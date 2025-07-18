@@ -1,22 +1,84 @@
-import { createRouter, createWebHistory } from '@ionic/vue-router';
-import { RouteRecordRaw } from 'vue-router';
-import HomePage from '../views/HomePage.vue'
+import type { RouteRecordRaw } from 'vue-router'
+import { createRouter, createWebHistory } from '@ionic/vue-router'
+
+import LoginPage from '@/views/LoginPage.vue'
+import ExerciseLogs from '@/views/ExerciseLogs.vue'
+import WizardApiKey from '@/views/wizard/ApiKey.vue'
+import WizardIntro from '@/views/wizard/SetupIntro.vue'
+import WizardBodyStats from '@/views/wizard/BodyStats.vue'
+import WizardFreeInput from '@/views/wizard/FreeInput.vue'
+import WizardFitnessGoal from '@/views/wizard/FitnessGoal.vue'
+import WizardFitnessLevel from '@/views/wizard/FitnessLevel.vue'
+import WizardWorkoutLocation from '@/views/wizard/WorkoutLocation.vue'
+import WizardEquipmentOption from '@/views/wizard/EquipmentOption.vue'
+import WizardWorkoutDaysPerWeek from '@/views/wizard/WorkoutDaysPerWeek.vue'
 
 const routes: Array<RouteRecordRaw> = [
   {
     path: '/',
-    redirect: '/home'
+    name: 'Login',
+    component: LoginPage,
   },
   {
-    path: '/home',
-    name: 'Home',
-    component: HomePage
-  }
+    path: '/wizard',
+    name: 'WizardIntro',
+    component: WizardIntro,
+  },
+  {
+    path: '/wizard',
+    name: 'WizardIntro',
+    component: WizardIntro,
+  },
+  {
+    path: '/wizard/fitness-goal',
+    name: 'WizardFitnessGoal',
+    component: WizardFitnessGoal,
+  },
+  {
+    path: '/wizard/fitness-level',
+    name: 'WizardFitnessLevel',
+    component: WizardFitnessLevel,
+  },
+  {
+    path: '/wizard/workout-days-per-week',
+    name: 'WizardWorkoutDaysPerWeek',
+    component: WizardWorkoutDaysPerWeek,
+  },
+  {
+    path: '/wizard/workout-location',
+    name: 'WizardWorkoutLocation',
+    component: WizardWorkoutLocation,
+  },
+  {
+    path: '/wizard/equipment-option',
+    name: 'WizardEquipmentOption',
+    component: WizardEquipmentOption,
+  },
+  {
+    path: '/wizard/body-stats',
+    name: 'WizardBodyStats',
+    component: WizardBodyStats,
+  },
+  {
+    path: '/wizard/free-input',
+    name: 'WizardFreeInput',
+    component: WizardFreeInput,
+  },
+  {
+    path: '/wizard/api-key',
+    name: 'WizardApiKey',
+    component: WizardApiKey,
+  },
+  {
+    path: '/exercise-logs',
+    name: 'ExerciseLogs',
+    component: ExerciseLogs,
+  },
 ]
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
-  routes
+  routes,
 })
 
 export default router

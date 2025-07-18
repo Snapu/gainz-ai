@@ -1,5 +1,11 @@
 {
-    "recommendations": [
-        "Webnative.webnative"
-    ]
+  "recommendations": [
+    "vitest.explorer",
+    "dbaeumer.vscode-eslint",
+    "EditorConfig.EditorConfig",
+    "oxc.oxc-vscode",
+    "esbenp.prettier-vscode",
+    "Webnative.webnative",
+    "Webnative.webnative"
+  ]
 }

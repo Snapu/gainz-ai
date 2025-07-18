@@ -1,0 +1,64 @@
+<script setup lang="ts">
+import { reactive, watchEffect } from 'vue'
+
+import { IonContent, IonItem, IonList, IonPage } from '@ionic/vue'
+
+import { type EquipmentOption, type UserProfile, useUserProfileStore } from '@/stores/userProfile'
+
+import UiCheckbox from '@/components/ui/UiCheckbox.vue'
+import WizardHeader from '@/components/WizardHeader.vue'
+import WizardFooter from '@/components/WizardFooter.vue'
+
+const userProfileStore = useUserProfileStore()
+
+const equipmentOptionLabels: [string, EquipmentOption][] = [
+  // 🔹 Minimal / No Equipment
+  ['Bodyweight only', 'bodyweight'],
+
+  // 🔸 Lightweight / Portable Equipment
+  ['Resistance bands', 'resistance_bands'],
+  ['Suspension trainer (e.g. TRX)', 'suspension_trainer'],
+  ['Gymnastic rings', 'gymnastic_rings'],
+
+  // 🔹 Calisthenics / Fixed Bars
+  ['Pull-up bar', 'pull_up_bar'],
+  ['Dip bar', 'dip_bar'],
+
+  // 🔸 Free Weights
+  ['Dumbbells', 'dumbbells'],
+  ['Kettlebells', 'kettlebells'],
+  ['Barbell & rack', 'barbell_rack'],
+  ['Bench', 'bench'],
+
+  // 🔹 Machines
+  ['Cable machine', 'cable_machine'],
+  ['Cardio machines', 'cardio_machine'],
+
+  // 🔸 Functional Tools
+  ['Medicine ball', 'medicine_ball'],
+]
+
+const form = reactive<UserProfile>({ ...userProfileStore.userProfile })
+watchEffect(() => userProfileStore.saveUserProfile(form))
+</script>
+
+<template>
+  <ion-page>
+    <WizardHeader title="5/8" />
+
+    <ion-content>
+      <div class="ion-padding-horizontal">
+        <h1>What equipment do you have access to?</h1>
+      </div>
+      <ion-list inset>
+        <ion-item v-for="[label, value] in equipmentOptionLabels" :key="value">
+          <UiCheckbox v-model="form.equipmentAccess" :value="value" multiple>
+            {{ label }}
+          </UiCheckbox>
+        </ion-item>
+      </ion-list>
+    </ion-content>
+
+    <WizardFooter next-route="/wizard/body-stats" />
+  </ion-page>
+</template>
