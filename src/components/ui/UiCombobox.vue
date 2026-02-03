@@ -80,8 +80,9 @@ function onSearchInput(event: SearchbarCustomEvent) {
 function onSearchChange(event: SearchbarCustomEvent) {
   if (event.target.value) selectItem(event.target.value)
 }
-function onInputClick() {
+function onFocus(event: CustomEvent) {
   if (recentlyClosed.value) {
+    event.detail.target.blur()
     recentlyClosed.value = false
     return
   }
@@ -95,7 +96,7 @@ function onInputClick() {
     :label="props.label"
     label-placement="fixed"
     clear-input
-    @click="onInputClick"
+    @ion-focus="onFocus"
   />
 
   <ion-modal ref="modalRef">
