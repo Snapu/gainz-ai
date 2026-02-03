@@ -1,0 +1,10 @@
+{
+  "web": {
+    "client_id": "804592774481-hvo962fnjn23g9tt4i0s5d62f17pegg7.apps.googleusercontent.com",
+    "project_id": "g-ai-nz",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_secret": "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"
+  }
+}

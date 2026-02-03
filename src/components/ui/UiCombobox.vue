@@ -35,6 +35,7 @@ const searchbarRef = ref<InstanceType<typeof IonSearchbar> | null>(null)
 
 const searchQuery = ref('')
 const filteredItems = ref<string[]>([...props.items])
+const recentlyClosed = ref(false)
 
 watchEffect(() => {
   const normalized = searchQuery.value.trim().toLowerCase()
@@ -54,10 +55,12 @@ watchEffect(() => {
 function open() {
   modalRef.value?.$el.present()
   searchQuery.value = ''
+  recentlyClosed.value = false
   setTimeout(() => searchbarRef.value?.$el.setFocus(), 200)
 }
 
 function close() {
+  recentlyClosed.value = true
   modalRef.value?.$el.dismiss()
 }
 
@@ -77,6 +80,13 @@ function onSearchInput(event: SearchbarCustomEvent) {
 function onSearchChange(event: SearchbarCustomEvent) {
   if (event.target.value) selectItem(event.target.value)
 }
+function onInputClick() {
+  if (recentlyClosed.value) {
+    recentlyClosed.value = false
+    return
+  }
+  open()
+}
 </script>
 
 <template>
@@ -85,7 +95,7 @@ function onSearchChange(event: SearchbarCustomEvent) {
     :label="props.label"
     label-placement="fixed"
     clear-input
-    @ion-focus="open"
+    @click="onInputClick"
   />
 
   <ion-modal ref="modalRef">

@@ -1,6 +1,7 @@
-import { createApp } from 'vue'
+import { createApp, watch } from 'vue'
 
 import { createPinia } from 'pinia'
+
 import { IonicVue } from '@ionic/vue'
 
 import App from '@/App.vue'
@@ -36,9 +37,9 @@ import '@ionic/vue/css/palettes/dark.system.css'
 
 /* Theme variables */
 import '@/theme/variables.css'
-
-import { supabase } from '@/supabase'
-import { useUserProfileStore } from '@/stores/userProfile'
+import { useAuthStore } from './stores/auth'
+import { useUserProfileStore } from './stores/userProfile'
+import { useSpreadsheetStore } from './stores/spreadsheet'
 
 const app = createApp(App).use(IonicVue).use(createPinia()).use(router)
 
@@ -46,16 +47,22 @@ router.isReady().then(() => {
   app.mount('#app')
 })
 
-supabase.auth.onAuthStateChange((event, session) => {
-  console.debug(event, session)
-  if (session === null || event === 'SIGNED_OUT') {
-    router.push('/')
-  } else if (event === 'INITIAL_SESSION') {
-    const { setupCompleted } = useUserProfileStore()
-    if (!setupCompleted) {
+const authStore = useAuthStore()
+const userProfileStore = useUserProfileStore()
+const spreadsheetStore = useSpreadsheetStore()
+
+watch(
+  [() => authStore.isLoggedIn, () => spreadsheetStore.doc],
+  ([isLoggedIn, doc]) => {
+    if (!isLoggedIn) {
+      router.push('/')
+    } else if (!userProfileStore.setupCompleted) {
       router.push('/wizard/fitness-goal')
+    } else if (!doc) {
+      router.push('/spreadsheet-init')
     } else {
       router.push('/exercise-logs')
     }
-  }
-})
+  },
+  { immediate: true },
+)

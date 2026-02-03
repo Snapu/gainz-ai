@@ -5,7 +5,6 @@ import { add, settingsOutline } from 'ionicons/icons'
 import {
   IonAccordion,
   IonAccordionGroup,
-  IonBadge,
   IonButton,
   IonButtons,
   IonContent,
@@ -35,11 +34,12 @@ import { localeDateString } from '@/services/utils/date'
 import { formatNumberWithUnit, formatUnit } from '@/services/utils/units'
 
 import { useExercisesStore } from '@/stores/exercises'
-import { type ExerciseLogState, useExerciseLogsStore } from '@/stores/exerciseLogs'
+import { useExerciseLogsStore } from '@/stores/exerciseLogs'
 
 import StopWatch from '@/components/StopWatch.vue'
 import AiFeedback from '@/components/AiFeedback.vue'
 import UiCombobox from '@/components/ui/UiCombobox.vue'
+import type { ExerciseLog } from '@/services/exerciseLogs'
 
 const contentRef = useTemplateRef('content')
 const cacheAiFeedback = ref(false)
@@ -51,11 +51,11 @@ const exerciseLogsStore = useExerciseLogsStore()
 const groupedLogs = computed(() =>
   exerciseLogsStore.exerciseLogs.reduce(
     (a, o) => {
-      const day = localeDateString(o.logged_at)
+      const day = localeDateString(o.loggedAt)
       a[day] = a[day] ? [...a[day], o] : [o]
       return a
     },
-    {} as Record<string, ExerciseLogState[]>,
+    {} as Record<string, ExerciseLog[]>,
   ),
 )
 
@@ -72,19 +72,20 @@ function scrollBottom() {
 function logCurrentExercise() {
   if (!currentExerciseName.value) return
   exercisesStore.addExercise({ name: currentExerciseName.value.trim() })
-  exerciseLogsStore.addExerciseLog({
-    logged_at: new Date(),
-    exercise_name: currentExerciseName.value,
-    reps: currentReps.value,
-    weight: currentWeight.value,
-    distance: currentDistance.value,
-    duration: currentDuration.value,
-  })
+  const log = {
+    loggedAt: new Date(),
+    exerciseName: currentExerciseName.value,
+    reps: currentReps.value ?? undefined,
+    weight: currentWeight.value ?? undefined,
+    distance: currentDistance.value ?? undefined,
+    duration: currentDuration.value ?? undefined,
+  }
+  exerciseLogsStore.addExerciseLog(log)
   cacheAiFeedback.value = false
   setTimeout(() => scrollBottom(), 200)
 }
 
-function deleteLog(log: ExerciseLogState) {
+function deleteLog(log: ExerciseLog) {
   exerciseLogsStore.removeExerciseLog(log)
 }
 
@@ -141,25 +142,22 @@ function openWizard() {
             <ion-label>{{ day }}</ion-label>
           </ion-item>
           <ion-list slot="content" inset>
-            <ion-item-sliding
-              v-for="log in logs"
-              :key="log.exercise_name + log.logged_at.getTime()"
-            >
+            <ion-item-sliding v-for="log in logs" :key="log.exerciseName + log.loggedAt.getTime()">
               <ion-item>
                 <span slot="start">
-                  <b>{{ log.exercise_name }}</b>
+                  {{ log.exerciseName }}
                 </span>
                 <span slot="end">
-                  <ion-badge v-if="log.reps" class="ion-margin-end"> {{ log.reps }} x </ion-badge>
-                  <ion-badge v-if="log.weight" class="ion-margin-end">
+                  <span v-if="log.reps" class="ion-margin-start"> {{ log.reps }} x </span>
+                  <span v-if="log.weight" class="ion-margin-start">
                     {{ formatNumberWithUnit(log.weight, 'kilogram') }}
-                  </ion-badge>
-                  <ion-badge v-if="log.distance" class="ion-margin-end">
+                  </span>
+                  <span v-if="log.distance" class="ion-margin-start">
                     {{ formatNumberWithUnit(log.distance, 'meter') }}
-                  </ion-badge>
-                  <ion-badge v-if="log.duration" class="ion-margin-end">
+                  </span>
+                  <span v-if="log.duration" class="ion-margin-start">
                     {{ formatNumberWithUnit(log.duration, 'minute') }}
-                  </ion-badge>
+                  </span>
                 </span>
               </ion-item>
               <ion-item-options>
@@ -174,7 +172,7 @@ function openWizard() {
     </ion-content>
 
     <ion-footer>
-      <ion-list inset class="ion-no-padding">
+      <ion-list inset>
         <ion-list-header>
           <ion-label>Log Exercise</ion-label>
           <ion-button @click="() => logCurrentExercise()">
@@ -193,7 +191,7 @@ function openWizard() {
         </ion-item>
         <ion-item>
           <ion-input
-            v-model="currentReps"
+            v-model.number="currentReps"
             type="number"
             label="Reps"
             label-placement="fixed"
@@ -202,7 +200,7 @@ function openWizard() {
         </ion-item>
         <ion-item>
           <ion-input
-            v-model="currentWeight"
+            v-model.number="currentWeight"
             type="number"
             :label="formatUnit('kilogram')"
             label-placement="fixed"
@@ -211,7 +209,7 @@ function openWizard() {
         </ion-item>
         <ion-item>
           <ion-input
-            v-model="currentDistance"
+            v-model.number="currentDistance"
             type="number"
             :label="formatUnit('meter')"
             label-placement="fixed"
@@ -220,7 +218,7 @@ function openWizard() {
         </ion-item>
         <ion-item>
           <ion-input
-            v-model="currentDuration"
+            v-model.number="currentDuration"
             type="number"
             :label="formatUnit('minute')"
             label-placement="fixed"

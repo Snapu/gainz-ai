@@ -72,7 +72,7 @@ export const useAiStore = defineStore('ai', () => {
     const logsJson = JSON.stringify(
       exerciseLogsStore.exerciseLogs.map((log) => ({
         ...log,
-        timestamp: localeDateString(log.logged_at),
+        timestamp: localeDateString(log.loggedAt),
       })),
       null,
       2,

@@ -2,73 +2,35 @@ import { computed } from 'vue'
 
 import { defineStore } from 'pinia'
 import { useLocalStorage } from '@vueuse/core'
-
 import { useOfflineSyncedStore } from '@/services/utils/offlineSyncedStore'
 import {
   type ExerciseLog,
-  createExerciseLog,
-  deleteExerciseLog,
-  getExerciseLogs,
+  addExerciseLog as addExerciseLog_,
+  deleteExerciseLog as deleteExerciseLog_,
+  loadExerciseLogs,
 } from '@/services/exerciseLogs'
-
-export type ExerciseLogState = Omit<ExerciseLog, 'id'> & { id?: string }
+import { useSpreadsheetStore } from './spreadsheet'
+import type { GoogleSpreadsheet } from 'google-spreadsheet'
 
 export const useExerciseLogsStore = defineStore('exerciseLogs', () => {
+  const spreadsheetStore = useSpreadsheetStore()
   const {
     items: exerciseLogs,
     isLoading,
     add,
     remove,
-  } = useOfflineSyncedStore<ExerciseLogState>({
+  } = useOfflineSyncedStore<ExerciseLog>({
     key: 'exerciseLogs',
-    fetchRemote: () => getExerciseLogs(),
-    addRemote: (item) =>
-      createExerciseLog({
-        exercise_name: item.exercise_name,
-        reps: item.reps ?? undefined,
-        weight: item.weight ?? undefined,
-        distance: item.distance ?? undefined,
-        duration: item.duration ?? undefined,
-        logged_at: item.logged_at,
-      }),
-    removeRemote: (item) => deleteExerciseLog(item.id!),
+    fetchRemote: () => loadExerciseLogs(spreadsheetStore.doc as GoogleSpreadsheet),
+    addRemote: (item) => addExerciseLog_(item, spreadsheetStore.doc as GoogleSpreadsheet),
+    removeRemote: (item) => deleteExerciseLog_(item, spreadsheetStore.doc as GoogleSpreadsheet),
   })
-
-  const exerciseLogsMigration = useLocalStorage(
-    'exerciseLogs',
-    [] as {
-      exerciseName: string
-      reps?: number
-      weight?: number
-      distance?: number
-      duration?: number
-      timestamp: number
-    }[],
-  )
-
-  async function migrate() {
-    const failed: typeof exerciseLogsMigration.value = []
-    for (const exerciseLog of exerciseLogsMigration.value) {
-      const result = await createExerciseLog({
-        exercise_name: exerciseLog.exerciseName,
-        reps: exerciseLog.reps,
-        distance: exerciseLog.distance,
-        weight: exerciseLog.weight,
-        duration: exerciseLog.duration,
-        logged_at: new Date(exerciseLog.timestamp),
-      })
-      if (result.isErr()) failed.push(exerciseLog)
-    }
-    exerciseLogsMigration.value = failed
-  }
-
-  void migrate()
 
   const workoutFinished = useLocalStorage('workoutFinished', false)
 
   const startOfToday = new Date().setHours(0, 0, 0, 0)
   const workoutStarted = computed(() =>
-    exerciseLogs.value.find((log) => log.logged_at.getTime() > startOfToday),
+    exerciseLogs.value.find((log) => log.loggedAt.getTime() > startOfToday),
   )
 
   // reset on new day (i.e. workout not started yet)
@@ -88,8 +50,8 @@ export const useExerciseLogsStore = defineStore('exerciseLogs', () => {
 
   function lastLogForExercise(exerciseName: string) {
     return exerciseLogs.value
-      .filter((log) => exerciseName === log.exercise_name)
-      .sort((a, b) => b.logged_at.getTime() - a.logged_at.getTime())?.[0]
+      .filter((log) => exerciseName === log.exerciseName)
+      .sort((a, b) => b.loggedAt.getTime() - a.loggedAt.getTime())?.[0]
   }
 
   return {

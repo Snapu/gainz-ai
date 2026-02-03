@@ -1,37 +1,28 @@
 import { defineStore } from 'pinia'
-import { useLocalStorage } from '@vueuse/core'
 
 import { useOfflineSyncedStore } from '@/services/utils/offlineSyncedStore'
-import { type Exercise, createExercise, deleteExercise, getExercises } from '@/services/exercises'
-
-const clean = (s: string) => s.trim().replace(/\s+/g, ' ')
-
-export type ExerciseState = Omit<Exercise, 'id'> & { id?: string }
+import {
+  type Exercise,
+  addExercise as addExercise_,
+  deleteExercise,
+  loadExercises,
+} from '@/services/exercises'
+import { useSpreadsheetStore } from './spreadsheet'
+import type { GoogleSpreadsheet } from 'google-spreadsheet'
 
 export const useExercisesStore = defineStore('exercises', () => {
+  const spreadsheetStore = useSpreadsheetStore()
   const {
     items: exercises,
     add,
     remove,
-  } = useOfflineSyncedStore<ExerciseState>({
+  } = useOfflineSyncedStore<Exercise>({
     key: 'exercise',
-    fetchRemote: () => getExercises(),
-    addRemote: (item) => createExercise(item),
-    removeRemote: (item) => deleteExercise(item.id!),
+    // TODO FIXME types
+    fetchRemote: () => loadExercises(spreadsheetStore.doc as GoogleSpreadsheet),
+    addRemote: (item) => addExercise_(item, spreadsheetStore.doc as GoogleSpreadsheet),
+    removeRemote: (item) => deleteExercise(item, spreadsheetStore.doc as GoogleSpreadsheet),
   })
-
-  const exercisesMigration = useLocalStorage('exercises', [] as Exercise[])
-
-  async function migrate() {
-    const failed: typeof exercisesMigration.value = []
-    for (const exercise of exercisesMigration.value) {
-      const result = await createExercise({ ...exercise, name: clean(exercise.name) })
-      if (result.isErr()) failed.push(exercise)
-    }
-    exercisesMigration.value = failed
-  }
-
-  void migrate()
 
   const addExercise: typeof add = async (exercise) => {
     console.log('Adding exercise', exercise)

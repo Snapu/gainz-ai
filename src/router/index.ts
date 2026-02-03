@@ -2,6 +2,7 @@ import type { RouteRecordRaw } from 'vue-router'
 import { createRouter, createWebHistory } from '@ionic/vue-router'
 
 import LoginPage from '@/views/LoginPage.vue'
+import SpreadsheetInit from '@/views/SpreadsheetInit.vue'
 import ExerciseLogs from '@/views/ExerciseLogs.vue'
 import WizardApiKey from '@/views/wizard/ApiKey.vue'
 import WizardIntro from '@/views/wizard/SetupIntro.vue'
@@ -18,6 +19,11 @@ const routes: Array<RouteRecordRaw> = [
     path: '/',
     name: 'Login',
     component: LoginPage,
+  },
+  {
+    path: '/spreadsheet-init',
+    name: 'spreadsheetInit',
+    component: SpreadsheetInit,
   },
   {
     path: '/wizard',

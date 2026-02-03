@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
-import { chatboxEllipsesOutline, closeOutline } from 'ionicons/icons'
+import { closeOutline, sparklesOutline } from 'ionicons/icons'
 import {
   IonButton,
   IonButtons,
@@ -34,7 +34,7 @@ function askAi() {
 <template>
   <ion-button fill="clear" @click="() => askAi()">
     AI Feedback
-    <ion-icon slot="start" :icon="chatboxEllipsesOutline" />
+    <ion-icon slot="start" :icon="sparklesOutline" />
   </ion-button>
 
   <ion-modal ref="modalRef">

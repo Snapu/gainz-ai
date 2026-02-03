@@ -1,71 +1,62 @@
 import { z } from 'zod'
 import { type Result, err, ok } from 'neverthrow'
-
-import { supabase } from '@/supabase'
-
 import { parseData } from './utils/parseData'
+import type { GoogleSpreadsheet } from 'google-spreadsheet'
 
 const clean = (s: string) => s.trim().replace(/\s+/g, ' ')
 
+export const ExerciseNameSchema = z.string().overwrite(clean)
 export const ExerciseSchema = z.object({
-  id: z.string(),
-  name: z.string().overwrite(clean),
+  name: ExerciseNameSchema,
 })
-
 export type Exercise = z.infer<typeof ExerciseSchema>
 
-export async function getExercises(): Promise<
-  Result<Exercise[], 'select-failed' | 'parse-data-failed'>
-> {
-  const { data, error } = await supabase
-    .from('exercises')
-    .select('id, name')
-    .eq('archived', false)
-    .order('updated_at', { ascending: false })
+const SHEET_NAME = 'Exercises'
+const getSheet = (doc: GoogleSpreadsheet) => doc.sheetsByTitle[SHEET_NAME]
+const addSheet = (doc: GoogleSpreadsheet) =>
+  doc.addSheet({ title: SHEET_NAME, headerValues: ['name'] })
 
-  if (error) {
-    console.error(error)
-    return err('select-failed')
+export async function loadExercises(
+  doc: GoogleSpreadsheet,
+): Promise<Result<Exercise[], 'load-failed' | 'parse-data-failed'>> {
+  const sheet = getSheet(doc) ?? (await addSheet(doc))
+  try {
+    const rows = await sheet.getRows<Exercise>()
+    return parseData(
+      ExerciseSchema.array(),
+      rows.map((row) => row.toObject()),
+    )
+  } catch (error) {
+    console.error('Failed to load exercises. Error:', error)
+    return err('load-failed')
   }
-
-  return parseData(ExerciseSchema.array(), data)
 }
 
-export async function createExercise(exercise: {
-  name: string
-}): Promise<Result<void, 'insert-failed' | 'duplicate-name'>> {
-  const { error } = await supabase.from('exercises').insert([exercise])
-
-  if (error) {
-    console.error(error)
-    if (error.code === '23505') return err('duplicate-name')
-    return err('insert-failed')
-  }
-
-  return ok()
-}
-
-export async function deleteExercise(id: string): Promise<Result<void, 'delete-failed'>> {
-  const { error } = await supabase.from('exercises').delete().eq('id', id)
-
-  if (error?.message.includes('Consider archiving')) {
-    const { error: archiveError } = await supabase
-      .from('exercises')
-      .update({ archived: true })
-      .eq('id', id)
-
-    if (archiveError) {
-      console.error(archiveError)
-      return err('delete-failed')
-    }
-
+export async function addExercise(
+  exercise: Exercise,
+  doc: GoogleSpreadsheet,
+): Promise<Result<void, 'add-failed' | 'duplicate-name'>> {
+  try {
+    const sheet = getSheet(doc) ?? (await addSheet(doc))
+    await sheet.addRow(ExerciseSchema.parse(exercise))
     return ok()
+  } catch (error) {
+    console.error('failed to add exercise. Error:', error)
+    return err('add-failed')
   }
+}
 
-  if (error) {
-    console.error(error)
+export async function deleteExercise(
+  exercise: Exercise,
+  doc: GoogleSpreadsheet,
+): Promise<Result<void, 'delete-failed'>> {
+  const sheet = getSheet(doc)
+  try {
+    const rows = await sheet.getRows<Exercise>()
+    await rows.find((row) => row.get('name') === exercise.name)?.delete()
+    return ok()
+  } catch (error) {
+    console.error('Failed to delete exercise. Error:', error)
     return err('delete-failed')
   }
-
-  return ok()
 }

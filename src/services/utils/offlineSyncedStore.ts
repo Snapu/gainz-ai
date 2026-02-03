@@ -10,7 +10,7 @@ type PendingOperation<T> = {
   item: T
 }
 
-type UseOfflineSyncedStoreParams<T extends { id?: string }> = {
+type UseOfflineSyncedStoreParams<T> = {
   key: string
   fetchRemote: () => Promise<Result<T[], unknown>>
   addRemote: (item: T) => Promise<Result<void, unknown>>
@@ -18,7 +18,7 @@ type UseOfflineSyncedStoreParams<T extends { id?: string }> = {
   updateRemote?: (item: T) => Promise<Result<void, unknown>>
 }
 
-export function useOfflineSyncedStore<T extends { id?: string }>({
+export function useOfflineSyncedStore<T>({
   key,
   fetchRemote,
   addRemote,
@@ -43,10 +43,7 @@ export function useOfflineSyncedStore<T extends { id?: string }>({
       return
     }
 
-    const id = item.id
-    if (!id) return
-
-    const index = pending.value.findIndex((p) => p.item.id === id)
+    const index = pending.value.findIndex((p) => JSON.stringify(p.item) === JSON.stringify(item))
     if (index === -1) {
       pending.value.push(op)
       return
@@ -87,20 +84,18 @@ export function useOfflineSyncedStore<T extends { id?: string }>({
   }
 
   async function remove(item: T) {
-    if (!item.id) return
-
-    remoteItems.value = remoteItems.value.filter((i) => i.id !== item.id)
-    localCache.value = localCache.value.filter((i) => i.id !== item.id)
+    const strigifiedItem = JSON.stringify(item)
+    remoteItems.value = remoteItems.value.filter((i) => JSON.stringify(i) !== strigifiedItem)
+    localCache.value = localCache.value.filter((i) => JSON.stringify(i) !== strigifiedItem)
 
     const result = await removeRemote(item)
     if (result.isErr()) squashPendingOperation({ type: 'remove', item })
   }
 
   async function update(item: T) {
-    if (!item.id) return
-
-    remoteItems.value = remoteItems.value.filter((i) => i.id !== item.id)
-    const index = localCache.value.findIndex((i) => i.id === item.id)
+    const strigifiedItem = JSON.stringify(item)
+    remoteItems.value = remoteItems.value.filter((i) => JSON.stringify(i) !== strigifiedItem)
+    const index = localCache.value.findIndex((i) => JSON.stringify(i) === strigifiedItem)
     if (index === -1) {
       localCache.value.push(item)
     } else {
