@@ -50,7 +50,7 @@ export function useOfflineSyncedStore<T>({
     }
 
     const existing = pending.value[index]
-    if (existing.type === 'update') {
+    if (existing!.type === 'update') {
       pending.value[index] = op
     }
   }

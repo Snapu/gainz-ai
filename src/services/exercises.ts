@@ -51,6 +51,10 @@ export async function deleteExercise(
   doc: GoogleSpreadsheet,
 ): Promise<Result<void, 'delete-failed'>> {
   const sheet = getSheet(doc)
+  if (!sheet) {
+    console.error('Failed to delete exercise. Sheet does not exist.')
+    return err('delete-failed')
+  }
   try {
     const rows = await sheet.getRows<Exercise>()
     await rows.find((row) => row.get('name') === exercise.name)?.delete()
