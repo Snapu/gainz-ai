@@ -8,6 +8,7 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: '/gainz-ai/',
   plugins: [vue(), legacy(), vueDevTools()],
   resolve: {
     alias: {
