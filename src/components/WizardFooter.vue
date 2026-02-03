@@ -1,14 +1,3 @@
-<script setup lang="ts">
-import { IonButton, IonButtons, IonFooter, IonToolbar } from '@ionic/vue'
-
-interface Props {
-  nextRoute: string
-  nextLabel?: string
-  first?: boolean
-}
-const props = withDefaults(defineProps<Props>(), { nextLabel: 'Next', first: false })
-</script>
-
 <template>
   <ion-footer>
     <ion-toolbar>
@@ -23,3 +12,17 @@ const props = withDefaults(defineProps<Props>(), { nextLabel: 'Next', first: fal
     </ion-toolbar>
   </ion-footer>
 </template>
+
+<script setup lang="ts">
+import { IonButton, IonButtons, IonFooter, IonToolbar } from "@ionic/vue";
+
+interface Props {
+  nextRoute: string;
+  nextLabel?: string;
+  first?: boolean;
+}
+const props = withDefaults(defineProps<Props>(), {
+  nextLabel: "Next",
+  first: false,
+});
+</script>

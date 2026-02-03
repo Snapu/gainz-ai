@@ -1,27 +1,3 @@
-<script setup lang="ts">
-import { reactive, watchEffect } from 'vue'
-
-import { IonContent, IonItem, IonList, IonPage } from '@ionic/vue'
-
-import { type UserProfile, type WorkoutLocation, useUserProfileStore } from '@/stores/userProfile'
-
-import UiCheckbox from '@/components/ui/UiCheckbox.vue'
-import WizardHeader from '@/components/WizardHeader.vue'
-import WizardFooter from '@/components/WizardFooter.vue'
-
-const userProfileStore = useUserProfileStore()
-
-const workoutLocationLabels: [string, WorkoutLocation][] = [
-  ['🏋️ Gym', 'gym'],
-  ['🏠 Home', 'home'],
-  ['🌍 Both', 'both'],
-]
-
-const form = reactive<UserProfile>({ ...userProfileStore.userProfile })
-
-watchEffect(() => userProfileStore.saveUserProfile(form))
-</script>
-
 <template>
   <ion-page>
     <WizardHeader title="4/8" />
@@ -40,3 +16,24 @@ watchEffect(() => userProfileStore.saveUserProfile(form))
     <WizardFooter next-route="/wizard/equipment-option" />
   </ion-page>
 </template>
+
+<script setup lang="ts">
+import { IonContent, IonItem, IonList, IonPage } from "@ionic/vue";
+import { reactive, watchEffect } from "vue";
+import UiCheckbox from "@/components/ui/UiCheckbox.vue";
+import WizardFooter from "@/components/WizardFooter.vue";
+import WizardHeader from "@/components/WizardHeader.vue";
+import { type UserProfile, useUserProfileStore, type WorkoutLocation } from "@/stores/userProfile";
+
+const userProfileStore = useUserProfileStore();
+
+const workoutLocationLabels: [string, WorkoutLocation][] = [
+  ["🏋️ Gym", "gym"],
+  ["🏠 Home", "home"],
+  ["🌍 Both", "both"],
+];
+
+const form = reactive<UserProfile>({ ...userProfileStore.userProfile });
+
+watchEffect(() => userProfileStore.saveUserProfile(form));
+</script>

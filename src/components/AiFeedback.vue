@@ -1,36 +1,3 @@
-<script setup lang="ts">
-import { ref } from 'vue'
-
-import { closeOutline, sparklesOutline } from 'ionicons/icons'
-import {
-  IonButton,
-  IonButtons,
-  IonContent,
-  IonHeader,
-  IonIcon,
-  IonModal,
-  IonSkeletonText,
-  IonTitle,
-  IonToolbar,
-} from '@ionic/vue'
-
-import AiMarkdownContainer from './AiMarkdownContainer.vue'
-
-import { useAiStore } from '@/stores/ai'
-
-const modalRef = ref<InstanceType<typeof IonModal> | null>(null)
-
-const aiStore = useAiStore()
-
-function close() {
-  modalRef.value?.$el.dismiss()
-}
-
-function askAi() {
-  modalRef.value?.$el.present().then(() => aiStore.askAi())
-}
-</script>
-
 <template>
   <ion-button fill="clear" @click="() => askAi()">
     AI Feedback
@@ -66,3 +33,34 @@ function askAi() {
     </ion-content>
   </ion-modal>
 </template>
+
+<script setup lang="ts">
+import {
+  IonButton,
+  IonButtons,
+  IonContent,
+  IonHeader,
+  IonIcon,
+  IonModal,
+  IonSkeletonText,
+  IonTitle,
+  IonToolbar,
+} from "@ionic/vue";
+
+import { closeOutline, sparklesOutline } from "ionicons/icons";
+import { ref } from "vue";
+import { useAiStore } from "@/stores/ai";
+import AiMarkdownContainer from "./AiMarkdownContainer.vue";
+
+const modalRef = ref<InstanceType<typeof IonModal> | null>(null);
+
+const aiStore = useAiStore();
+
+function close() {
+  modalRef.value?.$el.dismiss();
+}
+
+function askAi() {
+  modalRef.value?.$el.present().then(() => aiStore.askAi());
+}
+</script>

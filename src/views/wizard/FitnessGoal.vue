@@ -1,29 +1,3 @@
-<script setup lang="ts">
-import { reactive, watchEffect } from 'vue'
-
-import { IonContent, IonItem, IonList, IonPage } from '@ionic/vue'
-
-import { type FitnessGoal, type UserProfile, useUserProfileStore } from '@/stores/userProfile'
-
-import UiCheckbox from '@/components/ui/UiCheckbox.vue'
-import WizardHeader from '@/components/WizardHeader.vue'
-import WizardFooter from '@/components/WizardFooter.vue'
-
-const userProfileStore = useUserProfileStore()
-
-const fitnessGoalLabels: [string, FitnessGoal][] = [
-  ['🏋️ Build muscle', 'build_muscle'],
-  ['🏃 Lose fat', 'lose_fat'],
-  ['❤️ Improve endurance', 'improve_endurance'],
-  ['🧘 Increase mobility', 'increase_mobility'],
-  ['✅ General fitness', 'general_fitness'],
-]
-
-const form = reactive<UserProfile>({ ...userProfileStore.userProfile })
-
-watchEffect(() => userProfileStore.saveUserProfile(form))
-</script>
-
 <template>
   <ion-page>
     <WizardHeader title="1/8" />
@@ -43,3 +17,26 @@ watchEffect(() => userProfileStore.saveUserProfile(form))
     <WizardFooter next-route="/wizard/fitness-level" first />
   </ion-page>
 </template>
+
+<script setup lang="ts">
+import { IonContent, IonItem, IonList, IonPage } from "@ionic/vue";
+import { reactive, watchEffect } from "vue";
+import UiCheckbox from "@/components/ui/UiCheckbox.vue";
+import WizardFooter from "@/components/WizardFooter.vue";
+import WizardHeader from "@/components/WizardHeader.vue";
+import { type FitnessGoal, type UserProfile, useUserProfileStore } from "@/stores/userProfile";
+
+const userProfileStore = useUserProfileStore();
+
+const fitnessGoalLabels: [string, FitnessGoal][] = [
+  ["🏋️ Build muscle", "build_muscle"],
+  ["🏃 Lose fat", "lose_fat"],
+  ["❤️ Improve endurance", "improve_endurance"],
+  ["🧘 Increase mobility", "increase_mobility"],
+  ["✅ General fitness", "general_fitness"],
+];
+
+const form = reactive<UserProfile>({ ...userProfileStore.userProfile });
+
+watchEffect(() => userProfileStore.saveUserProfile(form));
+</script>

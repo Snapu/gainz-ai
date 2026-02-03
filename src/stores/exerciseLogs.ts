@@ -1,57 +1,56 @@
-import { computed } from 'vue'
-
-import { defineStore } from 'pinia'
-import { useLocalStorage } from '@vueuse/core'
-import { useOfflineSyncedStore } from '@/services/utils/offlineSyncedStore'
+import { useLocalStorage } from "@vueuse/core";
+import type { GoogleSpreadsheet } from "google-spreadsheet";
+import { defineStore } from "pinia";
+import { computed } from "vue";
 import {
-  type ExerciseLog,
   addExerciseLog as addExerciseLog_,
   deleteExerciseLog as deleteExerciseLog_,
+  type ExerciseLog,
   loadExerciseLogs,
-} from '@/services/exerciseLogs'
-import { useSpreadsheetStore } from './spreadsheet'
-import type { GoogleSpreadsheet } from 'google-spreadsheet'
+} from "@/services/exerciseLogs";
+import { useOfflineSyncedStore } from "@/services/utils/offlineSyncedStore";
+import { useSpreadsheetStore } from "./spreadsheet";
 
-export const useExerciseLogsStore = defineStore('exerciseLogs', () => {
-  const spreadsheetStore = useSpreadsheetStore()
+export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
+  const spreadsheetStore = useSpreadsheetStore();
   const {
     items: exerciseLogs,
     isLoading,
     add,
     remove,
   } = useOfflineSyncedStore<ExerciseLog>({
-    key: 'exerciseLogs',
+    key: "exerciseLogs",
     fetchRemote: () => loadExerciseLogs(spreadsheetStore.doc as GoogleSpreadsheet),
     addRemote: (item) => addExerciseLog_(item, spreadsheetStore.doc as GoogleSpreadsheet),
     removeRemote: (item) => deleteExerciseLog_(item, spreadsheetStore.doc as GoogleSpreadsheet),
-  })
+  });
 
-  const workoutFinished = useLocalStorage('workoutFinished', false)
+  const workoutFinished = useLocalStorage("workoutFinished", false);
 
-  const startOfToday = new Date().setHours(0, 0, 0, 0)
+  const startOfToday = new Date().setHours(0, 0, 0, 0);
   const workoutStarted = computed(() =>
     exerciseLogs.value.find((log) => log.loggedAt.getTime() > startOfToday),
-  )
+  );
 
   // reset on new day (i.e. workout not started yet)
   if (!workoutStarted.value) {
-    workoutFinished.value = false
+    workoutFinished.value = false;
   }
 
   const addExerciseLog: typeof add = async (exerciseLog) => {
-    console.log('Adding exercise log', exerciseLog)
-    return add(exerciseLog)
-  }
+    console.log("Adding exercise log", exerciseLog);
+    return add(exerciseLog);
+  };
 
   const removeExerciseLog: typeof add = async (exerciseLog) => {
-    console.log('Removing exercise log', exerciseLog)
-    return remove(exerciseLog)
-  }
+    console.log("Removing exercise log", exerciseLog);
+    return remove(exerciseLog);
+  };
 
   function lastLogForExercise(exerciseName: string) {
     return exerciseLogs.value
       .filter((log) => exerciseName === log.exerciseName)
-      .sort((a, b) => b.loggedAt.getTime() - a.loggedAt.getTime())?.[0]
+      .sort((a, b) => b.loggedAt.getTime() - a.loggedAt.getTime())?.[0];
   }
 
   return {
@@ -62,5 +61,5 @@ export const useExerciseLogsStore = defineStore('exerciseLogs', () => {
     addExerciseLog,
     removeExerciseLog,
     lastLogForExercise,
-  }
-})
+  };
+});

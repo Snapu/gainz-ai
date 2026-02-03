@@ -1,13 +1,3 @@
-<script setup lang="ts">
-import { closeOutline } from 'ionicons/icons'
-import { IonButton, IonButtons, IonHeader, IonIcon, IonTitle, IonToolbar } from '@ionic/vue'
-
-interface Props {
-  title?: string
-}
-const props = withDefaults(defineProps<Props>(), { title: 'Setup Wizard' })
-</script>
-
 <template>
   <ion-header>
     <ion-toolbar>
@@ -20,3 +10,13 @@ const props = withDefaults(defineProps<Props>(), { title: 'Setup Wizard' })
     </ion-toolbar>
   </ion-header>
 </template>
+
+<script setup lang="ts">
+import { IonButton, IonButtons, IonHeader, IonIcon, IonTitle, IonToolbar } from "@ionic/vue";
+import { closeOutline } from "ionicons/icons";
+
+interface Props {
+  title?: string;
+}
+const props = withDefaults(defineProps<Props>(), { title: "Setup Wizard" });
+</script>

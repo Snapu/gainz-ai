@@ -1,8 +1,8 @@
 const localeDateOptions: Intl.DateTimeFormatOptions = {
-  weekday: 'long',
-  year: 'numeric',
-  month: 'numeric',
-  day: 'numeric',
-}
+  weekday: "long",
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+};
 export const localeDateString = (date: Date) =>
-  date.toLocaleDateString(undefined, localeDateOptions)
+  date.toLocaleDateString(undefined, localeDateOptions);

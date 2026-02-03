@@ -18,8 +18,8 @@
 </template>
 
 <script setup lang="ts">
-import { IonButton, IonContent, IonHeader, IonPage, IonTitle, IonToolbar } from '@ionic/vue'
-import { useAuthStore } from '@/stores/auth'
+import { IonButton, IonContent, IonHeader, IonPage, IonTitle, IonToolbar } from "@ionic/vue";
+import { useAuthStore } from "@/stores/auth";
 
-const authStore = useAuthStore()
+const authStore = useAuthStore();
 </script>

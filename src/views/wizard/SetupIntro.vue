@@ -1,9 +1,3 @@
-<script setup lang="ts">
-import { IonButton, IonContent, IonPage } from '@ionic/vue'
-
-import WizardHeader from '@/components/WizardHeader.vue'
-</script>
-
 <template>
   <ion-page>
     <WizardHeader />
@@ -25,3 +19,9 @@ import WizardHeader from '@/components/WizardHeader.vue'
     </ion-content>
   </ion-page>
 </template>
+
+<script setup lang="ts">
+import { IonButton, IonContent, IonPage } from "@ionic/vue";
+
+import WizardHeader from "@/components/WizardHeader.vue";
+</script>

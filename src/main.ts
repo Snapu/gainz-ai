@@ -1,28 +1,27 @@
-import { createApp, watch } from 'vue'
+import { IonicVue } from "@ionic/vue";
 
-import { createPinia } from 'pinia'
+import { createPinia } from "pinia";
+import { createApp, watch } from "vue";
 
-import { IonicVue } from '@ionic/vue'
+import App from "@/App.vue";
 
-import App from '@/App.vue'
-
-import router from '@/router'
+import router from "@/router";
 
 /* Core CSS required for Ionic components to work properly */
-import '@ionic/vue/css/core.css'
+import "@ionic/vue/css/core.css";
 
 /* Basic CSS for apps built with Ionic */
-import '@ionic/vue/css/normalize.css'
-import '@ionic/vue/css/structure.css'
-import '@ionic/vue/css/typography.css'
+import "@ionic/vue/css/normalize.css";
+import "@ionic/vue/css/structure.css";
+import "@ionic/vue/css/typography.css";
 
 /* Optional CSS utils that can be commented out */
-import '@ionic/vue/css/padding.css'
-import '@ionic/vue/css/float-elements.css'
-import '@ionic/vue/css/text-alignment.css'
-import '@ionic/vue/css/text-transformation.css'
-import '@ionic/vue/css/flex-utils.css'
-import '@ionic/vue/css/display.css'
+import "@ionic/vue/css/padding.css";
+import "@ionic/vue/css/float-elements.css";
+import "@ionic/vue/css/text-alignment.css";
+import "@ionic/vue/css/text-transformation.css";
+import "@ionic/vue/css/flex-utils.css";
+import "@ionic/vue/css/display.css";
 
 /**
  * Ionic Dark Mode
@@ -33,36 +32,36 @@ import '@ionic/vue/css/display.css'
 
 /* @import '@ionic/vue/css/palettes/dark.always.css'; */
 /* @import '@ionic/vue/css/palettes/dark.class.css'; */
-import '@ionic/vue/css/palettes/dark.system.css'
+import "@ionic/vue/css/palettes/dark.system.css";
 
 /* Theme variables */
-import '@/theme/variables.css'
-import { useAuthStore } from './stores/auth'
-import { useUserProfileStore } from './stores/userProfile'
-import { useSpreadsheetStore } from './stores/spreadsheet'
+import "@/theme/variables.css";
+import { useAuthStore } from "./stores/auth";
+import { useSpreadsheetStore } from "./stores/spreadsheet";
+import { useUserProfileStore } from "./stores/userProfile";
 
-const app = createApp(App).use(IonicVue).use(createPinia()).use(router)
+const app = createApp(App).use(IonicVue).use(createPinia()).use(router);
 
 router.isReady().then(() => {
-  app.mount('#app')
-})
+  app.mount("#app");
+});
 
-const authStore = useAuthStore()
-const userProfileStore = useUserProfileStore()
-const spreadsheetStore = useSpreadsheetStore()
+const authStore = useAuthStore();
+const userProfileStore = useUserProfileStore();
+const spreadsheetStore = useSpreadsheetStore();
 
 watch(
   [() => authStore.isLoggedIn, () => spreadsheetStore.doc],
   ([isLoggedIn, doc]) => {
     if (!isLoggedIn) {
-      router.push('/')
+      router.push("/");
     } else if (!userProfileStore.setupCompleted) {
-      router.push('/wizard/fitness-goal')
+      router.push("/wizard/fitness-goal");
     } else if (!doc) {
-      router.push('/spreadsheet-init')
+      router.push("/spreadsheet-init");
     } else {
-      router.push('/exercise-logs')
+      router.push("/exercise-logs");
     }
   },
   { immediate: true },
-)
+);

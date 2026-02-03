@@ -1,20 +1,3 @@
-<script setup lang="ts">
-import { reactive, watchEffect } from 'vue'
-
-import { IonContent, IonInput, IonItem, IonList, IonPage } from '@ionic/vue'
-
-import { type UserProfile, useUserProfileStore } from '@/stores/userProfile'
-
-import WizardHeader from '@/components/WizardHeader.vue'
-import WizardFooter from '@/components/WizardFooter.vue'
-
-const userProfileStore = useUserProfileStore()
-
-const form = reactive<UserProfile>({ ...userProfileStore.userProfile })
-
-watchEffect(() => userProfileStore.saveUserProfile(form))
-</script>
-
 <template>
   <ion-page>
     <WizardHeader title="8/8" />
@@ -40,3 +23,18 @@ watchEffect(() => userProfileStore.saveUserProfile(form))
     <WizardFooter next-route="/exercise-logs" next-label="Save" />
   </ion-page>
 </template>
+
+<script setup lang="ts">
+import { IonContent, IonInput, IonItem, IonList, IonPage } from "@ionic/vue";
+import { reactive, watchEffect } from "vue";
+import WizardFooter from "@/components/WizardFooter.vue";
+
+import WizardHeader from "@/components/WizardHeader.vue";
+import { type UserProfile, useUserProfileStore } from "@/stores/userProfile";
+
+const userProfileStore = useUserProfileStore();
+
+const form = reactive<UserProfile>({ ...userProfileStore.userProfile });
+
+watchEffect(() => userProfileStore.saveUserProfile(form));
+</script>
