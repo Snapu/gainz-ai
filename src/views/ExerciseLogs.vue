@@ -22,7 +22,7 @@
         <ion-buttons slot="start">
           <ion-menu-button />
         </ion-buttons>
-        <ion-title>Exercise Logs</ion-title>
+        <ion-title><ConsistencyLevel /></ion-title>
       </ion-toolbar>
     </ion-header>
 
@@ -156,10 +156,10 @@ import {
   IonTitle,
   IonToolbar,
 } from "@ionic/vue";
-
 import { add, settingsOutline } from "ionicons/icons";
 import { computed, onMounted, ref, useTemplateRef, watchEffect } from "vue";
 import AiFeedback from "@/components/AiFeedback.vue";
+import ConsistencyLevel from "@/components/ConsistencyLevel.vue";
 import StopWatch from "@/components/StopWatch.vue";
 import UiCombobox from "@/components/ui/UiCombobox.vue";
 import router from "@/router";
