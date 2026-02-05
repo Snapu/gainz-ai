@@ -2,13 +2,12 @@
   <ion-page>
     <ion-header>
       <ion-toolbar>
-        <ion-title>Login</ion-title>
+        <ion-title>Gainz AI</ion-title>
       </ion-toolbar>
     </ion-header>
 
     <ion-content>
       <div class="ion-padding-horizontal">
-        <h1>AI Personal Trainer</h1>
         <div class="ion-text-center">
           <ion-button fill="clear" @click="authStore.login">Login with Google</ion-button>
         </div>
