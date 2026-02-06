@@ -1,27 +1,17 @@
 <template>
-  <div class="header-progress">
-    <!-- Level -->
-    <div class="level">
-      <strong>L{{ userProgress.level }}</strong>
-    </div>
-
-    <!-- XP Bar -->
-    <div class="bar-track xp-track">
-      <div class="bar-fill xp-bar" :style="{ width: userProgress.progressPercent + '%' }"></div>
-    </div>
-    <span class="bar-label">{{ userProgress.progressPercent }}%</span>
-
-    <!-- Momentum as Flames -->
-    <div class="momentum">
-      <span
-        v-for="i in flameCount"
-        :key="i"
-        class="flame"
-      >
-        🔥
-      </span>
-    </div>
-  </div>
+  <ion-grid>
+    <ion-row class="ion-align-items-center ">
+      <ion-col size="auto">
+        <ion-text>Lvl {{ userProgress.level }}</ion-text>
+      </ion-col>
+      <ion-col size="3" >
+        <ion-progress-bar :value="userProgress.progressPercent / 100"></ion-progress-bar>
+      </ion-col>
+      <ion-col size="auto">
+        <span v-for="i in flameCount" :key="i">🔥</span>
+      </ion-col>
+    </ion-row>
+  </ion-grid>
 </template>
 
 <script setup lang="ts">
@@ -29,6 +19,7 @@ import { computed } from "vue";
 import { calculateUserProgress } from "@/services/leveling";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
 import { useUserProfileStore } from "@/stores/userProfile";
+import { IonProgressBar, IonGrid, IonCol, IonRow, IonText } from "@ionic/vue";
 
 const exerciseLogsStore = useExerciseLogsStore();
 const userProfileStore = useUserProfileStore();
@@ -53,48 +44,3 @@ const flameCount = computed(() => {
   return 5;
 });
 </script>
-
-<style scoped>
-.header-progress {
-  display: flex;
-  justify-content: center; /* horizontally center everything */
-  align-items: center;     /* vertical alignment */
-  gap: 8px;
-  font-family: Arial, sans-serif;
-  font-size: 0.85rem;
-}
-
-.level {
-  min-width: 36px;
-  text-align: center;
-  font-weight: bold;
-}
-
-.bar-track {
-  position: relative;
-  flex: 1; /* bars expand to fill space */
-  height: 10px;
-  background-color: #e0e0e0;
-  border-radius: 5px;
-  overflow: hidden;
-}
-
-.bar-fill {
-  height: 100%;
-  border-radius: 5px;
-  transition: width 0.5s ease;
-}
-
-.xp-bar {
-  background-color: #3b82f6;
-}
-
-.momentum {
-  display: flex;
-  gap: 2px;
-}
-
-.flame {
-  font-size: 1rem;
-}
-</style>

@@ -1,6 +1,5 @@
 <template>
   <ion-button fill="clear" @click="() => askAi()">
-    AI Feedback
     <ion-icon slot="start" :icon="sparklesOutline" />
   </ion-button>
 

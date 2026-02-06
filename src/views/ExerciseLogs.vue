@@ -17,12 +17,15 @@
       </ion-content>
     </ion-menu>
 
-    <ion-header>
+    <ion-header translucent>
       <ion-toolbar>
         <ion-buttons slot="start">
           <ion-menu-button />
         </ion-buttons>
         <ion-title><ConsistencyLevel /></ion-title>
+        <ion-buttons slot="end">
+          <AiFeedback />
+        </ion-buttons>
       </ion-toolbar>
     </ion-header>
 
@@ -60,73 +63,72 @@
           </ion-list>
         </ion-accordion>
       </ion-accordion-group>
-    </ion-content>
 
-    <ion-footer>
-      <ion-list inset>
-        <ion-list-header>
-          <ion-label>Log Exercise</ion-label>
-          <ion-button @click="() => logCurrentExercise()">
-            Log
-            <ion-icon slot="start" :icon="add"></ion-icon>
-          </ion-button>
-        </ion-list-header>
+      <ion-modal trigger="open-modal" :initial-breakpoint="0.5" :breakpoints="[0, 0.25, 0.5, 0.75]">
+        <ion-fab  horizontal="end" vertical="top" class="fab-margin">
+          <ion-fab-button color="light" @click="() => logCurrentExercise()">
+            <ion-icon :icon="add"></ion-icon>
+          </ion-fab-button>
+        </ion-fab>
 
-        <ion-item>
-          <UiCombobox
-            v-model="currentExerciseName"
-            label="Exercise"
-            :items="exercisesStore.exercises.map((exercise) => exercise.name)"
-            @deleted="(exerciseName) => exercisesStore.removeExerciseByName(exerciseName)"
-          />
-        </ion-item>
-        <ion-item>
-          <ion-input
-            v-model.number="currentReps"
-            type="number"
-            label="Reps"
-            label-placement="fixed"
-            clearInput
-          />
-        </ion-item>
-        <ion-item>
-          <ion-input
-            v-model.number="currentWeight"
-            type="number"
-            :label="formatUnit('kilogram')"
-            label-placement="fixed"
-            clearInput
-          />
-        </ion-item>
-        <ion-item>
-          <ion-input
-            v-model.number="currentDistance"
-            type="number"
-            :label="formatUnit('meter')"
-            label-placement="fixed"
-            clearInput
-          />
-        </ion-item>
-        <ion-item>
-          <ion-input
-            v-model.number="currentDuration"
-            type="number"
-            :label="formatUnit('minute')"
-            label-placement="fixed"
-            clearInput
-          />
-        </ion-item>
-      </ion-list>
+        <ion-list class="ion-margin-top">
+          <ion-list-header class="ion-margin-bottom">
+            <ion-label>Log Exercise</ion-label>
+          </ion-list-header>
 
-      <ion-toolbar>
-        <ion-buttons slot="start">
+          <ion-item>
+            <UiCombobox
+              v-model="currentExerciseName"
+              label="Exercise:"
+              :items="exercisesStore.exercises.map((exercise) => exercise.name)"
+              @deleted="(exerciseName) => exercisesStore.removeExerciseByName(exerciseName)"
+            />
+          </ion-item>
+          <ion-item>
+            <ion-input
+              v-model.number="currentReps"
+              type="number"
+              label="Reps:"
+              label-placement="fixed"
+              clearInput
+            />
+          </ion-item>
+          <ion-item>
+            <ion-input
+              v-model.number="currentWeight"
+              type="number"
+              :label="formatUnit('kilogram') + ':'"
+              label-placement="fixed"
+              clearInput
+            />
+          </ion-item>
+          <ion-item>
+            <ion-input
+              v-model.number="currentDistance"
+              type="number"
+              :label="formatUnit('meter') + ':'"
+              label-placement="fixed"
+              clearInput
+            />
+          </ion-item>
+          <ion-item>
+            <ion-input
+              v-model.number="currentDuration"
+              type="number"
+              :label="formatUnit('minute') + ':'"
+              label-placement="fixed"
+              clearInput
+            />
+          </ion-item>
           <StopWatch />
-        </ion-buttons>
-        <ion-buttons slot="end">
-          <AiFeedback />
-        </ion-buttons>
-      </ion-toolbar>
-    </ion-footer>
+        </ion-list>
+      </ion-modal>
+      <ion-fab horizontal="end" vertical="bottom" slot="fixed" class="fab-margin">
+        <ion-fab-button id="open-modal" color="light">
+          <ion-icon :icon="add"></ion-icon>
+        </ion-fab-button>
+      </ion-fab>
+    </ion-content>
   </ion-page>
 </template>
 
@@ -137,7 +139,8 @@ import {
   IonButton,
   IonButtons,
   IonContent,
-  IonFooter,
+  IonFab,
+  IonFabButton,
   IonHeader,
   IonIcon,
   IonInput,
@@ -152,6 +155,7 @@ import {
   IonMenu,
   IonMenuButton,
   IonMenuToggle,
+  IonModal,
   IonPage,
   IonTitle,
   IonToolbar,
@@ -234,3 +238,15 @@ function openWizard() {
   router.push("/wizard/fitness-goal");
 }
 </script>
+
+<style scoped>
+  ion-list {
+    --ion-item-background: transparent;
+  }
+  ion-modal {
+    --border-radius: 40px;
+  }
+  .fab-margin {
+    margin: 6px;
+  }
+</style>

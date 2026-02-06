@@ -128,3 +128,9 @@ function onFocus(event: CustomEvent) {
   open();
 }
 </script>
+
+<style scoped>
+  ion-list {
+    --ion-item-background: transparent;
+  }
+</style>

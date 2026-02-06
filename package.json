@@ -11,7 +11,8 @@
     "test:unit": "vitest",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
-    "lint": "biome check . --write"
+    "lint": "biome check . --write",
+    "format": "biome format . --write"
   },
   "dependencies": {
     "@capacitor/app": "8.0.0",
