@@ -17,7 +17,12 @@
     is-open
     header="Add to Home Screen"
     message="Tap the Share button and select 'Add to Home Screen' to install this app."
-    :buttons="[{ text: 'Got it', handler: () => (showIosInstructions = false) }]"
+    :buttons="[
+      {
+        text: 'Got it',
+        handler: dismissIosPrompt,
+      },
+    ]"
   />
 </template>
 
@@ -51,8 +56,11 @@ onMounted(() => {
   }
 
   if (isIos.value) {
-    // Show iOS instructions
-    showIosInstructions.value = true;
+    // Only show iOS instructions if not previously dismissed
+    const dismissed = localStorage.getItem("pwa-ios-prompt-dismissed");
+    if (!dismissed) {
+      showIosInstructions.value = true;
+    }
   } else {
     // Listen for the beforeinstallprompt event on Android/Chrome
     window.addEventListener("beforeinstallprompt", (e) => {
@@ -85,5 +93,10 @@ const installPwa = async () => {
 
   // Clear the deferred prompt
   deferredPrompt.value = null;
+};
+
+const dismissIosPrompt = () => {
+  showIosInstructions.value = false;
+  localStorage.setItem("pwa-ios-prompt-dismissed", "true");
 };
 </script>
