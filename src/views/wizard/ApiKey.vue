@@ -15,7 +15,7 @@
       </div>
       <ion-list inset>
         <ion-item>
-          <ion-input v-model="form.apiKey" label="API key" label-placement="floating" autofocus />
+          <ion-input v-model="form.apiKey" label="API key:" label-placement="floating" autofocus />
         </ion-item>
       </ion-list>
     </ion-content>

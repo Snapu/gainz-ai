@@ -30,11 +30,6 @@ const routes: Array<RouteRecordRaw> = [
     component: WizardIntro,
   },
   {
-    path: "/wizard",
-    name: "WizardIntro",
-    component: WizardIntro,
-  },
-  {
     path: "/wizard/fitness-goal",
     name: "WizardFitnessGoal",
     component: WizardFitnessGoal,

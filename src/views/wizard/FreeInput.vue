@@ -10,7 +10,7 @@
         <ion-item>
           <ion-textarea
             v-model="form.freeUserInput"
-            label="Free input"
+            label="Free input:"
             label-placement="floating"
             :rows="10"
             autofocus

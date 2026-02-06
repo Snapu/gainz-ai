@@ -10,7 +10,7 @@
         <ion-item>
           <ion-input
             v-model="form.age"
-            label="Age"
+            label="Age:"
             type="number"
             label-placement="floating"
             autofocus
@@ -19,7 +19,7 @@
         <ion-item>
           <ion-input
             v-model="form.heightCm"
-            label="Height in cm"
+            label="Height in cm:"
             type="number"
             label-placement="floating"
           />
@@ -27,7 +27,7 @@
         <ion-item>
           <ion-input
             v-model="form.weightKg"
-            label="Weight in kg"
+            label="Weight in kg:"
             type="number"
             label-placement="floating"
           />

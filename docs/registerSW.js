@@ -1,1 +1,0 @@
-if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/gainz-ai/sw.js', { scope: '/gainz-ai/' })})}
