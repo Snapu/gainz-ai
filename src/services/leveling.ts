@@ -1,105 +1,74 @@
 /**
- * FITNESS LEVELING & CONSISTENCY SYSTEM
- * ====================================
+ * FITNESS PROGRESSION SYSTEM
+ * ==========================
  *
- * PURPOSE
- * -------
- * This system models long-term fitness progress using principles of
- * delayed gratification, discipline, and habit formation.
+ * This module calculates long-term fitness progress using
+ * consistency-first principles instead of short-term engagement mechanics.
  *
- * It is intentionally NOT optimized for:
- * - daily streak dopamine
- * - short-term engagement tricks
- * - grinding or session spam
+ * DESIGN PHILOSOPHY
+ * -----------------
+ * - Consistency beats intensity
+ * - Progress compounds over weeks, not days
+ * - Momentum amplifies effort but cannot replace it
+ * - Breaks cause setbacks, not hard resets
+ * - Fitness has no finish line
  *
- * Instead, it rewards:
- * - showing up consistently over weeks
- * - respecting recovery and life interruptions
- * - long-term adherence measured in months and years
- *
- * CORE IDEAS
+ * CORE MODEL
  * ----------
- * 1. Progress is earned, not granted.
- * 2. Consistency beats intensity.
- * 3. Momentum is fragile and valuable.
- * 4. Fitness has no finish line.
+ * - Input represents calendar days on which any exercise occurred
+ * - Multiple exercises on the same day count as one exercise day
+ * - Progress is evaluated on a weekly cadence
+ * - A consistency-based momentum multiplier affects XP gain
+ * - Missing weeks reduces momentum; sustained consistency restores it
+ *
+ * SAFEGUARDS
+ * ----------
+ * - Diminishing returns prevent grinding or overtraining
+ * - High-consistency users receive limited forgiveness for short breaks
+ * - All values are bounded to prevent runaway growth
+ *
+ * OUTCOME
+ * -------
+ * - Early levels are achievable within weeks
+ * - High levels represent months or years of discipline
+ * - There is no maximum level; progress reflects lifestyle commitment
+ *
+ * This system is intentionally designed for delayed gratification
+ * and long-term adherence rather than rapid leveling.
  */
 
 /* ======================================================
  * CONFIGURATION CONSTANTS
- * ======================================================
- *
- * These constants define the "physics" of the system.
- * They should be tuned slowly and carefully.
- */
+ * ====================================================== */
 
-// Base XP awarded per completed workout BEFORE momentum
-// This represents raw effort.
-const BASE_XP_PER_WORKOUT = 100;
+const BASE_XP_PER_EXERCISE_DAY = 100;
 
-// Momentum bounds (acts as an XP multiplier)
-//
-// MOMENTUM_MIN:
-// - represents inactivity / cold start
-// - momentum always starts here
-//
-// MOMENTUM_MAX:
-// - represents elite, long-term consistency
-// - intentionally hard to reach
-const MOMENTUM_MIN = 0.5;
-const MOMENTUM_MAX = 1.25;
+// Momentum (consistency multiplier)
+const MOMENTUM_MIN = 0.5; // cold start / inactivity
+const MOMENTUM_MAX = 1.25; // elite long-term consistency
 
-// Momentum growth rules
-//
-// MOMENTUM_GAIN_WEEK:
-// - granted for any week with at least one workout
-//
-// MOMENTUM_GAIN_GOAL:
-// - bonus for meeting weekly workout target
-const MOMENTUM_GAIN_WEEK = 0.03;
-const MOMENTUM_GAIN_GOAL = 0.02;
+// Momentum gain
+const MOMENTUM_GAIN_WEEK = 0.03; // any active week
+const MOMENTUM_GAIN_GOAL = 0.02; // meeting weekly goal
 
-// Momentum decay
-//
-// Missing a full week hurts more than gaining one helps.
-// This encodes the reality that consistency is fragile.
+// Momentum decay (missing weeks hurts)
 const MOMENTUM_LOSS_MISSED_WEEK = 0.08;
 
-// Level XP curve
-//
-// Exponential growth ensures:
-// - early levels feel reachable
-// - high levels represent lifestyle commitment
+// Level curve (exponential, no hard cap)
 const LEVEL_XP_BASE = 400;
 const LEVEL_XP_GROWTH = 1.08;
 
-// Recovery & forgiveness rules
-//
-// Users with high consistency are allowed a small buffer
-// to rest, get sick, or handle life events.
+// Recovery buffer for disciplined users
 const HIGH_MOMENTUM_THRESHOLD = 1.0;
 const FREE_MISSED_WEEKS_AT_HIGH_MOMENTUM = 1;
 
-// Overtraining protection
-//
-// Limits how much extra XP can be earned beyond the weekly goal.
-// Prevents grinding and unhealthy session spam.
-const EXTRA_WORKOUT_CAP = 1;
+// Overtraining / grinding protection
+const EXTRA_EXERCISE_DAY_CAP = 1;
 
 /* ======================================================
  * TYPES
  * ====================================================== */
 
-/**
- * Result returned by the leveling system.
- *
- * UI layers are responsible for visualization:
- * - flames
- * - colors
- * - progress bars
- *
- * This service only returns raw values.
- */
 export interface UserProgress {
   level: number;
   totalXP: number;
@@ -110,40 +79,61 @@ export interface UserProgress {
 }
 
 /* ======================================================
- * UTILITY FUNCTIONS
+ * UTILITIES
  * ====================================================== */
 
 /**
- * Clamps a value between min and max.
- * Used heavily for momentum safety.
+ * Clamp a number between bounds.
  */
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
 /**
- * Converts a date to the start of its ISO week (Monday).
+ * Normalize a date to YYYY-MM-DD.
  *
- * Weekly granularity is intentional:
+ * Used to identify a unique *exercise day* regardless
+ * of how many exercises occurred on that day.
+ */
+function toDayKey(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Deduplicate exercise dates by calendar day.
+ *
+ * If multiple exercises are logged on the same day,
+ * they count as ONE exercise day for consistency tracking.
+ */
+function dedupeExerciseDays(dates: Date[]): Date[] {
+  const seen = new Set<string>();
+
+  return dates.filter((date) => {
+    const key = toDayKey(date);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/**
+ * Convert a date to the start of its ISO week (Monday).
+ *
+ * Weekly granularity:
  * - respects rest days
  * - avoids toxic daily streaks
- * - matches real training cycles
+ * - mirrors real training cycles
  */
 function startOfWeek(date: Date): Date {
   const d = new Date(date);
-  const day = d.getDay() || 7; // Sunday becomes 7
+  const day = d.getDay() || 7; // Sunday → 7
   d.setHours(0, 0, 0, 0);
   d.setDate(d.getDate() - day + 1);
   return d;
 }
 
 /**
- * Groups workout dates by week.
- *
- * Each week is evaluated independently for:
- * - momentum gain
- * - momentum decay
- * - XP calculation
+ * Group exercise days by week.
  */
 function groupByWeek(dates: Date[]): Map<number, Date[]> {
   const map = new Map<number, Date[]>();
@@ -160,10 +150,9 @@ function groupByWeek(dates: Date[]): Map<number, Date[]> {
 /**
  * XP required to advance FROM a given level.
  *
- * This is intentionally exponential:
- * - level 20 ≈ ~3 months consistent
- * - level 100 ≈ ~1 year disciplined
- * - no hard upper bound
+ * Exponential curve:
+ * - early levels feel achievable
+ * - high levels represent lifestyle commitment
  */
 function xpForLevel(level: number): number {
   return Math.floor(LEVEL_XP_BASE * LEVEL_XP_GROWTH ** level);
@@ -174,37 +163,26 @@ function xpForLevel(level: number): number {
  * ====================================================== */
 
 /**
- * Calculates the user's overall training progress.
+ * Calculate long-term training progress.
  *
- * INPUTS
- * ------
- * workoutDays:
- *   Array of dates when workouts occurred.
+ * @param exerciseDates
+ *   Dates on which the user performed at least one exercise.
+ *   (Raw logs; may include multiple entries per day.)
  *
- * aimedWorkoutsPerWeek:
- *   User's intended weekly training frequency.
+ * @param aimedWorkoutsPerWeek
+ *   Intended number of exercise days per week.
  *
- * OUTPUT
- * ------
- * A UserProgress object representing:
- * - long-term level
- * - XP progress
- * - consistency momentum
+ * @returns UserProgress
+ *   Level, XP, and consistency momentum.
  */
 export function calculateUserProgress(
-  workoutDays: Date[],
+  exerciseDates: Date[],
   aimedWorkoutsPerWeek: number,
 ): UserProgress {
   /* ----------------------------------
-   * Empty / new user state
-   * ----------------------------------
-   *
-   * No workouts means:
-   * - level 0
-   * - zero XP
-   * - minimum momentum
-   */
-  if (workoutDays.length === 0) {
+   * New / inactive user
+   * ---------------------------------- */
+  if (exerciseDates.length === 0) {
     return {
       level: 0,
       totalXP: 0,
@@ -216,14 +194,17 @@ export function calculateUserProgress(
   }
 
   /* ----------------------------------
-   * Preparation
+   * Normalize input data
    * ---------------------------------- */
 
-  // Sort dates chronologically
-  const sortedDates = [...workoutDays].sort((a, b) => a.getTime() - b.getTime());
+  // Sort chronologically
+  const sortedDates = [...exerciseDates].sort((a, b) => a.getTime() - b.getTime());
 
-  // Group workouts by week
-  const weeks = groupByWeek(sortedDates);
+  // Deduplicate by calendar day → exercise days
+  const uniqueExerciseDays = dedupeExerciseDays(sortedDates);
+
+  // Group exercise days by week
+  const weeks = groupByWeek(uniqueExerciseDays);
   const weekKeys = [...weeks.keys()].sort();
 
   let momentum = MOMENTUM_MIN;
@@ -232,18 +213,13 @@ export function calculateUserProgress(
 
   /* ----------------------------------
    * Weekly evaluation loop
-   * ----------------------------------
-   *
-   * This loop is the heart of the system.
-   * Each iteration represents one training week.
-   */
+   * ---------------------------------- */
   for (const weekKey of weekKeys) {
     /* ---- Handle missed weeks ---- */
     if (previousWeek !== null) {
       const weeksMissed = (weekKey - previousWeek) / (7 * 24 * 60 * 60 * 1000) - 1;
 
       if (weeksMissed > 0) {
-        // High-consistency users get a small recovery buffer
         const effectiveMissed =
           momentum >= HIGH_MOMENTUM_THRESHOLD
             ? Math.max(0, weeksMissed - FREE_MISSED_WEEKS_AT_HIGH_MOMENTUM)
@@ -253,33 +229,36 @@ export function calculateUserProgress(
       }
     }
 
-    /* ---- Evaluate current week ---- */
-    const workoutsThisWeek = weeks.get(weekKey)!.length;
+    /* ---- Current week ---- */
+    const exerciseDaysThisWeek = weeks.get(weekKey)!.length;
 
     // Momentum inertia:
-    // High momentum is harder to build (but still valuable)
+    // high consistency is harder to build, but more stable
     const inertia = momentum > 1.0 ? 0.5 : 1.0;
 
     // Any active week builds momentum
     momentum += MOMENTUM_GAIN_WEEK * inertia;
 
-    // Meeting weekly goal gives a bonus
-    if (workoutsThisWeek >= aimedWorkoutsPerWeek) {
+    // Meeting weekly goal grants bonus
+    if (exerciseDaysThisWeek >= aimedWorkoutsPerWeek) {
       momentum += MOMENTUM_GAIN_GOAL * inertia;
     }
 
     momentum = clamp(momentum, MOMENTUM_MIN, MOMENTUM_MAX);
 
     /* ---- XP calculation ---- */
-    const effectiveWorkouts = Math.min(workoutsThisWeek, aimedWorkoutsPerWeek + EXTRA_WORKOUT_CAP);
+    const effectiveExerciseDays = Math.min(
+      exerciseDaysThisWeek,
+      aimedWorkoutsPerWeek + EXTRA_EXERCISE_DAY_CAP,
+    );
 
-    totalXP += effectiveWorkouts * BASE_XP_PER_WORKOUT * momentum;
+    totalXP += effectiveExerciseDays * BASE_XP_PER_EXERCISE_DAY * momentum;
 
     previousWeek = weekKey;
   }
 
   /* ----------------------------------
-   * Level calculation
+   * Level resolution
    * ---------------------------------- */
 
   let level = 0;
