@@ -1,7 +1,9 @@
 <template>
-  <ion-button fill="clear" @click="() => askAi()">
-    <ion-icon slot="start" :icon="sparklesOutline" />
-  </ion-button>
+  <ion-fab  horizontal="end" vertical="top" slot="fixed" class="fab-margin">
+    <ion-fab-button color="light" @click="() => askAi()">
+      <ion-icon :icon="sparklesSharp"></ion-icon>
+    </ion-fab-button>
+  </ion-fab>
 
   <ion-modal ref="modalRef">
     <ion-header>
@@ -38,6 +40,8 @@ import {
   IonButton,
   IonButtons,
   IonContent,
+  IonFab,
+  IonFabButton,
   IonHeader,
   IonIcon,
   IonModal,
@@ -46,7 +50,7 @@ import {
   IonToolbar,
 } from "@ionic/vue";
 
-import { closeOutline, sparklesOutline } from "ionicons/icons";
+import { closeOutline, sparklesSharp } from "ionicons/icons";
 import { ref } from "vue";
 import { useAiStore } from "@/stores/ai";
 import AiMarkdownContainer from "./AiMarkdownContainer.vue";
@@ -63,3 +67,9 @@ function askAi() {
   modalRef.value?.$el.present().then(() => aiStore.askAi());
 }
 </script>
+
+<style scoped>
+  .fab-margin {
+    margin: 6px;
+  }
+</style>

@@ -2,7 +2,7 @@
   <ion-grid>
     <ion-row class="ion-align-items-center ">
       <ion-col size="auto">
-        <ion-text>Lvl {{ userProgress.level }}</ion-text>
+        <ion-text color="dark"><strong>Lvl {{ userProgress.level }}</strong></ion-text>
       </ion-col>
       <ion-col size="3" >
         <ion-progress-bar :value="userProgress.progressPercent / 100"></ion-progress-bar>
@@ -15,11 +15,11 @@
 </template>
 
 <script setup lang="ts">
+import { IonCol, IonGrid, IonProgressBar, IonRow, IonText } from "@ionic/vue";
 import { computed } from "vue";
 import { calculateUserProgress } from "@/services/leveling";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
 import { useUserProfileStore } from "@/stores/userProfile";
-import { IonProgressBar, IonGrid, IonCol, IonRow, IonText } from "@ionic/vue";
 
 const exerciseLogsStore = useExerciseLogsStore();
 const userProfileStore = useUserProfileStore();
@@ -37,10 +37,8 @@ const flameCount = computed(() => {
 
   if (totalXP === 0) return 0;
 
-  if (momentum < 0.65) return 1;
-  if (momentum < 0.8) return 2;
-  if (momentum < 0.95) return 3;
-  if (momentum < 1.1) return 4;
-  return 5;
+  if (momentum < 0.75) return 1;
+  if (momentum < 1) return 2;
+  return 3;
 });
 </script>

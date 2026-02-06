@@ -1,162 +1,307 @@
-// --------------------
-// Types
-// --------------------
+/**
+ * FITNESS LEVELING & CONSISTENCY SYSTEM
+ * ====================================
+ *
+ * PURPOSE
+ * -------
+ * This system models long-term fitness progress using principles of
+ * delayed gratification, discipline, and habit formation.
+ *
+ * It is intentionally NOT optimized for:
+ * - daily streak dopamine
+ * - short-term engagement tricks
+ * - grinding or session spam
+ *
+ * Instead, it rewards:
+ * - showing up consistently over weeks
+ * - respecting recovery and life interruptions
+ * - long-term adherence measured in months and years
+ *
+ * CORE IDEAS
+ * ----------
+ * 1. Progress is earned, not granted.
+ * 2. Consistency beats intensity.
+ * 3. Momentum is fragile and valuable.
+ * 4. Fitness has no finish line.
+ */
 
-export type UserProgress = {
-  level: number;
-  totalXP: number;
-  momentum: number; // raw multiplier 0.5 - 1.25
-  xpInCurrentLevel: number;
-  xpForNextLevel: number;
-  progressPercent: number; // 0-100
-};
+/* ======================================================
+ * CONFIGURATION CONSTANTS
+ * ======================================================
+ *
+ * These constants define the "physics" of the system.
+ * They should be tuned slowly and carefully.
+ */
 
-// --------------------
-// Constants
-// --------------------
+// Base XP awarded per completed workout BEFORE momentum
+// This represents raw effort.
+const BASE_XP_PER_WORKOUT = 100;
 
-const BASE_WEEKLY_XP = 100;
-const MAX_CONSISTENCY_MULTIPLIER = 1.5;
-
+// Momentum bounds (acts as an XP multiplier)
+//
+// MOMENTUM_MIN:
+// - represents inactivity / cold start
+// - momentum always starts here
+//
+// MOMENTUM_MAX:
+// - represents elite, long-term consistency
+// - intentionally hard to reach
 const MOMENTUM_MIN = 0.5;
 const MOMENTUM_MAX = 1.25;
-const MOMENTUM_GAIN = 0.03;
-const MOMENTUM_LOSS = 0.07;
 
-const LEVEL_XP_BASE = 200;
-const LEVEL_XP_EXPONENT = 1.5;
+// Momentum growth rules
+//
+// MOMENTUM_GAIN_WEEK:
+// - granted for any week with at least one workout
+//
+// MOMENTUM_GAIN_GOAL:
+// - bonus for meeting weekly workout target
+const MOMENTUM_GAIN_WEEK = 0.03;
+const MOMENTUM_GAIN_GOAL = 0.02;
 
-// --------------------
-// Helpers
-// --------------------
+// Momentum decay
+//
+// Missing a full week hurts more than gaining one helps.
+// This encodes the reality that consistency is fragile.
+const MOMENTUM_LOSS_MISSED_WEEK = 0.08;
 
+// Level XP curve
+//
+// Exponential growth ensures:
+// - early levels feel reachable
+// - high levels represent lifestyle commitment
+const LEVEL_XP_BASE = 400;
+const LEVEL_XP_GROWTH = 1.08;
+
+// Recovery & forgiveness rules
+//
+// Users with high consistency are allowed a small buffer
+// to rest, get sick, or handle life events.
+const HIGH_MOMENTUM_THRESHOLD = 1.0;
+const FREE_MISSED_WEEKS_AT_HIGH_MOMENTUM = 1;
+
+// Overtraining protection
+//
+// Limits how much extra XP can be earned beyond the weekly goal.
+// Prevents grinding and unhealthy session spam.
+const EXTRA_WORKOUT_CAP = 1;
+
+/* ======================================================
+ * TYPES
+ * ====================================================== */
+
+/**
+ * Result returned by the leveling system.
+ *
+ * UI layers are responsible for visualization:
+ * - flames
+ * - colors
+ * - progress bars
+ *
+ * This service only returns raw values.
+ */
+export interface UserProgress {
+  level: number;
+  totalXP: number;
+  xpIntoLevel: number;
+  xpForNextLevel: number;
+  progressPercent: number;
+  momentum: number; // consistency multiplier
+}
+
+/* ======================================================
+ * UTILITY FUNCTIONS
+ * ====================================================== */
+
+/**
+ * Clamps a value between min and max.
+ * Used heavily for momentum safety.
+ */
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function getISOWeekKey(date: Date): string {
-  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  const day = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - day);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  const week = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-  return `${d.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+/**
+ * Converts a date to the start of its ISO week (Monday).
+ *
+ * Weekly granularity is intentional:
+ * - respects rest days
+ * - avoids toxic daily streaks
+ * - matches real training cycles
+ */
+function startOfWeek(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay() || 7; // Sunday becomes 7
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - day + 1);
+  return d;
 }
 
-function parseWeekKey(key: string): { year: number; week: number } {
-  const [y, w] = key.split("-W");
-  return { year: Number(y), week: Number(w) };
+/**
+ * Groups workout dates by week.
+ *
+ * Each week is evaluated independently for:
+ * - momentum gain
+ * - momentum decay
+ * - XP calculation
+ */
+function groupByWeek(dates: Date[]): Map<number, Date[]> {
+  const map = new Map<number, Date[]>();
+
+  for (const date of dates) {
+    const weekKey = startOfWeek(date).getTime();
+    if (!map.has(weekKey)) map.set(weekKey, []);
+    map.get(weekKey)!.push(date);
+  }
+
+  return map;
 }
 
-function weekDiff(a: string, b: string): number {
-  const A = parseWeekKey(a);
-  const B = parseWeekKey(b);
-  return (B.year - A.year) * 52 + (B.week - A.week);
+/**
+ * XP required to advance FROM a given level.
+ *
+ * This is intentionally exponential:
+ * - level 20 ≈ ~3 months consistent
+ * - level 100 ≈ ~1 year disciplined
+ * - no hard upper bound
+ */
+function xpForLevel(level: number): number {
+  return Math.floor(LEVEL_XP_BASE * LEVEL_XP_GROWTH ** level);
 }
 
-function xpRequiredForLevel(level: number): number {
-  return LEVEL_XP_BASE * level ** LEVEL_XP_EXPONENT;
-}
+/* ======================================================
+ * MAIN CALCULATION
+ * ====================================================== */
 
-// --------------------
-// Main function
-// --------------------
-
+/**
+ * Calculates the user's overall training progress.
+ *
+ * INPUTS
+ * ------
+ * workoutDays:
+ *   Array of dates when workouts occurred.
+ *
+ * aimedWorkoutsPerWeek:
+ *   User's intended weekly training frequency.
+ *
+ * OUTPUT
+ * ------
+ * A UserProgress object representing:
+ * - long-term level
+ * - XP progress
+ * - consistency momentum
+ */
 export function calculateUserProgress(
-  workoutDates: Date[],
+  workoutDays: Date[],
   aimedWorkoutsPerWeek: number,
 ): UserProgress {
-  if (aimedWorkoutsPerWeek <= 0) {
-    throw new Error("aimedWorkoutsPerWeek must be > 0");
-  }
-
-  // Deduplicate workouts per UTC day
-  const uniqueDays = new Set(
-    workoutDates.map((d) => `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`),
-  );
-
-  // Group by ISO week
-  const weekMap = new Map<string, number>();
-  for (const key of uniqueDays) {
-    const [y, m, d] = key.split("-").map(Number);
-    const date = new Date(Date.UTC(y!, m, d));
-    const weekKey = getISOWeekKey(date);
-    weekMap.set(weekKey, (weekMap.get(weekKey) ?? 0) + 1);
-  }
-
-  if (weekMap.size === 0) {
+  /* ----------------------------------
+   * Empty / new user state
+   * ----------------------------------
+   *
+   * No workouts means:
+   * - level 0
+   * - zero XP
+   * - minimum momentum
+   */
+  if (workoutDays.length === 0) {
     return {
       level: 0,
       totalXP: 0,
-      momentum: 1,
-      xpInCurrentLevel: 0,
-      xpForNextLevel: xpRequiredForLevel(1),
+      xpIntoLevel: 0,
+      xpForNextLevel: xpForLevel(0),
       progressPercent: 0,
+      momentum: MOMENTUM_MIN,
     };
   }
 
-  // Sort weeks chronologically
-  const sortedWeekKeys = [...weekMap.keys()].sort((a, b) => weekDiff(a, b));
+  /* ----------------------------------
+   * Preparation
+   * ---------------------------------- */
 
-  const firstWeek = sortedWeekKeys[0]!;
-  const lastWeek = sortedWeekKeys[sortedWeekKeys.length - 1]!;
+  // Sort dates chronologically
+  const sortedDates = [...workoutDays].sort((a, b) => a.getTime() - b.getTime());
 
-  // Create a full list of weeks between first and last to apply decay for empty weeks
-  const totalWeeks = weekDiff(firstWeek, lastWeek) + 1;
+  // Group workouts by week
+  const weeks = groupByWeek(sortedDates);
+  const weekKeys = [...weeks.keys()].sort();
+
+  let momentum = MOMENTUM_MIN;
   let totalXP = 0;
-  let momentum = 1.0;
-  let lastWeekKey: string | null = null;
+  let previousWeek: number | null = null;
 
-  for (let i = 0; i < totalWeeks; i++) {
-    // Compute the current week key
-    const { year, week } = parseWeekKey(firstWeek);
-    const weekNumber = week + i;
-    const currentYear = year + Math.floor((weekNumber - 1) / 52);
-    const currentWeek = ((weekNumber - 1) % 52) + 1;
-    const currentWeekKey = `${currentYear}-W${String(currentWeek).padStart(2, "0")}`;
+  /* ----------------------------------
+   * Weekly evaluation loop
+   * ----------------------------------
+   *
+   * This loop is the heart of the system.
+   * Each iteration represents one training week.
+   */
+  for (const weekKey of weekKeys) {
+    /* ---- Handle missed weeks ---- */
+    if (previousWeek !== null) {
+      const weeksMissed = (weekKey - previousWeek) / (7 * 24 * 60 * 60 * 1000) - 1;
 
-    const workouts = weekMap.get(currentWeekKey) ?? 0;
+      if (weeksMissed > 0) {
+        // High-consistency users get a small recovery buffer
+        const effectiveMissed =
+          momentum >= HIGH_MOMENTUM_THRESHOLD
+            ? Math.max(0, weeksMissed - FREE_MISSED_WEEKS_AT_HIGH_MOMENTUM)
+            : weeksMissed;
 
-    // Apply decay for skipped weeks
-    if (lastWeekKey !== null && weekDiff(lastWeekKey, currentWeekKey) > 1) {
-      const gap = weekDiff(lastWeekKey, currentWeekKey) - 1;
-      momentum = clamp(momentum - gap * MOMENTUM_LOSS, MOMENTUM_MIN, MOMENTUM_MAX);
+        momentum -= effectiveMissed * MOMENTUM_LOSS_MISSED_WEEK;
+      }
     }
 
-    // Weekly consistency
-    const consistency = workouts / aimedWorkoutsPerWeek;
-    const effectiveConsistency = Math.min(consistency, MAX_CONSISTENCY_MULTIPLIER);
-    const weeklyXP = BASE_WEEKLY_XP * effectiveConsistency * momentum;
-    totalXP += weeklyXP;
+    /* ---- Evaluate current week ---- */
+    const workoutsThisWeek = weeks.get(weekKey)!.length;
 
-    // Momentum grows only for consecutive successful weeks
-    if (lastWeekKey !== null && weekDiff(lastWeekKey, currentWeekKey) === 1 && consistency >= 1) {
-      momentum = clamp(momentum + MOMENTUM_GAIN, MOMENTUM_MIN, MOMENTUM_MAX);
+    // Momentum inertia:
+    // High momentum is harder to build (but still valuable)
+    const inertia = momentum > 1.0 ? 0.5 : 1.0;
+
+    // Any active week builds momentum
+    momentum += MOMENTUM_GAIN_WEEK * inertia;
+
+    // Meeting weekly goal gives a bonus
+    if (workoutsThisWeek >= aimedWorkoutsPerWeek) {
+      momentum += MOMENTUM_GAIN_GOAL * inertia;
     }
 
-    lastWeekKey = currentWeekKey;
+    momentum = clamp(momentum, MOMENTUM_MIN, MOMENTUM_MAX);
+
+    /* ---- XP calculation ---- */
+    const effectiveWorkouts = Math.min(workoutsThisWeek, aimedWorkoutsPerWeek + EXTRA_WORKOUT_CAP);
+
+    totalXP += effectiveWorkouts * BASE_XP_PER_WORKOUT * momentum;
+
+    previousWeek = weekKey;
   }
 
-  // Compute level and progress
+  /* ----------------------------------
+   * Level calculation
+   * ---------------------------------- */
+
   let level = 0;
-  let accumulatedXP = 0;
-  while (true) {
-    const xpNext = xpRequiredForLevel(level + 1);
-    if (accumulatedXP + xpNext > totalXP) break;
-    accumulatedXP += xpNext;
+  let xpRemaining = totalXP;
+
+  while (xpRemaining >= xpForLevel(level)) {
+    xpRemaining -= xpForLevel(level);
     level++;
   }
 
-  const xpInCurrentLevel = totalXP - accumulatedXP;
-  const xpForNextLevel = xpRequiredForLevel(level + 1);
-  const progressPercent = Math.min(Math.floor((xpInCurrentLevel / xpForNextLevel) * 100), 100);
+  const xpForNext = xpForLevel(level);
+  const progressPercent = Math.floor((xpRemaining / xpForNext) * 100);
 
+  /* ----------------------------------
+   * Final result
+   * ---------------------------------- */
   return {
     level,
     totalXP: Math.floor(totalXP),
-    momentum: Number(momentum.toFixed(2)),
-    xpInCurrentLevel: Math.floor(xpInCurrentLevel),
-    xpForNextLevel: Math.floor(xpForNextLevel),
+    xpIntoLevel: Math.floor(xpRemaining),
+    xpForNextLevel: xpForNext,
     progressPercent,
+    momentum,
   };
 }

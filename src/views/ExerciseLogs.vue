@@ -22,14 +22,17 @@
         <ion-buttons slot="start">
           <ion-menu-button />
         </ion-buttons>
-        <ion-title><ConsistencyLevel /></ion-title>
-        <ion-buttons slot="end">
-          <AiFeedback />
-        </ion-buttons>
+        <ion-title>Gainz AI</ion-title>
       </ion-toolbar>
     </ion-header>
 
     <ion-content ref="content" id="content">
+      <ion-card>
+        <ion-card-content>
+          <ConsistencyLevel />
+          <AiFeedback />
+        </ion-card-content>
+      </ion-card>
       <ion-accordion-group :value="open" multiple>
         <ion-accordion v-for="[day, logs] in Object.entries(groupedLogs)" :key="day" :value="day">
           <ion-item slot="header">
@@ -66,7 +69,7 @@
 
       <ion-modal trigger="open-modal" :initial-breakpoint="0.5" :breakpoints="[0, 0.25, 0.5, 0.75]">
         <ion-fab  horizontal="end" vertical="top" class="fab-margin">
-          <ion-fab-button color="light" @click="() => logCurrentExercise()">
+          <ion-fab-button color="light" translucent @click="() => logCurrentExercise()">
             <ion-icon :icon="add"></ion-icon>
           </ion-fab-button>
         </ion-fab>
@@ -123,8 +126,9 @@
           <StopWatch />
         </ion-list>
       </ion-modal>
+
       <ion-fab horizontal="end" vertical="bottom" slot="fixed" class="fab-margin">
-        <ion-fab-button id="open-modal" color="light">
+        <ion-fab-button id="open-modal" color="light" translucent>
           <ion-icon :icon="add"></ion-icon>
         </ion-fab-button>
       </ion-fab>
@@ -138,6 +142,10 @@ import {
   IonAccordionGroup,
   IonButton,
   IonButtons,
+  IonCard,
+  IonCardContent,
+  IonCardHeader,
+  IonCardTitle,
   IonContent,
   IonFab,
   IonFabButton,
