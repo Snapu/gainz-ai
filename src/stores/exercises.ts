@@ -17,7 +17,7 @@ export const useExercisesStore = defineStore("exercises", () => {
     remove,
   } = useOfflineSyncedStore<Exercise>({
     key: "exercise",
-    // TODO FIXME types
+    getId: (exercise) => exercise.name,
     fetchRemote: () => loadExercises(spreadsheetStore.doc as GoogleSpreadsheet),
     addRemote: (item) => addExercise_(item, spreadsheetStore.doc as GoogleSpreadsheet),
     removeRemote: (item) => deleteExercise(item, spreadsheetStore.doc as GoogleSpreadsheet),

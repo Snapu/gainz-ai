@@ -20,6 +20,7 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
     remove,
   } = useOfflineSyncedStore<ExerciseLog>({
     key: "exerciseLogs",
+    getId: (log) => `${log.exerciseName}-${log.loggedAt.getTime()}`,
     fetchRemote: () => loadExerciseLogs(spreadsheetStore.doc as GoogleSpreadsheet),
     addRemote: (item) => addExerciseLog_(item, spreadsheetStore.doc as GoogleSpreadsheet),
     removeRemote: (item) => deleteExerciseLog_(item, spreadsheetStore.doc as GoogleSpreadsheet),
