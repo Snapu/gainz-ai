@@ -137,6 +137,7 @@
 </template>
 
 <script setup lang="ts">
+import { Haptics, ImpactStyle } from "@capacitor/haptics";
 import {
   IonAccordion,
   IonAccordionGroup,
@@ -167,7 +168,6 @@ import {
   IonTitle,
   IonToolbar,
 } from "@ionic/vue";
-import { Haptics, ImpactStyle } from "@capacitor/haptics";
 import { add, settingsOutline } from "ionicons/icons";
 import { computed, onMounted, ref, useTemplateRef, watchEffect } from "vue";
 import AiFeedback from "@/components/AiFeedback.vue";
@@ -224,11 +224,16 @@ async function logCurrentExercise() {
   exerciseLogsStore.addExerciseLog(log);
   cacheAiFeedback.value = false;
 
-  // Haptic feedback for confirmation
-  await Haptics.impact({ style: ImpactStyle.Medium });
+  // Haptic feedback for confirmation (wrapped in try-catch for iOS compatibility)
+  try {
+    await Haptics.impact({ style: ImpactStyle.Medium });
+  } catch (error) {
+    console.log("Haptics not available:", error);
+  }
 
   // Close modal and scroll to show new entry
   await logModalRef.value?.$el.dismiss();
+
   setTimeout(() => scrollBottom(), 200);
 }
 
