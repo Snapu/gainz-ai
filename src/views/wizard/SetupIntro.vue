@@ -3,7 +3,7 @@
     <WizardHeader />
 
     <ion-content>
-      <div class="ion-padding-horizontal">
+      <div class="ion-padding">
         <h1>Hello! 👋</h1>
         <p>I'm your <strong>AI Personal Trainer</strong>!</p>
         <p>

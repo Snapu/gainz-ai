@@ -67,7 +67,7 @@
         </ion-accordion>
       </ion-accordion-group>
 
-      <ion-modal trigger="open-modal" :initial-breakpoint="0.5" :breakpoints="[0, 0.25, 0.5, 0.75]">
+      <ion-modal ref="logModalRef" trigger="open-modal" :initial-breakpoint="0.5" :breakpoints="[0, 0.25, 0.5, 0.75]">
         <ion-fab  horizontal="end" vertical="top" class="fab-margin">
           <ion-fab-button color="light" translucent @click="() => logCurrentExercise()">
             <ion-icon :icon="add"></ion-icon>
@@ -167,6 +167,7 @@ import {
   IonTitle,
   IonToolbar,
 } from "@ionic/vue";
+import { Haptics, ImpactStyle } from "@capacitor/haptics";
 import { add, settingsOutline } from "ionicons/icons";
 import { computed, onMounted, ref, useTemplateRef, watchEffect } from "vue";
 import AiFeedback from "@/components/AiFeedback.vue";
@@ -180,6 +181,7 @@ import { formatNumberWithUnit, formatUnit } from "@/services/utils/units";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
 import { useExercisesStore } from "@/stores/exercises";
 
+const logModalRef = ref<InstanceType<typeof IonModal> | null>(null);
 const contentRef = useTemplateRef("content");
 const cacheAiFeedback = ref(false);
 const open = ref([localeDateString(new Date())]);
@@ -207,9 +209,9 @@ const currentDuration = ref<number | null>(null);
 function scrollBottom() {
   contentRef?.value?.$el.scrollToBottom(500);
 }
-
-function logCurrentExercise() {
+async function logCurrentExercise() {
   if (!currentExerciseName.value) return;
+
   exercisesStore.addExercise({ name: currentExerciseName.value.trim() });
   const log = {
     loggedAt: new Date(),
@@ -221,6 +223,12 @@ function logCurrentExercise() {
   };
   exerciseLogsStore.addExerciseLog(log);
   cacheAiFeedback.value = false;
+
+  // Haptic feedback for confirmation
+  await Haptics.impact({ style: ImpactStyle.Medium });
+
+  // Close modal and scroll to show new entry
+  await logModalRef.value?.$el.dismiss();
   setTimeout(() => scrollBottom(), 200);
 }
 

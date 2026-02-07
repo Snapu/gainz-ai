@@ -3,10 +3,10 @@
     <WizardHeader title="4/8" />
 
     <ion-content>
-      <div class="ion-padding-horizontal">
+      <div class="ion-padding">
         <h1>Where do you work out most?</h1>
       </div>
-      <ion-list inset>
+      <ion-list>
         <ion-item v-for="[label, value] in workoutLocationLabels" :key="value">
           <UiCheckbox v-model="form.workoutLocation" :value="value">{{ label }}</UiCheckbox>
         </ion-item>

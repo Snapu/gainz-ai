@@ -3,17 +3,17 @@
     <WizardHeader title="7/8" />
 
     <ion-content>
-      <div class="ion-padding-horizontal">
+      <div class="ion-padding">
         <h1>Anything else that you want to tell me?</h1>
       </div>
-      <ion-list inset>
+      <ion-list>
         <ion-item>
           <ion-textarea
             v-model="form.freeUserInput"
             label="Free input:"
-            label-placement="floating"
-            :rows="10"
+            :rows="15"
             autofocus
+            label-placement="floating"
           />
         </ion-item>
       </ion-list>

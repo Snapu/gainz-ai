@@ -3,10 +3,10 @@
     <WizardHeader title="5/8" />
 
     <ion-content>
-      <div class="ion-padding-horizontal">
+      <div class="ion-padding">
         <h1>What equipment do you have access to?</h1>
       </div>
-      <ion-list inset>
+      <ion-list>
         <ion-item v-for="[label, value] in equipmentOptionLabels" :key="value">
           <UiCheckbox v-model="form.equipmentAccess" :value="value" multiple>
             {{ label }}

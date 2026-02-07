@@ -3,16 +3,15 @@
     <WizardHeader title="6/8" />
 
     <ion-content>
-      <div class="ion-padding-horizontal">
+      <div class="ion-padding">
         <h1>What’s your age, height, and weight?</h1>
       </div>
-      <ion-list inset>
+      <ion-list>
         <ion-item>
           <ion-input
             v-model="form.age"
             label="Age:"
             type="number"
-            label-placement="floating"
             autofocus
           />
         </ion-item>
@@ -21,7 +20,6 @@
             v-model="form.heightCm"
             label="Height in cm:"
             type="number"
-            label-placement="floating"
           />
         </ion-item>
         <ion-item>
@@ -29,7 +27,6 @@
             v-model="form.weightKg"
             label="Weight in kg:"
             type="number"
-            label-placement="floating"
           />
         </ion-item>
       </ion-list>

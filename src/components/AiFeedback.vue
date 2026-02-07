@@ -18,16 +18,18 @@
     </ion-header>
 
     <ion-content class="ion-padding">
-      <div v-if="aiStore.isLoading">
-        <h3>
-          <ion-skeleton-text animated style="width: 80%" />
-        </h3>
-        <p>
-          <ion-skeleton-text animated style="width: 60%" />
-        </p>
-        <p>
-          <ion-skeleton-text animated style="width: 30%" />
-        </p>
+      <div v-if="aiStore.isLoading" class="skeleton-feedback">
+        <div class="skeleton-timestamp">
+          <ion-skeleton-text animated style="width: 80px; height: 14px;" />
+        </div>
+        <div class="skeleton-content">
+          <ion-skeleton-text animated style="width: 100%; height: 20px;" />
+          <ion-skeleton-text animated style="width: 95%; height: 16px;" />
+          <ion-skeleton-text animated style="width: 98%; height: 16px;" />
+          <ion-skeleton-text animated style="width: 90%; height: 16px;" />
+          <ion-skeleton-text animated style="width: 85%; height: 16px;" />
+          <ion-skeleton-text animated style="width: 92%; height: 16px;" />
+        </div>
       </div>
 
       <AiMarkdownContainer />
@@ -63,7 +65,31 @@ function close() {
   modalRef.value?.$el.dismiss();
 }
 
-function askAi() {
-  modalRef.value?.$el.present().then(() => aiStore.askAi());
+async function askAi() {
+  await modalRef.value?.$el.present();
+
+  // If we have cached messages, show them immediately
+  if (aiStore.messages.length > 0) {
+    console.debug("Showing cached messages");
+  }
+
+  // Then try to get new AI response (will be skipped if no new logs)
+  await aiStore.askAi();
 }
 </script>
+
+<style scoped>
+.skeleton-feedback {
+  margin-bottom: 2rem;
+}
+
+.skeleton-timestamp {
+  margin-bottom: 0.5rem;
+}
+
+.skeleton-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+</style>

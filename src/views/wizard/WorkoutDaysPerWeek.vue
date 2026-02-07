@@ -3,10 +3,10 @@
     <WizardHeader title="3/8" />
 
     <ion-content>
-      <div class="ion-padding-horizontal">
+      <div class="ion-padding">
         <h1>How many days per week do you want to train?</h1>
       </div>
-      <ion-list inset>
+      <ion-list>
         <ion-item v-for="[label, value] in workoutDaysPerWeekLabels" :key="value">
           <UiCheckbox v-model="form.workoutDaysPerWeek" :value="value">{{ label }}</UiCheckbox>
         </ion-item>

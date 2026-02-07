@@ -3,10 +3,10 @@
     <WizardHeader title="2/8" />
 
     <ion-content>
-      <div class="ion-padding-horizontal">
+      <div class="ion-padding">
         <h1>What’s your current fitness level?</h1>
       </div>
-      <ion-list inset>
+      <ion-list>
         <ion-item v-for="[label, value] in fitnessLevelLabels" :key="value">
           <UiCheckbox v-model="form.fitnessLevel" :value="value"> {{ label }}</UiCheckbox>
         </ion-item>

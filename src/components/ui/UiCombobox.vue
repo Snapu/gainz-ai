@@ -23,7 +23,7 @@
     </ion-header>
 
     <ion-content>
-      <ion-list inset>
+      <ion-list>
         <ion-item-sliding v-for="item in filteredItems" :key="item">
           <ion-item @click="() => selectItem(item)">
             {{ item }}
