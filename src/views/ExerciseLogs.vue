@@ -36,15 +36,15 @@
       <ion-accordion-group :value="open" multiple>
         <ion-accordion v-for="[day, logs] in Object.entries(groupedLogs)" :key="day" :value="day">
           <ion-item slot="header">
-            <ion-label>{{ day }}</ion-label>
+            <ion-label color="medium">{{ day }}</ion-label>
           </ion-item>
-          <ion-list slot="content" inset>
+          <ion-list slot="content">
             <ion-item-sliding v-for="log in logs" :key="log.exerciseName + log.loggedAt.getTime()">
               <ion-item>
-                <span slot="start">
+                <ion-label>
                   {{ log.exerciseName }}
-                </span>
-                <span slot="end">
+                </ion-label>
+                <ion-note slot="end">
                   <span v-if="log.reps" class="ion-margin-start"> {{ log.reps }} x </span>
                   <span v-if="log.weight" class="ion-margin-start">
                     {{ formatNumberWithUnit(log.weight, "kilogram") }}
@@ -55,7 +55,7 @@
                   <span v-if="log.duration" class="ion-margin-start">
                     {{ formatNumberWithUnit(log.duration, "minute") }}
                   </span>
-                </span>
+                </ion-note>
               </ion-item>
               <ion-item-options>
                 <ion-item-option color="danger" @click="() => deleteLog(log)">
@@ -144,8 +144,6 @@ import {
   IonButtons,
   IonCard,
   IonCardContent,
-  IonCardHeader,
-  IonCardTitle,
   IonContent,
   IonFab,
   IonFabButton,
@@ -164,6 +162,7 @@ import {
   IonMenuButton,
   IonMenuToggle,
   IonModal,
+  IonNote,
   IonPage,
   IonTitle,
   IonToolbar,

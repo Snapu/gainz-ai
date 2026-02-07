@@ -2,13 +2,18 @@
   <ion-grid>
     <ion-row class="ion-align-items-center ">
       <ion-col size="auto">
-        <ion-text color="dark"><strong>Lvl {{ userProgress.level }}</strong></ion-text>
+        <ion-text color="dark"><strong>LVL {{ userProgress.level }}</strong></ion-text>
       </ion-col>
       <ion-col size="3" >
         <ion-progress-bar :value="userProgress.progressPercent / 100"></ion-progress-bar>
       </ion-col>
       <ion-col size="auto">
         <span v-for="i in flameCount" :key="i">🔥</span>
+      </ion-col>
+    </ion-row>
+    <ion-row>
+      <ion-col>
+        <ion-text color="dark">{{ userProgress.title }}</ion-text>
       </ion-col>
     </ion-row>
   </ion-grid>

@@ -1,6 +1,6 @@
 <template>
-  <ion-fab  horizontal="end" vertical="top" slot="fixed" class="fab-margin">
-    <ion-fab-button color="light" @click="() => askAi()">
+  <ion-fab  horizontal="end" vertical="center" class="ion-margin-horizontal">
+    <ion-fab-button color="light"  @click="() => askAi()">
       <ion-icon :icon="sparklesSharp"></ion-icon>
     </ion-fab-button>
   </ion-fab>
@@ -67,9 +67,3 @@ function askAi() {
   modalRef.value?.$el.present().then(() => aiStore.askAi());
 }
 </script>
-
-<style scoped>
-  .fab-margin {
-    margin: 6px;
-  }
-</style>

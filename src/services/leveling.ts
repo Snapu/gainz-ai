@@ -55,8 +55,9 @@ const MOMENTUM_GAIN_GOAL = 0.02; // meeting weekly goal
 const MOMENTUM_LOSS_MISSED_WEEK = 0.08;
 
 // Level curve (exponential, no hard cap)
-const LEVEL_XP_BASE = 400;
-const LEVEL_XP_GROWTH = 1.08;
+// Tuned for ~Level 100 after 3 years of consistent training
+const LEVEL_XP_BASE = 330;
+const LEVEL_XP_GROWTH = 1.01;
 
 // Recovery buffer for disciplined users
 const HIGH_MOMENTUM_THRESHOLD = 1.0;
@@ -76,6 +77,72 @@ export interface UserProgress {
   xpForNextLevel: number;
   progressPercent: number;
   momentum: number; // consistency multiplier
+  title: string; // anime-style rank title
+}
+
+/* ======================================================
+ * TITLE SYSTEM
+ * ====================================================== */
+
+/**
+ * Anime-inspired rank titles that escalate with level milestones.
+ *
+ * Spaced for psychological impact:
+ * - Early titles come quickly to hook new users
+ * - Mid-tier titles celebrate sustained commitment
+ * - Elite titles are legendary achievements
+ *
+ * Each title is more epic than the previous, creating clear progression.
+ */
+const TITLES = [
+  { level: 1, title: "🔰 Novice Challenger" },
+  { level: 5, title: "⚔️ Iron Warrior" },
+  { level: 10, title: "🔥 Flame Bearer" },
+  { level: 15, title: "⚡ Thunder Fist" },
+  { level: 20, title: "💪 Steel Conqueror" },
+  { level: 25, title: "🌟 Rising Phoenix" },
+  { level: 30, title: "🛡️ Immortal Guardian" },
+  { level: 40, title: "👑 Champion of Will" },
+  { level: 50, title: "⚔️ Legendary Slayer" },
+  { level: 60, title: "🔱 Master of Discipline" },
+  { level: 75, title: "🌪️ Storm Emperor" },
+  { level: 100, title: "💎 Diamond Ascendant" },
+  { level: 125, title: "🐉 Dragon Sovereign" },
+  { level: 150, title: "⚡ Thunder God" },
+  { level: 175, title: "🔥 Inferno Overlord" },
+  { level: 200, title: "🌌 Cosmic Titan" },
+  { level: 250, title: "👹 Demon King" },
+  { level: 300, title: "🌠 Celestial Transcendent" },
+] as const;
+
+/**
+ * Get the appropriate title for a given level.
+ * Returns the highest unlocked title.
+ */
+export function getTitleForLevel(level: number): string {
+  let currentTitle: string = TITLES[0].title;
+
+  for (const { level: requiredLevel, title } of TITLES) {
+    if (level >= requiredLevel) {
+      currentTitle = title;
+    } else {
+      break;
+    }
+  }
+
+  return currentTitle;
+}
+
+/**
+ * Get the next title milestone and XP required.
+ */
+export function getNextTitleMilestone(level: number): { level: number; title: string } | null {
+  for (const { level: requiredLevel, title } of TITLES) {
+    if (level < requiredLevel) {
+      return { level: requiredLevel, title };
+    }
+  }
+  return null; // Max title reached
 }
 
 /* ======================================================
@@ -184,12 +251,13 @@ export function calculateUserProgress(
    * ---------------------------------- */
   if (exerciseDates.length === 0) {
     return {
-      level: 0,
+      level: 1,
       totalXP: 0,
       xpIntoLevel: 0,
-      xpForNextLevel: xpForLevel(0),
+      xpForNextLevel: xpForLevel(1),
       progressPercent: 0,
       momentum: MOMENTUM_MIN,
+      title: getTitleForLevel(1),
     };
   }
 
@@ -261,7 +329,7 @@ export function calculateUserProgress(
    * Level resolution
    * ---------------------------------- */
 
-  let level = 0;
+  let level = 1;
   let xpRemaining = totalXP;
 
   while (xpRemaining >= xpForLevel(level)) {
@@ -273,6 +341,11 @@ export function calculateUserProgress(
   const progressPercent = Math.floor((xpRemaining / xpForNext) * 100);
 
   /* ----------------------------------
+   * Title resolution
+   * ---------------------------------- */
+  const title = getTitleForLevel(level);
+
+  /* ----------------------------------
    * Final result
    * ---------------------------------- */
   return {
@@ -282,5 +355,6 @@ export function calculateUserProgress(
     xpForNextLevel: xpForNext,
     progressPercent,
     momentum,
+    title,
   };
 }
