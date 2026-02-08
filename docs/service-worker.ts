@@ -63,10 +63,30 @@ self.addEventListener("sync", (event: SyncEvent) => {
 });
 
 // Allow the service worker to control the page immediately
-self.addEventListener("install", () => {
-  self.skipWaiting();
+self.addEventListener("install", (event: ExtendableEvent) => {
+  // Skip waiting to activate immediately
+  event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener("activate", (event: ExtendableEvent) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    (async () => {
+      // Delete old caches
+      const cacheNames = await caches.keys();
+      
+      await Promise.all(
+        cacheNames.map(async (cacheName) => {
+          // Delete old workbox precache versions
+          if (cacheName.startsWith('workbox-precache-v2-') || 
+              cacheName.startsWith('workbox-precache-')) {
+            console.log('Deleting old cache:', cacheName);
+            await caches.delete(cacheName);
+          }
+        })
+      );
+      
+      // Take control of all clients immediately
+      await self.clients.claim();
+    })()
+  );
 });
