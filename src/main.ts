@@ -47,6 +47,13 @@ const app = createApp(App).use(IonicVue).use(createPinia()).use(router);
 // Migrate old pending operations from previous localStorage-based queue to Workbox
 async function migrateOldPendingOperations() {
   try {
+    // Check if migration already ran
+    const migrationCompleted = localStorage.getItem("migration:v1:completed");
+    if (migrationCompleted === "true") {
+      console.log("Migration already completed, skipping...");
+      return;
+    }
+
     const oldLogsQueue = localStorage.getItem("pending:exerciseLogs");
     const oldExercisesQueue = localStorage.getItem("pending:exercise");
 
@@ -73,7 +80,6 @@ async function migrateOldPendingOperations() {
           if (op.type === "add") await exerciseLogsStore.addExerciseLog(op.item);
           else if (op.type === "remove") await exerciseLogsStore.removeExerciseLog(op.item);
         }
-        localStorage.removeItem("pending:exerciseLogs");
       }
 
       // Migrate exercises (exercises use name as ID, so no UUID needed)
@@ -83,17 +89,20 @@ async function migrateOldPendingOperations() {
           if (op.type === "add") await exercisesStore.addExercise(op.item);
           else if (op.type === "remove") await exercisesStore.removeExerciseByName(op.item.name);
         }
-        localStorage.removeItem("pending:exercise");
       }
-
-      // Clean up old caches
-      localStorage.removeItem("cache:exerciseLogs");
-      localStorage.removeItem("cache:exercise");
 
       console.log("Migration complete - Workbox will handle queued requests");
     }
+
+    // Always mark migration as complete and clean up, even if queues were empty
+    localStorage.setItem("migration:v1:completed", "true");
+    localStorage.removeItem("pending:exerciseLogs");
+    localStorage.removeItem("pending:exercise");
+    localStorage.removeItem("cache:exerciseLogs");
+    localStorage.removeItem("cache:exercise");
   } catch (error) {
     console.error("Failed to migrate old pending operations:", error);
+    // Don't mark as complete if migration failed
   }
 }
 

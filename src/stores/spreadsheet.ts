@@ -1,6 +1,6 @@
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { defineStore } from "pinia";
-import { type Ref, computed, ref, watchEffect } from "vue";
+import { computed, type Ref, ref, watchEffect } from "vue";
 import {
   createSpreadsheet,
   getSpreadsheetId,

@@ -92,7 +92,14 @@ export async function addExerciseLog(
 ): Promise<Result<void, "add-failed" | "duplicate-name">> {
   try {
     const sheet = getSheet(doc) ?? (await addSheet(doc));
-    await sheet.addRow(ExerciseLogSchema.parse(exerciseLog));
+
+    // Ensure ID exists (defensive programming for migration edge cases)
+    const logWithId = {
+      ...exerciseLog,
+      id: exerciseLog.id || crypto.randomUUID(),
+    };
+
+    await sheet.addRow(ExerciseLogSchema.parse(logWithId));
     return ok();
   } catch (error) {
     console.error("failed to add exercise log. Error:", error);
