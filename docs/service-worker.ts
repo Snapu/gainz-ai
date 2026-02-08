@@ -73,18 +73,18 @@ self.addEventListener("activate", (event: ExtendableEvent) => {
     (async () => {
       // Delete old caches
       const cacheNames = await caches.keys();
-      
+
       await Promise.all(
         cacheNames.map(async (cacheName) => {
           // Delete old workbox precache versions
-          if (cacheName.startsWith('workbox-precache-v2-') || 
+          if (cacheName.startsWith('workbox-precache-v2-') ||
               cacheName.startsWith('workbox-precache-')) {
             console.log('Deleting old cache:', cacheName);
             await caches.delete(cacheName);
           }
         })
       );
-      
+
       // Take control of all clients immediately
       await self.clients.claim();
     })()
