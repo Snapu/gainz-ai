@@ -44,8 +44,62 @@ import { useUserProfileStore } from "./stores/userProfile";
 
 const app = createApp(App).use(IonicVue).use(createPinia()).use(router);
 
+// Migrate old pending operations from previous localStorage-based queue to Workbox
+async function migrateOldPendingOperations() {
+  try {
+    const oldLogsQueue = localStorage.getItem("pending:exerciseLogs");
+    const oldExercisesQueue = localStorage.getItem("pending:exercise");
+
+    if (oldLogsQueue || oldExercisesQueue) {
+      console.log("Migrating old pending operations to Workbox...");
+
+      const exerciseLogsStore = useExerciseLogsStore();
+      const exercisesStore = useExercisesStore();
+
+      // Migrate exercise logs
+      if (oldLogsQueue) {
+        const operations = JSON.parse(oldLogsQueue);
+        for (const op of operations) {
+          // Add UUID if missing (old data didn't have UUIDs)
+          if (!op.item.id) {
+            op.item.id = crypto.randomUUID();
+          }
+
+          // Convert date strings back to Date objects
+          if (op.item.loggedAt && typeof op.item.loggedAt === "string") {
+            op.item.loggedAt = new Date(op.item.loggedAt);
+          }
+
+          if (op.type === "add") await exerciseLogsStore.addExerciseLog(op.item);
+          else if (op.type === "remove") await exerciseLogsStore.removeExerciseLog(op.item);
+        }
+        localStorage.removeItem("pending:exerciseLogs");
+      }
+
+      // Migrate exercises (exercises use name as ID, so no UUID needed)
+      if (oldExercisesQueue) {
+        const operations = JSON.parse(oldExercisesQueue);
+        for (const op of operations) {
+          if (op.type === "add") await exercisesStore.addExercise(op.item);
+          else if (op.type === "remove") await exercisesStore.removeExerciseByName(op.item.name);
+        }
+        localStorage.removeItem("pending:exercise");
+      }
+
+      // Clean up old caches
+      localStorage.removeItem("cache:exerciseLogs");
+      localStorage.removeItem("cache:exercise");
+
+      console.log("Migration complete - Workbox will handle queued requests");
+    }
+  } catch (error) {
+    console.error("Failed to migrate old pending operations:", error);
+  }
+}
+
 router.isReady().then(() => {
   app.mount("#app");
+  migrateOldPendingOperations();
 });
 
 // Register service worker and listen for background sync events
