@@ -21,17 +21,9 @@ export default defineConfig(({ mode }) => {
         strategies: "injectManifest",
         srcDir: "public",
         filename: "service-worker.ts",
-        injectManifest: {
-          globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
-        },
         devOptions: {
           enabled: true,
           type: "module",
-        },
-        workbox: {
-          cleanupOutdatedCaches: true,
-          clientsClaim: true,
-          skipWaiting: true,
         },
         includeAssets: ["favicon.png", "icon-192.png", "icon-512.png"],
         manifest: {
