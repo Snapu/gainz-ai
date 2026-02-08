@@ -3,16 +3,28 @@
 
 import { BackgroundSyncPlugin } from "workbox-background-sync";
 import type { PrecacheEntry } from "workbox-precaching";
-import { precacheAndRoute } from "workbox-precaching";
+import { cleanupOutdatedCaches, precacheAndRoute } from "workbox-precaching";
 import { registerRoute } from "workbox-routing";
-import { NetworkOnly } from "workbox-strategies";
+import { NetworkFirst, NetworkOnly } from "workbox-strategies";
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<PrecacheEntry>;
 };
 
+// Clean up old caches automatically
+cleanupOutdatedCaches();
+
 // Precache app shell assets
 precacheAndRoute(self.__WB_MANIFEST);
+
+// Use Network First for HTML navigation requests to ensure updates
+registerRoute(
+  ({ request }) => request.mode === 'navigate',
+  new NetworkFirst({
+    cacheName: 'html-cache',
+    networkTimeoutSeconds: 3,
+  })
+);
 
 // Create a background sync plugin for Google Sheets API requests
 const bgSyncPlugin = new BackgroundSyncPlugin("sheets-api-queue", {
@@ -71,22 +83,22 @@ self.addEventListener("install", (event: ExtendableEvent) => {
 self.addEventListener("activate", (event: ExtendableEvent) => {
   event.waitUntil(
     (async () => {
-      // Delete old caches
+      // Clear ALL caches on activate to force fresh content
       const cacheNames = await caches.keys();
+      console.log('Clearing all caches:', cacheNames);
 
       await Promise.all(
-        cacheNames.map(async (cacheName) => {
-          // Delete old workbox precache versions
-          if (cacheName.startsWith('workbox-precache-v2-') ||
-              cacheName.startsWith('workbox-precache-')) {
-            console.log('Deleting old cache:', cacheName);
-            await caches.delete(cacheName);
-          }
-        })
+        cacheNames.map((cacheName) => caches.delete(cacheName))
       );
 
       // Take control of all clients immediately
       await self.clients.claim();
+
+      // Notify all clients to reload
+      const clients = await self.clients.matchAll();
+      clients.forEach((client: Client) => {
+        client.postMessage({ type: 'SW_ACTIVATED' });
+      });
     })()
   );
 });

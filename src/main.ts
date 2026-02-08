@@ -122,6 +122,12 @@ if ("serviceWorker" in navigator) {
       exerciseLogsStore.refresh();
       exercisesStore.refresh();
     }
+
+    // Reload when service worker activates with cleared caches
+    if (event.data && event.data.type === "SW_ACTIVATED") {
+      console.log("Service worker activated - reloading for fresh content...");
+      window.location.reload();
+    }
   });
 }
 
