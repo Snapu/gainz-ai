@@ -15,8 +15,8 @@ export const useExercisesStore = defineStore("exercises", () => {
     items: exercises,
     add,
     remove,
+    refresh,
   } = useOfflineSyncedStore<Exercise>({
-    key: "exercise",
     getId: (exercise) => exercise.name,
     fetchRemote: () => loadExercises(spreadsheetStore.doc as GoogleSpreadsheet),
     addRemote: (item) => addExercise_(item, spreadsheetStore.doc as GoogleSpreadsheet),
@@ -34,5 +34,5 @@ export const useExercisesStore = defineStore("exercises", () => {
     await Promise.all(exercises.value.filter(({ name }) => name === exerciseName).map(remove));
   };
 
-  return { exercises, addExercise, removeExerciseByName };
+  return { exercises, addExercise, removeExerciseByName, refresh };
 });

@@ -1,17 +1,9 @@
-import { useAsyncState, useLocalStorage, useOnline } from "@vueuse/core";
+import { useAsyncState, useDebounceFn, useDocumentVisibility, useOnline } from "@vueuse/core";
 
 import type { Result } from "neverthrow";
-import { computed, type Ref, ref, watch } from "vue";
-
-type OperationType = "add" | "update" | "remove";
-
-type PendingOperation<T> = {
-  type: OperationType;
-  item: T;
-};
+import { ref, watch } from "vue";
 
 type UseOfflineSyncedStoreParams<T> = {
-  key: string;
   getId: (item: T) => string;
   fetchRemote: () => Promise<Result<T[], unknown>>;
   addRemote: (item: T) => Promise<Result<void, unknown>>;
@@ -19,100 +11,82 @@ type UseOfflineSyncedStoreParams<T> = {
   updateRemote?: (item: T) => Promise<Result<void, unknown>>;
 };
 
+/**
+ * Simplified offline store that relies on Workbox BackgroundSync for request queuing.
+ * Workbox handles retry logic, persistence, and deduplication at the service worker level.
+ */
 export function useOfflineSyncedStore<T>({
-  key,
   getId,
   fetchRemote,
   addRemote,
   removeRemote,
   updateRemote,
 }: UseOfflineSyncedStoreParams<T>) {
-  const localCache = ref<T[]>([]) as Ref<T[]>;
-  const pending = useLocalStorage<PendingOperation<T>[]>(`pending:${key}`, []);
   const isOnline = useOnline();
+  const isRefreshing = ref(false);
 
-  const remoteHandlers = {
-    add: addRemote,
-    update: updateRemote,
-    remove: removeRemote,
-  };
-
-  function queueOperation(op: PendingOperation<T>) {
-    pending.value.push(op);
-  }
-
-  async function syncPending() {
-    if (!isOnline.value || pending.value.length === 0) return;
-
-    const queue = [...pending.value];
-    const leftovers: typeof queue = [];
-
-    for (const op of queue) {
-      const handler = remoteHandlers[op.type];
-      if (!handler) {
-        console.warn(`No handler for operation type: ${op.type}`);
-        continue;
-      }
-
-      const result = await handler(op.item);
-      // Keep failed operation in queue
-      if (result.isErr()) {
-        leftovers.push(op);
-      } else if (result.isOk() && op.type === "add") {
-        // Move successfully synced items from localCache to remoteItems
-        const itemId = getId(op.item);
-        localCache.value = localCache.value.filter((i) => getId(i) !== itemId);
-        remoteItems.value.push(op.item);
-      }
-    }
-
-    pending.value = leftovers;
-  }
-
-  const { state: remoteItems, isLoading } = useAsyncState(async () => {
-    await syncPending();
+  const { state: items, isLoading } = useAsyncState(async () => {
     const result = await fetchRemote();
     if (result.isErr()) return [];
     return result.value;
   }, []);
 
-  // Auto-retry pending operations when coming back online
-  watch(isOnline, (online) => {
-    if (online && pending.value.length > 0) {
-      console.log("Connection restored. Syncing pending operations...");
-      syncPending();
+  // Auto-sync when switching between PWA and browser (separate localStorage contexts)
+  const visibility = useDocumentVisibility();
+
+  // Debounce refresh to avoid hammering API on rapid visibility changes
+  const debouncedRefresh = useDebounceFn(async () => {
+    if (isOnline.value) {
+      console.log("App visible. Syncing with remote to prevent stale data...");
+      await refresh();
+    }
+  }, 1000);
+
+  watch(visibility, (current) => {
+    if (current === "visible") {
+      debouncedRefresh();
     }
   });
 
-  const items = computed(() => [...remoteItems.value, ...localCache.value]);
+  async function refresh() {
+    if (isRefreshing.value) return; // Prevent concurrent refreshes
+    isRefreshing.value = true;
+
+    try {
+      // Re-fetch remote data to get latest from other instances
+      const result = await fetchRemote();
+      if (result.isOk()) {
+        items.value = result.value;
+      }
+    } finally {
+      isRefreshing.value = false;
+    }
+  }
 
   async function add(item: T) {
-    // Add to local cache immediately for optimistic UI
-    localCache.value.push(item);
+    // Optimistically update UI - create new array to trigger reactivity
+    items.value = [...items.value, item];
 
+    // Call API - Workbox will queue if offline
     const result = await addRemote(item);
-    if (result.isOk()) {
-      // Move from localCache to remoteItems on success
+    if (result.isErr()) {
+      // Revert on immediate error (e.g., validation failure)
       const itemId = getId(item);
-      localCache.value = localCache.value.filter((i) => getId(i) !== itemId);
-      remoteItems.value.push(item);
-    } else {
-      // Queue for later sync if failed
-      queueOperation({ type: "add", item });
+      items.value = items.value.filter((i) => getId(i) !== itemId);
     }
   }
 
   async function remove(item: T) {
+    // Optimistically update UI
+    const originalItems = [...items.value];
     const itemId = getId(item);
+    items.value = items.value.filter((i) => getId(i) !== itemId);
 
-    // Remove from both caches immediately for optimistic UI
-    remoteItems.value = remoteItems.value.filter((i) => getId(i) !== itemId);
-    localCache.value = localCache.value.filter((i) => getId(i) !== itemId);
-
+    // Call API - Workbox will queue if offline
     const result = await removeRemote(item);
     if (result.isErr()) {
-      // Queue for later sync if failed
-      queueOperation({ type: "remove", item });
+      // Revert on immediate error
+      items.value = originalItems;
     }
   }
 
@@ -122,34 +96,22 @@ export function useOfflineSyncedStore<T>({
       return;
     }
 
+    // Optimistically update UI
     const itemId = getId(item);
-
-    // Update in remoteItems if it exists there
-    const remoteIndex = remoteItems.value.findIndex((i) => getId(i) === itemId);
-    if (remoteIndex !== -1) {
-      remoteItems.value[remoteIndex] = item;
+    const index = items.value.findIndex((i) => getId(i) === itemId);
+    if (index !== -1) {
+      const newItems = [...items.value];
+      newItems[index] = item;
+      items.value = newItems;
     }
 
-    // Update in localCache if it exists there, otherwise add it
-    const localIndex = localCache.value.findIndex((i) => getId(i) === itemId);
-    if (localIndex === -1) {
-      localCache.value.push(item);
-    } else {
-      localCache.value[localIndex] = item;
-    }
-
+    // Call API - Workbox will queue if offline
     const result = await updateRemote(item);
-    if (result.isOk()) {
-      // Move from localCache to remoteItems on success if needed
-      localCache.value = localCache.value.filter((i) => getId(i) !== itemId);
-      if (remoteIndex === -1) {
-        remoteItems.value.push(item);
-      }
-    } else {
-      // Queue for later sync if failed
-      queueOperation({ type: "update", item });
+    if (result.isErr()) {
+      // Could revert here, but typically updates are idempotent
+      // and will be retried by Workbox
     }
   }
 
-  return { items, isLoading, isOnline, add, remove, update, syncPending };
+  return { items, isLoading, isOnline, isRefreshing, add, remove, update, refresh };
 }

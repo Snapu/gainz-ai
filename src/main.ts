@@ -37,6 +37,8 @@ import "@ionic/vue/css/palettes/dark.system.css";
 /* Theme variables */
 import "@/theme/variables.css";
 import { useAuthStore } from "./stores/auth";
+import { useExerciseLogsStore } from "./stores/exerciseLogs";
+import { useExercisesStore } from "./stores/exercises";
 import { useSpreadsheetStore } from "./stores/spreadsheet";
 import { useUserProfileStore } from "./stores/userProfile";
 
@@ -45,6 +47,20 @@ const app = createApp(App).use(IonicVue).use(createPinia()).use(router);
 router.isReady().then(() => {
   app.mount("#app");
 });
+
+// Register service worker and listen for background sync events
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    if (event.data && event.data.type === "BACKGROUND_SYNC_SUCCESS") {
+      console.log("Background sync completed, refreshing all stores...");
+      // Refresh all stores after successful background sync
+      const exerciseLogsStore = useExerciseLogsStore();
+      const exercisesStore = useExercisesStore();
+      exerciseLogsStore.refresh();
+      exercisesStore.refresh();
+    }
+  });
+}
 
 const authStore = useAuthStore();
 const userProfileStore = useUserProfileStore();

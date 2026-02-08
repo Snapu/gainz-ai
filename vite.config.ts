@@ -18,8 +18,12 @@ export default defineConfig(({ mode }) => {
       vueDevTools(),
       VitePWA({
         registerType: "autoUpdate",
+        strategies: "injectManifest",
+        srcDir: "public",
+        filename: "service-worker.ts",
         devOptions: {
           enabled: true,
+          type: "module",
         },
         includeAssets: ["favicon.png", "icon-192.png", "icon-512.png"],
         manifest: {

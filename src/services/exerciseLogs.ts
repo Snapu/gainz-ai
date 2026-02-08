@@ -5,6 +5,7 @@ import { ExerciseNameSchema } from "./exercises";
 import { parseData } from "./utils/parseData";
 
 export const ExerciseLogSchema = z.object({
+  id: z.uuid(),
   exerciseName: ExerciseNameSchema,
   reps: z.coerce.number().optional(),
   weight: z.coerce.number().optional(),
@@ -20,13 +21,58 @@ const getSheet = (doc: GoogleSpreadsheet) => doc.sheetsByTitle[SHEET_NAME];
 const addSheet = (doc: GoogleSpreadsheet) =>
   doc.addSheet({
     title: SHEET_NAME,
-    headerValues: ["exerciseName", "reps", "weight", "distance", "duration", "loggedAt"],
+    headerValues: ["id", "exerciseName", "reps", "weight", "distance", "duration", "loggedAt"],
   });
+
+async function migrateExistingLogs(doc: GoogleSpreadsheet): Promise<void> {
+  const sheet = getSheet(doc);
+  if (!sheet) return;
+
+  // Load header info first
+  await sheet.loadHeaderRow();
+  const headers = sheet.headerValues;
+
+  // Check if migration already done
+  if (headers.includes("id")) return;
+
+  console.log("Migrating exercise logs - adding UUIDs to existing data...");
+
+  try {
+    // Get all row data before changing headers
+    const rows = await sheet.getRows();
+    const rowData = rows.map((row) => row.toObject());
+
+    // Add id column as first column
+    await sheet.setHeaderRow(["id", ...headers]);
+
+    // Reload sheet to get updated structure
+    await sheet.loadHeaderRow();
+
+    // Clear and re-add all rows with UUIDs
+    await sheet.clearRows();
+
+    const rowsWithIds = rowData.map((row) => ({
+      id: crypto.randomUUID(),
+      ...row,
+    }));
+
+    await sheet.addRows(rowsWithIds);
+
+    console.log(`Migration complete - added UUIDs to ${rowsWithIds.length} existing logs`);
+  } catch (error) {
+    console.error("Migration failed:", error);
+    throw error;
+  }
+}
 
 export async function loadExerciseLogs(
   doc: GoogleSpreadsheet,
 ): Promise<Result<ExerciseLog[], "load-failed" | "parse-data-failed">> {
   const sheet = getSheet(doc) ?? (await addSheet(doc));
+
+  // Run migration for existing data (only runs once)
+  await migrateExistingLogs(doc);
+
   try {
     const rows = await sheet.getRows<ExerciseLog>();
     console.debug("Fetched rows", rows);
@@ -66,11 +112,7 @@ export async function deleteExerciseLog(
   }
   try {
     const rows = await sheet.getRows<ExerciseLog>();
-    const rowToDelete = await rows.find(
-      (row) =>
-        row.get("exerciseName") === exerciseLog.exerciseName &&
-        row.get("loggedAt") === exerciseLog.loggedAt.toISOString(),
-    );
+    const rowToDelete = await rows.find((row) => row.get("id") === exerciseLog.id);
     console.debug("Deleting row:", rowToDelete);
     await rowToDelete?.delete();
     return ok();

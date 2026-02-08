@@ -214,6 +214,7 @@ async function logCurrentExercise() {
 
   exercisesStore.addExercise({ name: currentExerciseName.value.trim() });
   const log = {
+    id: crypto.randomUUID(),
     loggedAt: new Date(),
     exerciseName: currentExerciseName.value,
     reps: currentReps.value ?? undefined,
