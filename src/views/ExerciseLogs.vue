@@ -14,6 +14,17 @@
             <ion-icon slot="start" :icon="settingsOutline" />
           </ion-button>
         </ion-menu-toggle>
+        <ion-menu-toggle>
+          <ion-button
+            fill="clear"
+            :href="spreadsheetStore.spreadsheetUrl ?? undefined"
+            target="_blank"
+            :disabled="!spreadsheetStore.spreadsheetUrl"
+          >
+            Open Spreadsheet
+            <ion-icon slot="start" :icon="openOutline" />
+          </ion-button>
+        </ion-menu-toggle>
       </ion-content>
     </ion-menu>
 
@@ -168,7 +179,7 @@ import {
   IonTitle,
   IonToolbar,
 } from "@ionic/vue";
-import { add, settingsOutline } from "ionicons/icons";
+import { add, openOutline, settingsOutline } from "ionicons/icons";
 import { computed, onMounted, ref, useTemplateRef, watchEffect } from "vue";
 import AiFeedback from "@/components/AiFeedback.vue";
 import ConsistencyLevel from "@/components/ConsistencyLevel.vue";
@@ -180,6 +191,7 @@ import { localeDateString } from "@/services/utils/date";
 import { formatNumberWithUnit, formatUnit } from "@/services/utils/units";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
 import { useExercisesStore } from "@/stores/exercises";
+import { useSpreadsheetStore } from "@/stores/spreadsheet";
 
 const logModalRef = ref<InstanceType<typeof IonModal> | null>(null);
 const contentRef = useTemplateRef("content");
@@ -188,6 +200,7 @@ const open = ref([localeDateString(new Date())]);
 
 const exercisesStore = useExercisesStore();
 const exerciseLogsStore = useExerciseLogsStore();
+const spreadsheetStore = useSpreadsheetStore();
 
 const groupedLogs = computed(() =>
   exerciseLogsStore.exerciseLogs.reduce(

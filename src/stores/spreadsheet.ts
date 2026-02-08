@@ -1,6 +1,6 @@
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { defineStore } from "pinia";
-import { type Ref, ref, watchEffect } from "vue";
+import { type Ref, computed, ref, watchEffect } from "vue";
 import {
   createSpreadsheet,
   getSpreadsheetId,
@@ -40,5 +40,10 @@ export const useSpreadsheetStore = defineStore("spreadsheet", () => {
     void init(accessToken);
   });
 
-  return { isLoading, doc };
+  const spreadsheetUrl = computed(() => {
+    if (!doc.value?.spreadsheetId) return null;
+    return `https://docs.google.com/spreadsheets/d/${doc.value.spreadsheetId}/edit`;
+  });
+
+  return { isLoading, doc, spreadsheetUrl };
 });
