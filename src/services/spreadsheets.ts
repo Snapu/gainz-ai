@@ -7,7 +7,7 @@ export async function getSpreadsheetId(
   name: string,
   accessToken: string,
 ): Promise<Result<string | null, "get-spreadsheet-id-failed" | "parse-data-failed">> {
-  const query = `name='${name}' and mimeType='application/vnd.google-apps.spreadsheet'`;
+  const query = `name='${name}' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`;
 
   try {
     const response = await fetch(
