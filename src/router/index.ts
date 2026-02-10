@@ -1,7 +1,9 @@
 import { createRouter, createWebHistory } from "@ionic/vue-router";
 import type { RouteRecordRaw } from "vue-router";
 import ExerciseLogs from "@/views/ExerciseLogs.vue";
+import Impressum from "@/views/Impressum.vue";
 import LoginPage from "@/views/LoginPage.vue";
+import PrivacyPolicy from "@/views/PrivacyPolicy.vue";
 import SpreadsheetInit from "@/views/SpreadsheetInit.vue";
 import WizardApiKey from "@/views/wizard/ApiKey.vue";
 import WizardBodyStats from "@/views/wizard/BodyStats.vue";
@@ -73,6 +75,16 @@ const routes: Array<RouteRecordRaw> = [
     path: "/exercise-logs",
     name: "ExerciseLogs",
     component: ExerciseLogs,
+  },
+  {
+    path: "/privacy-policy",
+    name: "PrivacyPolicy",
+    component: PrivacyPolicy,
+  },
+  {
+    path: "/impressum",
+    name: "Impressum",
+    component: Impressum,
   },
 ];
 

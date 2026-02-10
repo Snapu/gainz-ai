@@ -25,6 +25,18 @@
             <ion-icon slot="start" :icon="openOutline" />
           </ion-button>
         </ion-menu-toggle>
+        <ion-menu-toggle>
+          <ion-button fill="clear" router-link="/privacy-policy">
+            Datenschutzerklärung
+            <ion-icon slot="start" :icon="documentTextOutline" />
+          </ion-button>
+        </ion-menu-toggle>
+        <ion-menu-toggle>
+          <ion-button fill="clear" router-link="/impressum">
+            Impressum
+            <ion-icon slot="start" :icon="informationCircleOutline" />
+          </ion-button>
+        </ion-menu-toggle>
       </ion-content>
     </ion-menu>
 
@@ -179,7 +191,13 @@ import {
   IonTitle,
   IonToolbar,
 } from "@ionic/vue";
-import { add, openOutline, settingsOutline } from "ionicons/icons";
+import {
+  add,
+  documentTextOutline,
+  informationCircleOutline,
+  openOutline,
+  settingsOutline,
+} from "ionicons/icons";
 import { computed, onMounted, ref, useTemplateRef, watchEffect } from "vue";
 import AiFeedback from "@/components/AiFeedback.vue";
 import ConsistencyLevel from "@/components/ConsistencyLevel.vue";
