@@ -13,10 +13,17 @@ const SCOPES = [
 export const useAuthStore = defineStore("auth", () => {
   const accessToken = useLocalStorage<string | null>("auth:accessToken", null);
   const expiresAt = useLocalStorage<number | null>("auth:expiresAt", null);
+  const refreshToken = useLocalStorage<string | null>("auth:refreshToken", null);
 
   const isLoggedIn = computed(() => {
     if (!accessToken.value || !expiresAt.value) return false;
     return expiresAt.value - Date.now() > 0;
+  });
+
+  const needsRefresh = computed(() => {
+    if (!expiresAt.value) return false;
+    // Refresh if token expires in less than 5 minutes
+    return expiresAt.value - Date.now() < 5 * 60 * 1000;
   });
 
   const login = () => {
@@ -37,5 +44,27 @@ export const useAuthStore = defineStore("auth", () => {
     });
   };
 
-  return { accessToken, isLoggedIn, login };
+  const refreshAccessToken = async () => {
+    return new Promise<void>((resolve, reject) => {
+      googleSdkLoaded((google) => {
+        google.accounts.oauth2
+          .initTokenClient({
+            client_id: CLIENT_ID,
+            scope: SCOPES.join(" "),
+            prompt: "", // Silent refresh
+            callback: (response) => {
+              accessToken.value = response.access_token;
+              expiresAt.value = parseInt(response.expires_in, 10) * 1000 + Date.now();
+              resolve();
+            },
+            error_callback: (error) => {
+              reject(new Error(error.message));
+            },
+          })
+          .requestAccessToken({ prompt: "" });
+      });
+    });
+  };
+
+  return { accessToken, isLoggedIn, needsRefresh, login, refreshAccessToken };
 });
