@@ -13,7 +13,6 @@ const SCOPES = [
 export const useAuthStore = defineStore("auth", () => {
   const accessToken = useLocalStorage<string | null>("auth:accessToken", null);
   const expiresAt = useLocalStorage<number | null>("auth:expiresAt", null);
-  const refreshToken = useLocalStorage<string | null>("auth:refreshToken", null);
 
   const isLoggedIn = computed(() => {
     if (!accessToken.value || !expiresAt.value) return false;
