@@ -8,7 +8,7 @@
 <script setup lang="ts">
 import { IonButton, IonIcon } from "@ionic/vue";
 import { playOutline, refresh } from "ionicons/icons";
-import { computed, ref } from "vue";
+import { computed, onUnmounted, ref } from "vue";
 
 const totalMs = ref(0);
 const startTimestamp = ref(Date.now());
@@ -16,16 +16,16 @@ const timer = ref<ReturnType<typeof setInterval> | null>(null);
 
 const formatedTime = computed(() => {
   const totalSeconds = Math.floor(totalMs.value / 1000);
-  const duration = {
-    hours: Math.floor(totalSeconds / 3600),
-    minutes: Math.floor((totalSeconds % 3600) / 60),
-    seconds: totalSeconds % 60,
-  };
-  // @ts-expect-error
-  return new Intl.DurationFormat(undefined, {
-    style: "digital",
-    hoursDisplay: "auto",
-  }).format(duration);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const pad = (n: number) => n.toString().padStart(2, "0");
+
+  if (hours > 0) {
+    return `${hours}:${pad(minutes)}:${pad(seconds)}`;
+  }
+  return `${minutes}:${pad(seconds)}`;
 });
 
 function toggleTimer() {
@@ -40,6 +40,12 @@ function toggleTimer() {
     }, 1000);
   }
 }
+
+onUnmounted(() => {
+  if (timer.value) {
+    clearInterval(timer.value);
+  }
+});
 </script>
 
 <style scoped>
