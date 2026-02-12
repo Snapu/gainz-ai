@@ -29,7 +29,8 @@ describe("leveling system", () => {
     });
 
     it("should deduplicate multiple exercises on the same day", () => {
-      const today = new Date();
+      // Use a fixed date at noon to avoid timezone edge cases
+      const today = new Date("2026-01-15T12:00:00");
       const sameDay1 = new Date(today);
       const sameDay2 = new Date(today);
       sameDay2.setHours(today.getHours() + 2); // Different time, same day

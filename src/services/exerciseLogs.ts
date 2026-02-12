@@ -16,7 +16,8 @@ export const ExerciseLogSchema = z.object({
 
 export type ExerciseLog = z.infer<typeof ExerciseLogSchema>;
 
-const SHEET_NAME = `Logs${new Date().getFullYear()}`;
+const LOGS_SHEET_PREFIX = "Logs";
+const SHEET_NAME = `${LOGS_SHEET_PREFIX}${new Date().getFullYear()}`;
 const getSheet = (doc: GoogleSpreadsheet) => doc.sheetsByTitle[SHEET_NAME];
 const addSheet = (doc: GoogleSpreadsheet) =>
   doc.addSheet({
@@ -126,5 +127,43 @@ export async function deleteExerciseLog(
   } catch (error) {
     console.error("Failed to delete exercise log. Error:", error);
     return err("delete-failed");
+  }
+}
+
+export function findPastYearLogSheets(doc: GoogleSpreadsheet): number[] {
+  const currentYear = new Date().getFullYear();
+  const pastYears: number[] = [];
+
+  for (const title of Object.keys(doc.sheetsByTitle)) {
+    if (title.startsWith(LOGS_SHEET_PREFIX)) {
+      const yearStr = title.slice(LOGS_SHEET_PREFIX.length);
+      const year = Number(yearStr);
+      if (!Number.isNaN(year) && year < currentYear) {
+        pastYears.push(year);
+      }
+    }
+  }
+
+  return pastYears.sort((a, b) => a - b);
+}
+
+export async function loadLogsFromYear(
+  year: number,
+  doc: GoogleSpreadsheet,
+): Promise<Result<ExerciseLog[], "load-failed" | "parse-data-failed" | "sheet-not-found">> {
+  const sheetName = `${LOGS_SHEET_PREFIX}${year}`;
+  const sheet = doc.sheetsByTitle[sheetName];
+
+  if (!sheet) return err("sheet-not-found");
+
+  try {
+    const rows = await sheet.getRows<ExerciseLog>();
+    return parseData(
+      ExerciseLogSchema.array(),
+      rows.map((row) => row.toObject()),
+    );
+  } catch (error) {
+    console.error(`Failed to load logs from year ${year}. Error:`, error);
+    return err("load-failed");
   }
 }

@@ -23,19 +23,25 @@
 import { IonCol, IonGrid, IonProgressBar, IonRow, IonText } from "@ionic/vue";
 import { computed } from "vue";
 import { calculateUserProgress } from "@/services/leveling";
+import { summaryToWorkoutDates } from "@/services/trainingSummary";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
+import { useTrainingSummaryStore } from "@/stores/trainingSummary";
 import { useUserProfileStore } from "@/stores/userProfile";
 
 const exerciseLogsStore = useExerciseLogsStore();
 const userProfileStore = useUserProfileStore();
+const trainingSummaryStore = useTrainingSummaryStore();
 
 const userProgress = computed(() => {
   const aimedWorkoutsPerWeek = userProfileStore.userProfile.workoutDaysPerWeek ?? 3;
-  const workoutDates = exerciseLogsStore.exerciseLogs.map((log) => log.loggedAt);
-  return calculateUserProgress(workoutDates, aimedWorkoutsPerWeek);
+
+  const historicalDates = summaryToWorkoutDates(trainingSummaryStore.summaries);
+  const currentYearDates = exerciseLogsStore.exerciseLogs.map((log) => log.loggedAt);
+  const allWorkoutDates = [...historicalDates, ...currentYearDates];
+
+  return calculateUserProgress(allWorkoutDates, aimedWorkoutsPerWeek);
 });
 
-// Compute flames directly from raw momentum (0.5–1.25)
 const flameCount = computed(() => {
   const momentum = userProgress.value.momentum;
   const totalXP = userProgress.value.totalXP;

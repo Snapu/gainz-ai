@@ -1,11 +1,11 @@
 import { type GenerateContentConfig, GoogleGenAI } from "@google/genai";
 
 import { defineStore } from "pinia";
-import * as smd from "streaming-markdown";
 import { computed, ref } from "vue";
 
 import { localeDateString } from "@/services/utils/date";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
+import { useTrainingSummaryStore } from "@/stores/trainingSummary";
 import { useUserProfileStore } from "@/stores/userProfile";
 
 interface AiMessage {
@@ -110,6 +110,7 @@ export const useAiStore = defineStore("ai", () => {
 
   const userProfileStore = useUserProfileStore();
   const exerciseLogsStore = useExerciseLogsStore();
+  const trainingSummaryStore = useTrainingSummaryStore();
 
   const todaySessionDate = computed(() => localeDateString(new Date()));
 
@@ -142,15 +143,20 @@ export const useAiStore = defineStore("ai", () => {
     isLoading.value = true;
 
     try {
-      // Get today's logs only for current context
       const startOfToday = new Date().setHours(0, 0, 0, 0);
       const todayLogs = exerciseLogsStore.exerciseLogs.filter(
         (log) => log.loggedAt.getTime() > startOfToday,
       );
 
-      // For first message, include more history for context
       const isFirstMessage = messages.value.length === 0;
-      const logsToInclude = isFirstMessage ? exerciseLogsStore.exerciseLogs : todayLogs;
+
+      const fourWeeksAgo = new Date();
+      fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
+      const last4WeeksLogs = exerciseLogsStore.exerciseLogs.filter(
+        (log) => log.loggedAt.getTime() >= fourWeeksAgo.getTime(),
+      );
+
+      const logsToInclude = isFirstMessage ? last4WeeksLogs : todayLogs;
 
       const workoutStatus = exerciseLogsStore.workoutStarted
         ? `I already started my workout today.`
@@ -166,14 +172,25 @@ export const useAiStore = defineStore("ai", () => {
         2,
       );
 
+      let historicalSummarySection = "";
+      if (isFirstMessage && trainingSummaryStore.summaries.length > 0) {
+        const summaryJson = JSON.stringify(trainingSummaryStore.summaries, null, 2);
+        historicalSummarySection = `
+Here is my historical training summary (monthly aggregates from past years):
+\`\`\`json
+${summaryJson}
+\`\`\`
+
+`;
+      }
+
       const currentUserInput = `Today is ${today}, ${workoutStatus}
 
 Here is my profile data:
 \`\`\`json
 ${profileJson}
 \`\`\`
-
-Here is my ${isFirstMessage ? "exercise log history" : "today's exercise logs so far"}:
+${historicalSummarySection}Here is my ${isFirstMessage ? "recent exercise logs (last 4 weeks)" : "today's exercise logs so far"}:
 \`\`\`json
 ${logsJson}
 \`\`\`
