@@ -17,6 +17,7 @@
 
 <script setup lang="ts">
 import { IonText } from "@ionic/vue";
+import DOMPurify from "dompurify";
 import * as smd from "streaming-markdown";
 import { computed } from "vue";
 import { useAiStore } from "@/stores/ai";
@@ -34,7 +35,7 @@ function renderMarkdown(content: string): string {
   const renderer = smd.default_renderer(tempDiv);
   const parser = smd.parser(renderer);
   smd.parser_write(parser, content);
-  return tempDiv.innerHTML;
+  return DOMPurify.sanitize(tempDiv.innerHTML);
 }
 
 function formatTime(timestamp: Date): string {
