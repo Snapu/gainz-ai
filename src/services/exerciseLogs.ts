@@ -4,13 +4,19 @@ import { ZodError, z } from "zod";
 import { ExerciseNameSchema } from "./exercises";
 import { parseData } from "./utils/parseData";
 
+const optionalNumberSchema = z.preprocess((val) => {
+  if (val === "" || val === null || val === undefined) return undefined;
+  const num = Number(val);
+  return Number.isNaN(num) ? undefined : num;
+}, z.number().optional());
+
 export const ExerciseLogSchema = z.object({
   id: z.uuid(),
   exerciseName: ExerciseNameSchema,
-  reps: z.coerce.number().optional(),
-  weight: z.coerce.number().optional(),
-  distance: z.coerce.number().optional(),
-  duration: z.coerce.number().optional(),
+  reps: optionalNumberSchema,
+  weight: optionalNumberSchema,
+  distance: optionalNumberSchema,
+  duration: optionalNumberSchema,
   loggedAt: z.coerce.date(),
 });
 
