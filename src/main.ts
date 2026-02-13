@@ -1,4 +1,5 @@
 import { IonicVue } from "@ionic/vue";
+import * as Sentry from "@sentry/vue";
 
 import { createPinia } from "pinia";
 import { createApp, watch } from "vue";
@@ -43,6 +44,14 @@ import { useSpreadsheetStore } from "./stores/spreadsheet";
 import { useUserProfileStore } from "./stores/userProfile";
 
 const app = createApp(App).use(IonicVue).use(createPinia()).use(router);
+
+Sentry.init({
+  app,
+  dsn: "https://4d5bd61bc9b2ac0bdefc804ffe8abf31@o4510880320978944.ingest.de.sentry.io/4510880322617424",
+  // Setting this option to true will send default PII data to Sentry.
+  // For example, automatic IP address collection on events
+  sendDefaultPii: false,
+});
 
 router.isReady().then(() => {
   app.mount("#app");

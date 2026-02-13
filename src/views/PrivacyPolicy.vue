@@ -12,7 +12,7 @@
     <ion-content class="ion-padding">
       <div class="privacy-content">
         <h1>Datenschutzerklärung / Privacy Policy</h1>
-        <p><strong>Letzte Aktualisierung / Last Updated:</strong> 10. Februar 2026</p>
+        <p><strong>Letzte Aktualisierung / Last Updated:</strong> 13. Februar 2026</p>
 
         <p>Diese Datenschutzerklärung gilt für die Gainz AI App (nachfolgend "App" oder "Anwendung") und erläutert, welche personenbezogenen Daten wir erheben, wie wir diese verarbeiten und welche Rechte Sie haben.</p>
 
@@ -93,7 +93,19 @@ E-Mail: app.gainz.ai@gmail.com
 
         <h2>4. Datenübermittlung an Dritte</h2>
 
-        <h3>4.1 Google LLC (Alphabet Inc.)</h3>
+        <h3>4.1 Sentry (Fehlerüberwachung)</h3>
+        <p>Die App nutzt Sentry zur technischen Fehlerüberwachung und Stabilitätsverbesserung.</p>
+        <ul>
+          <li><strong>Anbieter:</strong> Functional Software, Inc., 45 Fremont Street, 8th Floor, San Francisco, CA 94105, USA</li>
+          <li><strong>Zweck:</strong> Erkennung und Behebung technischer Fehler</li>
+          <li><strong>Rechtsgrundlage:</strong> Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse an Fehleranalyse und App-Stabilität)</li>
+          <li><strong>Datenstandort:</strong> EU (Deutschland)</li>
+          <li><strong>Übermittelte Daten:</strong> Fehlermeldungen, Stack Traces, Browser-/Geräteinformationen (User Agent), HTTP-Request-URLs, Konsolenmeldungen, Referrer-URL</li>
+          <li><strong>Nicht übermittelte Daten:</strong> IP-Adressen, Cookies, E-Mail-Adressen, Benutzernamen</li>
+          <li><strong>Datenschutzerklärung:</strong> <a href="https://sentry.io/privacy/" target="_blank">https://sentry.io/privacy/</a></li>
+        </ul>
+
+        <h3>4.2 Google LLC (Alphabet Inc.)</h3>
         <p>Die App nutzt folgende Google-Dienste:</p>
 
         <h4>Google OAuth 2.0 / Google Login</h4>
@@ -120,7 +132,7 @@ E-Mail: app.gainz.ai@gmail.com
           <li><strong>API Terms of Service:</strong> <a href="https://ai.google.dev/gemini-api/terms" target="_blank">https://ai.google.dev/gemini-api/terms</a></li>
         </ul>
 
-        <h3>4.2 Übermittlung in Drittländer</h3>
+        <h3>4.3 Übermittlung in Drittländer</h3>
         <p><strong>USA:</strong> Datenübermittlung an Google LLC in den USA erfolgt auf Grundlage der EU-Standardvertragsklauseln und des EU-US Data Privacy Framework.</p>
         <p><strong>Risiken:</strong> Die Übermittlung von Daten in die USA kann mit Risiken verbunden sein, da US-Behörden unter bestimmten Umständen Zugriff auf Ihre Daten haben könnten.</p>
 
@@ -137,7 +149,10 @@ E-Mail: app.gainz.ai@gmail.com
         <h3>5.2 Google Drive Daten</h3>
         <p>Ihre in Google Drive gespeicherten Daten unterliegen Ihrer Kontrolle. Sie können diese jederzeit selbst löschen.</p>
 
-        <h3>5.3 Bei Google Generative AI</h3>
+        <h3>5.3 Sentry</h3>
+        <p>Fehlerdaten werden für 90 Tage in Sentry gespeichert und anschließend automatisch gelöscht.</p>
+
+        <h3>5.4 Bei Google Generative AI</h3>
         <p>Google speichert übermittelte Daten gemäß den Generative AI API Terms of Service.</p>
 
         <h2>6. Ihre Rechte</h2>
@@ -155,6 +170,7 @@ E-Mail: app.gainz.ai@gmail.com
         <ul>
           <li><strong>Lokale Daten:</strong> Löschen Sie den Browser-Cache und die LocalStorage-Daten</li>
           <li><strong>Google Drive Daten:</strong> Löschen Sie die entsprechende Tabelle in Ihrem Google Drive</li>
+          <li><strong>Sentry:</strong> Fehlerdaten werden automatisch nach 90 Tagen gelöscht</li>
           <li><strong>Google Generative AI:</strong> Kontaktieren Sie Google gemäß deren Datenschutzrichtlinien</li>
         </ul>
 
