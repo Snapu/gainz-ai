@@ -31,6 +31,7 @@ export const useAuthStore = defineStore("auth", () => {
         .initTokenClient({
           client_id: CLIENT_ID,
           scope: SCOPES.join(" "),
+          prompt: "none",
           callback: (response) => {
             if (!SCOPES.every((scope) => response.scope.includes(scope))) {
               console.warn("missing scopes in: ", response.scope);
@@ -43,27 +44,5 @@ export const useAuthStore = defineStore("auth", () => {
     });
   };
 
-  const refreshAccessToken = async () => {
-    return new Promise<void>((resolve, reject) => {
-      googleSdkLoaded((google) => {
-        google.accounts.oauth2
-          .initTokenClient({
-            client_id: CLIENT_ID,
-            scope: SCOPES.join(" "),
-            prompt: "", // Silent refresh
-            callback: (response) => {
-              accessToken.value = response.access_token;
-              expiresAt.value = parseInt(response.expires_in, 10) * 1000 + Date.now();
-              resolve();
-            },
-            error_callback: (error) => {
-              reject(new Error(error.message));
-            },
-          })
-          .requestAccessToken({ prompt: "" });
-      });
-    });
-  };
-
-  return { accessToken, isLoggedIn, needsRefresh, login, refreshAccessToken };
+  return { accessToken, isLoggedIn, needsRefresh, login };
 });

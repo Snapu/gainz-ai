@@ -75,23 +75,6 @@ const authStore = useAuthStore();
 const userProfileStore = useUserProfileStore();
 const spreadsheetStore = useSpreadsheetStore();
 
-// Auto-refresh token when it's about to expire
-watch(
-  () => authStore.needsRefresh,
-  async (needsRefresh) => {
-    if (needsRefresh && authStore.isLoggedIn) {
-      console.log("Access token expiring soon, refreshing...");
-      try {
-        await authStore.refreshAccessToken();
-        console.log("Access token refreshed successfully");
-      } catch (error) {
-        console.error("Failed to refresh access token:", error);
-      }
-    }
-  },
-  { immediate: true },
-);
-
 watch(
   [() => authStore.isLoggedIn, () => spreadsheetStore.doc],
   ([isLoggedIn, doc]) => {
