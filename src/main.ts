@@ -75,6 +75,9 @@ const authStore = useAuthStore();
 const userProfileStore = useUserProfileStore();
 const spreadsheetStore = useSpreadsheetStore();
 
+watch([() => authStore.needsRefresh], ([needRefresh]) => {
+  if (needRefresh) authStore.login();
+});
 watch(
   [() => authStore.isLoggedIn, () => spreadsheetStore.doc],
   ([isLoggedIn, doc]) => {
