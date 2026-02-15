@@ -6,7 +6,8 @@ import { parseData } from "./utils/parseData";
 
 const optionalNumberSchema = z.preprocess((val) => {
   if (val === "" || val === null || val === undefined) return undefined;
-  const num = Number(val);
+  // Spreadsheet locale is set to en_US, so values use period as decimal separator
+  const num = typeof val === "string" ? parseFloat(val) : Number(val);
   return Number.isNaN(num) ? undefined : num;
 }, z.number().optional());
 
@@ -164,10 +165,15 @@ export async function loadLogsFromYear(
 
   try {
     const rows = await sheet.getRows<ExerciseLog>();
-    return parseData(
-      ExerciseLogSchema.array(),
-      rows.map((row) => row.toObject()),
-    );
+    // Add IDs to rows that don't have them (for legacy data migration)
+    const rowsWithIds = rows.map((row) => {
+      const obj = row.toObject();
+      return {
+        ...obj,
+        id: obj.id || crypto.randomUUID(),
+      };
+    });
+    return parseData(ExerciseLogSchema.array(), rowsWithIds);
   } catch (error) {
     console.error(`Failed to load logs from year ${year}. Error:`, error);
     return err("load-failed");

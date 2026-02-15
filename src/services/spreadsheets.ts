@@ -45,6 +45,10 @@ export async function loadSpreadsheet(
   try {
     const doc = new GoogleSpreadsheet(id, { token: accessToken });
     await doc.loadInfo();
+    // Ensure consistent number formatting by setting locale to en_US
+    if (doc.locale !== "en_US") {
+      await doc.updateProperties({ locale: "en_US" });
+    }
     return ok(doc);
   } catch (error) {
     console.error(`Failed to load spreadsheet with id ${id}. Error:`, error);
@@ -61,6 +65,8 @@ export async function createSpreadsheet(
       { token: accessToken },
       { title: name },
     );
+    // Set locale to en_US for consistent number formatting
+    await doc.updateProperties({ locale: "en_US" });
     return ok(doc);
   } catch (error) {
     console.warn(`Failed to create new spreadsheet with name ${name}. Error:`, error);
