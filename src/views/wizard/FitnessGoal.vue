@@ -9,7 +9,7 @@
       </div>
       <ion-list>
         <ion-item v-for="[label, value] in fitnessGoalLabels" :key="value">
-          <UiCheckbox v-model="form.fitnessGoal" :value="value" multiple> {{ label }}</UiCheckbox>
+          <UiCheckbox v-model="userProfile.fitnessGoal" :value="value" multiple> {{ label }}</UiCheckbox>
         </ion-item>
       </ion-list>
     </ion-content>
@@ -20,13 +20,14 @@
 
 <script setup lang="ts">
 import { IonContent, IonItem, IonList, IonPage } from "@ionic/vue";
-import { reactive, watchEffect } from "vue";
+import { storeToRefs } from "pinia";
 import UiCheckbox from "@/components/ui/UiCheckbox.vue";
 import WizardFooter from "@/components/WizardFooter.vue";
 import WizardHeader from "@/components/WizardHeader.vue";
 import { type FitnessGoal, type UserProfile, useUserProfileStore } from "@/stores/userProfile";
 
 const userProfileStore = useUserProfileStore();
+const { userProfile } = storeToRefs(userProfileStore);
 
 const fitnessGoalLabels: [string, FitnessGoal][] = [
   ["🏋️ Build muscle", "build_muscle"],
@@ -35,8 +36,4 @@ const fitnessGoalLabels: [string, FitnessGoal][] = [
   ["🧘 Increase mobility", "increase_mobility"],
   ["✅ General fitness", "general_fitness"],
 ];
-
-const form = reactive<UserProfile>({ ...userProfileStore.userProfile });
-
-watchEffect(() => userProfileStore.saveUserProfile(form));
 </script>

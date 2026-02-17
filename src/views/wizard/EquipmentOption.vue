@@ -8,7 +8,7 @@
       </div>
       <ion-list>
         <ion-item v-for="[label, value] in equipmentOptionLabels" :key="value">
-          <UiCheckbox v-model="form.equipmentAccess" :value="value" multiple>
+          <UiCheckbox v-model="userProfile.equipmentAccess" :value="value" multiple>
             {{ label }}
           </UiCheckbox>
         </ion-item>
@@ -21,13 +21,14 @@
 
 <script setup lang="ts">
 import { IonContent, IonItem, IonList, IonPage } from "@ionic/vue";
-import { reactive, watchEffect } from "vue";
+import { storeToRefs } from "pinia";
 import UiCheckbox from "@/components/ui/UiCheckbox.vue";
 import WizardFooter from "@/components/WizardFooter.vue";
 import WizardHeader from "@/components/WizardHeader.vue";
 import { type EquipmentOption, type UserProfile, useUserProfileStore } from "@/stores/userProfile";
 
 const userProfileStore = useUserProfileStore();
+const { userProfile } = storeToRefs(userProfileStore);
 
 const equipmentOptionLabels: [string, EquipmentOption][] = [
   // 🔹 Minimal / No Equipment
@@ -55,7 +56,4 @@ const equipmentOptionLabels: [string, EquipmentOption][] = [
   // 🔸 Functional Tools
   ["Medicine ball", "medicine_ball"],
 ];
-
-const form = reactive<UserProfile>({ ...userProfileStore.userProfile });
-watchEffect(() => userProfileStore.saveUserProfile(form));
 </script>

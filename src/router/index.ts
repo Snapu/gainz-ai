@@ -11,7 +11,6 @@ import WizardEquipmentOption from "@/views/wizard/EquipmentOption.vue";
 import WizardFitnessGoal from "@/views/wizard/FitnessGoal.vue";
 import WizardFitnessLevel from "@/views/wizard/FitnessLevel.vue";
 import WizardFreeInput from "@/views/wizard/FreeInput.vue";
-import WizardIntro from "@/views/wizard/SetupIntro.vue";
 import WizardWorkoutDaysPerWeek from "@/views/wizard/WorkoutDaysPerWeek.vue";
 import WizardWorkoutLocation from "@/views/wizard/WorkoutLocation.vue";
 
@@ -25,11 +24,6 @@ const routes: Array<RouteRecordRaw> = [
     path: "/spreadsheet-init",
     name: "spreadsheetInit",
     component: SpreadsheetInit,
-  },
-  {
-    path: "/wizard",
-    name: "WizardIntro",
-    component: WizardIntro,
   },
   {
     path: "/wizard/fitness-goal",

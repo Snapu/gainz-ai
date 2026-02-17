@@ -1,5 +1,6 @@
 import { useLocalStorage } from "@vueuse/core";
 import { defineStore } from "pinia";
+import { computed } from "vue";
 
 export type FitnessGoal =
   | "build_muscle"
@@ -42,14 +43,6 @@ export type UserProfile = {
 
 export const useUserProfileStore = defineStore("userProfile", () => {
   const userProfile = useLocalStorage("userProfile", {} as UserProfile);
-  const setupCompleted = useLocalStorage("setupCompleted", false);
-
-  function saveUserProfile(value: UserProfile) {
-    if (Object.keys(value).length === 0) return;
-    console.debug("save user profile", value);
-    userProfile.value = value;
-    setupCompleted.value = true;
-  }
-
-  return { userProfile, setupCompleted, saveUserProfile };
+  const setupCompleted = computed(() => Object.keys(userProfile.value).length > 0);
+  return { userProfile, setupCompleted };
 });

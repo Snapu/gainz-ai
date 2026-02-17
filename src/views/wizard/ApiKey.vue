@@ -16,7 +16,7 @@
       <ion-list>
         <ion-item>
           <ion-textarea
-            v-model="form.apiKey"
+            v-model="userProfile.apiKey"
             label="API key:"
             :rows="3"
             autofocus
@@ -32,15 +32,11 @@
 
 <script setup lang="ts">
 import { IonContent, IonItem, IonList, IonPage, IonTextarea } from "@ionic/vue";
-import { reactive, watchEffect } from "vue";
+import { storeToRefs } from "pinia";
 import WizardFooter from "@/components/WizardFooter.vue";
-
 import WizardHeader from "@/components/WizardHeader.vue";
-import { type UserProfile, useUserProfileStore } from "@/stores/userProfile";
+import { useUserProfileStore } from "@/stores/userProfile";
 
 const userProfileStore = useUserProfileStore();
-
-const form = reactive<UserProfile>({ ...userProfileStore.userProfile });
-
-watchEffect(() => userProfileStore.saveUserProfile(form));
+const { userProfile } = storeToRefs(userProfileStore);
 </script>

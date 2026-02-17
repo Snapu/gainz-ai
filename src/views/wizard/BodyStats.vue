@@ -4,12 +4,12 @@
 
     <ion-content>
       <div class="ion-padding">
-        <h1>What’s your age, height, and weight?</h1>
+        <h1>What's your age, height, and weight?</h1>
       </div>
       <ion-list>
         <ion-item>
           <ion-input
-            v-model="form.age"
+            v-model="userProfile.age"
             label="Age:"
             type="number"
             autofocus
@@ -17,14 +17,14 @@
         </ion-item>
         <ion-item>
           <ion-input
-            v-model="form.heightCm"
+            v-model="userProfile.heightCm"
             label="Height in cm:"
             type="number"
           />
         </ion-item>
         <ion-item>
           <ion-input
-            v-model="form.weightKg"
+            v-model="userProfile.weightKg"
             label="Weight in kg:"
             type="number"
           />
@@ -38,15 +38,11 @@
 
 <script setup lang="ts">
 import { IonContent, IonInput, IonItem, IonList, IonPage } from "@ionic/vue";
-import { reactive, watchEffect } from "vue";
+import { storeToRefs } from "pinia";
 import WizardFooter from "@/components/WizardFooter.vue";
-
 import WizardHeader from "@/components/WizardHeader.vue";
-import { type UserProfile, useUserProfileStore } from "@/stores/userProfile";
+import { useUserProfileStore } from "@/stores/userProfile";
 
 const userProfileStore = useUserProfileStore();
-
-const form = reactive<UserProfile>({ ...userProfileStore.userProfile });
-
-watchEffect(() => userProfileStore.saveUserProfile(form));
+const { userProfile } = storeToRefs(userProfileStore);
 </script>
