@@ -8,6 +8,7 @@ import {
   SPREADSHEET_NAME,
 } from "@/services/spreadsheets";
 import { useAuthStore } from "./auth";
+import * as Sentry from "@sentry/vue";
 
 export const useSpreadsheetStore = defineStore("spreadsheet", () => {
   const doc = ref<GoogleSpreadsheet | null>(null) as Ref<GoogleSpreadsheet | null>;
@@ -19,6 +20,10 @@ export const useSpreadsheetStore = defineStore("spreadsheet", () => {
     isLoading.value = true;
     try {
       const idResult = await getSpreadsheetId(SPREADSHEET_NAME, accessToken);
+      if (idResult.isErr()) {
+        console.error("Error getting spreadsheet ID:", idResult.error);
+        Sentry.captureException(idResult.error);
+      }
       if (idResult.isOk() && idResult.value !== null) {
         const loadResult = await loadSpreadsheet(idResult.value, accessToken);
         if (loadResult.isOk()) doc.value = loadResult.value as GoogleSpreadsheet;
