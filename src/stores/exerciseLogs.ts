@@ -1,4 +1,3 @@
-import { useLocalStorage } from "@vueuse/core";
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { defineStore } from "pinia";
 import { computed } from "vue";
@@ -27,17 +26,10 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
     removeRemote: (item) => deleteExerciseLog_(item, spreadsheetStore.doc as GoogleSpreadsheet),
   });
 
-  const workoutFinished = useLocalStorage("workoutFinished", false);
-
   const startOfToday = new Date().setHours(0, 0, 0, 0);
   const workoutStarted = computed(() =>
     exerciseLogs.value.find((log) => log.loggedAt.getTime() > startOfToday),
   );
-
-  // reset on new day (i.e. workout not started yet)
-  if (!workoutStarted.value) {
-    workoutFinished.value = false;
-  }
 
   const addExerciseLog: typeof add = async (exerciseLog) => {
     console.log("Adding exercise log", exerciseLog);
@@ -57,7 +49,6 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
 
   return {
     exerciseLogs,
-    workoutFinished,
     workoutStarted,
     isLoading,
     isRefreshing,
