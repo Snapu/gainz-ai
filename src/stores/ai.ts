@@ -1,8 +1,7 @@
-import { type GenerateContentConfig, GoogleGenAI } from "@google/genai";
-
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 
+import { askAi as askAiService } from "@/services/ai.ts";
 import { localeDateString } from "@/services/utils/date";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
 import { useTrainingSummaryStore } from "@/stores/trainingSummary";
@@ -16,35 +15,6 @@ interface AiMessage {
   sessionDate: string;
   logsCount: number;
 }
-
-const aiConfig: GenerateContentConfig = {
-  systemInstruction: `
-You are an AI personal trainer providing feedback to your client.
-
-Your job:
-- Recall this week's training, last week's training, and long-term progress and patterns; Detect users rhythms, splits and phases and give brief feedback.
-- Warn user when you detect an overtraining, undertraining or neglected muscle groups.
-- Create an effective workout plan for today that is based on the user's training history and aligns with the user's goals, fitness level and amount of days the user wants to workout per week. Only suggest exercises that can be done with the user's available equipment.
-- Infer from exercise logs whether user is planning, mid-workout, or finished training. Adapt your responses accordingly.
-- Respect any time constraints in the user's profile (e.g., preferred workout duration).
-
-You may receive:
-- Your previous feedback from this session (if any)
-- A \`userProfile\` JSON (age, gender, goals, fitness level, equipment, time constraints, etc.)
-- An \`exerciseLogs\` JSON array (past workout sessions and today's logs)
-- User's preferred language/locale
-- Current date
-
-Important:
-- The user CANNOT send text replies. They only log exercises in the app.
-- When you receive updated exercise logs, acknowledge what's new and adapt your recommendations.
-- Build on your previous feedback. Don't repeat advice you already gave.
-- Don't ask questions or prompt for responses (e.g., avoid "Let me know how it goes!" or "Tell me when you're done").
-- Always respond in the user's preferred language, using the **informal form of address** (e.g. "du" in German, "tú" in Spanish, "tu" in French). Never use formal address like "Sie", "usted", or "vous".
-- Avoid filler sentences and small talk; optimize all responses for mobile screens.
-- Be clear, constructive, data-driven and knowledgeable. Be critical when you need to be.
-`,
-};
 
 const STORAGE_KEY_PREFIX = "ai-messages-";
 const MAX_SESSION_AGE_DAYS = 7;
@@ -125,7 +95,6 @@ export const useAiStore = defineStore("ai", () => {
       return;
     }
 
-    const ai = new GoogleGenAI({ apiKey });
     const today = localeDateString(new Date());
     const todayLogsCount = getTodayLogsCount(exerciseLogsStore);
 
@@ -143,91 +112,20 @@ export const useAiStore = defineStore("ai", () => {
     isLoading.value = true;
 
     try {
-      const startOfToday = new Date().setHours(0, 0, 0, 0);
-      const todayLogs = exerciseLogsStore.exerciseLogs.filter(
-        (log) => log.loggedAt.getTime() > startOfToday,
-      );
+      type PreviousMessagesParam = Parameters<typeof askAiService>[4];
 
-      const isFirstMessage = messages.value.length === 0;
+      const previousMessages: PreviousMessagesParam = messages.value.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+        sessionDate: msg.sessionDate,
+        logsCount: msg.logsCount,
+      }));
 
-      const fourWeeksAgo = new Date();
-      fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
-      const last4WeeksLogs = exerciseLogsStore.exerciseLogs.filter(
-        (log) => log.loggedAt.getTime() >= fourWeeksAgo.getTime(),
-      );
-
-      const logsToInclude = isFirstMessage ? last4WeeksLogs : todayLogs;
-
-      const workoutStatus = exerciseLogsStore.workoutStarted
-        ? `I already started my workout today.`
-        : `I haven't worked out today yet.`;
-
-      const profileJson = JSON.stringify(userProfileStore.userProfile, null, 2);
-      const logsJson = JSON.stringify(
-        logsToInclude.map((log) => ({
-          ...log,
-          timestamp: localeDateString(log.loggedAt),
-        })),
-        null,
-        2,
-      );
-
-      let historicalSummarySection = "";
-      if (isFirstMessage && trainingSummaryStore.summaries.length > 0) {
-        const summaryJson = JSON.stringify(trainingSummaryStore.summaries, null, 2);
-        historicalSummarySection = `
-Here is my historical training summary (monthly aggregates from past years):
-\`\`\`json
-${summaryJson}
-\`\`\`
-
-`;
-      }
-
-      const currentUserInput = `Today is ${today}, ${workoutStatus}
-
-Here is my profile data:
-\`\`\`json
-${profileJson}
-\`\`\`
-${historicalSummarySection}Here is my ${isFirstMessage ? "recent exercise logs (last 4 weeks)" : "today's exercise logs so far"}:
-\`\`\`json
-${logsJson}
-\`\`\`
-
-Units: weight = kg, duration = minutes, distance = meters
-
-Language preference: "${navigator.language}"`;
-
-      console.debug(currentUserInput);
-
-      // Build conversation contents array
-      const conversationContents: Array<{
-        role: "user" | "model";
-        parts: Array<{ text: string }>;
-      }> = [];
-
-      // Include last 5 message pairs for context (10 messages total)
-      const recentMessages = messages.value.slice(-10);
-      for (const msg of recentMessages) {
-        conversationContents.push({
-          role: msg.role === "assistant" ? "model" : "user",
-          parts: [{ text: msg.content }],
-        });
-      }
-
-      // Add current user input
-      conversationContents.push({
-        role: "user",
-        parts: [{ text: currentUserInput }],
-      });
-
-      // Save user message
       const userMessageId = `${Date.now()}-user`;
       const userMessage: AiMessage = {
         id: userMessageId,
         role: "user",
-        content: currentUserInput,
+        content: "AI request",
         timestamp: new Date(),
         sessionDate: today,
         logsCount: todayLogsCount,
@@ -235,18 +133,22 @@ Language preference: "${navigator.language}"`;
       messages.value.push(userMessage);
       saveMessagesToStorage(today, messages.value);
 
-      const responseStream = await ai.models.generateContentStream({
-        model: "gemini-2.5-flash",
-        contents: conversationContents,
-        config: aiConfig,
-      });
+      const result = await askAiService(
+        apiKey,
+        userProfileStore.userProfile,
+        exerciseLogsStore.exerciseLogs,
+        trainingSummaryStore.summaries,
+        previousMessages,
+      );
 
-      // Accumulate AI response
-      let aiResponseText = "";
-      for await (const chunk of responseStream) {
-        if (chunk.text) {
-          isLoading.value = false;
-          aiResponseText += chunk.text;
+      if (result.isErr()) {
+        switch (result.error) {
+          case "missing-api-key":
+            alert("No API Key configured!");
+            return;
+          case "generate-content-stream-failed":
+            alert("Failed to get AI response. Please try again.");
+            return;
         }
       }
 
@@ -255,7 +157,7 @@ Language preference: "${navigator.language}"`;
       const assistantMessage: AiMessage = {
         id: assistantMessageId,
         role: "assistant",
-        content: aiResponseText,
+        content: result.value,
         timestamp: new Date(),
         sessionDate: today,
         logsCount: todayLogsCount,
