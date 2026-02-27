@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/vue";
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { defineStore } from "pinia";
 import { computed, type Ref, ref, watchEffect } from "vue";
@@ -8,7 +9,6 @@ import {
   SPREADSHEET_NAME,
 } from "@/services/spreadsheets";
 import { useAuthStore } from "./auth";
-import * as Sentry from "@sentry/vue";
 
 export const useSpreadsheetStore = defineStore("spreadsheet", () => {
   const doc = ref<GoogleSpreadsheet | null>(null) as Ref<GoogleSpreadsheet | null>;

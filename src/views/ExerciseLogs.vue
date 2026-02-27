@@ -56,7 +56,7 @@
           <AiFeedback />
         </ion-card-content>
       </ion-card>
-      <ion-accordion-group :value="open" multiple>
+      <ion-accordion-group :value="open" multiple class="logs-accordion-group">
         <ion-accordion v-for="[day, logs] in Object.entries(groupedLogs)" :key="day" :value="day">
           <ion-item slot="header">
             <ion-label color="medium">{{ day }}</ion-label>
@@ -300,5 +300,8 @@ function openWizard() {
   }
   .fab-margin {
     margin: 6px;
+  }
+  .logs-accordion-group {
+    padding-bottom: 100px;
   }
 </style>
