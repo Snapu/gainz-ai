@@ -56,7 +56,7 @@ export const useAuthStore = defineStore("auth", () => {
       .mapErr((): AuthError => "token-request-failed")
       .andThen(
         (response): ResultAsync<GoogleTokenResponse, AuthError> =>
-          SCOPES.every((scope) => response.scope.includes(scope))
+          SCOPES.every((scope) => response.scope?.includes(scope))
             ? okAsync(response)
             : errAsync("missing-scopes"),
       );
