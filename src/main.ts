@@ -3,6 +3,7 @@ import * as Sentry from "@sentry/vue";
 
 import { createPinia } from "pinia";
 import { createApp, watch } from "vue";
+import vue3GoogleLogin from "vue3-google-login";
 
 import App from "@/App.vue";
 
@@ -37,13 +38,15 @@ import "@ionic/vue/css/palettes/dark.system.css";
 
 /* Theme variables */
 import "@/theme/variables.css";
-import { useAuthStore } from "./stores/auth";
+import { CLIENT_ID, useAuthStore } from "./stores/auth";
 import { useExerciseLogsStore } from "./stores/exerciseLogs";
 import { useExercisesStore } from "./stores/exercises";
 import { useSpreadsheetStore } from "./stores/spreadsheet";
 import { useUserProfileStore } from "./stores/userProfile";
 
-const app = createApp(App).use(IonicVue).use(createPinia()).use(router);
+const app = createApp(App).use(IonicVue).use(createPinia()).use(router).use(vue3GoogleLogin, {
+  clientId: CLIENT_ID,
+});
 
 Sentry.init({
   app,
@@ -75,9 +78,6 @@ const authStore = useAuthStore();
 const userProfileStore = useUserProfileStore();
 const spreadsheetStore = useSpreadsheetStore();
 
-watch([() => authStore.needsRefresh], ([needRefresh]) => {
-  if (needRefresh) authStore.login();
-});
 watch(
   [() => authStore.isLoggedIn, () => spreadsheetStore.doc],
   ([isLoggedIn, doc]) => {
