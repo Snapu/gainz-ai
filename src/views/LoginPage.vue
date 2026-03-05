@@ -9,8 +9,9 @@
     <ion-content>
       <div class="ion-padding">
         <div class="ion-text-center">
-          <GoogleLogin v-if="!authStore.isEmailSet" :callback="handleIdToken"/>
-          <ion-button v-else fill="clear" @click="authStore.login">Continue</ion-button>
+          <ion-button @click="login">
+            Sign in with Google
+          </ion-button>
         </div>
       </div>
     </ion-content>
@@ -18,20 +19,23 @@
 </template>
 
 <script setup lang="ts">
-import { IonContent, IonHeader, IonPage, IonTitle, IonToolbar } from "@ionic/vue";
-import { type CallbackTypes, decodeCredential } from "vue3-google-login";
-import { z } from "zod";
+import { IonButton, IonContent, IonHeader, IonPage, IonTitle, IonToolbar, toastController } from "@ionic/vue";
 import { useAuthStore } from "@/stores/auth";
-
-const claimsSchema = z.object({
-  email: z.email(),
-});
 
 const authStore = useAuthStore();
 
-const handleIdToken: CallbackTypes.CredentialCallback = (response) => {
-  // TODO error handling for invalid credential format or missing email claim
-  const userData = claimsSchema.parse(decodeCredential(response.credential));
-  authStore.setEmail(userData.email);
-};
+async function login() {
+  const result = await authStore.login();
+  if (result.isErr()) {
+    const message = result.error === "missing-scopes"
+      ? "Login failed. Please grant the required permissions and try again."
+      : "Login failed. Please try again.";
+    const toast = await toastController.create({
+      message,
+      duration: 3000,
+      color: "danger",
+    });
+    await toast.present();
+  }
+}
 </script>
