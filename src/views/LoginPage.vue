@@ -19,7 +19,15 @@
 </template>
 
 <script setup lang="ts">
-import { IonButton, IonContent, IonHeader, IonPage, IonTitle, IonToolbar, toastController } from "@ionic/vue";
+import {
+  IonButton,
+  IonContent,
+  IonHeader,
+  IonPage,
+  IonTitle,
+  IonToolbar,
+  toastController,
+} from "@ionic/vue";
 import { useAuthStore } from "@/stores/auth";
 
 const authStore = useAuthStore();
@@ -27,9 +35,10 @@ const authStore = useAuthStore();
 async function login() {
   const result = await authStore.login();
   if (result.isErr()) {
-    const message = result.error === "missing-scopes"
-      ? "Login failed. Please grant the required permissions and try again."
-      : "Login failed. Please try again.";
+    const message =
+      result.error === "missing-scopes"
+        ? "Login failed. Please grant the required permissions and try again."
+        : "Login failed. Please try again.";
     const toast = await toastController.create({
       message,
       duration: 3000,

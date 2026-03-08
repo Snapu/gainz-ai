@@ -111,39 +111,35 @@
             />
           </ion-item>
           <ion-item>
-            <ion-input
-              v-model.number="currentReps"
-              type="number"
+            <UiNumberStepper
+              v-model="currentReps"
               label="Reps:"
-              label-placement="fixed"
-              clearInput
+              :step="1"
+              :min="0"
             />
           </ion-item>
           <ion-item>
-            <ion-input
-              v-model.number="currentWeight"
-              type="number"
+            <UiNumberStepper
+              v-model="currentWeight"
               :label="formatUnit('kilogram') + ':'"
-              label-placement="fixed"
-              clearInput
+              :step="0.5"
+              :min="0"
             />
           </ion-item>
           <ion-item>
-            <ion-input
-              v-model.number="currentDistance"
-              type="number"
+            <UiNumberStepper
+              v-model="currentDistance"
               :label="formatUnit('meter') + ':'"
-              label-placement="fixed"
-              clearInput
+              :step="100"
+              :min="0"
             />
           </ion-item>
           <ion-item>
-            <ion-input
-              v-model.number="currentDuration"
-              type="number"
+            <UiNumberStepper
+              v-model="currentDuration"
               :label="formatUnit('minute') + ':'"
-              label-placement="fixed"
-              clearInput
+              :step="0.5"
+              :min="0"
             />
           </ion-item>
           <StopWatch />
@@ -203,6 +199,7 @@ import AiFeedback from "@/components/AiFeedback.vue";
 import ConsistencyLevel from "@/components/ConsistencyLevel.vue";
 import StopWatch from "@/components/StopWatch.vue";
 import UiCombobox from "@/components/ui/UiCombobox.vue";
+import UiNumberStepper from "@/components/ui/UiNumberStepper.vue";
 import router from "@/router";
 import type { ExerciseLog } from "@/services/exerciseLogs";
 import { localeDateString } from "@/services/utils/date";
