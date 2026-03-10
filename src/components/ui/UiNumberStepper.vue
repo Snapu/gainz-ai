@@ -1,5 +1,7 @@
 <template>
   <div class="stepper-container">
+    <ion-label v-if="props.label" class="stepper-label">{{ props.label }}</ion-label>
+
     <ion-button
       fill="clear"
       size="default"
@@ -13,8 +15,6 @@
     <ion-input
       v-model.number="model"
       type="number"
-      :label="props.label"
-      :label-placement="props.labelPlacement"
       class="stepper-input"
       :min="props.min?.toString()"
       :max="props.max?.toString()"
@@ -34,7 +34,7 @@
 </template>
 
 <script setup lang="ts">
-import { IonButton, IonIcon, IonInput } from "@ionic/vue";
+import { IonButton, IonIcon, IonInput, IonLabel } from "@ionic/vue";
 import { addOutline, removeOutline } from "ionicons/icons";
 import { computed } from "vue";
 
@@ -43,12 +43,10 @@ interface Props {
   max?: number;
   step?: number;
   label?: string;
-  labelPlacement?: "start" | "end" | "fixed" | "floating" | "stacked";
 }
 
 const props = withDefaults(defineProps<Props>(), {
   step: 1,
-  labelPlacement: "fixed",
 });
 
 const model = defineModel<number | null>();
@@ -103,8 +101,13 @@ function increment() {
 .stepper-container {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   width: 100%;
+  gap: 4px;
+}
+
+.stepper-label {
+  min-width: 100px;
+  flex-shrink: 0;
 }
 
 .stepper-btn {
@@ -113,14 +116,15 @@ function increment() {
   min-height: 44px; /* Touch target size */
   min-width: 44px;
   margin: 0;
+  flex-shrink: 0;
 }
 
 .stepper-input {
   text-align: center;
   --padding-start: 8px;
   --padding-end: 8px;
-  /* Ensure input has enough width but doesn't dominate */
-  flex: 1; 
+  flex: 1;
+  max-width: 100px;
 }
 
 /* 

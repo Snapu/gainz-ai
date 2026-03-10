@@ -11,6 +11,7 @@ describe("UiNumberStepper", () => {
           IonButton: true,
           IonInput: true,
           IonIcon: true,
+          IonLabel: true,
         },
       },
     });
@@ -26,6 +27,7 @@ describe("UiNumberStepper", () => {
           IonButton: true,
           IonInput: true,
           IonIcon: true,
+          IonLabel: true,
         },
       },
     });
@@ -41,6 +43,7 @@ describe("UiNumberStepper", () => {
           IonButton: true,
           IonInput: true,
           IonIcon: true,
+          IonLabel: true,
         },
       },
     });
@@ -56,6 +59,7 @@ describe("UiNumberStepper", () => {
           IonButton: true,
           IonInput: true,
           IonIcon: true,
+          IonLabel: true,
         },
       },
     });
@@ -72,6 +76,7 @@ describe("UiNumberStepper", () => {
           IonButton: true,
           IonInput: true,
           IonIcon: true,
+          IonLabel: true,
         },
       },
     });
@@ -87,6 +92,7 @@ describe("UiNumberStepper", () => {
           IonButton: true,
           IonInput: true,
           IonIcon: true,
+          IonLabel: true,
         },
       },
     });
@@ -102,6 +108,7 @@ describe("UiNumberStepper", () => {
           IonButton: true,
           IonInput: true,
           IonIcon: true,
+          IonLabel: true,
         },
       },
     });
@@ -117,6 +124,7 @@ describe("UiNumberStepper", () => {
           IonButton: true,
           IonInput: true,
           IonIcon: true,
+          IonLabel: true,
         },
       },
     });
@@ -132,6 +140,7 @@ describe("UiNumberStepper", () => {
           IonButton: true,
           IonInput: true,
           IonIcon: true,
+          IonLabel: true,
         },
       },
     });
@@ -153,6 +162,7 @@ describe("UiNumberStepper", () => {
           IonButton: true,
           IonInput: true,
           IonIcon: true,
+          IonLabel: true,
         },
       },
     });
