@@ -190,3 +190,71 @@ export async function saveUserProfile(
     return err("spreadsheet-save-failed");
   }
 }
+
+/**
+ * Migrate user profile from old localStorage format to spreadsheet
+ * Idempotent: safe to run multiple times (checks if already migrated)
+ *
+ * Migration steps:
+ * 1. Check if spreadsheet already has data → skip (already migrated)
+ * 2. Check for old localStorage key "userProfile"
+ * 3. If data exists: extract apiKey, save profile to spreadsheet, clean up localStorage
+ *
+ * @returns "migrated" if data was migrated, "skipped" if already done, "no-data" if nothing to migrate
+ */
+export async function migrateFromLocalStorage(
+  doc: GoogleSpreadsheet,
+): Promise<Result<"migrated" | "skipped" | "no-data", "migration-failed">> {
+  try {
+    // Check if spreadsheet already has data (idempotency check)
+    const loadResult = await loadUserProfile(doc);
+    if (loadResult.isErr()) {
+      return err("migration-failed");
+    }
+
+    if (loadResult.value !== null) {
+      // Spreadsheet already has data, migration already done or user is new
+      return ok("skipped");
+    }
+
+    // Check for old localStorage data
+    const oldDataJson = localStorage.getItem("userProfile");
+    if (!oldDataJson) {
+      // No old data to migrate
+      return ok("no-data");
+    }
+
+    // Parse old localStorage data
+    let oldData: any;
+    try {
+      oldData = JSON.parse(oldDataJson);
+    } catch (parseError) {
+      console.error("Failed to parse old userProfile localStorage:", parseError);
+      return err("migration-failed");
+    }
+
+    // Extract apiKey (if present) and profile data
+    const { apiKey, ...profileData } = oldData;
+
+    // Save apiKey to new localStorage key (if it exists)
+    if (apiKey) {
+      localStorage.setItem("userProfile:apiKey", apiKey);
+    }
+
+    // Save profile data (without apiKey) to spreadsheet
+    const saveResult = await saveUserProfile(profileData, doc);
+    if (saveResult.isErr()) {
+      console.error("Failed to save migrated profile to spreadsheet");
+      return err("migration-failed");
+    }
+
+    // Remove old localStorage key (migration complete)
+    localStorage.removeItem("userProfile");
+
+    console.log("User profile migrated from localStorage to spreadsheet");
+    return ok("migrated");
+  } catch (error) {
+    console.error("Migration failed:", error);
+    return err("migration-failed");
+  }
+}
