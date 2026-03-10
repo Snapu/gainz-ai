@@ -1,6 +1,13 @@
-import { useLocalStorage } from "@vueuse/core";
+import { useDebounceFn, useLocalStorage } from "@vueuse/core";
 import { defineStore } from "pinia";
-import { computed } from "vue";
+import { computed, ref, watch, watchEffect } from "vue";
+import {
+  loadUserProfile,
+  migrateFromLocalStorage,
+  saveUserProfile,
+  type UserProfileForSheet,
+} from "@/services/userProfile";
+import { useSpreadsheetStore } from "@/stores/spreadsheet";
 
 export type FitnessGoal =
   | "build_muscle"
@@ -43,6 +50,57 @@ export type UserProfile = {
 
 export const useUserProfileStore = defineStore("userProfile", () => {
   const userProfile = useLocalStorage("userProfile", {} as UserProfile);
-  const setupCompleted = computed(() => Object.keys(userProfile.value).length > 0);
-  return { userProfile, setupCompleted };
+  const apiKey = useLocalStorage<string | null>("userProfile:apiKey", null);
+  const isLoading = ref(false);
+
+  const setupCompleted = computed(() => {
+    const profile = userProfile.value;
+    return !!(
+      profile.fitnessGoal?.length ||
+      profile.age ||
+      profile.heightCm ||
+      profile.weightKg ||
+      profile.fitnessLevel ||
+      profile.workoutDaysPerWeek ||
+      profile.workoutLocation ||
+      profile.equipmentAccess?.length ||
+      profile.freeUserInput
+    );
+  });
+
+  watchEffect(async () => {
+    const spreadsheetStore = useSpreadsheetStore();
+    const { doc } = spreadsheetStore;
+    if (!doc) return;
+
+    isLoading.value = true;
+
+    await migrateFromLocalStorage(doc);
+
+    const result = await loadUserProfile(doc);
+    if (result.isOk() && result.value) {
+      userProfile.value = { ...result.value };
+    }
+
+    isLoading.value = false;
+  });
+
+  const debouncedSave = useDebounceFn(async () => {
+    const spreadsheetStore = useSpreadsheetStore();
+    const { doc } = spreadsheetStore;
+    if (!doc) return;
+
+    const { apiKey: _, ...profileData } = userProfile.value;
+    await saveUserProfile(profileData as UserProfileForSheet, doc);
+  }, 1500);
+
+  watch(
+    userProfile,
+    () => {
+      void debouncedSave();
+    },
+    { deep: true },
+  );
+
+  return { userProfile, apiKey, isLoading, setupCompleted };
 });
