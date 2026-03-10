@@ -96,8 +96,13 @@ export const useUserProfileStore = defineStore("userProfile", () => {
 
   watch(
     userProfile,
-    () => {
-      void debouncedSave();
+    (newProfile) => {
+      if ("apiKey" in newProfile) {
+        const { apiKey: _, ...cleanProfile } = newProfile as UserProfileWithApiKey;
+        userProfile.value = cleanProfile;
+      } else {
+        void debouncedSave();
+      }
     },
     { deep: true },
   );
