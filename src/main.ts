@@ -79,14 +79,16 @@ const userProfileStore = useUserProfileStore();
 const spreadsheetStore = useSpreadsheetStore();
 
 watch(
-  [() => authStore.isLoggedIn, () => spreadsheetStore.doc],
-  ([isLoggedIn, doc]) => {
+  [() => authStore.isLoggedIn, () => spreadsheetStore.doc, () => userProfileStore.isLoading],
+  ([isLoggedIn, doc, isLoading]) => {
     if (!isLoggedIn) {
       router.push("/");
-    } else if (!userProfileStore.setupCompleted) {
-      router.push("/wizard/fitness-goal");
     } else if (!doc) {
       router.push("/spreadsheet-init");
+    } else if (isLoading) {
+      return;
+    } else if (!userProfileStore.setupCompleted) {
+      router.push("/wizard/fitness-goal");
     } else {
       router.push("/exercise-logs");
     }
