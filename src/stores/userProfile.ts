@@ -45,8 +45,9 @@ export type UserProfile = {
   workoutLocation?: WorkoutLocation;
   equipmentAccess?: EquipmentOption[];
   freeUserInput?: string;
-  apiKey?: string;
 };
+
+export type UserProfileWithApiKey = UserProfile & { apiKey?: string };
 
 export const useUserProfileStore = defineStore("userProfile", () => {
   const userProfile = useLocalStorage("userProfile", {} as UserProfile);
@@ -90,8 +91,7 @@ export const useUserProfileStore = defineStore("userProfile", () => {
     const { doc } = spreadsheetStore;
     if (!doc) return;
 
-    const { apiKey: _, ...profileData } = userProfile.value;
-    await saveUserProfile(profileData as UserProfileForSheet, doc);
+    await saveUserProfile(userProfile.value, doc);
   }, 1500);
 
   watch(
@@ -102,5 +102,13 @@ export const useUserProfileStore = defineStore("userProfile", () => {
     { deep: true },
   );
 
-  return { userProfile, apiKey, isLoading, setupCompleted };
+  function updateProfile(partial: Partial<UserProfileWithApiKey>): void {
+    const { apiKey: newApiKey, ...profileFields } = partial;
+    if (newApiKey !== undefined) {
+      apiKey.value = newApiKey;
+    }
+    userProfile.value = { ...userProfile.value, ...profileFields };
+  }
+
+  return { userProfile, apiKey, isLoading, setupCompleted, updateProfile };
 });

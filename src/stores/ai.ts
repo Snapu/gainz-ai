@@ -89,7 +89,7 @@ export const useAiStore = defineStore("ai", () => {
   cleanOldSessions();
 
   async function askAi() {
-    const apiKey = userProfileStore.userProfile.apiKey;
+    const apiKey = userProfileStore.apiKey;
     if (!apiKey) {
       alert("No API Key configured!");
       return;
