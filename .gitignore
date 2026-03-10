@@ -31,3 +31,8 @@ npm-debug.log*
 /platforms
 /plugins
 /www
+
+.opencode
+.sisyphus
+.agents
+skills-lock.json
