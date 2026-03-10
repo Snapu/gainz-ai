@@ -1,4 +1,5 @@
 import { useDebounceFn, useLocalStorage } from "@vueuse/core";
+import { err, ok, type Result } from "neverthrow";
 import { defineStore } from "pinia";
 import { computed, ref, watch, watchEffect } from "vue";
 import {
@@ -50,12 +51,14 @@ export type UserProfile = {
 export type UserProfileWithApiKey = UserProfile & { apiKey?: string };
 
 export const useUserProfileStore = defineStore("userProfile", () => {
-  const userProfile = useLocalStorage("userProfile", {} as UserProfile);
+  const userProfile = ref<UserProfile>({});
+  const hasCompletedSetup = useLocalStorage<boolean>("hasCompletedSetup", false);
   const apiKey = useLocalStorage<string | null>("userProfile:apiKey", null);
   const isLoading = ref(false);
 
-  const setupCompleted = computed(() => {
-    const profile = userProfile.value;
+  const setupCompleted = computed(() => hasCompletedSetup.value);
+
+  function profileHasData(profile: UserProfile): boolean {
     return !!(
       profile.fitnessGoal?.length ||
       profile.age ||
@@ -67,7 +70,7 @@ export const useUserProfileStore = defineStore("userProfile", () => {
       profile.equipmentAccess?.length ||
       profile.freeUserInput
     );
-  });
+  }
 
   watchEffect(async () => {
     const spreadsheetStore = useSpreadsheetStore();
@@ -81,6 +84,9 @@ export const useUserProfileStore = defineStore("userProfile", () => {
     const result = await loadUserProfile(doc);
     if (result.isOk() && result.value) {
       userProfile.value = { ...result.value };
+      if (profileHasData(result.value)) {
+        hasCompletedSetup.value = true;
+      }
     }
 
     isLoading.value = false;
@@ -115,5 +121,25 @@ export const useUserProfileStore = defineStore("userProfile", () => {
     userProfile.value = { ...userProfile.value, ...profileFields };
   }
 
-  return { userProfile, apiKey, isLoading, setupCompleted, updateProfile };
+  async function completeSetup(): Promise<Result<void, string>> {
+    const spreadsheetStore = useSpreadsheetStore();
+    const { doc } = spreadsheetStore;
+    if (!doc) return err("no-spreadsheet-document");
+
+    const result = await saveUserProfile(userProfile.value, doc);
+    if (result.isErr()) return err(result.error);
+
+    hasCompletedSetup.value = true;
+    return ok(undefined);
+  }
+
+  return {
+    userProfile,
+    hasCompletedSetup,
+    apiKey,
+    isLoading,
+    setupCompleted,
+    updateProfile,
+    completeSetup,
+  };
 });
