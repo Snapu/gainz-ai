@@ -67,9 +67,9 @@ import {
   IonToolbar,
 } from "@ionic/vue";
 import { addOutline } from "ionicons/icons";
+import { computed, ref } from "vue";
 import AddEventModal from "@/components/AddEventModal.vue";
 import { useEventsStore } from "@/stores/events";
-import { computed, ref } from "vue";
 
 const eventsStore = useEventsStore();
 const addModalRef = ref<InstanceType<typeof AddEventModal> | null>(null);
@@ -77,6 +77,10 @@ const addModalRef = ref<InstanceType<typeof AddEventModal> | null>(null);
 const highlightedDates = computed(() => {
   const dates: { date: string; textColor: string; backgroundColor: string }[] = [];
   for (const event of eventsStore.events) {
+    if (!Array.isArray(event.dates)) {
+      console.warn("Event has invalid dates array:", event);
+      continue;
+    }
     for (const date of event.dates) {
       dates.push({
         date,
@@ -89,7 +93,7 @@ const highlightedDates = computed(() => {
 });
 
 function formatDates(dates: string[]): string {
-  if (dates.length === 0) return "";
+  if (!Array.isArray(dates) || dates.length === 0) return "";
   if (dates.length === 1) {
     const date = dates[0];
     if (!date) return "";
@@ -102,9 +106,7 @@ function formatDates(dates: string[]): string {
   if (dates.length <= 3) {
     return dates
       .filter((d): d is string => !!d)
-      .map((d) =>
-        new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      )
+      .map((d) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" }))
       .join(", ");
   }
   return `${dates.length} days`;
