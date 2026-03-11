@@ -1,6 +1,7 @@
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { err, ok, type Result } from "neverthrow";
 import { z } from "zod";
+import { parseData } from "./utils/parseData";
 
 export const FitnessGoalSchema = z.enum([
   "build_muscle",
@@ -72,30 +73,9 @@ export const UserProfileSchema = z.object({
 
 export type UserProfile = z.infer<typeof UserProfileSchema>;
 export type UserProfileWithApiKey = UserProfile & { apiKey?: string };
-export type UserProfileForSheet = UserProfile;
-
-/**
- * Serialize UserProfile to sheet row format
- * Converts arrays to comma-separated strings, numbers to strings
- */
-export function serializeForSheet(profile: UserProfileForSheet): Record<string, string> {
-  return {
-    age: profile.age?.toString() ?? "",
-    heightCm: profile.heightCm?.toString() ?? "",
-    weightKg: profile.weightKg?.toString() ?? "",
-    fitnessGoal: (profile.fitnessGoal ?? []).join(","),
-    fitnessLevel: profile.fitnessLevel ?? "",
-    workoutDaysPerWeek: profile.workoutDaysPerWeek?.toString() ?? "",
-    workoutLocation: profile.workoutLocation ?? "",
-    equipmentAccess: (profile.equipmentAccess ?? []).join(","),
-    freeUserInput: profile.freeUserInput ?? "",
-  };
-}
 
 const SHEET_NAME = "UserProfile";
-
 const getSheet = (doc: GoogleSpreadsheet) => doc.sheetsByTitle[SHEET_NAME];
-
 const addSheet = (doc: GoogleSpreadsheet) =>
   doc.addSheet({
     title: SHEET_NAME,
@@ -112,69 +92,56 @@ const addSheet = (doc: GoogleSpreadsheet) =>
     ],
   });
 
-/**
- * Load user profile from spreadsheet
- * Returns null if no profile exists (empty sheet)
- * Returns error if spreadsheet access fails or data is invalid
- */
+function serializeForSheet(profile: UserProfile): Record<string, string> {
+  return {
+    age: profile.age?.toString() ?? "",
+    heightCm: profile.heightCm?.toString() ?? "",
+    weightKg: profile.weightKg?.toString() ?? "",
+    fitnessGoal: (profile.fitnessGoal ?? []).join(","),
+    fitnessLevel: profile.fitnessLevel ?? "",
+    workoutDaysPerWeek: profile.workoutDaysPerWeek?.toString() ?? "",
+    workoutLocation: profile.workoutLocation ?? "",
+    equipmentAccess: (profile.equipmentAccess ?? []).join(","),
+    freeUserInput: profile.freeUserInput ?? "",
+  };
+}
+
 export async function loadUserProfile(
   doc: GoogleSpreadsheet,
-): Promise<Result<UserProfile | null, "spreadsheet-load-failed" | "spreadsheet-parse-failed">> {
+): Promise<Result<UserProfile | null, "load-failed" | "parse-data-failed">> {
+  const sheet = getSheet(doc) ?? (await addSheet(doc));
   try {
-    let sheet = getSheet(doc);
-    if (!sheet) sheet = await addSheet(doc);
-
-    await sheet.loadHeaderRow();
     const rows = await sheet.getRows();
-
     if (rows.length === 0) {
       return ok(null);
     }
-
-    const rowData = rows[0]!.toObject();
-    const parseResult = UserProfileSchema.safeParse(rowData);
-
-    if (!parseResult.success) {
-      console.error("Failed to parse user profile:", parseResult.error);
-      return err("spreadsheet-parse-failed");
-    }
-
-    return ok(parseResult.data);
+    const result = await parseData(UserProfileSchema, rows[0]!.toObject());
+    return result.isOk() ? ok(result.value) : err(result.error);
   } catch (error) {
-    console.error("Failed to load user profile:", error);
-    return err("spreadsheet-load-failed");
+    console.error("Failed to load user profile. Error:", error);
+    return err("load-failed");
   }
 }
 
-/**
- * Save user profile to spreadsheet
- * Updates existing profile row if present, creates new row if empty
- */
 export async function saveUserProfile(
-  profile: UserProfileForSheet,
+  profile: UserProfile,
   doc: GoogleSpreadsheet,
-): Promise<Result<void, "spreadsheet-save-failed">> {
+): Promise<Result<void, "save-failed">> {
   try {
-    let sheet = getSheet(doc);
-    if (!sheet) sheet = await addSheet(doc);
-
-    await sheet.loadHeaderRow();
+    const sheet = getSheet(doc) ?? (await addSheet(doc));
     const rows = await sheet.getRows();
-
     const serialized = serializeForSheet(profile);
 
     if (rows.length > 0) {
-      const existingRow = rows[0]!;
-      existingRow.assign(serialized);
-      await existingRow.save();
+      rows[0]!.assign(serialized);
+      await rows[0]!.save();
     } else {
       await sheet.addRow(serialized);
     }
-
-    return ok(undefined);
+    return ok();
   } catch (error) {
-    console.error("Failed to save user profile:", error);
-    return err("spreadsheet-save-failed");
+    console.error("Failed to save user profile. Error:", error);
+    return err("save-failed");
   }
 }
 

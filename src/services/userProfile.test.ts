@@ -4,9 +4,8 @@ import {
   loadUserProfile,
   migrateFromLocalStorage,
   saveUserProfile,
-  serializeForSheet,
   UserProfileSchema,
-  type UserProfileForSheet,
+  type UserProfile,
 } from "./userProfile";
 
 const createMockLocalStorage = () => {
@@ -313,98 +312,6 @@ describe("userProfile service", () => {
     });
   });
 
-  describe("serializeForSheet", () => {
-    it("should convert profile to sheet row format", () => {
-      const profile: UserProfileForSheet = {
-        age: 25,
-        heightCm: 180,
-        weightKg: 75,
-        fitnessGoal: ["build_muscle", "lose_fat"],
-        fitnessLevel: "intermediate",
-        workoutDaysPerWeek: 4,
-        workoutLocation: "gym",
-        equipmentAccess: ["dumbbells", "barbell_rack"],
-        freeUserInput: "test notes",
-      };
-
-      const result = serializeForSheet(profile);
-
-      expect(result).toEqual({
-        age: "25",
-        heightCm: "180",
-        weightKg: "75",
-        fitnessGoal: "build_muscle,lose_fat",
-        fitnessLevel: "intermediate",
-        workoutDaysPerWeek: "4",
-        workoutLocation: "gym",
-        equipmentAccess: "dumbbells,barbell_rack",
-        freeUserInput: "test notes",
-      });
-    });
-
-    it("should handle empty arrays as empty strings", () => {
-      const profile: UserProfileForSheet = {
-        fitnessGoal: [],
-        equipmentAccess: [],
-      };
-
-      const result = serializeForSheet(profile);
-
-      expect(result.fitnessGoal).toBe("");
-      expect(result.equipmentAccess).toBe("");
-    });
-
-    it("should handle undefined optional fields as empty strings", () => {
-      const profile: UserProfileForSheet = {
-        age: undefined,
-        heightCm: undefined,
-        weightKg: undefined,
-        fitnessGoal: [],
-        fitnessLevel: undefined,
-        workoutDaysPerWeek: undefined,
-        workoutLocation: undefined,
-        equipmentAccess: [],
-        freeUserInput: undefined,
-      };
-
-      const result = serializeForSheet(profile);
-
-      expect(result.age).toBe("");
-      expect(result.heightCm).toBe("");
-      expect(result.weightKg).toBe("");
-      expect(result.fitnessLevel).toBe("");
-      expect(result.workoutDaysPerWeek).toBe("");
-      expect(result.workoutLocation).toBe("");
-      expect(result.freeUserInput).toBe("");
-    });
-
-    it("should convert decimal numbers to strings", () => {
-      const profile: UserProfileForSheet = {
-        heightCm: 175.5,
-        weightKg: 82.3,
-        fitnessGoal: [],
-        equipmentAccess: [],
-      };
-
-      const result = serializeForSheet(profile);
-
-      expect(result.heightCm).toBe("175.5");
-      expect(result.weightKg).toBe("82.3");
-    });
-
-    it("should handle single item arrays", () => {
-      const profile: UserProfileForSheet = {
-        fitnessGoal: ["build_muscle"],
-        equipmentAccess: ["bodyweight"],
-      };
-
-      const result = serializeForSheet(profile);
-
-      expect(result.fitnessGoal).toBe("build_muscle");
-      expect(result.equipmentAccess).toBe("bodyweight");
-    });
-  });
-
   describe("loadUserProfile", () => {
     it("should return null for empty sheet", async () => {
       const mockSheet = createMockSheet([]);
@@ -416,7 +323,6 @@ describe("userProfile service", () => {
       if (result.isOk()) {
         expect(result.value).toBeNull();
       }
-      expect(mockSheet.loadHeaderRow).toHaveBeenCalled();
       expect(mockSheet.getRows).toHaveBeenCalled();
     });
 
@@ -485,7 +391,7 @@ describe("userProfile service", () => {
 
       expect(result.isErr()).toBe(true);
       if (result.isErr()) {
-        expect(result.error).toBe("spreadsheet-load-failed");
+        expect(result.error).toBe("load-failed");
       }
     });
 
@@ -508,7 +414,7 @@ describe("userProfile service", () => {
 
       expect(result.isErr()).toBe(true);
       if (result.isErr()) {
-        expect(result.error).toBe("spreadsheet-parse-failed");
+        expect(result.error).toBe("parse-data-failed");
       }
     });
   });
@@ -517,14 +423,14 @@ describe("userProfile service", () => {
     it("should create new row in empty sheet", async () => {
       const mockSheet = createMockSheet([]);
       const mockDoc = createMockDoc(mockSheet);
-      const profile: UserProfileForSheet = {
+      const profile: UserProfile = {
         age: 25,
         heightCm: 180,
         weightKg: 75,
         fitnessGoal: ["build_muscle"],
-        fitnessLevel: "intermediate",
+        fitnessLevel: "intermediate" as const,
         workoutDaysPerWeek: 4,
-        workoutLocation: "gym",
+        workoutLocation: "gym" as const,
         equipmentAccess: ["dumbbells"],
         freeUserInput: "test",
       };
@@ -559,14 +465,14 @@ describe("userProfile service", () => {
       });
       const mockSheet = createMockSheet([existingRow]);
       const mockDoc = createMockDoc(mockSheet);
-      const profile: UserProfileForSheet = {
+      const profile: UserProfile = {
         age: 25,
         heightCm: 180,
         weightKg: 75,
         fitnessGoal: ["build_muscle"],
-        fitnessLevel: "intermediate",
+        fitnessLevel: "intermediate" as const,
         workoutDaysPerWeek: 4,
-        workoutLocation: "gym",
+        workoutLocation: "gym" as const,
         equipmentAccess: ["dumbbells"],
         freeUserInput: "updated",
       };
@@ -590,7 +496,7 @@ describe("userProfile service", () => {
 
     it("should create sheet if it does not exist", async () => {
       const mockDoc = createMockDoc(null);
-      const profile: UserProfileForSheet = {
+      const profile = {
         age: 25,
         fitnessGoal: [],
         equipmentAccess: [],
@@ -606,7 +512,7 @@ describe("userProfile service", () => {
       const mockSheet = createMockSheet([]);
       mockSheet.addRow.mockRejectedValue(new Error("Save error"));
       const mockDoc = createMockDoc(mockSheet);
-      const profile: UserProfileForSheet = {
+      const profile = {
         age: 25,
         fitnessGoal: [],
         equipmentAccess: [],
@@ -616,7 +522,7 @@ describe("userProfile service", () => {
 
       expect(result.isErr()).toBe(true);
       if (result.isErr()) {
-        expect(result.error).toBe("spreadsheet-save-failed");
+        expect(result.error).toBe("save-failed");
       }
     });
   });
