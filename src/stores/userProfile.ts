@@ -1,4 +1,5 @@
 import { useDebounceFn, useLocalStorage } from "@vueuse/core";
+import { err, ok, type Result } from "neverthrow";
 import { defineStore } from "pinia";
 import { computed, ref, watch, watchEffect } from "vue";
 import {
@@ -97,6 +98,18 @@ export const useUserProfileStore = defineStore("userProfile", () => {
     userProfile.value = { ...userProfile.value, ...profileFields };
   }
 
+  async function completeSetup(): Promise<Result<void, string>> {
+    const spreadsheetStore = useSpreadsheetStore();
+    const { doc } = spreadsheetStore;
+    if (!doc) return err("no-spreadsheet-document");
+
+    const result = await saveUserProfile(userProfile.value, doc);
+    if (result.isErr()) return err(result.error);
+
+    hasCompletedSetup.value = true;
+    return ok(undefined);
+  }
+
   return {
     userProfile,
     hasCompletedSetup,
@@ -104,5 +117,6 @@ export const useUserProfileStore = defineStore("userProfile", () => {
     isLoading,
     setupCompleted,
     updateProfile,
+    completeSetup,
   };
 });
