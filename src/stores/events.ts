@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { type Ref, ref } from "vue";
-import { EventSchema, type Event } from "@/types/event";
+import { type Event, EventSchema } from "@/types/event";
 
 const STORAGE_KEY = "events:stored";
 
