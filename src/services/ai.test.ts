@@ -32,12 +32,11 @@ function createUserProfile(): UserProfile {
   };
 }
 
-function createEvent(type: string, startDate: string, endDate: string): Event {
+function createEvent(type: string, dates: string[]): Event {
   return {
     id: crypto.randomUUID(),
     type,
-    startDate,
-    endDate,
+    dates,
   };
 }
 
@@ -55,7 +54,7 @@ describe("askAi - Events Integration (RED Phase)", () => {
 
   describe("askAi signature - events parameter acceptance", () => {
     it("RED: askAi should accept events parameter (currently missing)", async () => {
-      const events = [createEvent("Sickness", "2026-03-11", "2026-03-12")];
+      const events = [createEvent("Sickness", ["2026-03-11", "2026-03-12"])];
 
       const callWithEvents = () =>
         askAi(
@@ -103,15 +102,15 @@ describe("askAi - Events Integration (RED Phase)", () => {
   describe("askAi - events inclusion in prompt", () => {
     it("RED: askAi should include events JSON in currentUserInput when provided", async () => {
       const events = [
-        createEvent("Sickness", "2026-03-11", "2026-03-13"),
-        createEvent("Injury", "2026-03-12", "2026-03-14"),
+        createEvent("Sickness", ["2026-03-11", "2026-03-12", "2026-03-13"]),
+        createEvent("Injury", ["2026-03-12", "2026-03-13", "2026-03-14"]),
       ];
 
       const eventsJson = JSON.stringify(events, null, 2);
 
       expect(eventsJson).toContain('"type": "Sickness"');
       expect(eventsJson).toContain('"type": "Injury"');
-      expect(eventsJson).toContain('"startDate": "2026-03-11"');
+      expect(eventsJson).toContain('"dates": [');
     });
 
     it("RED: askAi should not break with empty events array", async () => {
@@ -123,7 +122,7 @@ describe("askAi - Events Integration (RED Phase)", () => {
     });
 
     it("RED: askAi should format events section correctly in prompt", () => {
-      const events = [createEvent("Fasting", "2026-03-11", "2026-03-11")];
+      const events = [createEvent("Fasting", ["2026-03-11"])];
 
       const expectedPromptSection = `
 Here are my current events and constraints:
@@ -140,10 +139,10 @@ ${JSON.stringify(events, null, 2)}
   describe("askAi - events data structure validation", () => {
     it("RED: events should be array of Event type", () => {
       const events: Event[] = [
-        createEvent("Sickness", "2026-03-10", "2026-03-11"),
-        createEvent("Injury", "2026-03-08", "2026-03-09"),
-        createEvent("Fasting", "2026-03-11", "2026-03-11"),
-        createEvent("Rest Day", "2026-03-07", "2026-03-07"),
+        createEvent("Sickness", ["2026-03-10", "2026-03-11"]),
+        createEvent("Injury", ["2026-03-08", "2026-03-09"]),
+        createEvent("Fasting", ["2026-03-11"]),
+        createEvent("Rest Day", ["2026-03-07"]),
       ];
 
       expect(Array.isArray(events)).toBe(true);
@@ -151,15 +150,14 @@ ${JSON.stringify(events, null, 2)}
       events.forEach((event) => {
         expect(event).toHaveProperty("id");
         expect(event).toHaveProperty("type");
-        expect(event).toHaveProperty("startDate");
-        expect(event).toHaveProperty("endDate");
+        expect(event).toHaveProperty("dates");
       });
     });
 
     it("RED: events should be JSON serializable", () => {
       const events = [
-        createEvent("Sickness", "2026-03-11", "2026-03-12"),
-        createEvent("Rest Day", "2026-03-10", "2026-03-10"),
+        createEvent("Sickness", ["2026-03-11", "2026-03-12"]),
+        createEvent("Rest Day", ["2026-03-10"]),
       ];
 
       const serialized = JSON.stringify(events);
@@ -170,7 +168,7 @@ ${JSON.stringify(events, null, 2)}
 
     it("RED: askAi should handle various event types correctly", () => {
       const eventTypes = ["Sickness", "Injury", "Fasting", "Rest Day"];
-      const events = eventTypes.map((type) => createEvent(type, "2026-03-11", "2026-03-11"));
+      const events = eventTypes.map((type) => createEvent(type, ["2026-03-11"]));
 
       expect(events.map((e) => e.type)).toEqual(eventTypes);
     });
@@ -182,7 +180,7 @@ ${JSON.stringify(events, null, 2)}
         createExerciseLog("Squat", new Date("2026-03-11T10:00:00"), { reps: 5, weight: 100 }),
         createExerciseLog("Deadlift", new Date("2026-03-11T11:00:00"), { reps: 3, weight: 150 }),
       ];
-      const events = [createEvent("Rest Day", "2026-03-12", "2026-03-12")];
+      const events = [createEvent("Rest Day", ["2026-03-12"])];
 
       expect(logs).toHaveLength(2);
       expect(events).toHaveLength(1);
@@ -192,7 +190,7 @@ ${JSON.stringify(events, null, 2)}
       const logs = [
         createExerciseLog("Bench Press", new Date("2026-03-11T10:00:00"), { reps: 10, weight: 60 }),
       ];
-      const events = [createEvent("Sickness", "2026-03-13", "2026-03-14")];
+      const events = [createEvent("Sickness", ["2026-03-13", "2026-03-14"])];
 
       const logsJson = JSON.stringify(logs);
       const eventsJson = JSON.stringify(events);
@@ -205,10 +203,10 @@ ${JSON.stringify(events, null, 2)}
       const logs = [
         createExerciseLog("Squat", new Date("2026-03-11T10:00:00"), { reps: 5, weight: 100 }),
       ];
-      const events = [createEvent("Fasting", "2026-03-11", "2026-03-11")];
+      const events = [createEvent("Fasting", ["2026-03-11"])];
 
       const logDate = logs[0]?.loggedAt.toISOString().split("T")[0];
-      const eventDate = events[0]?.startDate;
+      const eventDate = events[0]?.dates[0];
 
       expect(logDate).toBe(eventDate);
     });

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import {
+  type DatetimeCustomEvent,
   IonButton,
   IonButtons,
   IonContent,
+  IonDatetime,
   IonFooter,
   IonHeader,
   IonInput,
@@ -13,36 +15,33 @@ import {
   IonTitle,
   IonToolbar,
 } from "@ionic/vue";
-import { usePreferredDark } from "@vueuse/core";
-import { DatePicker } from "v-calendar";
-import { EVENT_PRESETS } from "@/types/event";
-import "v-calendar/style.css";
 import { ref } from "vue";
+import { EVENT_PRESETS } from "@/types/event";
 
 const modalRef = ref<InstanceType<typeof IonModal> | null>(null);
-const isDark = usePreferredDark();
 
-const selectedType = ref<string>(EVENT_PRESETS[0] || "Rest Day");
+const selectedType = ref<string>(EVENT_PRESETS[0] ?? "Rest Day");
 const customType = ref("");
-const dateRange = ref({
-  start: new Date(),
-  end: new Date(),
-});
+const today = new Date().toISOString().split("T")[0] ?? "";
+const selectedDates = ref<string[]>([today]);
 
 const emit =
-  defineEmits<
-    (e: "saved", event: { id: string; type: string; startDate: Date; endDate: Date }) => void
-  >();
+  defineEmits<(e: "saved", event: { id: string; type: string; dates: string[] }) => void>();
+
+function handleDateChange(event: DatetimeCustomEvent) {
+  const value = event.detail.value;
+  if (Array.isArray(value)) {
+    selectedDates.value = value;
+  }
+}
 
 function open() {
   modalRef.value?.$el.present();
   // Reset fields
-  selectedType.value = EVENT_PRESETS[0] || "Rest Day";
+  selectedType.value = EVENT_PRESETS[0] ?? "Rest Day";
   customType.value = "";
-  dateRange.value = {
-    start: new Date(),
-    end: new Date(),
-  };
+  const resetDate = new Date().toISOString().split("T")[0] ?? "";
+  selectedDates.value = [resetDate];
 }
 
 function close() {
@@ -51,13 +50,12 @@ function close() {
 
 function handleSave() {
   const type = selectedType.value === "Other" ? customType.value : selectedType.value;
-  if (!type) return; // Basic validation
+  if (!type || selectedDates.value.length === 0) return; // Basic validation
 
   emit("saved", {
     id: crypto.randomUUID(),
     type,
-    startDate: dateRange.value.start,
-    endDate: dateRange.value.end,
+    dates: selectedDates.value,
   });
   close();
 }
@@ -90,7 +88,13 @@ defineExpose({ open });
       </ion-item>
 
       <div class="calendar-container ion-margin-top">
-        <DatePicker v-model.range="dateRange" mode="date" :is-dark="isDark" expanded />
+        <IonDatetime
+          :value="selectedDates"
+          @ionChange="handleDateChange"
+          multiple
+          presentation="date"
+          :prefer-wheel="false"
+        />
       </div>
     </ion-content>
     <ion-footer>

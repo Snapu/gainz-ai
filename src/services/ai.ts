@@ -147,7 +147,9 @@ export async function askAi(
       null,
       2,
     );
-    const eventsJson = JSON.stringify(events, null, 2);
+    const eventsText = events
+      .map((event) => `- ${event.type}: ${event.dates.join(", ")}`)
+      .join("\n");
 
     let historicalSummarySection = "";
     if (isFirstMessage && trainingSummaries.length > 0) {
@@ -175,10 +177,8 @@ ${logsJson}
 
     if (events.length > 0) {
       currentUserInput += `
-Here are my current events and constraints:
-\`\`\`json
-${eventsJson}
-\`\`\`
+Here are my recent health/schedule events:
+${eventsText}
 `;
     }
 
