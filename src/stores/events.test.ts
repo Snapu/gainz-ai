@@ -81,7 +81,9 @@ describe("useEventsStore", () => {
       store.addEvent(event);
 
       expect(store.events).toHaveLength(1);
-      expect(store.events[0].dates).toEqual(["2024-03-15"]);
+      const addedEvent = store.events[0];
+      expect(addedEvent).toBeDefined();
+      expect(addedEvent?.dates).toEqual(["2024-03-15"]);
     });
 
     it("should add event with multiple dates", () => {
@@ -91,8 +93,11 @@ describe("useEventsStore", () => {
       store.addEvent(event);
 
       expect(store.events).toHaveLength(1);
-      expect(store.events[0].dates).toHaveLength(3);
-      expect(store.events[0].dates).toContain("2024-03-10");
+      const addedEvent = store.events[0];
+      expect(addedEvent).toBeDefined();
+      expect(addedEvent?.dates).toHaveLength(3);
+      expect(addedEvent?.dates).toContain("2024-03-10");
+      expect(addedEvent?.dates).toContain("2024-03-12");
     });
   });
 
