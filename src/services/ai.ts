@@ -5,8 +5,8 @@ import { err, ok, type Result } from "neverthrow";
 import type { ExerciseLog } from "@/services/exerciseLogs";
 import type { TrainingSummary } from "@/services/trainingSummary";
 import { localeDateString } from "@/services/utils/date";
-import type { Event } from "@/types/event";
 import type { UserProfile } from "@/stores/userProfile";
+import type { Event } from "@/types/event";
 
 type PreviousAiMessage = {
   role: "user" | "assistant";

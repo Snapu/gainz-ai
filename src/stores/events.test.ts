@@ -1,7 +1,7 @@
+import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { setActivePinia, createPinia } from "pinia";
-import type { Event } from "@/types/event";
 import { useEventsStore } from "@/stores/events";
+import type { Event } from "@/types/event";
 
 // Helper to create test events
 function createEvent(
@@ -64,10 +64,7 @@ describe("useEventsStore", () => {
       vi.spyOn(localStorage, "setItem");
       store.addEvent(event);
 
-      expect(localStorage.setItem).toHaveBeenCalledWith(
-        "events:stored",
-        JSON.stringify([event]),
-      );
+      expect(localStorage.setItem).toHaveBeenCalledWith("events:stored", JSON.stringify([event]));
     });
 
     it("should add multiple events", () => {
@@ -143,10 +140,7 @@ describe("useEventsStore", () => {
       store.addEvent(event2);
       store.addEvent(event3);
 
-      const result = store.getEventsByDateRange(
-        new Date("2024-03-01"),
-        new Date("2024-03-31"),
-      );
+      const result = store.getEventsByDateRange(new Date("2024-03-01"), new Date("2024-03-31"));
 
       expect(result).toHaveLength(2);
       expect(result).toContainEqual(event1);
@@ -159,10 +153,7 @@ describe("useEventsStore", () => {
 
       store.addEvent(event);
 
-      const result = store.getEventsByDateRange(
-        new Date("2024-03-01"),
-        new Date("2024-03-31"),
-      );
+      const result = store.getEventsByDateRange(new Date("2024-03-01"), new Date("2024-03-31"));
 
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual(event);
@@ -174,10 +165,7 @@ describe("useEventsStore", () => {
 
       store.addEvent(event);
 
-      const result = store.getEventsByDateRange(
-        new Date("2024-03-01"),
-        new Date("2024-03-31"),
-      );
+      const result = store.getEventsByDateRange(new Date("2024-03-01"), new Date("2024-03-31"));
 
       expect(result).toHaveLength(0);
     });
@@ -188,10 +176,7 @@ describe("useEventsStore", () => {
 
       store.addEvent(event);
 
-      const result = store.getEventsByDateRange(
-        new Date("2024-03-01"),
-        new Date("2024-03-31"),
-      );
+      const result = store.getEventsByDateRange(new Date("2024-03-01"), new Date("2024-03-31"));
 
       expect(result).toHaveLength(0);
     });

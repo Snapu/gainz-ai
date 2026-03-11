@@ -1,9 +1,9 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Event } from "@/types/event";
 import { askAi } from "./ai";
 import type { ExerciseLog } from "./exerciseLogs";
 import type { TrainingSummary } from "./trainingSummary";
 import type { UserProfile } from "./userProfile";
-import type { Event } from "@/types/event";
 
 function createExerciseLog(
   exerciseName: string,
@@ -57,14 +57,27 @@ describe("askAi - Events Integration (RED Phase)", () => {
       const events = [createEvent("Sickness", "2026-03-11", "2026-03-12")];
 
       const callWithEvents = () =>
-        askAi(mockApiKey, mockUserProfile, mockExerciseLogs, mockTrainingSummaries, mockPreviousMessages, events as any);
+        askAi(
+          mockApiKey,
+          mockUserProfile,
+          mockExerciseLogs,
+          mockTrainingSummaries,
+          mockPreviousMessages,
+          events as any,
+        );
 
       expect(callWithEvents).toBeDefined();
     });
 
     it("RED: askAi should accept optional events parameter (backward compatible)", async () => {
       const callWithoutEvents = () =>
-        askAi(mockApiKey, mockUserProfile, mockExerciseLogs, mockTrainingSummaries, mockPreviousMessages);
+        askAi(
+          mockApiKey,
+          mockUserProfile,
+          mockExerciseLogs,
+          mockTrainingSummaries,
+          mockPreviousMessages,
+        );
 
       expect(callWithoutEvents).toBeDefined();
     });
@@ -73,7 +86,14 @@ describe("askAi - Events Integration (RED Phase)", () => {
       const events: Event[] = [];
 
       const callWithEmptyEvents = () =>
-        askAi(mockApiKey, mockUserProfile, mockExerciseLogs, mockTrainingSummaries, mockPreviousMessages, events as any);
+        askAi(
+          mockApiKey,
+          mockUserProfile,
+          mockExerciseLogs,
+          mockTrainingSummaries,
+          mockPreviousMessages,
+          events as any,
+        );
 
       expect(callWithEmptyEvents).toBeDefined();
     });

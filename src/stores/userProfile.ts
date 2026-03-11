@@ -3,12 +3,12 @@ import { err, ok, type Result } from "neverthrow";
 import { defineStore } from "pinia";
 import { computed, ref, watch, watchEffect } from "vue";
 import {
-  loadUserProfile,
-  migrateFromLocalStorage,
-  saveUserProfile,
   type EquipmentOption,
   type FitnessGoal,
   type FitnessLevel,
+  loadUserProfile,
+  migrateFromLocalStorage,
+  saveUserProfile,
   type UserProfile,
   type UserProfileWithApiKey,
   type WorkoutLocation,
@@ -56,7 +56,11 @@ export const useUserProfileStore = defineStore("userProfile", () => {
     await migrateFromLocalStorage(doc);
 
     const result = await loadUserProfile(doc);
-    console.log("[userProfile] Load result:", result.isOk() ? "OK" : "ERR", result.isOk() ? result.value : result.error);
+    console.log(
+      "[userProfile] Load result:",
+      result.isOk() ? "OK" : "ERR",
+      result.isOk() ? result.value : result.error,
+    );
     if (result.isOk() && result.value) {
       userProfile.value = { ...result.value };
       const hasData = profileHasData(result.value);

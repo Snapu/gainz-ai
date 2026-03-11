@@ -86,7 +86,12 @@ watch(
     () => userProfileStore.setupCompleted, // CRITICAL: Must watch setupCompleted to react when it changes!
   ],
   ([isLoggedIn, doc, isLoading, setupCompleted]) => {
-    console.log("[main] Watch triggered:", { isLoggedIn, hasDoc: !!doc, isLoading, setupCompleted });
+    console.log("[main] Watch triggered:", {
+      isLoggedIn,
+      hasDoc: !!doc,
+      isLoading,
+      setupCompleted,
+    });
     if (!isLoggedIn) {
       router.push("/");
     } else if (!doc || isLoading) {

@@ -4,8 +4,8 @@ import {
   loadUserProfile,
   migrateFromLocalStorage,
   saveUserProfile,
-  UserProfileSchema,
   type UserProfile,
+  UserProfileSchema,
 } from "./userProfile";
 
 const createMockLocalStorage = () => {

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { EVENT_PRESETS } from "@/types/event";
 import {
   IonButton,
   IonButtons,
@@ -16,6 +15,7 @@ import {
 } from "@ionic/vue";
 import { usePreferredDark } from "@vueuse/core";
 import { DatePicker } from "v-calendar";
+import { EVENT_PRESETS } from "@/types/event";
 import "v-calendar/style.css";
 import { ref } from "vue";
 
@@ -29,9 +29,10 @@ const dateRange = ref({
   end: new Date(),
 });
 
-const emit = defineEmits<{
-  (e: "saved", event: { id: string; type: string; startDate: Date; endDate: Date }): void;
-}>();
+const emit =
+  defineEmits<
+    (e: "saved", event: { id: string; type: string; startDate: Date; endDate: Date }) => void
+  >();
 
 function open() {
   modalRef.value?.$el.present();

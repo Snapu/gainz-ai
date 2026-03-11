@@ -1,5 +1,4 @@
-import { beforeEach, afterEach } from "vitest";
-import { vi } from "vitest";
+import { afterEach, beforeEach, vi } from "vitest";
 
 // Mock Ionic components globally for all tests
 vi.mock("@ionic/vue", () => ({
@@ -28,7 +27,7 @@ const mockLocalStorage = {
     delete storage[key];
   },
   clear: () => {
-    Object.keys(storage).forEach(key => {
+    Object.keys(storage).forEach((key) => {
       delete storage[key];
     });
   },
@@ -38,7 +37,7 @@ const mockLocalStorage = {
   },
 };
 
-vi.stubGlobal('localStorage', mockLocalStorage);
+vi.stubGlobal("localStorage", mockLocalStorage);
 
 beforeEach(() => {
   mockLocalStorage.clear();

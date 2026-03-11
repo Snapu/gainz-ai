@@ -45,8 +45,6 @@
 </template>
 
 <script setup lang="ts">
-import AddEventModal from "@/components/AddEventModal.vue";
-import { useEventsStore } from "@/stores/events";
 import {
   IonBackButton,
   IonButtons,
@@ -67,6 +65,8 @@ import {
 } from "@ionic/vue";
 import { addOutline } from "ionicons/icons";
 import { Calendar } from "v-calendar";
+import AddEventModal from "@/components/AddEventModal.vue";
+import { useEventsStore } from "@/stores/events";
 import "v-calendar/style.css";
 import { computed, ref } from "vue";
 
@@ -96,12 +96,7 @@ function openAddModal() {
   addModalRef.value?.open();
 }
 
-function handleSaved(event: {
-  id: string;
-  type: string;
-  startDate: Date;
-  endDate: Date;
-}) {
+function handleSaved(event: { id: string; type: string; startDate: Date; endDate: Date }) {
   eventsStore.addEvent({
     ...event,
     startDate: event.startDate.toISOString(),
