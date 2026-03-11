@@ -56,14 +56,19 @@ export const useUserProfileStore = defineStore("userProfile", () => {
     await migrateFromLocalStorage(doc);
 
     const result = await loadUserProfile(doc);
+    console.log("[userProfile] Load result:", result.isOk() ? "OK" : "ERR", result.isOk() ? result.value : result.error);
     if (result.isOk() && result.value) {
       userProfile.value = { ...result.value };
-      if (profileHasData(result.value)) {
+      const hasData = profileHasData(result.value);
+      console.log("[userProfile] Profile has data:", hasData, "Data:", result.value);
+      if (hasData) {
         hasCompletedSetup.value = true;
+        console.log("[userProfile] Set hasCompletedSetup = true");
       }
     }
 
     isLoading.value = false;
+    console.log("[userProfile] Loading complete. hasCompletedSetup:", hasCompletedSetup.value);
   });
 
   const debouncedSave = useDebounceFn(async () => {

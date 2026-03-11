@@ -79,15 +79,23 @@ const userProfileStore = useUserProfileStore();
 const spreadsheetStore = useSpreadsheetStore();
 
 watch(
-  [() => authStore.isLoggedIn, () => spreadsheetStore.doc, () => userProfileStore.isLoading],
-  ([isLoggedIn, doc, isLoading]) => {
+  [
+    () => authStore.isLoggedIn,
+    () => spreadsheetStore.doc,
+    () => userProfileStore.isLoading,
+    () => userProfileStore.setupCompleted, // CRITICAL: Must watch setupCompleted to react when it changes!
+  ],
+  ([isLoggedIn, doc, isLoading, setupCompleted]) => {
+    console.log("[main] Watch triggered:", { isLoggedIn, hasDoc: !!doc, isLoading, setupCompleted });
     if (!isLoggedIn) {
       router.push("/");
     } else if (!doc || isLoading) {
       return;
-    } else if (!userProfileStore.setupCompleted) {
+    } else if (!setupCompleted) {
+      console.log("[main] Setup not completed, routing to wizard");
       router.push("/wizard/fitness-goal");
     } else {
+      console.log("[main] Setup completed, routing to exercise-logs");
       router.push("/exercise-logs");
     }
   },
