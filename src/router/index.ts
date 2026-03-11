@@ -74,6 +74,11 @@ const routes: Array<RouteRecordRaw> = [
     name: "Impressum",
     component: Impressum,
   },
+  {
+    path: "/events",
+    name: "Events",
+    component: () => import("@/views/EventsPage.vue"),
+  },
 ];
 
 const router = createRouter({
