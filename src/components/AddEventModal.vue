@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  type DatetimeCustomEvent,
   IonButton,
   IonButtons,
   IonContent,
@@ -13,10 +14,9 @@ import {
   IonSelectOption,
   IonTitle,
   IonToolbar,
-  type DatetimeCustomEvent,
 } from "@ionic/vue";
-import { EVENT_PRESETS } from "@/types/event";
 import { ref } from "vue";
+import { EVENT_PRESETS } from "@/types/event";
 
 const modalRef = ref<InstanceType<typeof IonModal> | null>(null);
 
@@ -25,9 +25,8 @@ const customType = ref("");
 const today = new Date().toISOString().split("T")[0] ?? "";
 const selectedDates = ref<string[]>([today]);
 
-const emit = defineEmits<{
-  (e: "saved", event: { id: string; type: string; dates: string[] }): void;
-}>();
+const emit =
+  defineEmits<(e: "saved", event: { id: string; type: string; dates: string[] }) => void>();
 
 function handleDateChange(event: DatetimeCustomEvent) {
   const value = event.detail.value;

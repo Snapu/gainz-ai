@@ -4,11 +4,7 @@ import { useEventsStore } from "@/stores/events";
 import type { Event } from "@/types/event";
 
 // Helper to create test events
-function createEvent(
-  type: string,
-  dates: string[],
-  id: string = crypto.randomUUID(),
-): Event {
+function createEvent(type: string, dates: string[], id: string = crypto.randomUUID()): Event {
   return { id, type, dates };
 }
 
@@ -27,7 +23,13 @@ describe("useEventsStore", () => {
     });
 
     it("should restore events from localStorage on initialization", () => {
-      const testEvent = createEvent("Sickness", ["2024-03-01", "2024-03-02", "2024-03-03", "2024-03-04", "2024-03-05"]);
+      const testEvent = createEvent("Sickness", [
+        "2024-03-01",
+        "2024-03-02",
+        "2024-03-03",
+        "2024-03-04",
+        "2024-03-05",
+      ]);
       const stored = JSON.stringify([testEvent]);
 
       vi.spyOn(localStorage, "getItem").mockReturnValue(stored);
@@ -43,7 +45,18 @@ describe("useEventsStore", () => {
   describe("addEvent", () => {
     it("should add event to array", () => {
       const store = useEventsStore();
-      const event = createEvent("Injury", ["2024-03-01", "2024-03-02", "2024-03-03", "2024-03-04", "2024-03-05", "2024-03-06", "2024-03-07", "2024-03-08", "2024-03-09", "2024-03-10"]);
+      const event = createEvent("Injury", [
+        "2024-03-01",
+        "2024-03-02",
+        "2024-03-03",
+        "2024-03-04",
+        "2024-03-05",
+        "2024-03-06",
+        "2024-03-07",
+        "2024-03-08",
+        "2024-03-09",
+        "2024-03-10",
+      ]);
 
       store.addEvent(event);
 
@@ -63,8 +76,26 @@ describe("useEventsStore", () => {
 
     it("should add multiple events", () => {
       const store = useEventsStore();
-      const event1 = createEvent("Sickness", ["2024-03-01", "2024-03-02", "2024-03-03", "2024-03-04", "2024-03-05"]);
-      const event2 = createEvent("Injury", ["2024-03-10", "2024-03-11", "2024-03-12", "2024-03-13", "2024-03-14", "2024-03-15", "2024-03-16", "2024-03-17", "2024-03-18", "2024-03-19", "2024-03-20"]);
+      const event1 = createEvent("Sickness", [
+        "2024-03-01",
+        "2024-03-02",
+        "2024-03-03",
+        "2024-03-04",
+        "2024-03-05",
+      ]);
+      const event2 = createEvent("Injury", [
+        "2024-03-10",
+        "2024-03-11",
+        "2024-03-12",
+        "2024-03-13",
+        "2024-03-14",
+        "2024-03-15",
+        "2024-03-16",
+        "2024-03-17",
+        "2024-03-18",
+        "2024-03-19",
+        "2024-03-20",
+      ]);
 
       store.addEvent(event1);
       store.addEvent(event2);
@@ -104,8 +135,26 @@ describe("useEventsStore", () => {
   describe("removeEvent", () => {
     it("should remove event by id", () => {
       const store = useEventsStore();
-      const event1 = createEvent("Sickness", ["2024-03-01", "2024-03-02", "2024-03-03", "2024-03-04", "2024-03-05"]);
-      const event2 = createEvent("Injury", ["2024-03-10", "2024-03-11", "2024-03-12", "2024-03-13", "2024-03-14", "2024-03-15", "2024-03-16", "2024-03-17", "2024-03-18", "2024-03-19", "2024-03-20"]);
+      const event1 = createEvent("Sickness", [
+        "2024-03-01",
+        "2024-03-02",
+        "2024-03-03",
+        "2024-03-04",
+        "2024-03-05",
+      ]);
+      const event2 = createEvent("Injury", [
+        "2024-03-10",
+        "2024-03-11",
+        "2024-03-12",
+        "2024-03-13",
+        "2024-03-14",
+        "2024-03-15",
+        "2024-03-16",
+        "2024-03-17",
+        "2024-03-18",
+        "2024-03-19",
+        "2024-03-20",
+      ]);
 
       store.addEvent(event1);
       store.addEvent(event2);
@@ -130,7 +179,13 @@ describe("useEventsStore", () => {
 
     it("should handle removing non-existent event gracefully", () => {
       const store = useEventsStore();
-      const event = createEvent("Sickness", ["2024-03-01", "2024-03-02", "2024-03-03", "2024-03-04", "2024-03-05"]);
+      const event = createEvent("Sickness", [
+        "2024-03-01",
+        "2024-03-02",
+        "2024-03-03",
+        "2024-03-04",
+        "2024-03-05",
+      ]);
 
       store.addEvent(event);
       store.removeEvent("non-existent-id");
