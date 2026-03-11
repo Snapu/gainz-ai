@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 
 import { askAi as askAiService } from "@/services/ai.ts";
 import { localeDateString } from "@/services/utils/date";
+import { useEventsStore } from "@/stores/events";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
 import { useTrainingSummaryStore } from "@/stores/trainingSummary";
 import { useUserProfileStore } from "@/stores/userProfile";
@@ -81,6 +82,7 @@ export const useAiStore = defineStore("ai", () => {
   const userProfileStore = useUserProfileStore();
   const exerciseLogsStore = useExerciseLogsStore();
   const trainingSummaryStore = useTrainingSummaryStore();
+  const eventsStore = useEventsStore();
 
   const todaySessionDate = computed(() => localeDateString(new Date()));
 
@@ -139,6 +141,7 @@ export const useAiStore = defineStore("ai", () => {
         exerciseLogsStore.exerciseLogs,
         trainingSummaryStore.summaries,
         previousMessages,
+        eventsStore.events,
       );
 
       if (result.isErr()) {

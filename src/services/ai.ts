@@ -5,6 +5,7 @@ import { err, ok, type Result } from "neverthrow";
 import type { ExerciseLog } from "@/services/exerciseLogs";
 import type { TrainingSummary } from "@/services/trainingSummary";
 import { localeDateString } from "@/services/utils/date";
+import type { Event } from "@/types/event";
 import type { UserProfile } from "@/stores/userProfile";
 
 type PreviousAiMessage = {
@@ -31,6 +32,7 @@ You may receive:
 - Your previous feedback from this session (if any)
 - A \`userProfile\` JSON (age, gender, goals, fitness level, equipment, time constraints, etc.)
 - An \`exerciseLogs\` JSON array (past workout sessions and today's logs)
+- An \`events\` array containing health/schedule events (sickness, injury, fasting, rest days, etc.)
 - User's preferred language/locale
 - Current date
 
@@ -42,6 +44,12 @@ Important:
 - Always respond in the user's preferred language, using the **informal form of address** (e.g. "du" in German, "tú" in Spanish, "tu" in French). Never use formal address like "Sie", "usted", or "vous".
 - Avoid filler sentences and small talk; optimize all responses for mobile screens.
 - Be clear, constructive, data-driven and knowledgeable. Be critical when you need to be.
+
+Event handling:
+- Consider health/schedule events when making workout recommendations.
+- Adjust workout intensity and exercise selection based on recent events (e.g., ease back after sickness/injury).
+- If user was sick/injured recently, warn about returning too quickly and recommend gradual progression.
+- Respect scheduled rest days and fasting periods in your recommendations.
 `,
 };
 
@@ -96,6 +104,7 @@ export async function askAi(
   exerciseLogs: ExerciseLog[],
   trainingSummaries: TrainingSummary[],
   previousMessages: PreviousAiMessage[],
+  events: Event[] = [],
 ): Promise<Result<string, AskAiError>> {
   if (!apiKey) return err("missing-api-key");
 
@@ -138,6 +147,7 @@ export async function askAi(
       null,
       2,
     );
+    const eventsJson = JSON.stringify(events, null, 2);
 
     let historicalSummarySection = "";
     if (isFirstMessage && trainingSummaries.length > 0) {
@@ -151,7 +161,7 @@ ${summaryJson}
 `;
     }
 
-    const currentUserInput = `Today is ${today}, ${workoutStatus}
+    let currentUserInput = `Today is ${today}, ${workoutStatus}
 
 Here is my profile data:
 \`\`\`json
@@ -161,7 +171,18 @@ ${historicalSummarySection}Here is my ${isFirstMessage ? "recent exercise logs (
 \`\`\`json
 ${logsJson}
 \`\`\`
+`;
 
+    if (events.length > 0) {
+      currentUserInput += `
+Here are my current events and constraints:
+\`\`\`json
+${eventsJson}
+\`\`\`
+`;
+    }
+
+    currentUserInput += `
 Units: weight = kg, duration = minutes, distance = meters
 
 Language preference: "${navigator.language}"`;
