@@ -4,7 +4,6 @@ import ExerciseLogs from "@/views/ExerciseLogs.vue";
 import Impressum from "@/views/Impressum.vue";
 import LoginPage from "@/views/LoginPage.vue";
 import PrivacyPolicy from "@/views/PrivacyPolicy.vue";
-import SpreadsheetInit from "@/views/SpreadsheetInit.vue";
 import WizardApiKey from "@/views/wizard/ApiKey.vue";
 import WizardBodyStats from "@/views/wizard/BodyStats.vue";
 import WizardEquipmentOption from "@/views/wizard/EquipmentOption.vue";
@@ -19,11 +18,6 @@ const routes: Array<RouteRecordRaw> = [
     path: "/",
     name: "Login",
     component: LoginPage,
-  },
-  {
-    path: "/spreadsheet-init",
-    name: "spreadsheetInit",
-    component: SpreadsheetInit,
   },
   {
     path: "/wizard/fitness-goal",

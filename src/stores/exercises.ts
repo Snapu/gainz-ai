@@ -1,5 +1,6 @@
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { defineStore } from "pinia";
+import { watch } from "vue";
 import {
   addExercise as addExercise_,
   deleteExercise,
@@ -22,6 +23,17 @@ export const useExercisesStore = defineStore("exercises", () => {
     addRemote: (item) => addExercise_(item, spreadsheetStore.doc as GoogleSpreadsheet),
     removeRemote: (item) => deleteExercise(item, spreadsheetStore.doc as GoogleSpreadsheet),
   });
+
+  // Refresh when spreadsheet doc becomes available (handles page refresh race condition)
+  watch(
+    () => spreadsheetStore.doc,
+    (doc) => {
+      if (doc && exercises.value.length === 0) {
+        console.log("[exercises] Spreadsheet ready, refreshing exercises");
+        void refresh();
+      }
+    },
+  );
 
   const addExercise: typeof add = async (exercise) => {
     console.log("Adding exercise", exercise);

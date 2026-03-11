@@ -16,7 +16,7 @@
       <ion-list>
         <ion-item>
           <ion-textarea
-            v-model="userProfile.apiKey"
+            v-model="apiKey"
             label="API key:"
             :rows="3"
             autofocus
@@ -38,5 +38,5 @@ import WizardHeader from "@/components/WizardHeader.vue";
 import { useUserProfileStore } from "@/stores/userProfile";
 
 const userProfileStore = useUserProfileStore();
-const { userProfile } = storeToRefs(userProfileStore);
+const { apiKey } = storeToRefs(userProfileStore);
 </script>

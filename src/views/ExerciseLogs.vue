@@ -1,6 +1,6 @@
 <template>
   <ion-page>
-    <ion-loading v-if="exerciseLogsStore.isLoading" is-open></ion-loading>
+    <ion-loading :is-open="exerciseLogsStore.isLoading" message="Loading logs..." />
     <ion-menu content-id="content">
       <ion-header>
         <ion-toolbar>

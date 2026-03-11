@@ -1,6 +1,6 @@
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { defineStore } from "pinia";
-import { computed } from "vue";
+import { computed, watch } from "vue";
 import {
   addExerciseLog as addExerciseLog_,
   deleteExerciseLog as deleteExerciseLog_,
@@ -25,6 +25,17 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
     addRemote: (item) => addExerciseLog_(item, spreadsheetStore.doc as GoogleSpreadsheet),
     removeRemote: (item) => deleteExerciseLog_(item, spreadsheetStore.doc as GoogleSpreadsheet),
   });
+
+  // Refresh when spreadsheet doc becomes available (handles page refresh race condition)
+  watch(
+    () => spreadsheetStore.doc,
+    (doc) => {
+      if (doc && exerciseLogs.value.length === 0) {
+        console.log("[exerciseLogs] Spreadsheet ready, refreshing logs");
+        void refresh();
+      }
+    },
+  );
 
   const startOfToday = new Date().setHours(0, 0, 0, 0);
   const workoutStarted = computed(() =>
