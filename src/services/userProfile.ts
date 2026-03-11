@@ -111,6 +111,7 @@ export async function loadUserProfile(
 ): Promise<Result<UserProfile | null, "load-failed" | "parse-data-failed">> {
   const sheet = getSheet(doc) ?? (await addSheet(doc));
   try {
+    await sheet.loadHeaderRow();
     const rows = await sheet.getRows();
     if (rows.length === 0) {
       return ok(null);
@@ -129,6 +130,7 @@ export async function saveUserProfile(
 ): Promise<Result<void, "save-failed">> {
   try {
     const sheet = getSheet(doc) ?? (await addSheet(doc));
+    await sheet.loadHeaderRow();
     const rows = await sheet.getRows();
     const serialized = serializeForSheet(profile);
 
