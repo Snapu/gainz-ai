@@ -30,22 +30,9 @@ export const useEventsStore = defineStore("events", () => {
     persistEvents();
   }
 
-  function getEventsByDateRange(start: Date, end: Date): Event[] {
-    return events.value.filter((event) => {
-      const eventStart = new Date(event.startDate);
-      const eventEnd = new Date(event.endDate);
-
-      // Event overlaps with range if:
-      // - event ends after or at range start AND
-      // - event starts before or at range end
-      return eventEnd >= start && eventStart <= end;
-    });
-  }
-
   return {
     events,
     addEvent,
     removeEvent,
-    getEventsByDateRange,
   };
 });
