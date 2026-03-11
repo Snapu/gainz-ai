@@ -15,6 +15,12 @@
           </ion-button>
         </ion-menu-toggle>
         <ion-menu-toggle>
+          <ion-button fill="clear" router-link="/events">
+            Events
+            <ion-icon slot="start" :icon="calendarOutline" />
+          </ion-button>
+        </ion-menu-toggle>
+        <ion-menu-toggle>
           <ion-button
             fill="clear"
             :href="spreadsheetStore.spreadsheetUrl ?? undefined"
@@ -189,6 +195,7 @@ import {
 } from "@ionic/vue";
 import {
   add,
+  calendarOutline,
   documentTextOutline,
   informationCircleOutline,
   openOutline,
