@@ -1,6 +1,6 @@
 <template>
   <ion-page>
-    <ion-loading v-if="!spreadsheetStore.doc" is-open></ion-loading>
+    <ion-loading :is-open="!spreadsheetStore.doc" message="Loading spreadsheet..." />
   </ion-page>
 </template>
 
