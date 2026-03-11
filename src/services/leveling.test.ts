@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  calculateUserProgress,
-  getNextTitleMilestone,
-  getTitleForLevel,
-  type UserProgress,
-} from "./leveling";
+import { calculateUserProgress, getNextTitleMilestone, getTitleForLevel } from "./leveling";
 
 describe("leveling system", () => {
   describe("calculateUserProgress", () => {

@@ -1,5 +1,4 @@
 import { useDebounceFn, useLocalStorage } from "@vueuse/core";
-import { err, ok, type Result } from "neverthrow";
 import { defineStore } from "pinia";
 import { computed, ref, watch, watchEffect } from "vue";
 import {

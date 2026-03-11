@@ -116,7 +116,7 @@ export async function loadUserProfile(
     if (rows.length === 0) {
       return ok(null);
     }
-    const result = await parseData(UserProfileSchema, rows[0]!.toObject());
+    const result = await parseData(UserProfileSchema, rows[0]?.toObject());
     return result.isOk() ? ok(result.value) : err(result.error);
   } catch (error) {
     console.error("Failed to load user profile. Error:", error);
@@ -135,8 +135,8 @@ export async function saveUserProfile(
     const serialized = serializeForSheet(profile);
 
     if (rows.length > 0) {
-      rows[0]!.assign(serialized);
-      await rows[0]!.save();
+      rows[0]?.assign(serialized);
+      await rows[0]?.save();
     } else {
       await sheet.addRow(serialized);
     }

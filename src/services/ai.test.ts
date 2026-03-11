@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { Event } from "@/types/event";
+import type { PreviousAiMessage } from "./ai";
 import { askAi } from "./ai";
 import type { ExerciseLog } from "./exerciseLogs";
 import type { TrainingSummary } from "./trainingSummary";
@@ -50,7 +51,7 @@ describe("askAi - Events Integration (RED Phase)", () => {
     }),
   ];
   const mockTrainingSummaries: TrainingSummary[] = [];
-  const mockPreviousMessages: any[] = [];
+  const mockPreviousMessages: PreviousAiMessage[] = [];
 
   describe("askAi signature - events parameter acceptance", () => {
     it("RED: askAi should accept events parameter (currently missing)", async () => {
@@ -63,7 +64,7 @@ describe("askAi - Events Integration (RED Phase)", () => {
           mockExerciseLogs,
           mockTrainingSummaries,
           mockPreviousMessages,
-          events as any,
+          events,
         );
 
       expect(callWithEvents).toBeDefined();
@@ -92,7 +93,7 @@ describe("askAi - Events Integration (RED Phase)", () => {
           mockExerciseLogs,
           mockTrainingSummaries,
           mockPreviousMessages,
-          events as any,
+          events,
         );
 
       expect(callWithEmptyEvents).toBeDefined();
@@ -206,8 +207,8 @@ ${JSON.stringify(events, null, 2)}
       ];
       const events = [createEvent("Fasting", "2026-03-11", "2026-03-11")];
 
-      const logDate = logs[0]!.loggedAt.toISOString().split("T")[0];
-      const eventDate = events[0]!.startDate;
+      const logDate = logs[0]?.loggedAt.toISOString().split("T")[0];
+      const eventDate = events[0]?.startDate;
 
       expect(logDate).toBe(eventDate);
     });
@@ -233,7 +234,6 @@ ${JSON.stringify(events, null, 2)}
         mockExerciseLogs,
         mockTrainingSummaries,
         mockPreviousMessages,
-        undefined as any,
       );
 
       expect(result).toBeDefined();

@@ -8,7 +8,7 @@ import { localeDateString } from "@/services/utils/date";
 import type { UserProfile } from "@/stores/userProfile";
 import type { Event } from "@/types/event";
 
-type PreviousAiMessage = {
+export type PreviousAiMessage = {
   role: "user" | "assistant";
   content: string;
   sessionDate: string;

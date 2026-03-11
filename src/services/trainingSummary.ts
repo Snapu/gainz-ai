@@ -3,7 +3,6 @@ import { err, ok, type Result } from "neverthrow";
 import { z } from "zod";
 import {
   type ExerciseLog,
-  ExerciseLogSchema,
   findPastYearLogSheets,
   loadExerciseLogs,
   loadLogsFromYear,
@@ -87,7 +86,7 @@ export function aggregateLogsToSummary(logs: ExerciseLog[]): TrainingSummary[] {
     const key = `${year}-${month}`;
 
     if (!byYearMonth.has(key)) byYearMonth.set(key, []);
-    byYearMonth.get(key)!.push(log);
+    byYearMonth.get(key)?.push(log);
   }
 
   const summaries: TrainingSummary[] = [];
@@ -103,7 +102,7 @@ export function aggregateLogsToSummary(logs: ExerciseLog[]): TrainingSummary[] {
     const byExercise = new Map<string, ExerciseLog[]>();
     for (const log of monthLogs) {
       if (!byExercise.has(log.exerciseName)) byExercise.set(log.exerciseName, []);
-      byExercise.get(log.exerciseName)!.push(log);
+      byExercise.get(log.exerciseName)?.push(log);
     }
 
     for (const [exerciseName, exerciseLogs] of byExercise) {

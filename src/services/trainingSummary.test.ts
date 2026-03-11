@@ -56,8 +56,8 @@ describe("trainingSummary", () => {
       const result = aggregateLogsToSummary(logs);
 
       expect(result).toHaveLength(1);
-      expect(result[0]!.workoutDays).toBe(2);
-      expect(result[0]!.sets).toBe(3);
+      expect(result[0]?.workoutDays).toBe(2);
+      expect(result[0]?.sets).toBe(3);
     });
 
     it("should track max weight across sets", () => {
@@ -69,7 +69,7 @@ describe("trainingSummary", () => {
 
       const result = aggregateLogsToSummary(logs);
 
-      expect(result[0]!.maxWeight).toBe(160);
+      expect(result[0]?.maxWeight).toBe(160);
     });
 
     it("should calculate total volume correctly", () => {
@@ -81,7 +81,7 @@ describe("trainingSummary", () => {
 
       const result = aggregateLogsToSummary(logs);
 
-      expect(result[0]!.totalVolume).toBe(10 * 60 + 8 * 70 + 6 * 80);
+      expect(result[0]?.totalVolume).toBe(10 * 60 + 8 * 70 + 6 * 80);
     });
 
     it("should calculate total reps correctly", () => {
@@ -93,9 +93,9 @@ describe("trainingSummary", () => {
 
       const result = aggregateLogsToSummary(logs);
 
-      expect(result[0]!.totalReps).toBe(24);
-      expect(result[0]!.maxWeight).toBeUndefined();
-      expect(result[0]!.totalVolume).toBeUndefined();
+      expect(result[0]?.totalReps).toBe(24);
+      expect(result[0]?.maxWeight).toBeUndefined();
+      expect(result[0]?.totalVolume).toBeUndefined();
     });
 
     it("should aggregate distance for cardio exercises", () => {
@@ -106,8 +106,8 @@ describe("trainingSummary", () => {
 
       const result = aggregateLogsToSummary(logs);
 
-      expect(result[0]!.totalDistance).toBe(8000);
-      expect(result[0]!.totalDuration).toBe(40);
+      expect(result[0]?.totalDistance).toBe(8000);
+      expect(result[0]?.totalDuration).toBe(40);
     });
 
     it("should aggregate duration for timed exercises", () => {
@@ -119,7 +119,7 @@ describe("trainingSummary", () => {
 
       const result = aggregateLogsToSummary(logs);
 
-      expect(result[0]!.totalDuration).toBe(4.5);
+      expect(result[0]?.totalDuration).toBe(4.5);
     });
 
     it("should separate exercises by name", () => {
@@ -148,8 +148,8 @@ describe("trainingSummary", () => {
       const result = aggregateLogsToSummary(logs);
 
       expect(result).toHaveLength(2);
-      expect(result.find((s) => s.month === 3)!.maxWeight).toBe(100);
-      expect(result.find((s) => s.month === 4)!.maxWeight).toBe(110);
+      expect(result.find((s) => s.month === 3)?.maxWeight).toBe(100);
+      expect(result.find((s) => s.month === 4)?.maxWeight).toBe(110);
     });
 
     it("should separate logs by year", () => {
@@ -161,8 +161,8 @@ describe("trainingSummary", () => {
       const result = aggregateLogsToSummary(logs);
 
       expect(result).toHaveLength(2);
-      expect(result.find((s) => s.year === 2023)!.maxWeight).toBe(60);
-      expect(result.find((s) => s.year === 2024)!.maxWeight).toBe(65);
+      expect(result.find((s) => s.year === 2023)?.maxWeight).toBe(60);
+      expect(result.find((s) => s.year === 2024)?.maxWeight).toBe(65);
     });
 
     it("should handle mixed exercise types in same month", () => {
@@ -197,10 +197,10 @@ describe("trainingSummary", () => {
 
       const result = aggregateLogsToSummary(logs);
 
-      expect(result[0]!.sets).toBe(3);
-      expect(result[0]!.totalReps).toBe(18);
-      expect(result[0]!.maxWeight).toBe(60);
-      expect(result[0]!.totalVolume).toBe(600);
+      expect(result[0]?.sets).toBe(3);
+      expect(result[0]?.totalReps).toBe(18);
+      expect(result[0]?.maxWeight).toBe(60);
+      expect(result[0]?.totalVolume).toBe(600);
     });
   });
 
