@@ -2,65 +2,47 @@ import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { err, ok, type Result } from "neverthrow";
 import { z } from "zod";
 
-export type FitnessGoal =
-  | "build_muscle"
-  | "lose_fat"
-  | "improve_endurance"
-  | "increase_mobility"
-  | "general_fitness";
+export const FitnessGoalSchema = z.enum([
+  "build_muscle",
+  "lose_fat",
+  "improve_endurance",
+  "increase_mobility",
+  "general_fitness",
+]);
+export type FitnessGoal = z.infer<typeof FitnessGoalSchema>;
 
-export type FitnessLevel = "beginner" | "intermediate" | "advanced";
+export const FitnessLevelSchema = z.enum(["beginner", "intermediate", "advanced"]);
+export type FitnessLevel = z.infer<typeof FitnessLevelSchema>;
 
-export type WorkoutLocation = "gym" | "home" | "both";
+export const WorkoutLocationSchema = z.enum(["gym", "home", "both"]);
+export type WorkoutLocation = z.infer<typeof WorkoutLocationSchema>;
 
-export type EquipmentOption =
-  | "bodyweight"
-  | "dumbbells"
-  | "barbell_rack"
-  | "resistance_bands"
-  | "kettlebells"
-  | "pull_up_bar"
-  | "dip_bar"
-  | "gymnastic_rings"
-  | "cable_machine"
-  | "cardio_machine"
-  | "suspension_trainer"
-  | "medicine_ball"
-  | "bench";
+export const EquipmentOptionSchema = z.enum([
+  "bodyweight",
+  "dumbbells",
+  "barbell_rack",
+  "resistance_bands",
+  "kettlebells",
+  "pull_up_bar",
+  "dip_bar",
+  "gymnastic_rings",
+  "cable_machine",
+  "cardio_machine",
+  "suspension_trainer",
+  "medicine_ball",
+  "bench",
+]);
+export type EquipmentOption = z.infer<typeof EquipmentOptionSchema>;
 
-export type UserProfile = {
-  age?: number;
-  heightCm?: number;
-  weightKg?: number;
-  fitnessGoal?: FitnessGoal[];
-  fitnessLevel?: FitnessLevel;
-  workoutDaysPerWeek?: number;
-  workoutLocation?: WorkoutLocation;
-  equipmentAccess?: EquipmentOption[];
-  freeUserInput?: string;
-};
-
-export type UserProfileWithApiKey = UserProfile & { apiKey?: string };
-
-export type UserProfileForSheet = Omit<UserProfile, "apiKey">;
-
-/**
- * Transform: Parse empty string, null, or undefined to undefined,
- * otherwise parse string as float
- */
 const optionalNumberSchema = z.preprocess((val) => {
   if (val === "" || val === null || val === undefined) return undefined;
   const num = typeof val === "string" ? parseFloat(val) : Number(val);
   return Number.isNaN(num) ? undefined : num;
 }, z.number().optional());
 
-/**
- * Transform: Parse comma-separated string to typed array
- * Handles empty strings, trims whitespace, filters empty items
- */
-const commaSeparatedArraySchema = <T extends string>(enumSchema: z.ZodType<T>) =>
+const commaSeparatedArraySchema = <T extends z.ZodTypeAny>(enumSchema: T) =>
   z.preprocess((val) => {
-    if (val === "" || val === null || val === undefined) return [];
+    if (val === "" || val === null || val === undefined) return undefined;
     if (typeof val === "string") {
       return val
         .split(",")
@@ -68,14 +50,9 @@ const commaSeparatedArraySchema = <T extends string>(enumSchema: z.ZodType<T>) =
         .filter((item) => item.length > 0);
     }
     return val;
-  }, z.array(enumSchema));
+  }, z.array(enumSchema).optional());
 
-/**
- * Zod schema for UserProfile data parsed from spreadsheet
- * Transforms string cell values to typed UserProfile
- * Note: apiKey excluded (stays in localStorage only)
- */
-const optionalEnumSchema = <T extends string>(enumSchema: z.ZodType<T>) =>
+const optionalEnumSchema = <T extends z.ZodTypeAny>(enumSchema: T) =>
   z.preprocess((val) => {
     if (val === "" || val === null || val === undefined) return undefined;
     return val;
@@ -85,37 +62,17 @@ export const UserProfileSchema = z.object({
   age: optionalNumberSchema,
   heightCm: optionalNumberSchema,
   weightKg: optionalNumberSchema,
-  fitnessGoal: commaSeparatedArraySchema(
-    z.enum([
-      "build_muscle",
-      "lose_fat",
-      "improve_endurance",
-      "increase_mobility",
-      "general_fitness",
-    ]),
-  ),
-  fitnessLevel: optionalEnumSchema(z.enum(["beginner", "intermediate", "advanced"])),
+  fitnessGoal: commaSeparatedArraySchema(FitnessGoalSchema),
+  fitnessLevel: optionalEnumSchema(FitnessLevelSchema),
   workoutDaysPerWeek: optionalNumberSchema,
-  workoutLocation: optionalEnumSchema(z.enum(["gym", "home", "both"])),
-  equipmentAccess: commaSeparatedArraySchema(
-    z.enum([
-      "bodyweight",
-      "dumbbells",
-      "barbell_rack",
-      "resistance_bands",
-      "kettlebells",
-      "pull_up_bar",
-      "dip_bar",
-      "gymnastic_rings",
-      "cable_machine",
-      "cardio_machine",
-      "suspension_trainer",
-      "medicine_ball",
-      "bench",
-    ]),
-  ),
+  workoutLocation: optionalEnumSchema(WorkoutLocationSchema),
+  equipmentAccess: commaSeparatedArraySchema(EquipmentOptionSchema),
   freeUserInput: z.preprocess((val) => (val === "" ? undefined : val), z.string().optional()),
 });
+
+export type UserProfile = z.infer<typeof UserProfileSchema>;
+export type UserProfileWithApiKey = UserProfile & { apiKey?: string };
+export type UserProfileForSheet = UserProfile;
 
 /**
  * Serialize UserProfile to sheet row format

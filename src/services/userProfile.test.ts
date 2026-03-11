@@ -99,11 +99,11 @@ describe("userProfile service", () => {
         expect(result.data.age).toBeUndefined();
         expect(result.data.heightCm).toBeUndefined();
         expect(result.data.weightKg).toBeUndefined();
-        expect(result.data.fitnessGoal).toEqual([]);
+        expect(result.data.fitnessGoal).toBeUndefined();
         expect(result.data.fitnessLevel).toBeUndefined();
         expect(result.data.workoutDaysPerWeek).toBeUndefined();
         expect(result.data.workoutLocation).toBeUndefined();
-        expect(result.data.equipmentAccess).toEqual([]);
+        expect(result.data.equipmentAccess).toBeUndefined();
         expect(result.data.freeUserInput).toBeUndefined();
       }
     });
