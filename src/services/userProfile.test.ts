@@ -1,11 +1,11 @@
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { UserProfileForSheet } from "@/types/userProfile";
 import {
   loadUserProfile,
   migrateFromLocalStorage,
   saveUserProfile,
   serializeForSheet,
-  type UserProfileForSheet,
   UserProfileSchema,
 } from "./userProfile";
 

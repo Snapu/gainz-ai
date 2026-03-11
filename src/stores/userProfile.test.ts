@@ -1,5 +1,5 @@
 import type { GoogleSpreadsheet } from "google-spreadsheet";
-import { err, ok } from "neverthrow";
+import { ok } from "neverthrow";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { type UserProfile, useUserProfileStore } from "./userProfile";
@@ -107,18 +107,19 @@ describe("useUserProfileStore", () => {
     });
   });
 
-  describe("completeSetup() sets flag on success", () => {
+  describe("debouncedSave sets hasCompletedSetup on first successful save", () => {
     it("should set hasCompletedSetup to true on successful save", async () => {
       vi.mocked(migrateFromLocalStorage).mockResolvedValue(ok("no-data"));
       vi.mocked(loadUserProfile).mockResolvedValue(ok(null));
       vi.mocked(saveUserProfile).mockResolvedValue(ok(undefined));
 
       const store = useUserProfileStore();
+      expect(store.hasCompletedSetup).toBe(false);
+
       store.updateProfile({ age: 25 });
 
-      const result = await store.completeSetup();
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
-      expect(result.isOk()).toBe(true);
       expect(store.hasCompletedSetup).toBe(true);
       expect(mockLocalStorage.getItem("hasCompletedSetup")).toBe("true");
     });
@@ -136,44 +137,9 @@ describe("useUserProfileStore", () => {
       };
       store.updateProfile(profileData);
 
-      await store.completeSetup();
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       expect(saveUserProfile).toHaveBeenCalledWith(expect.objectContaining(profileData), mockDoc);
-    });
-  });
-
-  describe("completeSetup() does NOT set flag on failure", () => {
-    it("should not set hasCompletedSetup on save failure", async () => {
-      vi.mocked(migrateFromLocalStorage).mockResolvedValue(ok("no-data"));
-      vi.mocked(loadUserProfile).mockResolvedValue(ok(null));
-      vi.mocked(saveUserProfile).mockResolvedValue(err("spreadsheet-save-failed"));
-
-      const store = useUserProfileStore();
-      store.updateProfile({ age: 25 });
-
-      const result = await store.completeSetup();
-
-      expect(result.isErr()).toBe(true);
-      expect(store.hasCompletedSetup).toBe(false);
-      expect(mockLocalStorage.getItem("hasCompletedSetup")).toBe("false");
-    });
-
-    it("should return error when no spreadsheet document available", async () => {
-      vi.mocked(useSpreadsheetStore).mockReturnValue(
-        mockSpreadsheetStore(null) as ReturnType<typeof useSpreadsheetStore>,
-      );
-
-      setActivePinia(createPinia());
-      const store = useUserProfileStore();
-      store.updateProfile({ age: 25 });
-
-      const result = await store.completeSetup();
-
-      expect(result.isErr()).toBe(true);
-      if (result.isErr()) {
-        expect(result.error).toBe("no-spreadsheet-document");
-      }
-      expect(store.hasCompletedSetup).toBe(false);
     });
   });
 

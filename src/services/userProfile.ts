@@ -6,8 +6,9 @@ import type {
   FitnessGoal,
   FitnessLevel,
   UserProfile,
+  UserProfileForSheet,
   WorkoutLocation,
-} from "@/stores/userProfile";
+} from "@/types/userProfile";
 
 /**
  * Transform: Parse empty string, null, or undefined to undefined,
@@ -81,11 +82,6 @@ export const UserProfileSchema = z.object({
   ),
   freeUserInput: z.preprocess((val) => (val === "" ? undefined : val), z.string().optional()),
 });
-
-/**
- * Type: UserProfile without apiKey (for spreadsheet storage)
- */
-export type UserProfileForSheet = Omit<UserProfile, "apiKey">;
 
 /**
  * Serialize UserProfile to sheet row format

@@ -1,54 +1,18 @@
 import { useDebounceFn, useLocalStorage } from "@vueuse/core";
-import { err, ok, type Result } from "neverthrow";
 import { defineStore } from "pinia";
 import { computed, ref, watch, watchEffect } from "vue";
-import {
-  loadUserProfile,
-  migrateFromLocalStorage,
-  saveUserProfile,
-  type UserProfileForSheet,
-} from "@/services/userProfile";
+import { loadUserProfile, migrateFromLocalStorage, saveUserProfile } from "@/services/userProfile";
 import { useSpreadsheetStore } from "@/stores/spreadsheet";
+import type { UserProfile, UserProfileWithApiKey } from "@/types/userProfile";
 
-export type FitnessGoal =
-  | "build_muscle"
-  | "lose_fat"
-  | "improve_endurance"
-  | "increase_mobility"
-  | "general_fitness";
-
-export type FitnessLevel = "beginner" | "intermediate" | "advanced";
-
-export type WorkoutLocation = "gym" | "home" | "both";
-
-export type EquipmentOption =
-  | "bodyweight"
-  | "dumbbells"
-  | "barbell_rack"
-  | "resistance_bands"
-  | "kettlebells"
-  | "pull_up_bar"
-  | "dip_bar"
-  | "gymnastic_rings"
-  | "cable_machine"
-  | "cardio_machine"
-  | "suspension_trainer"
-  | "medicine_ball"
-  | "bench";
-
-export type UserProfile = {
-  age?: number;
-  heightCm?: number;
-  weightKg?: number;
-  fitnessGoal?: FitnessGoal[];
-  fitnessLevel?: FitnessLevel;
-  workoutDaysPerWeek?: number;
-  workoutLocation?: WorkoutLocation;
-  equipmentAccess?: EquipmentOption[];
-  freeUserInput?: string;
-};
-
-export type UserProfileWithApiKey = UserProfile & { apiKey?: string };
+export type {
+  EquipmentOption,
+  FitnessGoal,
+  FitnessLevel,
+  UserProfile,
+  UserProfileWithApiKey,
+  WorkoutLocation,
+} from "@/types/userProfile";
 
 export const useUserProfileStore = defineStore("userProfile", () => {
   const userProfile = ref<UserProfile>({});
@@ -97,7 +61,10 @@ export const useUserProfileStore = defineStore("userProfile", () => {
     const { doc } = spreadsheetStore;
     if (!doc) return;
 
-    await saveUserProfile(userProfile.value, doc);
+    const result = await saveUserProfile(userProfile.value, doc);
+    if (result.isOk()) {
+      hasCompletedSetup.value = true;
+    }
   }, 1500);
 
   watch(
@@ -121,18 +88,6 @@ export const useUserProfileStore = defineStore("userProfile", () => {
     userProfile.value = { ...userProfile.value, ...profileFields };
   }
 
-  async function completeSetup(): Promise<Result<void, string>> {
-    const spreadsheetStore = useSpreadsheetStore();
-    const { doc } = spreadsheetStore;
-    if (!doc) return err("no-spreadsheet-document");
-
-    const result = await saveUserProfile(userProfile.value, doc);
-    if (result.isErr()) return err(result.error);
-
-    hasCompletedSetup.value = true;
-    return ok(undefined);
-  }
-
   return {
     userProfile,
     hasCompletedSetup,
@@ -140,6 +95,5 @@ export const useUserProfileStore = defineStore("userProfile", () => {
     isLoading,
     setupCompleted,
     updateProfile,
-    completeSetup,
   };
 });
