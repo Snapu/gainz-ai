@@ -1,9 +1,18 @@
 import { useDebounceFn, useLocalStorage } from "@vueuse/core";
 import { defineStore } from "pinia";
 import { computed, ref, watch, watchEffect } from "vue";
-import { loadUserProfile, migrateFromLocalStorage, saveUserProfile } from "@/services/userProfile";
+import {
+  loadUserProfile,
+  migrateFromLocalStorage,
+  saveUserProfile,
+  type EquipmentOption,
+  type FitnessGoal,
+  type FitnessLevel,
+  type UserProfile,
+  type UserProfileWithApiKey,
+  type WorkoutLocation,
+} from "@/services/userProfile";
 import { useSpreadsheetStore } from "@/stores/spreadsheet";
-import type { UserProfile, UserProfileWithApiKey } from "@/types/userProfile";
 
 export type {
   EquipmentOption,
@@ -12,7 +21,7 @@ export type {
   UserProfile,
   UserProfileWithApiKey,
   WorkoutLocation,
-} from "@/types/userProfile";
+};
 
 export const useUserProfileStore = defineStore("userProfile", () => {
   const userProfile = ref<UserProfile>({});
