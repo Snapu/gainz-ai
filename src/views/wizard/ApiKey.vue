@@ -26,53 +26,17 @@
       </ion-list>
     </ion-content>
 
-    <ion-footer>
-      <ion-toolbar>
-        <ion-buttons slot="secondary">
-          <ion-button fill="clear" @click="() => $router.back()">Previous</ion-button>
-        </ion-buttons>
-        <ion-buttons slot="primary">
-          <ion-button fill="clear" @click="handleSave">Save</ion-button>
-        </ion-buttons>
-      </ion-toolbar>
-    </ion-footer>
+    <WizardFooter next-route="/exercise-logs" next-label="Save" />
   </ion-page>
 </template>
 
 <script setup lang="ts">
-import {
-  IonButton,
-  IonButtons,
-  IonContent,
-  IonFooter,
-  IonItem,
-  IonList,
-  IonPage,
-  IonTextarea,
-  IonToolbar,
-  toastController,
-} from "@ionic/vue";
+import { IonContent, IonItem, IonList, IonPage, IonTextarea } from "@ionic/vue";
 import { storeToRefs } from "pinia";
-import { useRouter } from "vue-router";
+import WizardFooter from "@/components/WizardFooter.vue";
 import WizardHeader from "@/components/WizardHeader.vue";
 import { useUserProfileStore } from "@/stores/userProfile";
 
-const router = useRouter();
 const userProfileStore = useUserProfileStore();
 const { apiKey } = storeToRefs(userProfileStore);
-
-async function handleSave(): Promise<void> {
-  const result = await userProfileStore.completeSetup();
-
-  if (result.isOk()) {
-    router.push("/exercise-logs");
-  } else {
-    const toast = await toastController.create({
-      message: "Failed to save profile. Please try again.",
-      duration: 3000,
-      color: "danger",
-    });
-    await toast.present();
-  }
-}
 </script>
