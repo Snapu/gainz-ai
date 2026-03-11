@@ -83,9 +83,7 @@ watch(
   ([isLoggedIn, doc, isLoading]) => {
     if (!isLoggedIn) {
       router.push("/");
-    } else if (!doc) {
-      router.push("/spreadsheet-init");
-    } else if (isLoading) {
+    } else if (!doc || isLoading) {
       return;
     } else if (!userProfileStore.setupCompleted) {
       router.push("/wizard/fitness-goal");
