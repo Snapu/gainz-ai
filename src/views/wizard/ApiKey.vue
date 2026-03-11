@@ -32,16 +32,11 @@
 
 <script setup lang="ts">
 import { IonContent, IonItem, IonList, IonPage, IonTextarea } from "@ionic/vue";
-import { computed } from "vue";
+import { storeToRefs } from "pinia";
 import WizardFooter from "@/components/WizardFooter.vue";
 import WizardHeader from "@/components/WizardHeader.vue";
 import { useUserProfileStore } from "@/stores/userProfile";
 
 const userProfileStore = useUserProfileStore();
-const apiKey = computed({
-  get: () => userProfileStore.apiKey,
-  set: (v) => {
-    userProfileStore.apiKey = v;
-  },
-});
+const { apiKey } = storeToRefs(userProfileStore);
 </script>
