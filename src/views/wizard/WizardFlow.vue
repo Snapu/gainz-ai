@@ -9,26 +9,72 @@ import Input from "@/components/ui/Input.vue";
 import NumberField from "@/components/ui/NumberField.vue";
 import ToggleGroup from "@/components/ui/ToggleGroup.vue";
 import ToggleGroupItem from "@/components/ui/ToggleGroupItem.vue";
+import type {
+  EquipmentOption,
+  FitnessGoal,
+  FitnessLevel,
+  WorkoutLocation,
+} from "@/stores/userProfile";
 import { useUserProfileStore } from "@/stores/userProfile";
 
 const router = useRouter();
 const profileStore = useUserProfileStore();
 const { userProfile, apiKey } = storeToRefs(profileStore);
 
-const workoutDaysString = computed({
-  get: () =>
-    userProfile.value.workoutDaysPerWeek === 5
-      ? "5+"
-      : String(userProfile.value.workoutDaysPerWeek || ""),
-  set: (val) => {
-    userProfile.value.workoutDaysPerWeek = val === "5+" ? 5 : Number(val);
-  },
-});
+const fitnessGoalLabels: [string, FitnessGoal][] = [
+  ["Build muscle", "build_muscle"],
+  ["Lose fat", "lose_fat"],
+  ["Improve endurance", "improve_endurance"],
+  ["Increase mobility", "increase_mobility"],
+  ["General fitness", "general_fitness"],
+];
+
+const fitnessLevelLabels: [string, FitnessLevel][] = [
+  ["Beginner", "beginner"],
+  ["Intermediate", "intermediate"],
+  ["Advanced", "advanced"],
+];
+
+const workoutDaysPerWeekLabels: [string, number][] = [
+  ["2", 2],
+  ["3", 3],
+  ["4", 4],
+  ["5+", 5],
+];
+
+const workoutLocationLabels: [string, WorkoutLocation][] = [
+  ["Gym", "gym"],
+  ["Home", "home"],
+  ["Both", "both"],
+];
+
+const equipmentOptionLabels: [string, EquipmentOption][] = [
+  ["Bodyweight only", "bodyweight"],
+  ["Resistance bands", "resistance_bands"],
+  ["Suspension trainer (e.g. TRX)", "suspension_trainer"],
+  ["Gymnastic rings", "gymnastic_rings"],
+  ["Pull-up bar", "pull_up_bar"],
+  ["Dip bar", "dip_bar"],
+  ["Dumbbells", "dumbbells"],
+  ["Kettlebells", "kettlebells"],
+  ["Barbell & rack", "barbell_rack"],
+  ["Bench", "bench"],
+  ["Cable machine", "cable_machine"],
+  ["Cardio machines", "cardio_machine"],
+  ["Medicine ball", "medicine_ball"],
+];
 
 const apiKeyString = computed({
   get: () => apiKey.value || "",
   set: (val: string) => {
     apiKey.value = val || null;
+  },
+});
+
+const workoutDaysString = computed({
+  get: () => (userProfile.value.workoutDaysPerWeek ? String(userProfile.value.workoutDaysPerWeek) : ""),
+  set: (val: string) => {
+    userProfile.value.workoutDaysPerWeek = val === "" ? undefined : Number(val);
   },
 });
 
@@ -71,42 +117,15 @@ function skipWizard() {
   profileStore.hasCompletedSetup = true;
   router.push("/exercise-logs");
 }
-
-// Data options
-const GOALS = [
-  "Build muscle",
-  "Lose fat",
-  "Improve endurance",
-  "Increase mobility",
-  "General fitness",
-];
-const LEVELS = ["Beginner", "Intermediate", "Advanced"];
-const DAYS = ["2", "3", "4", "5+"];
-const LOCATIONS = ["Gym", "Home", "Both"];
-const EQUIPMENTS = [
-  "Bodyweight",
-  "Resistance bands",
-  "Suspension trainer",
-  "Gymnastic rings",
-  "Pull-up bar",
-  "Dip bar",
-  "Dumbbells",
-  "Kettlebells",
-  "Barbell & rack",
-  "Bench",
-  "Cable machine",
-  "Cardio machines",
-  "Medicine ball",
-];
 </script>
 
 <template>
   <div class="min-h-screen bg-background flex flex-col pt-safe">
     <!-- Header -->
     <header class="flex items-center justify-between px-4 py-4 sticky top-0 bg-background/90 z-10 backdrop-blur-xl">
-      <Button 
-        variant="ghost" 
-        size="icon" 
+      <Button
+        variant="ghost"
+        size="icon"
         class="rounded-full w-12 h-12"
         @click="handleBack"
         :disabled="stepper.isFirst.value"
@@ -114,17 +133,17 @@ const EQUIPMENTS = [
       >
         <ArrowLeft class="w-6 h-6" />
       </Button>
-      
+
       <!-- Progress indicators -->
       <div class="flex gap-2 items-center mx-4 flex-1 justify-center max-w-[200px]">
-        <div 
-          v-for="(step, idx) in totalSteps" 
+        <div
+          v-for="(step, idx) in totalSteps"
           :key="idx"
           class="h-1.5 flex-1 rounded-full bg-white/10 transition-colors duration-300"
           :class="{ 'bg-primary shadow-[0_0_8px_rgba(204,255,0,0.5)]': idx <= currentStepIndex }"
         ></div>
       </div>
-      
+
       <Button variant="ghost" class="text-primary font-semibold tracking-wide" @click="skipWizard">
         Skip
       </Button>
@@ -138,19 +157,19 @@ const EQUIPMENTS = [
           <h2 class="text-3xl font-black mb-2 tracking-tight">What's your primary goal?</h2>
           <p class="text-muted-foreground mb-10 text-lg">Select all that apply.</p>
           <ToggleGroup type="multiple" v-model="userProfile.fitnessGoal">
-            <ToggleGroupItem v-for="g in GOALS" :key="g" :value="g">
-              {{ g }}
+            <ToggleGroupItem v-for="[label, value] in fitnessGoalLabels" :key="value" :value="value">
+              {{ label }}
             </ToggleGroupItem>
           </ToggleGroup>
         </template>
-        
+
         <!-- Level -->
         <template v-else-if="stepper.isCurrent('level')">
           <h2 class="text-3xl font-black mb-2 tracking-tight">Experience level</h2>
           <p class="text-muted-foreground mb-10 text-lg">How long have you been training?</p>
           <ToggleGroup type="single" v-model="userProfile.fitnessLevel">
-            <ToggleGroupItem v-for="l in LEVELS" :key="l" :value="l">
-              {{ l }}
+            <ToggleGroupItem v-for="[label, value] in fitnessLevelLabels" :key="value" :value="value">
+              {{ label }}
             </ToggleGroupItem>
           </ToggleGroup>
         </template>
@@ -160,8 +179,8 @@ const EQUIPMENTS = [
           <h2 class="text-3xl font-black mb-2 tracking-tight">Training frequency</h2>
           <p class="text-muted-foreground mb-10 text-lg">Workouts per week</p>
           <ToggleGroup type="single" v-model="workoutDaysString" class="grid grid-cols-2">
-            <ToggleGroupItem v-for="d in DAYS" :key="d" :value="d" class="justify-center h-20 text-xl font-bold">
-              {{ d }}
+            <ToggleGroupItem v-for="[label, value] in workoutDaysPerWeekLabels" :key="value" :value="String(value)" class="justify-center h-20 text-xl font-bold">
+              {{ label }}
             </ToggleGroupItem>
           </ToggleGroup>
         </template>
@@ -171,8 +190,8 @@ const EQUIPMENTS = [
           <h2 class="text-3xl font-black mb-2 tracking-tight">Where do you train?</h2>
           <p class="text-muted-foreground mb-10 text-lg">Sets your equipment baseline.</p>
           <ToggleGroup type="single" v-model="userProfile.workoutLocation">
-            <ToggleGroupItem v-for="l in LOCATIONS" :key="l" :value="l">
-              {{ l }}
+            <ToggleGroupItem v-for="[label, value] in workoutLocationLabels" :key="value" :value="value">
+              {{ label }}
             </ToggleGroupItem>
           </ToggleGroup>
         </template>
@@ -182,8 +201,8 @@ const EQUIPMENTS = [
           <h2 class="text-3xl font-black mb-2 tracking-tight">Equipment access</h2>
           <p class="text-muted-foreground mb-10 text-lg">Select what you have available.</p>
           <ToggleGroup type="multiple" v-model="userProfile.equipmentAccess">
-            <ToggleGroupItem v-for="e in EQUIPMENTS" :key="e" :value="e" class="py-3">
-              {{ e }}
+            <ToggleGroupItem v-for="[label, value] in equipmentOptionLabels" :key="value" :value="value" class="py-3">
+              {{ label }}
             </ToggleGroupItem>
           </ToggleGroup>
         </template>
@@ -203,8 +222,8 @@ const EQUIPMENTS = [
         <template v-else-if="stepper.isCurrent('extra')">
           <h2 class="text-3xl font-black mb-2 tracking-tight">Additional Context</h2>
           <p class="text-muted-foreground mb-10 text-lg">Any injuries, specific focus areas, or limitations?</p>
-          <textarea 
-            v-model="userProfile.freeUserInput" 
+          <textarea
+            v-model="userProfile.freeUserInput"
             placeholder="e.g. Bad left knee, want to focus on explosive strength..."
             class="w-full flex min-h-[160px] rounded-2xl border border-input/50 bg-card/60 px-5 py-4 text-base font-medium ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary disabled:cursor-not-allowed disabled:opacity-50 transition-all shadow-inner backdrop-blur-md resize-none"
           ></textarea>
@@ -214,7 +233,7 @@ const EQUIPMENTS = [
         <template v-else-if="stepper.isCurrent('apikey')">
           <h2 class="text-3xl font-black mb-2 tracking-tight">Enable AI Coach</h2>
           <p class="text-muted-foreground mb-10 text-lg">Enter your Gemini API Key to enable personalized feedback.</p>
-          <Input 
+          <Input
             v-model="apiKeyString"
             type="password"
             placeholder="AIzaSy..."
@@ -230,7 +249,7 @@ const EQUIPMENTS = [
 
     <!-- Bottom Action -->
     <div class="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-background via-background to-transparent pb-safe">
-      <Button 
+      <Button
         class="w-full h-16 rounded-2xl text-lg font-bold tracking-wide transition-all data-[state=save]:bg-white data-[state=save]:text-black hover:data-[state=save]:scale-[0.98]"
         :data-state="stepper.isLast.value ? 'save' : 'next'"
         @click="handleNext"
