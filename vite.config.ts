@@ -1,5 +1,6 @@
 /// <reference types="vitest" />
 import { fileURLToPath, URL } from "node:url";
+import tailwindcss from "@tailwindcss/vite";
 import legacy from "@vitejs/plugin-legacy";
 import vue from "@vitejs/plugin-vue";
 import { defineConfig } from "vite";
@@ -14,6 +15,7 @@ export default defineConfig(({ mode }) => {
     base,
     plugins: [
       vue(),
+      tailwindcss(),
       legacy(),
       vueDevTools(),
       VitePWA({

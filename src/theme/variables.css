@@ -1,0 +1,83 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300..900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Outfit', system-ui, sans-serif;
+
+  /* Sleek Athletic Dark Mode Theme */
+  --color-background: oklch(14% 0.01 264); 
+  --color-foreground: oklch(98% 0 0);
+
+  /* Electric Lime accent */
+  --color-primary: oklch(89% 0.2 135); 
+  --color-primary-foreground: oklch(14% 0.01 264);
+
+  --color-secondary: oklch(25% 0.02 264);
+  --color-secondary-foreground: oklch(98% 0 0);
+
+  --color-muted: oklch(25% 0.02 264);
+  --color-muted-foreground: oklch(70% 0.01 264);
+
+  --color-accent: oklch(25% 0.02 264);
+  --color-accent-foreground: oklch(98% 0 0);
+
+  --color-destructive: oklch(60% 0.2 25);
+  --color-destructive-foreground: oklch(98% 0 0);
+
+  --color-border: oklch(25% 0.02 264);
+  --color-input: oklch(25% 0.02 264);
+  --color-ring: oklch(89% 0.2 135);
+
+  --color-card: oklch(18% 0.01 264);
+  --color-card-foreground: oklch(98% 0 0);
+
+  --radius-sm: 0.3rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+  --radius-3xl: 2rem;
+
+  /* Reka UI and general animations */
+  --animate-in: animate-in 0.2s ease-out;
+  --animate-out: animate-out 0.2s ease-in;
+  --animate-slide-in-from-bottom: slide-in-from-bottom 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-slide-out-to-bottom: slide-out-to-bottom 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-fade-in: fade-in 0.2s ease-out;
+  --animate-fade-out: fade-out 0.2s ease-in;
+
+  @keyframes slide-in-from-bottom {
+    0% { transform: translateY(100%); }
+    100% { transform: translateY(0); }
+  }
+  @keyframes slide-out-to-bottom {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(100%); }
+  }
+  @keyframes animate-in {
+    0% { opacity: 0; transform: scale(0.95); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+  @keyframes animate-out {
+    0% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(0.95); }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes fade-out {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+  }
+}

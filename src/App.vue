@@ -1,24 +1,31 @@
-<template>
-  <ion-app>
-    <ion-router-outlet />
-    <ion-loading
-      :is-open="authStore.isLoggedIn && (!spreadsheetStore.doc || userProfileStore.isLoading)"
-      :message="!spreadsheetStore.doc ? 'Loading spreadsheet...' : 'Loading profile...'"
-    />
-    <PwaInstallButton />
-    <PwaUpdatePrompt />
-  </ion-app>
-</template>
-
 <script setup lang="ts">
-import { IonApp, IonLoading, IonRouterOutlet } from "@ionic/vue";
-import PwaInstallButton from "@/components/PwaInstallButton.vue";
-import PwaUpdatePrompt from "@/components/PwaUpdatePrompt.vue";
-import { useAuthStore } from "@/stores/auth";
-import { useSpreadsheetStore } from "@/stores/spreadsheet";
-import { useUserProfileStore } from "@/stores/userProfile";
+import { useRegisterSW } from "virtual:pwa-register/vue";
+import { ConfigProvider } from "reka-ui";
+import { watch } from "vue";
+import Toaster from "@/components/ui/Toaster.vue";
+import { useToast } from "@/components/ui/useToast";
 
-const authStore = useAuthStore();
-const spreadsheetStore = useSpreadsheetStore();
-const userProfileStore = useUserProfileStore();
+const { needRefresh, updateServiceWorker } = useRegisterSW();
+const { toast } = useToast();
+
+watch(needRefresh, (isNeeded) => {
+  if (isNeeded) {
+    toast({
+      title: "Update Available",
+      description: "A new version of GainzAI is ready.",
+      duration: 100000,
+      action: {
+        label: "Reload",
+        onClick: () => updateServiceWorker(true),
+      },
+    });
+  }
+});
 </script>
+
+<template>
+  <ConfigProvider locale="en" :scroll-body="false">
+    <RouterView />
+    <Toaster />
+  </ConfigProvider>
+</template>

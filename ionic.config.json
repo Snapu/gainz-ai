@@ -1,7 +1,0 @@
-{
-  "name": "gainz-ai",
-  "integrations": {
-    "capacitor": {}
-  },
-  "type": "vue-vite"
-}
