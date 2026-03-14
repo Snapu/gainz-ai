@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { getLocalTimeZone, parseDate } from "@internationalized/date";
 import { Trash } from "lucide-vue-next";
-import UiSwipeableItem from "@/components/ui/UiSwipeableItem.vue";
+import SwipeableItem from "@/components/ui/SwipeableItem.vue";
 import type { Event as AppEvent } from "@/types/event";
 
 const props = defineProps<{
@@ -35,7 +35,7 @@ function formatEventDate(dates: string[]) {
 </script>
 
 <template>
-  <UiSwipeableItem @action="emit('delete', props.event.id)">
+  <SwipeableItem @action="emit('delete', props.event.id)">
     <template #background>
       <Trash class="w-5 h-5" />
     </template>
@@ -44,5 +44,5 @@ function formatEventDate(dates: string[]) {
       <h3 class="font-bold text-sm text-foreground tracking-tight">{{ event.type }}</h3>
       <p class="text-[10px] text-primary font-bold tracking-wider uppercase">{{ formatEventDate(event.dates) }}</p>
     </div>
-  </UiSwipeableItem>
+  </SwipeableItem>
 </template>

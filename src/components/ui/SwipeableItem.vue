@@ -8,7 +8,7 @@ const props = withDefaults(
     maxSwipePercent?: number; // max visual translation as percentage of width
   }>(),
   {
-    thresholdPercent: 60,
+    thresholdPercent: 50,
     maxSwipePercent: 80,
   },
 );
