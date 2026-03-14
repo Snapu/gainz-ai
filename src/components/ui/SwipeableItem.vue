@@ -41,7 +41,9 @@ const { distanceX, isSwiping } = usePointerSwipe(itemRef, {
     :class="[
       isThresholdReached && isSwiping 
         ? 'bg-destructive/30 border-destructive/40 border-solid' 
-        : 'bg-destructive/10 border-destructive/20 border-dashed'
+        : 'bg-destructive/10 border-destructive/20 border-dashed',
+      // Dynamic touch-action to lock scroll when swiping
+      isSwiping ? 'touch-none' : 'touch-pan-y'
     ]"
   >
     <!-- Background delete action -->
