@@ -1,15 +1,15 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300..900&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@300..900&display=swap");
 @import "tailwindcss";
 
 @theme {
-  --font-sans: 'Outfit', system-ui, sans-serif;
+  --font-sans: "Outfit", system-ui, sans-serif;
 
   /* Sleek Athletic Dark Mode Theme */
-  --color-background: oklch(14% 0.01 264); 
+  --color-background: oklch(14% 0.01 264);
   --color-foreground: oklch(98% 0 0);
 
   /* Electric Lime accent */
-  --color-primary: oklch(89% 0.2 135); 
+  --color-primary: oklch(89% 0.2 135);
   --color-primary-foreground: oklch(14% 0.01 264);
 
   --color-secondary: oklch(25% 0.02 264);
@@ -47,28 +47,56 @@
   --animate-fade-out: fade-out 0.2s ease-in;
 
   @keyframes slide-in-from-bottom {
-    0% { transform: translateY(100%); }
-    100% { transform: translateY(0); }
+    0% {
+      transform: translateY(100%);
+    }
+    100% {
+      transform: translateY(0);
+    }
   }
   @keyframes slide-out-to-bottom {
-    0% { transform: translateY(0); }
-    100% { transform: translateY(100%); }
+    0% {
+      transform: translateY(0);
+    }
+    100% {
+      transform: translateY(100%);
+    }
   }
   @keyframes animate-in {
-    0% { opacity: 0; transform: scale(0.95); }
-    100% { opacity: 1; transform: scale(1); }
+    0% {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
   }
   @keyframes animate-out {
-    0% { opacity: 1; transform: scale(1); }
-    100% { opacity: 0; transform: scale(0.95); }
+    0% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(0.95);
+    }
   }
   @keyframes fade-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
   @keyframes fade-out {
-    from { opacity: 1; }
-    to { opacity: 0; }
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
   }
 }
 

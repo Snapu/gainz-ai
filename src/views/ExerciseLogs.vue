@@ -1,6 +1,16 @@
 <script setup lang="ts">
 import { useIntervalFn } from "@vueuse/core";
-import { Menu, Moon, Pause, Play, Plus, RotateCcw, Sparkles, Trash } from "lucide-vue-next";
+import {
+  ChevronRight,
+  Menu,
+  Moon,
+  Pause,
+  Play,
+  Plus,
+  RotateCcw,
+  Sparkles,
+  Trash,
+} from "lucide-vue-next";
 import { storeToRefs } from "pinia";
 import { computed, ref, watch } from "vue";
 import AICoachingPanel from "@/components/AICoachingPanel.vue";
@@ -9,10 +19,13 @@ import MomentumFlames from "@/components/MomentumFlames.vue";
 import Autocomplete from "@/components/ui/Autocomplete.vue";
 import BottomSheet from "@/components/ui/BottomSheet.vue";
 import Button from "@/components/ui/Button.vue";
+import DropdownMenu from "@/components/ui/DropdownMenu.vue";
+import DropdownMenuItem from "@/components/ui/DropdownMenuItem.vue";
 import NumberField from "@/components/ui/NumberField.vue";
 import Progress from "@/components/ui/Progress.vue";
 import Sparkline from "@/components/ui/Sparkline.vue";
 import { useToast } from "@/components/ui/useToast";
+import { WIZARD_STEPS } from "@/constants/wizard";
 import type { ExerciseLog } from "@/services/exerciseLogs";
 import { calculateUserProgress } from "@/services/leveling";
 import { summaryToWorkoutDates } from "@/services/trainingSummary";
@@ -202,9 +215,27 @@ const formattedTime = computed(() => {
         <Button variant="ghost" size="icon" @click="$router.push('/rest-recovery')">
           <Moon class="w-5 h-5 text-muted-foreground" />
         </Button>
-        <Button variant="ghost" size="icon" @click="$router.push('/wizard/fitness-goal')">
-          <Menu class="w-5 h-5" />
-        </Button>
+        <DropdownMenu>
+          <template #trigger>
+            <Button variant="ghost" size="icon">
+              <Menu class="w-5 h-5" />
+            </Button>
+          </template>
+          
+          <div class="px-3 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">
+            Quick Edit
+          </div>
+          
+          <DropdownMenuItem 
+            v-for="step in WIZARD_STEPS" 
+            :key="step.id"
+            @click="$router.push(`/wizard/${step.id}?mode=edit`)"
+            class="group"
+          >
+            <span>{{ step.title }}</span>
+            <ChevronRight class="w-4 h-4 ml-auto opacity-0 group-focus:opacity-20 transition-opacity" />
+          </DropdownMenuItem>
+        </DropdownMenu>
       </div>
     </header>
 

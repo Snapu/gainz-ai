@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { useStepper } from "@vueuse/core";
-import { ArrowLeft, Check, Sparkles } from "lucide-vue-next";
+import { ArrowLeft, Check, Sparkles, X } from "lucide-vue-next";
 import { storeToRefs } from "pinia";
-import { computed } from "vue";
-import { useRouter } from "vue-router";
+import { computed, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import Button from "@/components/ui/Button.vue";
 import Input from "@/components/ui/Input.vue";
 import NumberField from "@/components/ui/NumberField.vue";
 import ToggleGroup from "@/components/ui/ToggleGroup.vue";
 import ToggleGroupItem from "@/components/ui/ToggleGroupItem.vue";
+import { WIZARD_STEPS } from "@/constants/wizard";
 import type {
   EquipmentOption,
   FitnessGoal,
@@ -18,8 +19,11 @@ import type {
 import { useUserProfileStore } from "@/stores/userProfile";
 
 const router = useRouter();
+const route = useRoute();
 const profileStore = useUserProfileStore();
 const { userProfile, apiKey } = storeToRefs(profileStore);
+
+const isEditMode = computed(() => route.query.mode === "edit");
 
 const fitnessGoalLabels: [string, FitnessGoal][] = [
   ["Build muscle", "build_muscle"],
@@ -72,28 +76,48 @@ const apiKeyString = computed({
 });
 
 const workoutDaysString = computed({
-  get: () => (userProfile.value.workoutDaysPerWeek ? String(userProfile.value.workoutDaysPerWeek) : ""),
+  get: () =>
+    userProfile.value.workoutDaysPerWeek ? String(userProfile.value.workoutDaysPerWeek) : "",
   set: (val: string) => {
     userProfile.value.workoutDaysPerWeek = val === "" ? undefined : Number(val);
   },
 });
 
-const stepper = useStepper({
-  goal: { title: "Fitness Goal" },
-  level: { title: "Fitness Level" },
-  days: { title: "Workout Days" },
-  location: { title: "Workout Location" },
-  equipment: { title: "Equipment" },
-  stats: { title: "Body Stats" },
-  extra: { title: "Additional Info" },
-  apikey: { title: "API Key" },
+const stepper = useStepper(
+  WIZARD_STEPS.reduce(
+    (acc, step) => {
+      acc[step.id] = { title: step.title };
+      return acc;
+    },
+    {} as Record<string, { title: string }>,
+  ),
+);
+
+// SYNC: URL -> Stepper (Initial & Changes)
+watch(
+  () => route.params.step,
+  (newStep) => {
+    if (newStep && WIZARD_STEPS.some((s) => s.id === newStep)) {
+      stepper.goTo(newStep as string);
+    }
+  },
+  { immediate: true },
+);
+
+// SYNC: Stepper -> URL
+watch(stepper.index, (newIndex) => {
+  const newStep = WIZARD_STEPS[newIndex];
+  if (newStep && newStep.id !== route.params.step) {
+    router.replace({
+      params: { step: newStep.id },
+      query: route.query,
+    });
+  }
 });
 
 const stepsArray = computed(() => Object.keys(stepper.steps.value));
 const totalSteps = computed(() => stepsArray.value.length);
-// We must ignore the id missing type on step current value
-// @ts-expect-error
-const currentStepIndex = computed(() => stepsArray.value.indexOf(stepper.current.value.id));
+const currentStepIndex = stepper.index;
 
 function handleNext() {
   if (stepper.isLast.value) {
@@ -122,31 +146,49 @@ function skipWizard() {
 <template>
   <div class="min-h-screen bg-background flex flex-col pt-safe">
     <!-- Header -->
-    <header class="flex items-center justify-between px-4 py-4 sticky top-0 bg-background/90 z-10 backdrop-blur-xl">
+    <header 
+      class="flex items-center justify-between px-4 py-4 sticky top-0 bg-background/90 z-20 backdrop-blur-xl transition-all"
+      :class="{ 'border-b border-white/5': isEditMode }"
+    >
+      <!-- Left: Back Button -->
       <Button
+        v-if="!stepper.isFirst.value || isEditMode"
         variant="ghost"
         size="icon"
-        class="rounded-full w-12 h-12"
-        @click="handleBack"
-        :disabled="stepper.isFirst.value"
-        :class="{ 'opacity-0 pointer-events-none': stepper.isFirst.value }"
+        class="rounded-full w-12 h-12 -ml-2"
+        @click="isEditMode ? skipWizard() : handleBack()"
       >
         <ArrowLeft class="w-6 h-6" />
       </Button>
+      <div v-else class="w-12 h-12"></div>
 
-      <!-- Progress indicators -->
-      <div class="flex gap-2 items-center mx-4 flex-1 justify-center max-w-[200px]">
+      <!-- Center: Progress or Title -->
+      <div v-if="!isEditMode" class="flex gap-2 items-center mx-4 flex-1 justify-center max-w-[200px]">
         <div
-          v-for="(step, idx) in totalSteps"
+          v-for="idx in totalSteps"
           :key="idx"
-          class="h-1.5 flex-1 rounded-full bg-white/10 transition-colors duration-300"
-          :class="{ 'bg-primary shadow-[0_0_8px_rgba(204,255,0,0.5)]': idx <= currentStepIndex }"
+          class="h-1.5 flex-1 rounded-full transition-all duration-300"
+          :class="[
+            idx - 1 <= currentStepIndex
+              ? 'bg-primary shadow-[0_0_8px_rgba(204,255,0,0.5)]'
+              : 'bg-white/10',
+          ]"
         ></div>
       </div>
+      <div v-else class="flex-1 text-center">
+        <h1 class="text-sm font-black uppercase tracking-[0.2em] text-muted-foreground/60 italic">Edit Profile</h1>
+      </div>
 
-      <Button variant="ghost" class="text-primary font-semibold tracking-wide" @click="skipWizard">
+      <!-- Right: Skip or Spacer -->
+      <Button
+        v-if="!isEditMode"
+        variant="ghost"
+        class="text-primary font-semibold tracking-wide"
+        @click="skipWizard"
+      >
         Skip
       </Button>
+      <div v-else class="w-12 h-12"></div>
     </header>
 
     <!-- Content Area -->
@@ -248,7 +290,7 @@ function skipWizard() {
     </main>
 
     <!-- Bottom Action -->
-    <div class="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-background via-background to-transparent pb-safe">
+    <div v-if="!isEditMode" class="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-background via-background to-transparent pb-safe">
       <Button
         class="w-full h-16 rounded-2xl text-lg font-bold tracking-wide transition-all data-[state=save]:bg-white data-[state=save]:text-black hover:data-[state=save]:scale-[0.98]"
         :data-state="stepper.isLast.value ? 'save' : 'next'"
