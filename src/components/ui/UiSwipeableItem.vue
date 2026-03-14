@@ -1,25 +1,33 @@
 <script setup lang="ts">
-import { usePointerSwipe } from "@vueuse/core";
-import { ref } from "vue";
+import { useElementSize, usePointerSwipe } from "@vueuse/core";
+import { computed, ref } from "vue";
 
 const props = withDefaults(
   defineProps<{
-    threshold?: number;
-    maxSwipe?: number;
+    thresholdPercent?: number; // percentage of width required to trigger (0-100)
+    maxSwipePercent?: number; // max visual translation as percentage of width
   }>(),
   {
-    threshold: 100,
-    maxSwipe: 140,
+    thresholdPercent: 60,
+    maxSwipePercent: 80,
   },
 );
 
 const emit = defineEmits<(e: "action") => void>();
 
+const containerRef = ref<HTMLElement | null>(null);
 const itemRef = ref<HTMLElement | null>(null);
+const { width } = useElementSize(containerRef);
+
+const thresholdPx = computed(() => (width.value * props.thresholdPercent) / 100);
+const maxSwipePx = computed(() => (width.value * props.maxSwipePercent) / 100);
+
+const isThresholdReached = computed(() => distanceX.value > thresholdPx.value);
+
 const { distanceX, isSwiping } = usePointerSwipe(itemRef, {
-  threshold: 20,
+  threshold: 15,
   onSwipeEnd(e, direction) {
-    if (direction === "left" && distanceX.value > props.threshold) {
+    if (direction === "left" && isThresholdReached.value) {
       emit("action");
     }
   },
@@ -27,11 +35,23 @@ const { distanceX, isSwiping } = usePointerSwipe(itemRef, {
 </script>
 
 <template>
-  <div class="relative w-full overflow-hidden rounded-xl bg-destructive/10 border border-destructive/20 border-dashed">
+  <div 
+    ref="containerRef"
+    class="relative w-full overflow-hidden rounded-xl transition-colors duration-200"
+    :class="[
+      isThresholdReached && isSwiping 
+        ? 'bg-destructive/30 border-destructive/40 border-solid' 
+        : 'bg-destructive/10 border-destructive/20 border-dashed'
+    ]"
+  >
     <!-- Background delete action -->
     <div 
-      class="absolute inset-y-0 right-0 flex items-center justify-end px-6 text-destructive transition-opacity duration-200"
-      :class="{ 'opacity-100': isSwiping && distanceX > 40, 'opacity-0': !isSwiping || distanceX <= 40 }"
+      class="absolute inset-y-0 right-0 flex items-center justify-end px-6 text-destructive transition-all duration-200"
+      :class="{ 
+        'opacity-100 scale-110': isThresholdReached && isSwiping,
+        'opacity-60 scale-100': !isThresholdReached && isSwiping && distanceX > 40,
+        'opacity-0': !isSwiping || distanceX <= 40 
+      }"
     >
       <slot name="background" />
     </div>
@@ -39,10 +59,11 @@ const { distanceX, isSwiping } = usePointerSwipe(itemRef, {
     <!-- Foreground content -->
     <div 
       ref="itemRef"
-      class="relative w-full bg-card/95 backdrop-blur-md p-3 px-4 rounded-xl border border-white/5 shadow-sm transition-transform duration-200 ease-out touch-pan-y"
+      class="relative w-full bg-card/95 backdrop-blur-md p-3 px-4 rounded-xl border border-white/5 shadow-sm touch-pan-y"
+      :class="{ 'transition-transform duration-150 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]': !isSwiping }"
       :style="{ 
         transform: isSwiping && distanceX > 0 
-          ? `translateX(-${Math.min(distanceX, props.maxSwipe)}px)` 
+          ? `translateX(-${Math.min(distanceX, maxSwipePx)}px)` 
           : 'translateX(0px)' 
       }"
     >
