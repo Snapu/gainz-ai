@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { useElementSize, usePointerSwipe } from "@vueuse/core";
-import { computed, ref } from "vue";
+import { useElementSize, useEventListener, usePointerSwipe } from "@vueuse/core";
+import { computed, ref, watch } from "vue";
 
 const props = withDefaults(
   defineProps<{
@@ -25,7 +25,7 @@ const maxSwipePx = computed(() => (width.value * props.maxSwipePercent) / 100);
 const isThresholdReached = computed(() => distanceX.value > thresholdPx.value);
 
 const { distanceX, isSwiping } = usePointerSwipe(itemRef, {
-  threshold: 10, // Slightly lower threshold for quicker detection
+  threshold: 0, // Catch everything, we handle locking manually
   onSwipeEnd(e, direction) {
     if (direction === "left" && isThresholdReached.value) {
       emit("action");
@@ -48,7 +48,6 @@ const visualOffset = computed(() => {
 function reset() {
   manualOffset.value = 0;
   isLockingScroll.value = false;
-  // Also force distanceX back if possible, but usePointerSwipe handles its own ref
 }
 
 function handlePointerCancel() {
@@ -70,7 +69,6 @@ function onTouchMove(e: TouchEvent) {
   const touch = e.touches[0];
   if (!touch) return;
 
-  // If we already decided to lock scroll, prevent it
   if (isLockingScroll.value) {
     if (e.cancelable) e.preventDefault();
     return;
@@ -79,14 +77,13 @@ function onTouchMove(e: TouchEvent) {
   const deltaX = Math.abs(touch.clientX - touchStartPos.value.x);
   const deltaY = Math.abs(touch.clientY - touchStartPos.value.y);
 
-  // Capture horizontal swipe earlier (5px instead of 10px)
+  // Capture horizontal swipe earlier (5px)
   if (deltaX > 5 || deltaY > 5) {
     if (deltaX > deltaY) {
       isLockingScroll.value = true;
       if (e.cancelable) e.preventDefault();
-    } else {
-      // It's a vertical scroll, don't interfere
     }
+    // If vertical wins, we don't lock, browser handles scroll
   }
 }
 
@@ -95,6 +92,19 @@ function onTouchEnd() {
     reset();
   }
 }
+
+// Register non-passive listeners for reliable e.preventDefault() on iOS
+useEventListener(itemRef, "touchstart", onTouchStart, { passive: true });
+useEventListener(itemRef, "touchmove", onTouchMove, { passive: false });
+useEventListener(itemRef, "touchend", onTouchEnd, { passive: true });
+useEventListener(itemRef, "touchcancel", reset, { passive: true });
+
+// Ensure manual state cleanup when swipe state changes unexpectedly
+watch(isSwiping, (swiping) => {
+  if (!swiping) {
+    isLockingScroll.value = false;
+  }
+});
 </script>
 
 <template>
@@ -127,11 +137,8 @@ function onTouchEnd() {
       :class="{ 'transition-transform duration-150 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]': !isSwiping }"
       :style="{ 
         transform: `translateX(-${visualOffset}px)`,
-        touchAction: isLockingScroll ? 'none' : 'pan-y'
+        touchAction: 'pan-y'
       }"
-      @touchstart="onTouchStart"
-      @touchmove="onTouchMove"
-      @touchend="onTouchEnd"
     >
       <slot />
     </div>
