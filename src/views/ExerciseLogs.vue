@@ -16,11 +16,11 @@ import { computed, ref, watch } from "vue";
 import AICoachingPanel from "@/components/AICoachingPanel.vue";
 import ExerciseLogItem from "@/components/ExerciseLogItem.vue";
 import MomentumFlames from "@/components/MomentumFlames.vue";
-import Autocomplete from "@/components/ui/Autocomplete.vue";
 import BottomSheet from "@/components/ui/BottomSheet.vue";
 import Button from "@/components/ui/Button.vue";
 import DropdownMenu from "@/components/ui/DropdownMenu.vue";
 import DropdownMenuItem from "@/components/ui/DropdownMenuItem.vue";
+import ExerciseSelector from "@/components/ui/ExerciseSelector.vue";
 import NumberField from "@/components/ui/NumberField.vue";
 import Progress from "@/components/ui/Progress.vue";
 import Sparkline from "@/components/ui/Sparkline.vue";
@@ -288,11 +288,11 @@ const formattedTime = computed(() => {
     <!-- Bottom Sheet Form -->
     <BottomSheet v-model:open="isLogFormOpen" title="Log Exercise">
       <div class="flex flex-col gap-6 w-full">
-        <!-- Autocomplete Exercise Name -->
-        <Autocomplete
+        <!-- Optimized Exercise Selection -->
+        <ExerciseSelector
           v-model="formExerciseName"
           :options="exercisesStore.exercises.map(e => e.name)"
-          placeholder="Exercise Name..."
+          placeholder="Select or Search Exercise..."
           class="bg-card"
         >
           <template #item-action="{ option }">
@@ -320,13 +320,13 @@ const formattedTime = computed(() => {
               v-else
               variant="ghost"
               size="icon"
-              class="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              class="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 transition-opacity"
               @click.stop.prevent="confirmingDelete = option"
             >
               <Trash class="w-4 h-4" />
             </Button>
           </template>
-        </Autocomplete>
+        </ExerciseSelector>
 
         <!-- Exercise Stats -->
         <div
