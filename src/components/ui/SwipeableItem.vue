@@ -25,14 +25,12 @@ const maxSwipePx = computed(() => (width.value * props.maxSwipePercent) / 100);
 const isThresholdReached = computed(() => distanceX.value > thresholdPx.value);
 
 const { distanceX, isSwiping } = usePointerSwipe(itemRef, {
-  threshold: 15,
+  threshold: 10, // Slightly lower threshold for quicker detection
   onSwipeEnd(e, direction) {
     if (direction === "left" && isThresholdReached.value) {
       emit("action");
     }
-    // Always reset on end
-    manualOffset.value = 0;
-    isLockingScroll.value = false;
+    reset();
   },
 });
 
@@ -47,9 +45,14 @@ const visualOffset = computed(() => {
   return manualOffset.value;
 });
 
-function handlePointerCancel() {
+function reset() {
   manualOffset.value = 0;
   isLockingScroll.value = false;
+  // Also force distanceX back if possible, but usePointerSwipe handles its own ref
+}
+
+function handlePointerCancel() {
+  reset();
 }
 
 // Manual touch handling for robust scroll locking
@@ -67,6 +70,7 @@ function onTouchMove(e: TouchEvent) {
   const touch = e.touches[0];
   if (!touch) return;
 
+  // If we already decided to lock scroll, prevent it
   if (isLockingScroll.value) {
     if (e.cancelable) e.preventDefault();
     return;
@@ -75,11 +79,20 @@ function onTouchMove(e: TouchEvent) {
   const deltaX = Math.abs(touch.clientX - touchStartPos.value.x);
   const deltaY = Math.abs(touch.clientY - touchStartPos.value.y);
 
-  if (deltaX > 10 || deltaY > 10) {
+  // Capture horizontal swipe earlier (5px instead of 10px)
+  if (deltaX > 5 || deltaY > 5) {
     if (deltaX > deltaY) {
       isLockingScroll.value = true;
       if (e.cancelable) e.preventDefault();
+    } else {
+      // It's a vertical scroll, don't interfere
     }
+  }
+}
+
+function onTouchEnd() {
+  if (!isSwiping.value) {
+    reset();
   }
 }
 </script>
@@ -110,11 +123,15 @@ function onTouchMove(e: TouchEvent) {
     <!-- Foreground content -->
     <div 
       ref="itemRef"
-      class="relative w-full bg-card/95 backdrop-blur-md p-3 px-4 rounded-xl border border-white/5 shadow-sm select-none touch-pan-y"
+      class="relative w-full bg-card/95 backdrop-blur-md p-3 px-4 rounded-xl border border-white/5 shadow-sm select-none"
       :class="{ 'transition-transform duration-150 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]': !isSwiping }"
-      :style="{ transform: `translateX(-${visualOffset}px)` }"
+      :style="{ 
+        transform: `translateX(-${visualOffset}px)`,
+        touchAction: isLockingScroll ? 'none' : 'pan-y'
+      }"
       @touchstart="onTouchStart"
       @touchmove="onTouchMove"
+      @touchend="onTouchEnd"
     >
       <slot />
     </div>
