@@ -310,7 +310,7 @@ const formattedTime = computed(() => {
     </div>
 
     <!-- Logs List -->
-    <main class="flex-1 px-4 pb-32">
+    <main class="flex-1 px-4 pb-32 overflow-y-auto no-scrollbar">
       <div v-for="session in groupedLogs" :key="session.date" class="mt-8 overflow-hidden">
         <!-- Session Header -->
         <button 

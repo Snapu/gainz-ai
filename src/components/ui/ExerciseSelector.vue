@@ -102,7 +102,7 @@ watch(isOpen, (val) => {
         </div>
 
         <!-- Scrollable List -->
-        <div class="flex-1 overflow-y-auto px-6 pb-8 space-y-2">
+        <div class="flex-1 overflow-y-auto px-6 pb-8 space-y-2 no-scrollbar">
           <!-- Create New Option -->
           <button
             v-if="showCreateOption"

@@ -23,7 +23,7 @@ const forwarded = useForwardPropsEmits(props, emits);
     <slot name="trigger" />
     <DialogPortal>
       <DialogOverlay class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out" />
-      <DialogContent class="fixed bottom-0 left-0 right-0 z-50 flex flex-col gap-4 rounded-t-[2.5rem] border-t border-white/5 bg-background/95 backdrop-blur-xl p-8 pb-safe shadow-2xl data-[state=open]:animate-slide-in-from-bottom data-[state=closed]:animate-slide-out-to-bottom outline-none max-h-[90vh] overflow-y-auto">
+      <DialogContent class="fixed bottom-0 left-0 right-0 z-50 flex flex-col gap-4 rounded-t-[2.5rem] border-t border-white/5 bg-background/95 backdrop-blur-xl p-8 pb-safe shadow-2xl data-[state=open]:animate-slide-in-from-bottom data-[state=closed]:animate-slide-out-to-bottom outline-none max-h-[90vh] overflow-y-auto no-scrollbar">
         
         <div class="flex items-center justify-between mb-2">
           <DialogTitle v-if="title" class="text-2xl font-bold tracking-tight">
