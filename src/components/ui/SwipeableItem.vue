@@ -30,8 +30,58 @@ const { distanceX, isSwiping } = usePointerSwipe(itemRef, {
     if (direction === "left" && isThresholdReached.value) {
       emit("action");
     }
+    // Always reset on end
+    manualOffset.value = 0;
+    isLockingScroll.value = false;
   },
 });
+
+const manualOffset = ref(0);
+const isLockingScroll = ref(false);
+const touchStartPos = ref({ x: 0, y: 0 });
+
+const visualOffset = computed(() => {
+  if (isSwiping.value && distanceX.value > 0) {
+    return Math.min(distanceX.value, maxSwipePx.value);
+  }
+  return manualOffset.value;
+});
+
+function handlePointerCancel() {
+  manualOffset.value = 0;
+  isLockingScroll.value = false;
+}
+
+// Manual touch handling for robust scroll locking
+function onTouchStart(e: TouchEvent) {
+  const touch = e.touches[0];
+  if (!touch) return;
+  touchStartPos.value = {
+    x: touch.clientX,
+    y: touch.clientY,
+  };
+  isLockingScroll.value = false;
+}
+
+function onTouchMove(e: TouchEvent) {
+  const touch = e.touches[0];
+  if (!touch) return;
+
+  if (isLockingScroll.value) {
+    if (e.cancelable) e.preventDefault();
+    return;
+  }
+
+  const deltaX = Math.abs(touch.clientX - touchStartPos.value.x);
+  const deltaY = Math.abs(touch.clientY - touchStartPos.value.y);
+
+  if (deltaX > 10 || deltaY > 10) {
+    if (deltaX > deltaY) {
+      isLockingScroll.value = true;
+      if (e.cancelable) e.preventDefault();
+    }
+  }
+}
 </script>
 
 <template>
@@ -41,10 +91,9 @@ const { distanceX, isSwiping } = usePointerSwipe(itemRef, {
     :class="[
       isThresholdReached && isSwiping 
         ? 'bg-destructive/30 border-destructive/40 border-solid' 
-        : 'bg-destructive/10 border-destructive/20 border-dashed',
-      // Dynamic touch-action to lock scroll when swiping
-      isSwiping ? 'touch-none' : 'touch-pan-y'
+        : 'bg-destructive/10 border-destructive/20 border-dashed'
     ]"
+    @pointercancel="handlePointerCancel"
   >
     <!-- Background delete action -->
     <div 
@@ -61,13 +110,11 @@ const { distanceX, isSwiping } = usePointerSwipe(itemRef, {
     <!-- Foreground content -->
     <div 
       ref="itemRef"
-      class="relative w-full bg-card/95 backdrop-blur-md p-3 px-4 rounded-xl border border-white/5 shadow-sm touch-pan-y"
+      class="relative w-full bg-card/95 backdrop-blur-md p-3 px-4 rounded-xl border border-white/5 shadow-sm select-none touch-pan-y"
       :class="{ 'transition-transform duration-150 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]': !isSwiping }"
-      :style="{ 
-        transform: isSwiping && distanceX > 0 
-          ? `translateX(-${Math.min(distanceX, maxSwipePx)}px)` 
-          : 'translateX(0px)' 
-      }"
+      :style="{ transform: `translateX(-${visualOffset}px)` }"
+      @touchstart="onTouchStart"
+      @touchmove="onTouchMove"
     >
       <slot />
     </div>
