@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useIntervalFn } from "@vueuse/core";
 import {
+  ChevronDown,
   ChevronRight,
   Menu,
   Moon,
@@ -55,23 +56,77 @@ const userProgress = computed(() => {
 });
 
 // --- Group Logs ---
-const groupedLogs = computed(() => {
-  const groups: Record<string, typeof exerciseLogs.value> = {};
+interface GroupedSession {
+  date: string;
+  logs: ExerciseLog[];
+  stats: {
+    sets: number;
+    volume: number;
+    durationMinutes: number;
+    exerciseCount: number;
+  };
+}
 
-  // Sort descending
+const collapsedSessions = ref<Record<string, boolean>>({});
+
+const groupedLogs = computed(() => {
+  const groups: Record<string, ExerciseLog[]> = {};
+
   const sorted = [...exerciseLogs.value].sort(
     (a, b) => b.loggedAt.getTime() - a.loggedAt.getTime(),
   );
 
-  // Group
   for (const log of sorted) {
     const dateStr = localeDateString(log.loggedAt);
     if (!groups[dateStr]) groups[dateStr] = [];
     groups[dateStr].push(log);
   }
 
-  return groups;
+  return Object.entries(groups).map(([date, logs]): GroupedSession => {
+    const volume = logs.reduce((acc, log) => acc + (log.weight || 0) * (log.reps || 0), 0);
+    const exerciseCount = new Set(logs.map((l) => l.exerciseName)).size;
+
+    // Calculate duration: difference between earliest and latest log in the session
+    const times = logs.map((l) => l.loggedAt.getTime());
+    const minTime = Math.min(...times);
+    const maxTime = Math.max(...times);
+    const durationMinutes = Math.round((maxTime - minTime) / 60000);
+
+    return {
+      date,
+      logs,
+      stats: {
+        sets: logs.length,
+        volume,
+        durationMinutes,
+        exerciseCount,
+      },
+    };
+  });
 });
+
+// Initialize collapsed state: only first (most recent) is expanded by default
+watch(
+  groupedLogs,
+  (newGroups) => {
+    if (newGroups.length > 0) {
+      for (let i = 1; i < newGroups.length; i++) {
+        const session = newGroups[i];
+        if (session) {
+          const date = session.date;
+          if (collapsedSessions.value[date] === undefined) {
+            collapsedSessions.value[date] = true;
+          }
+        }
+      }
+    }
+  },
+  { immediate: true },
+);
+
+function toggleSession(date: string) {
+  collapsedSessions.value[date] = !collapsedSessions.value[date];
+}
 
 // --- Delete Exercise Catalog ---
 const confirmingDelete = ref<string | null>(null);
@@ -256,11 +311,41 @@ const formattedTime = computed(() => {
 
     <!-- Logs List -->
     <main class="flex-1 px-4 pb-32">
-      <div v-for="(logs, date) in groupedLogs" :key="date" class="mt-8">
-        <h3 class="text-sm font-black tracking-widest text-muted-foreground uppercase mb-4 ml-2">{{ date }}</h3>
-        <div class="flex flex-col gap-3">
+      <div v-for="session in groupedLogs" :key="session.date" class="mt-8 overflow-hidden">
+        <!-- Session Header -->
+        <button 
+          @click="toggleSession(session.date)"
+          class="w-full flex items-center justify-between p-3 mb-2 rounded-xl bg-card/40 border border-white/5 hover:bg-card/60 transition-colors group"
+        >
+          <div class="flex flex-col items-start px-1">
+            <h3 class="text-xs font-black tracking-widest text-muted-foreground uppercase">{{ session.date }}</h3>
+            <div class="flex items-center gap-2 mt-1">
+              <span class="text-xs font-bold text-foreground/80">{{ session.stats.sets }} sets</span>
+              <span class="w-1 h-1 rounded-full bg-muted-foreground/30"></span>
+              <span class="text-xs font-bold text-foreground/80">{{ session.stats.exerciseCount }} exercises</span>
+              <span class="w-1 h-1 rounded-full bg-muted-foreground/30"></span>
+              <span class="text-xs font-bold text-foreground/80">{{ session.stats.volume.toLocaleString() }} kg</span>
+              <template v-if="session.stats.durationMinutes > 0">
+                <span class="w-1 h-1 rounded-full bg-muted-foreground/30"></span>
+                <span class="text-xs font-bold text-foreground/80">{{ session.stats.durationMinutes }} min</span>
+              </template>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <ChevronDown 
+              class="w-4 h-4 text-muted-foreground transition-transform duration-300"
+              :class="{ '-rotate-180': !collapsedSessions[session.date] }"
+            />
+          </div>
+        </button>
+
+        <!-- Session Content -->
+        <div 
+          v-show="!collapsedSessions[session.date]"
+          class="flex flex-col gap-2 animate-in fade-in slide-in-from-top-2 duration-300"
+        >
           <ExerciseLogItem 
-            v-for="log in logs" 
+            v-for="log in session.logs" 
             :key="log.id" 
             :log="log"
             @delete="logsStore.removeExerciseLog($event)"
@@ -268,7 +353,7 @@ const formattedTime = computed(() => {
         </div>
       </div>
       
-      <div v-if="Object.keys(groupedLogs).length === 0" class="flex flex-col items-center justify-center mt-20 text-center opacity-50">
+      <div v-if="groupedLogs.length === 0" class="flex flex-col items-center justify-center mt-20 text-center opacity-50">
         <p class="text-lg font-bold mb-2">No exercises yet.</p>
         <p class="text-sm">Tap the + button to log your first set.</p>
       </div>
