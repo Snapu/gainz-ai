@@ -10,11 +10,7 @@ import router from "@/router";
 
 /* Theme variables */
 import "@/theme/variables.css";
-import { CLIENT_ID, useAuthStore } from "./stores/auth";
-import { useExerciseLogsStore } from "./stores/exerciseLogs";
-import { useExercisesStore } from "./stores/exercises";
-import { useSpreadsheetStore } from "./stores/spreadsheet";
-import { useUserProfileStore } from "./stores/userProfile";
+import { CLIENT_ID } from "./stores/auth";
 
 const app = createApp(App).use(createPinia()).use(router).use(vue3GoogleLogin, {
   clientId: CLIENT_ID,
@@ -31,48 +27,3 @@ Sentry.init({
 router.isReady().then(() => {
   app.mount("#app");
 });
-
-// Register service worker and listen for background sync events
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.addEventListener("message", (event) => {
-    if (event.data && event.data.type === "BACKGROUND_SYNC_SUCCESS") {
-      console.log("Background sync completed, refreshing all stores...");
-      // Refresh all stores after successful background sync
-      const exerciseLogsStore = useExerciseLogsStore();
-      const exercisesStore = useExercisesStore();
-      exerciseLogsStore.refresh();
-      exercisesStore.refresh();
-    }
-  });
-}
-
-const authStore = useAuthStore();
-const userProfileStore = useUserProfileStore();
-const spreadsheetStore = useSpreadsheetStore();
-
-watch(
-  [
-    () => authStore.isLoggedIn,
-    () => spreadsheetStore.doc,
-    () => userProfileStore.isLoading,
-    () => userProfileStore.setupCompleted, // CRITICAL: Must watch setupCompleted to react when it changes!
-  ],
-  ([isLoggedIn, doc, isLoading, setupCompleted]) => {
-    console.log("[main] Watch triggered:", {
-      isLoggedIn,
-      hasDoc: !!doc,
-      isLoading,
-      setupCompleted,
-    });
-    if (!isLoggedIn) {
-      router.push("/");
-    } else if (!doc || isLoading) {
-      router.push("/loading");
-    } else if (!setupCompleted) {
-      router.push("/wizard/fitness-goal");
-    } else {
-      router.push("/exercise-logs");
-    }
-  },
-  { immediate: true },
-);

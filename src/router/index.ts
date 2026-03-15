@@ -1,4 +1,7 @@
 import { createRouter, createWebHashHistory } from "vue-router";
+import { useAuthStore } from "@/stores/auth";
+import { useSpreadsheetStore } from "@/stores/spreadsheet";
+import { useUserProfileStore } from "@/stores/userProfile";
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -39,6 +42,52 @@ const router = createRouter({
       component: () => import("../views/Impressum.vue"),
     },
   ],
+});
+
+router.beforeEach(async (to) => {
+  const authStore = useAuthStore();
+  const userProfileStore = useUserProfileStore();
+  const spreadsheetStore = useSpreadsheetStore();
+
+  const isLoggedIn = authStore.isLoggedIn;
+  const hasDoc = !!spreadsheetStore.doc;
+  const isLoading = userProfileStore.isLoading;
+  const setupCompleted = userProfileStore.setupCompleted;
+
+  console.log("[router] Guard triggered:", {
+    to: to.path,
+    isLoggedIn,
+    hasDoc,
+    isLoading,
+    setupCompleted,
+  });
+
+  // Public pages
+  if (to.path === "/privacy" || to.path === "/impressum") {
+    return true;
+  }
+
+  if (!isLoggedIn) {
+    if (to.path !== "/") return "/";
+    return true;
+  }
+
+  if (!hasDoc || isLoading) {
+    if (to.path !== "/loading") return "/loading";
+    return true;
+  }
+
+  if (!setupCompleted) {
+    if (!to.path.startsWith("/wizard")) return "/wizard/fitness-goal";
+    return true;
+  }
+
+  // If logged in and setup completed, don't allow going back to login or loading or wizard
+  if (to.path === "/" || to.path === "/loading" || to.path.startsWith("/wizard")) {
+    return "/exercise-logs";
+  }
+
+  return true;
 });
 
 export default router;

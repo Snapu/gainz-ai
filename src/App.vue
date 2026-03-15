@@ -1,11 +1,47 @@
 <script setup lang="ts">
 import { useRegisterSW } from "virtual:pwa-register/vue";
+import { App as CapacitorApp } from "@capacitor/app";
 import { ConfigProvider } from "reka-ui";
-import { watch } from "vue";
+import { onMounted, onUnmounted, watch } from "vue";
+import { useRouter } from "vue-router";
 import Toaster from "@/components/ui/Toaster.vue";
 import { useToast } from "@/components/ui/useToast";
+import { useAuthStore } from "@/stores/auth";
+import { useExerciseLogsStore } from "@/stores/exerciseLogs";
+import { useExercisesStore } from "@/stores/exercises";
+import { useSpreadsheetStore } from "@/stores/spreadsheet";
+import { useUserProfileStore } from "@/stores/userProfile";
 
-const { needRefresh, updateServiceWorker } = useRegisterSW();
+const router = useRouter();
+const authStore = useAuthStore();
+const userProfileStore = useUserProfileStore();
+const spreadsheetStore = useSpreadsheetStore();
+
+const { needRefresh, updateServiceWorker } = useRegisterSW({
+  onRegisteredSW(swUrl, registration) {
+    if (registration) {
+      // Check for updates every hour
+      const interval = setInterval(
+        () => {
+          registration.update();
+        },
+        60 * 60 * 1000,
+      );
+
+      // Check for updates when the app comes to foreground
+      CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+        if (isActive) {
+          registration.update();
+        }
+      });
+
+      onUnmounted(() => {
+        clearInterval(interval);
+      });
+    }
+  },
+});
+
 const { toast } = useToast();
 
 watch(needRefresh, (isNeeded) => {
@@ -21,6 +57,61 @@ watch(needRefresh, (isNeeded) => {
     });
   }
 });
+
+// Move sync listener from main.ts to App.vue
+onMounted(() => {
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("message", (event) => {
+      if (event.data && event.data.type === "BACKGROUND_SYNC_SUCCESS") {
+        console.log("Background sync completed, refreshing all stores...");
+        const exerciseLogsStore = useExerciseLogsStore();
+        const exercisesStore = useExercisesStore();
+        exerciseLogsStore.refresh();
+        exercisesStore.refresh();
+      }
+    });
+  }
+});
+
+// Reactively handle auth/state changes and redirect if necessary
+// This handles transitions (e.g., session expires while on a page)
+watch(
+  [
+    () => authStore.isLoggedIn,
+    () => spreadsheetStore.doc,
+    () => userProfileStore.isLoading,
+    () => userProfileStore.setupCompleted,
+  ],
+  ([isLoggedIn, doc, isLoading, setupCompleted]) => {
+    const currentPath = router.currentRoute.value.path;
+
+    // Skip redirection for public pages
+    if (currentPath === "/privacy" || currentPath === "/impressum") return;
+
+    console.log("[App] State watch triggered:", {
+      isLoggedIn,
+      hasDoc: !!doc,
+      isLoading,
+      setupCompleted,
+      currentPath,
+    });
+
+    if (!isLoggedIn) {
+      if (currentPath !== "/") router.push("/");
+    } else if (!doc || isLoading) {
+      if (currentPath !== "/loading") router.push("/loading");
+    } else if (!setupCompleted) {
+      if (!currentPath.startsWith("/wizard")) router.push("/wizard/fitness-goal");
+    } else {
+      // If we are logged in, have a doc, and setup is complete,
+      // but we are on an auth page, redirect to app.
+      if (currentPath === "/" || currentPath === "/loading" || currentPath.startsWith("/wizard")) {
+        router.push("/exercise-logs");
+      }
+    }
+  },
+  { immediate: false }, // navigation guard handles the immediate load
+);
 </script>
 
 <template>

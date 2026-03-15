@@ -1,25 +1,20 @@
 <script setup lang="ts">
 import { CalendarDate, getLocalTimeZone, parseDate, today } from "@internationalized/date";
-import { ArrowLeft, ExternalLink, Menu, Moon, Plus, Trash } from "lucide-vue-next";
-import type { DateRange } from "reka-ui";
+import { ArrowLeft, Moon, Plus, Trash } from "lucide-vue-next";
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import RestRecoveryItem from "@/components/RestRecoveryItem.vue";
 import BottomSheet from "@/components/ui/BottomSheet.vue";
 import Button from "@/components/ui/Button.vue";
-import DropdownMenu from "@/components/ui/DropdownMenu.vue";
-import DropdownMenuItem from "@/components/ui/DropdownMenuItem.vue";
 import Input from "@/components/ui/Input.vue";
 import RangeCalendar from "@/components/ui/RangeCalendar.vue";
 import ToggleGroup from "@/components/ui/ToggleGroup.vue";
 import ToggleGroupItem from "@/components/ui/ToggleGroupItem.vue";
 import { useEventsStore } from "@/stores/events";
-import { useSpreadsheetStore } from "@/stores/spreadsheet";
 import type { Event as AppEvent } from "@/types/event";
 
 const router = useRouter();
 const eventsStore = useEventsStore();
-const spreadsheetStore = useSpreadsheetStore();
 
 const PRESET_TYPES = ["Rest Day", "Sickness", "Injury", "Fasting", "Other"];
 
@@ -82,26 +77,6 @@ function remove(id: string) {
       <Button variant="ghost" size="icon" @click="isAddOpen = true">
         <Plus class="w-6 h-6" />
       </Button>
-
-      <DropdownMenu>
-        <template #trigger>
-          <Button variant="ghost" size="icon">
-            <Menu class="w-6 h-6" />
-          </Button>
-        </template>
-        
-        <div class="px-3 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">
-          Data
-        </div>
-
-        <DropdownMenuItem 
-          @click="spreadsheetStore.openInBrowser()"
-          class="group"
-        >
-          <span>Open Spreadsheet</span>
-          <ExternalLink class="w-4 h-4 ml-auto opacity-40 group-hover:text-primary transition-colors" />
-        </DropdownMenuItem>
-      </DropdownMenu>
     </header>
 
     <p class="px-6 pt-4 text-sm text-muted-foreground">Track rest days, illness, injuries, and other off days so your AI coach can account for them.</p>
