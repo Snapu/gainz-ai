@@ -295,18 +295,41 @@ const formattedTime = computed(() => {
     </header>
 
     <!-- Consistency & Leveling -->
-    <div class="p-6 pb-2">
-      <div class="flex items-end justify-between mb-3">
-        <div>
-          <h2 class="text-lg font-bold text-primary mb-1">{{ userProgress.title }}</h2>
-          <p class="text-sm text-muted-foreground font-semibold">Level {{ userProgress.level }}</p>
+    <div class="px-6 py-8 mb-4 relative overflow-hidden rounded-3xl mx-4 mt-4 group">
+      <!-- Animated Background Gradient -->
+      <div class="absolute inset-0 bg-linear-to-br from-primary/10 via-background to-background z-0"></div>
+      <div class="absolute -top-24 -right-24 w-48 h-48 bg-primary/10 blur-[100px] rounded-full group-hover:bg-primary/20 transition-colors duration-700"></div>
+      
+      <div class="relative z-10">
+        <div class="flex items-end justify-between mb-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="px-2 py-0.5 rounded-full bg-primary/10 text-[10px] font-black uppercase tracking-widest text-primary border border-primary/20">Rank</span>
+              <h2 class="text-xl font-black italic tracking-tight text-foreground">{{ userProgress.title }}</h2>
+            </div>
+            <p class="text-sm text-muted-foreground font-medium">Level <span class="text-foreground font-black">{{ userProgress.level }}</span></p>
+          </div>
+          <div class="text-right">
+            <MomentumFlames :momentum="userProgress.momentum" />
+          </div>
         </div>
-        <div class="text-right">
-          <MomentumFlames :momentum="userProgress.momentum" />
+        
+        <div class="relative">
+          <Progress :model-value="userProgress.progressPercent" class="h-3 bg-white/5 border border-white/5 shadow-inner" />
+          <!-- Progress Glow -->
+          <div 
+            class="absolute top-0 left-0 h-3 bg-primary blur-[8px] opacity-30 transition-all duration-500"
+            :style="{ width: `${userProgress.progressPercent}%` }"
+          ></div>
+        </div>
+        
+        <div class="flex justify-between items-center mt-3">
+          <span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Next track: Peak Performance</span>
+          <p class="text-[10px] font-black tabular-nums text-primary/80 tracking-widest">
+            {{ userProgress.xpIntoLevel.toLocaleString() }} <span class="text-muted-foreground/30 mx-1">/</span> {{ userProgress.xpForNextLevel.toLocaleString() }} XP
+          </p>
         </div>
       </div>
-      <Progress :model-value="userProgress.progressPercent" class="h-4" />
-      <p class="text-xs text-muted-foreground mt-2 text-right">{{ userProgress.xpIntoLevel }} / {{ userProgress.xpForNextLevel }} XP</p>
     </div>
 
     <!-- Logs List -->
@@ -315,27 +338,43 @@ const formattedTime = computed(() => {
         <!-- Session Header -->
         <button 
           @click="toggleSession(session.date)"
-          class="w-full flex items-center justify-between p-3 mb-2 rounded-xl bg-card/40 border border-white/5 hover:bg-card/60 transition-colors group"
+          class="w-full flex items-center justify-between p-4 mb-3 rounded-2xl bg-linear-to-r from-card/60 to-card/20 border border-white/5 hover:border-primary/20 hover:from-card/80 transition-all duration-300 group relative overflow-hidden"
         >
-          <div class="flex flex-col items-start px-1">
-            <h3 class="text-xs font-black tracking-widest text-muted-foreground uppercase">{{ session.date }}</h3>
-            <div class="flex items-center gap-2 mt-1">
-              <span class="text-xs font-bold text-foreground/80">{{ session.stats.sets }} sets</span>
-              <span class="w-1 h-1 rounded-full bg-muted-foreground/30"></span>
-              <span class="text-xs font-bold text-foreground/80">{{ session.stats.exerciseCount }} exercises</span>
-              <span class="w-1 h-1 rounded-full bg-muted-foreground/30"></span>
-              <span class="text-xs font-bold text-foreground/80">{{ session.stats.volume.toLocaleString() }} kg</span>
-              <template v-if="session.stats.durationMinutes > 0">
-                <span class="w-1 h-1 rounded-full bg-muted-foreground/30"></span>
-                <span class="text-xs font-bold text-foreground/80">{{ session.stats.durationMinutes }} min</span>
-              </template>
+          <!-- Subtle Glow effect on hover -->
+          <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+          
+          <div class="flex flex-col items-start px-1 relative z-10">
+            <h3 class="text-[10px] font-black tracking-[0.2em] text-muted-foreground/60 uppercase group-hover:text-primary/60 transition-colors">{{ session.date }}</h3>
+            <div class="flex items-center gap-3 mt-1.5">
+              <div class="flex flex-col items-start">
+                <span class="text-lg font-black italic tracking-tighter text-foreground group-hover:text-primary transition-colors">{{ session.stats.volume.toLocaleString() }}<span class="text-[10px] ml-0.5 not-italic text-muted-foreground">KG</span></span>
+              </div>
+              
+              <div class="h-4 w-px bg-white/10 mx-1"></div>
+              
+              <div class="flex items-center gap-3">
+                <div class="flex flex-col">
+                  <span class="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">Sets</span>
+                  <span class="text-xs font-black text-foreground">{{ session.stats.sets }}</span>
+                </div>
+                <div class="flex flex-col">
+                  <span class="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">Exercises</span>
+                  <span class="text-xs font-black text-foreground">{{ session.stats.exerciseCount }}</span>
+                </div>
+                <div v-if="session.stats.durationMinutes > 0" class="flex flex-col">
+                  <span class="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">Time</span>
+                  <span class="text-xs font-black text-foreground">{{ session.stats.durationMinutes }}m</span>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="flex items-center gap-2">
-            <ChevronDown 
-              class="w-4 h-4 text-muted-foreground transition-transform duration-300"
-              :class="{ '-rotate-180': !collapsedSessions[session.date] }"
-            />
+          <div class="flex items-center gap-2 relative z-10">
+            <div class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+              <ChevronDown 
+                class="w-4 h-4 text-muted-foreground group-hover:text-primary transition-all duration-300"
+                :class="{ '-rotate-180': !collapsedSessions[session.date] }"
+              />
+            </div>
           </div>
         </button>
 
