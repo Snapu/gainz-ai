@@ -31,14 +31,12 @@ const router = createRouter({
     {
       path: "/privacy",
       name: "privacy",
-      component: () => import("../views/Legal.vue"),
-      props: { type: "privacy" },
+      component: () => import("../views/PrivacyPolicy.vue"),
     },
     {
       path: "/impressum",
       name: "impressum",
-      component: () => import("../views/Legal.vue"),
-      props: { type: "impressum" },
+      component: () => import("../views/Impressum.vue"),
     },
   ],
 });
