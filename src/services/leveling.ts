@@ -78,6 +78,8 @@ export interface UserProgress {
   progressPercent: number;
   momentum: number; // consistency multiplier
   title: string; // anime-style rank title
+  description: string; // motivational lore/description
+  avatar: string; // path to rank-specific avatar
 }
 
 /* ======================================================
@@ -95,42 +97,152 @@ export interface UserProgress {
  * Each title is more epic than the previous, creating clear progression.
  */
 const TITLES = [
-  { level: 1, title: "🔰 Novice Challenger" },
-  { level: 5, title: "⚔️ Iron Warrior" },
-  { level: 10, title: "🔥 Flame Bearer" },
-  { level: 15, title: "⚡ Thunder Fist" },
-  { level: 20, title: "💪 Steel Conqueror" },
-  { level: 25, title: "🌟 Rising Phoenix" },
-  { level: 30, title: "🛡️ Immortal Guardian" },
-  { level: 40, title: "👑 Champion of Will" },
-  { level: 50, title: "⚔️ Legendary Slayer" },
-  { level: 60, title: "🔱 Master of Discipline" },
-  { level: 75, title: "🌪️ Storm Emperor" },
-  { level: 100, title: "💎 Diamond Ascendant" },
-  { level: 125, title: "🐉 Dragon Sovereign" },
-  { level: 150, title: "⚡ Thunder God" },
-  { level: 175, title: "🔥 Inferno Overlord" },
-  { level: 200, title: "🌌 Cosmic Titan" },
-  { level: 250, title: "👹 Demon King" },
-  { level: 300, title: "🌠 Celestial Transcendent" },
+  {
+    level: 1,
+    title: "Novice Challenger",
+    avatar: "/assets/ranks/rank-1.png",
+    description: "Every legend starts with a single rep. Your journey has just begun.",
+  },
+  {
+    level: 5,
+    title: "Iron Warrior",
+    avatar: "/assets/ranks/rank-2.png",
+    description: "Forged in the fires of consistency. Your resolve is hardening like iron.",
+  },
+  {
+    level: 10,
+    title: "Flame Bearer",
+    avatar: "/assets/ranks/rank-3.png",
+    description: "The spark has become a flame. Keep the fire burning through every session.",
+  },
+  {
+    level: 15,
+    title: "Thunder Fist",
+    avatar: "/assets/ranks/rank-4.png",
+    description:
+      "Your strikes carry the weight of discipline. Speed and power are now your allies.",
+  },
+  {
+    level: 20,
+    title: "Steel Conqueror",
+    avatar: "/assets/ranks/rank-5.png",
+    description: "You've conquered the initial hurdles. Your body is a temple of steel.",
+  },
+  {
+    level: 25,
+    title: "Rising Phoenix",
+    avatar: "/assets/ranks/rank-6.png",
+    description: "From the ashes of your old self, a stronger athlete rises. Soar higher.",
+  },
+  {
+    level: 30,
+    title: "Immortal Guardian",
+    avatar: "/assets/ranks/rank-7.png",
+    description: "Consistency is your shield. You protect your gains with unwavering discipline.",
+  },
+  {
+    level: 40,
+    title: "Champion of Will",
+    avatar: "/assets/ranks/rank-8.png",
+    description: "Mind over matter. Your will is stronger than any resistance you face.",
+  },
+  {
+    level: 50,
+    title: "Legendary Slayer",
+    avatar: "/assets/ranks/rank-9.png",
+    description: "You slay doubt and fatigue daily. Your progress is the stuff of legends.",
+  },
+  {
+    level: 60,
+    title: "Master of Discipline",
+    avatar: "/assets/ranks/rank-10.png",
+    description: "The gym is your dojo. You have mastered the art of showing up.",
+  },
+  {
+    level: 75,
+    title: "Storm Emperor",
+    avatar: "/assets/ranks/rank-11.png",
+    description: "You command the storm of your life. Your power is a force of nature.",
+  },
+  {
+    level: 100,
+    title: "Diamond Ascendant",
+    avatar: "/assets/ranks/rank-12.png",
+    description: "Pressure has turned your effort into something unbreakable. Pure and strong.",
+  },
+  {
+    level: 125,
+    title: "Dragon Sovereign",
+    avatar: "/assets/ranks/rank-13.png",
+    description: "The dragon within has awakened. You rule your fitness with absolute power.",
+  },
+  {
+    level: 150,
+    title: "Thunder God",
+    avatar: "/assets/ranks/rank-14.png",
+    description: "A deity of the weights. Every rep echoes like thunder across the heavens.",
+  },
+  {
+    level: 175,
+    title: "Inferno Overlord",
+    avatar: "/assets/ranks/rank-15.png",
+    description:
+      "You've mastered the heat. Even the toughest workouts are but a breeze to your fire.",
+  },
+  {
+    level: 200,
+    title: "Cosmic Titan",
+    avatar: "/assets/ranks/rank-16.png",
+    description: "Your strength spans the stars. You've transcended mortal limits.",
+  },
+  {
+    level: 250,
+    title: "Demon King",
+    avatar: "/assets/ranks/rank-17.png",
+    description:
+      "The ultimate peak. You have conquered every challenge and stand alone at the top.",
+  },
+  {
+    level: 300,
+    title: "Celestial Transcendent",
+    avatar: "/assets/ranks/rank-17.png",
+    description:
+      "Beyond levels, beyond limits. You have become one with the flow of infinite energy.",
+  },
 ] as const;
+
+type RankInfo = (typeof TITLES)[number];
+
+/**
+ * Get internal rank info for a given level.
+ */
+function getRankInfoForLevel(level: number): RankInfo {
+  let current: RankInfo = TITLES[0];
+
+  for (const info of TITLES) {
+    if (level >= info.level) {
+      current = info;
+    } else {
+      break;
+    }
+  }
+
+  return current;
+}
 
 /**
  * Get the appropriate title for a given level.
  * Returns the highest unlocked title.
  */
 export function getTitleForLevel(level: number): string {
-  let currentTitle: string = TITLES[0].title;
+  return getRankInfoForLevel(level).title;
+}
 
-  for (const { level: requiredLevel, title } of TITLES) {
-    if (level >= requiredLevel) {
-      currentTitle = title;
-    } else {
-      break;
-    }
-  }
-
-  return currentTitle;
+/**
+ * Get the appropriate avatar path for a given level.
+ */
+export function getAvatarForLevel(level: number): string {
+  return getRankInfoForLevel(level).avatar;
 }
 
 /**
@@ -258,6 +370,8 @@ export function calculateUserProgress(
       progressPercent: 0,
       momentum: MOMENTUM_MIN,
       title: getTitleForLevel(1),
+      description: TITLES[0].description,
+      avatar: getAvatarForLevel(1),
     };
   }
 
@@ -341,9 +455,9 @@ export function calculateUserProgress(
   const progressPercent = Math.floor((xpRemaining / xpForNext) * 100);
 
   /* ----------------------------------
-   * Title resolution
+   * Title and Avatar resolution
    * ---------------------------------- */
-  const title = getTitleForLevel(level);
+  const rankInfo = getRankInfoForLevel(level);
 
   /* ----------------------------------
    * Final result
@@ -355,6 +469,8 @@ export function calculateUserProgress(
     xpForNextLevel: xpForNext,
     progressPercent,
     momentum,
-    title,
+    title: rankInfo.title,
+    description: (rankInfo as any).description,
+    avatar: rankInfo.avatar,
   };
 }

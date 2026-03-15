@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronRight,
   ExternalLink,
+  Info,
   Menu,
   Moon,
   Pause,
@@ -12,12 +13,14 @@ import {
   RotateCcw,
   Sparkles,
   Trash,
+  Trophy,
 } from "lucide-vue-next";
 import { storeToRefs } from "pinia";
 import { computed, ref, watch } from "vue";
 import AICoachingPanel from "@/components/AICoachingPanel.vue";
 import ExerciseLogItem from "@/components/ExerciseLogItem.vue";
 import MomentumFlames from "@/components/MomentumFlames.vue";
+import RankDetailsOverlay from "@/components/RankDetailsOverlay.vue";
 import BottomSheet from "@/components/ui/BottomSheet.vue";
 import Button from "@/components/ui/Button.vue";
 import DropdownMenu from "@/components/ui/DropdownMenu.vue";
@@ -49,6 +52,7 @@ const { userProfile } = storeToRefs(profileStore);
 const { exerciseLogs } = storeToRefs(logsStore);
 
 const isAIPanelOpen = ref(false);
+const isRankOverlayOpen = ref(false);
 
 // --- Leveling ---
 const userProgress = computed(() => {
@@ -311,43 +315,48 @@ const formattedTime = computed(() => {
       </div>
     </header>
 
-    <!-- Consistency & Leveling -->
-    <div class="px-6 py-8 mb-4 relative overflow-hidden rounded-3xl mx-4 mt-4 group">
-      <!-- Animated Background Gradient -->
+    <!-- Consistency & Leveling (Horizontal Row - Clean HUD) -->
+    <button 
+      @click="isRankOverlayOpen = true"
+      class="w-[calc(100%-2rem)] text-left px-5 py-5 mb-4 relative overflow-hidden rounded-[1.5rem] mx-4 mt-4 group transition-all active:scale-[0.98] duration-300 outline-none border border-white/5 bg-card/30"
+    >
+      <!-- Original Gradient Background -->
       <div class="absolute inset-0 bg-linear-to-br from-primary/10 via-background to-background z-0"></div>
-      <div class="absolute -top-24 -right-24 w-48 h-48 bg-primary/10 blur-[100px] rounded-full group-hover:bg-primary/20 transition-colors duration-700"></div>
+      <div class="absolute -top-16 -right-16 w-32 h-32 bg-primary/10 blur-[80px] rounded-full"></div>
       
-      <div class="relative z-10">
-        <div class="flex items-end justify-between mb-4">
-          <div>
-            <div class="flex items-center gap-2 mb-1">
-              <span class="px-2 py-0.5 rounded-full bg-primary/10 text-[10px] font-black uppercase tracking-widest text-primary border border-primary/20">Rank</span>
-              <h2 class="text-xl font-black italic tracking-tight text-foreground">{{ userProgress.title }}</h2>
-            </div>
-            <p class="text-sm text-muted-foreground font-medium">Level <span class="text-foreground font-black">{{ userProgress.level }}</span></p>
+      <!-- Content Row -->
+      <div class="relative z-10 flex items-center gap-5">
+        <!-- Avatar Section -->
+        <div class="relative flex-shrink-0">
+          <div class="relative w-[4.5rem] h-[4.5rem] rounded-2xl overflow-hidden border border-white/10">
+            <img :src="userProgress.avatar" :alt="userProgress.title" class="w-full h-full object-cover" />
           </div>
-          <div class="text-right">
+        </div>
+
+        <!-- Info Column -->
+        <div class="flex-1 min-w-0 flex flex-col gap-2.5">
+          <div class="flex items-center justify-between gap-2">
+            <h2 class="text-xl font-black italic tracking-tighter text-foreground truncate leading-none">
+              {{ userProgress.title }}
+            </h2>
+            
+            <!-- Compact Rank Badge -->
+            <div class="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-linear-to-b from-white/10 to-transparent border border-white/5">
+              <span class="text-[8px] font-black uppercase tracking-widest text-muted-foreground">LVL</span>
+              <span class="text-[11px] font-black italic text-primary leading-none">{{ userProgress.level }}</span>
+            </div>
+          </div>
+          
+          <!-- Simple Progress Bar -->
+          <Progress :model-value="userProgress.progressPercent" class="bg-white/5 rounded-full" />
+
+          <!-- Mini Status Footer -->
+          <div class="flex items-center justify-between">
             <MomentumFlames :momentum="userProgress.momentum" />
           </div>
         </div>
-        
-        <div class="relative">
-          <Progress :model-value="userProgress.progressPercent" class="h-3 bg-white/5 border border-white/5 shadow-inner" />
-          <!-- Progress Glow -->
-          <div 
-            class="absolute top-0 left-0 h-3 bg-primary blur-[8px] opacity-30 transition-all duration-500"
-            :style="{ width: `${userProgress.progressPercent}%` }"
-          ></div>
-        </div>
-        
-        <div class="flex justify-between items-center mt-3">
-          <span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Next track: Peak Performance</span>
-          <p class="text-[10px] font-black tabular-nums text-primary/80 tracking-widest">
-            {{ userProgress.xpIntoLevel.toLocaleString() }} <span class="text-muted-foreground/30 mx-1">/</span> {{ userProgress.xpForNextLevel.toLocaleString() }} XP
-          </p>
-        </div>
       </div>
-    </div>
+    </button>
 
     <!-- Logs List -->
     <main class="flex-1 px-4 pb-32 overflow-y-auto no-scrollbar">
@@ -525,6 +534,7 @@ const formattedTime = computed(() => {
     </BottomSheet>
 
     <AICoachingPanel v-model:open="isAIPanelOpen" />
+    <RankDetailsOverlay v-model:open="isRankOverlayOpen" :progress="userProgress" />
 
   </div>
 </template>
