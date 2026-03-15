@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useElementSize, useEventListener, usePointerSwipe } from "@vueuse/core";
-import { computed, ref, watch } from "vue";
+import { computed, ref } from "vue";
 
 const props = withDefaults(
   defineProps<{
@@ -24,37 +24,36 @@ const maxSwipePx = computed(() => (width.value * props.maxSwipePercent) / 100);
 
 const isThresholdReached = computed(() => distanceX.value > thresholdPx.value);
 
+const wasResetByScroll = ref(false);
+
 const { distanceX, isSwiping } = usePointerSwipe(itemRef, {
-  threshold: 0, // Catch everything, we handle locking manually
+  threshold: 15,
+  onSwipeStart() {
+    wasResetByScroll.value = false;
+  },
   onSwipeEnd(e, direction) {
-    if (direction === "left" && isThresholdReached.value) {
+    if (direction === "left" && isThresholdReached.value && !wasResetByScroll.value) {
       emit("action");
     }
     reset();
   },
 });
 
-const manualOffset = ref(0);
-const isLockingScroll = ref(false);
 const touchStartPos = ref({ x: 0, y: 0 });
 
 const visualOffset = computed(() => {
+  if (wasResetByScroll.value) return 0;
   if (isSwiping.value && distanceX.value > 0) {
     return Math.min(distanceX.value, maxSwipePx.value);
   }
-  return manualOffset.value;
+  return 0;
 });
 
 function reset() {
-  manualOffset.value = 0;
-  isLockingScroll.value = false;
+  wasResetByScroll.value = false;
 }
 
-function handlePointerCancel() {
-  reset();
-}
-
-// Manual touch handling for robust scroll locking
+// Manual touch handling for snap-back on scroll
 function onTouchStart(e: TouchEvent) {
   const touch = e.touches[0];
   if (!touch) return;
@@ -62,49 +61,26 @@ function onTouchStart(e: TouchEvent) {
     x: touch.clientX,
     y: touch.clientY,
   };
-  isLockingScroll.value = false;
+  wasResetByScroll.value = false;
 }
 
 function onTouchMove(e: TouchEvent) {
   const touch = e.touches[0];
   if (!touch) return;
 
-  if (isLockingScroll.value) {
-    if (e.cancelable) e.preventDefault();
-    return;
-  }
-
-  const deltaX = Math.abs(touch.clientX - touchStartPos.value.x);
   const deltaY = Math.abs(touch.clientY - touchStartPos.value.y);
 
-  // Capture horizontal swipe earlier (5px)
-  if (deltaX > 5 || deltaY > 5) {
-    if (deltaX > deltaY) {
-      isLockingScroll.value = true;
-      if (e.cancelable) e.preventDefault();
-    }
-    // If vertical wins, we don't lock, browser handles scroll
+  // If user starts scrolling vertically, snap back immediately
+  if (deltaY > 10 && isSwiping.value) {
+    wasResetByScroll.value = true;
   }
 }
 
-function onTouchEnd() {
-  if (!isSwiping.value) {
-    reset();
-  }
-}
-
-// Register non-passive listeners for reliable e.preventDefault() on iOS
+// Passive listeners are fine now since we want to allow scrolling
 useEventListener(itemRef, "touchstart", onTouchStart, { passive: true });
-useEventListener(itemRef, "touchmove", onTouchMove, { passive: false });
-useEventListener(itemRef, "touchend", onTouchEnd, { passive: true });
+useEventListener(itemRef, "touchmove", onTouchMove, { passive: true });
+useEventListener(itemRef, "touchend", reset, { passive: true });
 useEventListener(itemRef, "touchcancel", reset, { passive: true });
-
-// Ensure manual state cleanup when swipe state changes unexpectedly
-watch(isSwiping, (swiping) => {
-  if (!swiping) {
-    isLockingScroll.value = false;
-  }
-});
 </script>
 
 <template>
@@ -112,19 +88,19 @@ watch(isSwiping, (swiping) => {
     ref="containerRef"
     class="relative w-full overflow-hidden rounded-xl transition-colors duration-200"
     :class="[
-      isThresholdReached && isSwiping 
+      isThresholdReached && isSwiping && !wasResetByScroll
         ? 'bg-destructive/30 border-destructive/40 border-solid' 
         : 'bg-destructive/10 border-destructive/20 border-dashed'
     ]"
-    @pointercancel="handlePointerCancel"
+    @pointercancel="reset"
   >
     <!-- Background delete action -->
     <div 
       class="absolute inset-y-0 right-0 flex items-center justify-end px-6 text-destructive transition-all duration-200"
       :class="{ 
-        'opacity-100 scale-110': isThresholdReached && isSwiping,
-        'opacity-60 scale-100': !isThresholdReached && isSwiping && distanceX > 40,
-        'opacity-0': !isSwiping || distanceX <= 40 
+        'opacity-100 scale-110': isThresholdReached && isSwiping && !wasResetByScroll,
+        'opacity-60 scale-100': !isThresholdReached && isSwiping && distanceX > 40 && !wasResetByScroll,
+        'opacity-0': !isSwiping || distanceX <= 40 || wasResetByScroll
       }"
     >
       <slot name="background" />
@@ -134,7 +110,9 @@ watch(isSwiping, (swiping) => {
     <div 
       ref="itemRef"
       class="relative w-full bg-card/95 backdrop-blur-md p-3 px-4 rounded-xl border border-white/5 shadow-sm select-none"
-      :class="{ 'transition-transform duration-150 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]': !isSwiping }"
+      :class="{ 
+        'transition-transform duration-200 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]': !isSwiping || wasResetByScroll 
+      }"
       :style="{ 
         transform: `translateX(-${visualOffset}px)`,
         touchAction: 'pan-y'
