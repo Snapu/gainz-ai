@@ -50,5 +50,11 @@ export const useSpreadsheetStore = defineStore("spreadsheet", () => {
     return `https://docs.google.com/spreadsheets/d/${doc.value.spreadsheetId}/edit`;
   });
 
-  return { isLoading, doc, spreadsheetUrl };
+  function openInBrowser() {
+    if (spreadsheetUrl.value) {
+      window.open(spreadsheetUrl.value, "_blank");
+    }
+  }
+
+  return { isLoading, doc, spreadsheetUrl, openInBrowser };
 });

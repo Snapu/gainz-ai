@@ -3,6 +3,7 @@ import { useIntervalFn } from "@vueuse/core";
 import {
   ChevronDown,
   ChevronRight,
+  ExternalLink,
   Menu,
   Moon,
   Pause,
@@ -33,6 +34,7 @@ import { summaryToWorkoutDates } from "@/services/trainingSummary";
 import { localeDateString } from "@/services/utils/date";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
 import { useExercisesStore } from "@/stores/exercises";
+import { useSpreadsheetStore } from "@/stores/spreadsheet";
 import { useTrainingSummaryStore } from "@/stores/trainingSummary";
 import { useUserProfileStore } from "@/stores/userProfile";
 
@@ -40,6 +42,7 @@ const profileStore = useUserProfileStore();
 const logsStore = useExerciseLogsStore();
 const exercisesStore = useExercisesStore();
 const summaryStore = useTrainingSummaryStore();
+const spreadsheetStore = useSpreadsheetStore();
 const { toast } = useToast();
 
 const { userProfile } = storeToRefs(profileStore);
@@ -289,6 +292,20 @@ const formattedTime = computed(() => {
           >
             <span>{{ step.title }}</span>
             <ChevronRight class="w-4 h-4 ml-auto opacity-0 group-focus:opacity-20 transition-opacity" />
+          </DropdownMenuItem>
+
+          <div class="h-px bg-white/5 my-1 mx-3"></div>
+          
+          <div class="px-3 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">
+            Data
+          </div>
+
+          <DropdownMenuItem 
+            @click="spreadsheetStore.openInBrowser()"
+            class="group"
+          >
+            <span>Open Spreadsheet</span>
+            <ExternalLink class="w-4 h-4 ml-auto opacity-40 group-hover:text-primary transition-colors" />
           </DropdownMenuItem>
         </DropdownMenu>
       </div>
