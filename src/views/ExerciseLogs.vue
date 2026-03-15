@@ -287,7 +287,7 @@ const formattedTime = computed(() => {
           <DropdownMenuItem 
             v-for="step in WIZARD_STEPS" 
             :key="step.id"
-            @click="$router.push(`/wizard/${step.id}?mode=edit`)"
+            @select="$router.push(`/wizard/${step.id}?mode=edit`)"
             class="group"
           >
             <span>{{ step.title }}</span>
@@ -301,7 +301,7 @@ const formattedTime = computed(() => {
           </div>
 
           <DropdownMenuItem 
-            @click="spreadsheetStore.openInBrowser()"
+            @select="spreadsheetStore.openInBrowser()"
             class="group"
           >
             <span>Open Spreadsheet</span>

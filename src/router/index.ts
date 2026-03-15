@@ -49,41 +49,40 @@ router.beforeEach(async (to) => {
   const userProfileStore = useUserProfileStore();
   const spreadsheetStore = useSpreadsheetStore();
 
-  const isLoggedIn = authStore.isLoggedIn;
-  const hasDoc = !!spreadsheetStore.doc;
-  const isLoading = userProfileStore.isLoading;
-  const setupCompleted = userProfileStore.setupCompleted;
-
   console.log("[router] Guard triggered:", {
     to: to.path,
-    isLoggedIn,
-    hasDoc,
-    isLoading,
-    setupCompleted,
+    isLoggedIn: authStore.isLoggedIn,
+    hasDoc: !!spreadsheetStore.doc,
+    isLoading: userProfileStore.isLoading,
+    setupCompleted: userProfileStore.setupCompleted,
   });
 
-  // Public pages
+  // 1. Public pages
   if (to.path === "/privacy" || to.path === "/impressum") {
     return true;
   }
 
-  if (!isLoggedIn) {
-    if (to.path !== "/") return "/";
-    return true;
+  // 2. Auth check
+  if (!authStore.isLoggedIn) {
+    return to.path === "/" ? true : "/";
   }
 
-  if (!hasDoc || isLoading) {
-    if (to.path !== "/loading") return "/loading";
-    return true;
+  // 3. Loading check
+  if (!spreadsheetStore.doc || userProfileStore.isLoading) {
+    return to.path === "/loading" ? true : "/loading";
   }
 
-  if (!setupCompleted) {
-    if (!to.path.startsWith("/wizard")) return "/wizard/fitness-goal";
-    return true;
+  // 4. Setup check
+  if (!userProfileStore.setupCompleted) {
+    return to.path.startsWith("/wizard") ? true : "/wizard/fitness-goal";
   }
 
-  // If logged in and setup completed, don't allow going back to login or loading or wizard
-  if (to.path === "/" || to.path === "/loading" || to.path.startsWith("/wizard")) {
+  // 5. Normal operation (logged in & setup completed)
+  // If user tries to go to login, loading, or wizard (without edit mode), redirect to logs
+  const isExcluded = ["/", "/loading"].includes(to.path);
+  const isWizardWithoutEdit = to.path.startsWith("/wizard") && to.query.mode !== "edit";
+
+  if (isExcluded || isWizardWithoutEdit) {
     return "/exercise-logs";
   }
 
