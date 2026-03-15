@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { useElementSize, useEventListener, usePointerSwipe } from "@vueuse/core";
-import { computed, ref } from "vue";
+import { useElementSize, usePointerSwipe } from "@vueuse/core";
+import { computed, ref, watch } from "vue";
 
 const props = withDefaults(
   defineProps<{
@@ -26,12 +26,12 @@ const isThresholdReached = computed(() => distanceX.value > thresholdPx.value);
 
 const wasResetByScroll = ref(false);
 
-const { distanceX, isSwiping } = usePointerSwipe(itemRef, {
-  threshold: 15,
+const { distanceX, distanceY, isSwiping } = usePointerSwipe(itemRef, {
+  threshold: 0, // Catch everything for immediate detection
   onSwipeStart() {
     wasResetByScroll.value = false;
   },
-  onSwipeEnd(e, direction) {
+  onSwipeEnd(_e, direction) {
     if (direction === "left" && isThresholdReached.value && !wasResetByScroll.value) {
       emit("action");
     }
@@ -39,11 +39,10 @@ const { distanceX, isSwiping } = usePointerSwipe(itemRef, {
   },
 });
 
-const touchStartPos = ref({ x: 0, y: 0 });
-
 const visualOffset = computed(() => {
   if (wasResetByScroll.value) return 0;
-  if (isSwiping.value && distanceX.value > 0) {
+  // Only show visual swipe after 10px horizontal movement to avoid jitter on small taps
+  if (isSwiping.value && distanceX.value > 10) {
     return Math.min(distanceX.value, maxSwipePx.value);
   }
   return 0;
@@ -53,34 +52,18 @@ function reset() {
   wasResetByScroll.value = false;
 }
 
-// Manual touch handling for snap-back on scroll
-function onTouchStart(e: TouchEvent) {
-  const touch = e.touches[0];
-  if (!touch) return;
-  touchStartPos.value = {
-    x: touch.clientX,
-    y: touch.clientY,
-  };
-  wasResetByScroll.value = false;
-}
+// Coordinate horizontal vs vertical intent
+watch([distanceX, distanceY], ([x, y]) => {
+  if (!isSwiping.value || wasResetByScroll.value) return;
 
-function onTouchMove(e: TouchEvent) {
-  const touch = e.touches[0];
-  if (!touch) return;
+  const absX = Math.abs(x);
+  const absY = Math.abs(y);
 
-  const deltaY = Math.abs(touch.clientY - touchStartPos.value.y);
-
-  // If user starts scrolling vertically, snap back immediately
-  if (deltaY > 10 && isSwiping.value) {
+  // If vertical movement is significant or dominant early on, snap back
+  if (absY > 8 && (absY > absX || absX < 10)) {
     wasResetByScroll.value = true;
   }
-}
-
-// Passive listeners are fine now since we want to allow scrolling
-useEventListener(itemRef, "touchstart", onTouchStart, { passive: true });
-useEventListener(itemRef, "touchmove", onTouchMove, { passive: true });
-useEventListener(itemRef, "touchend", reset, { passive: true });
-useEventListener(itemRef, "touchcancel", reset, { passive: true });
+});
 </script>
 
 <template>
@@ -111,7 +94,7 @@ useEventListener(itemRef, "touchcancel", reset, { passive: true });
       ref="itemRef"
       class="relative w-full bg-card/95 backdrop-blur-md p-3 px-4 rounded-xl border border-white/5 shadow-sm select-none"
       :class="{ 
-        'transition-transform duration-200 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]': !isSwiping || wasResetByScroll 
+        'transition-transform duration-200 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]': !isSwiping || wasResetByScroll || distanceX < 10
       }"
       :style="{ 
         transform: `translateX(-${visualOffset}px)`,
