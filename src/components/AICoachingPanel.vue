@@ -4,12 +4,14 @@ import DOMPurify from "dompurify";
 import { Loader2, Sparkles } from "lucide-vue-next";
 import { computed, watch } from "vue";
 import BottomSheet from "@/components/ui/BottomSheet.vue";
+import { useToast } from "@/components/ui/useToast";
 import { useAiStore } from "@/stores/ai";
 
 const props = defineProps<{ open: boolean }>();
 const emit = defineEmits<(e: "update:open", val: boolean) => void>();
 
 const aiStore = useAiStore();
+const { toast } = useToast();
 
 const internalOpen = computed({
   get: () => props.open,
@@ -21,7 +23,20 @@ watch(
   () => props.open,
   (isOpen) => {
     if (isOpen && !aiStore.isLoading) {
-      aiStore.askAi();
+      aiStore.askAi().then((result) => {
+        if (result.isErr()) {
+          const description =
+            result.error === "missing-api-key"
+              ? "No API Key configured! Please add one in your profile."
+              : "Failed to get AI response. Please try again.";
+
+          toast({
+            title: "AI Coaching Error",
+            description,
+            variant: "destructive",
+          });
+        }
+      });
     }
   },
 );

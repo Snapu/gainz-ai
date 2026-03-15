@@ -1,3 +1,4 @@
+import { err, ok, type Result } from "neverthrow";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 
@@ -90,11 +91,10 @@ export const useAiStore = defineStore("ai", () => {
   messages.value = loadMessagesFromStorage(todaySessionDate.value);
   cleanOldSessions();
 
-  async function askAi() {
+  async function askAi(): Promise<Result<void, "missing-api-key" | "ai-failed">> {
     const apiKey = userProfileStore.apiKey;
     if (!apiKey) {
-      alert("No API Key configured!");
-      return;
+      return err("missing-api-key");
     }
 
     const today = localeDateString(new Date());
@@ -108,7 +108,7 @@ export const useAiStore = defineStore("ai", () => {
       lastMessage.sessionDate === today
     ) {
       console.debug("No new logs since last AI response, using cached messages.");
-      return;
+      return ok(undefined);
     }
 
     isLoading.value = true;
@@ -147,11 +147,9 @@ export const useAiStore = defineStore("ai", () => {
       if (result.isErr()) {
         switch (result.error) {
           case "missing-api-key":
-            alert("No API Key configured!");
-            return;
+            return err("missing-api-key");
           case "generate-content-stream-failed":
-            alert("Failed to get AI response. Please try again.");
-            return;
+            return err("ai-failed");
         }
       }
 
@@ -166,10 +164,10 @@ export const useAiStore = defineStore("ai", () => {
         logsCount: todayLogsCount,
       };
       messages.value.push(assistantMessage);
-      saveMessagesToStorage(today, messages.value);
+      return ok(undefined);
     } catch (error) {
       console.error("AI request failed:", error);
-      alert("Failed to get AI response. Please try again.");
+      return err("ai-failed");
     } finally {
       isLoading.value = false;
     }
