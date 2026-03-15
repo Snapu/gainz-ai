@@ -76,6 +76,24 @@ const visualOffset = computed(() => {
   return 0;
 });
 
+const shouldPreventScroll = computed(() => isSwiping.value && Math.abs(distanceX.value) > 10);
+
+const touchAction = computed(() => (shouldPreventScroll.value ? "none" : "pan-y"));
+
+function onTouchMove(e: TouchEvent) {
+  if (shouldPreventScroll.value) e.preventDefault();
+}
+
+watch(shouldPreventScroll, (prevent) => {
+  const el = itemRef.value;
+  if (!el) return;
+  if (prevent) {
+    el.addEventListener("touchmove", onTouchMove as EventListener, { passive: false });
+  } else {
+    el.removeEventListener("touchmove", onTouchMove as EventListener);
+  }
+});
+
 function reset() {
   // Reset the flag and force a visual snap-back (and notify pointer handlers)
   wasResetByScroll.value = false;
@@ -134,7 +152,7 @@ onBeforeUnmount(() => {
       }"
       :style="{
         transform: `translateX(-${visualOffset}px)`,
-        touchAction: 'pan-y'
+        touchAction: touchAction
       }"
     >
       <slot />
