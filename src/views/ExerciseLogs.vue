@@ -315,43 +315,44 @@ const formattedTime = computed(() => {
       </div>
     </header>
 
-    <!-- Consistency & Leveling (Horizontal Row - Clean HUD) -->
+    <!-- Consistency & Leveling (Horizontal HUD - Aligned) -->
     <button 
       @click="isRankOverlayOpen = true"
-      class="w-[calc(100%-2rem)] text-left px-5 py-5 mb-4 relative overflow-hidden rounded-[1.5rem] mx-4 mt-4 group transition-all active:scale-[0.98] duration-300 outline-none border border-white/5 bg-card/30"
+      class="w-[calc(100%-2rem)] text-left px-5 py-5 mb-4 relative overflow-hidden rounded-2xl mx-4 mt-4 group transition-all active:scale-[0.98] duration-300 outline-none border border-white/5 bg-linear-to-r from-card/60 to-card/20 shadow-sm"
     >
-      <!-- Original Gradient Background -->
-      <div class="absolute inset-0 bg-linear-to-br from-primary/10 via-background to-background z-0"></div>
+      <!-- Background Depth Circles -->
+      <div class="absolute inset-0 bg-background/20 z-0"></div>
       <div class="absolute -top-16 -right-16 w-32 h-32 bg-primary/10 blur-[80px] rounded-full"></div>
+      <div class="absolute -bottom-8 -left-8 w-24 h-24 bg-primary/10 blur-[60px] rounded-full"></div>
       
       <!-- Content Row -->
       <div class="relative z-10 flex items-center gap-5">
         <!-- Avatar Section -->
         <div class="relative flex-shrink-0">
-          <div class="relative w-[4.5rem] h-[4.5rem] rounded-2xl overflow-hidden border border-white/10">
+          <div class="relative w-24 h-24 rounded-2xl overflow-hidden border border-white/10 shadow-lg">
             <img :src="userProgress.avatar" :alt="userProgress.title" class="w-full h-full object-cover" />
           </div>
         </div>
 
         <!-- Info Column -->
-        <div class="flex-1 min-w-0 flex flex-col gap-2.5">
-          <div class="flex items-center justify-between gap-2">
-            <h2 class="text-xl font-black italic tracking-tighter text-foreground truncate leading-none">
-              {{ userProgress.title }}
-            </h2>
-            
-            <!-- Compact Rank Badge -->
-            <div class="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-linear-to-b from-white/10 to-transparent border border-white/5">
-              <span class="text-[8px] font-black uppercase tracking-widest text-muted-foreground">LVL</span>
-              <span class="text-[11px] font-black italic text-primary leading-none">{{ userProgress.level }}</span>
-            </div>
-          </div>
+        <div class="flex-1 min-w-0 flex flex-col gap-2">
+          <h2 class="text-xl font-black italic tracking-tighter text-foreground truncate leading-none mb-1">
+            {{ userProgress.title }}
+          </h2>
           
-          <!-- Simple Progress Bar -->
-          <Progress :model-value="userProgress.progressPercent" class="bg-white/5 rounded-full" />
+          <div class="flex flex-col gap-2">
+            <!-- Typographic Level (Aligned with stats) -->
+            <div class="text-xs font-semibold flex items-baseline">
+              <span class="text-[10px] text-muted-foreground opacity-70 mr-1 uppercase tracking-tighter">lvl</span>
+              <span class="text-primary">{{ userProgress.level }}</span>
+            </div>
+            
+            <!-- Simple Progress Bar -->
+            <Progress :model-value="userProgress.progressPercent" class="bg-white/5 rounded-full" />
+          </div>
 
           <!-- Mini Status Footer -->
-          <div class="flex items-center justify-between">
+          <div class="flex items-center justify-end">
             <MomentumFlames :momentum="userProgress.momentum" />
           </div>
         </div>

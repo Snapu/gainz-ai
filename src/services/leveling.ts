@@ -86,6 +86,9 @@ export interface UserProgress {
  * TITLE SYSTEM
  * ====================================================== */
 
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const resolveAsset = (path: string) => `${BASE}${path}`;
+
 /**
  * Anime-inspired rank titles that escalate with level milestones.
  *
@@ -100,112 +103,112 @@ const TITLES = [
   {
     level: 1,
     title: "Novice Challenger",
-    avatar: "/assets/ranks/rank-1.png",
+    avatar: resolveAsset("/assets/ranks/rank-1.png"),
     description: "Every legend starts with a single rep. Your journey has just begun.",
   },
   {
     level: 5,
     title: "Iron Warrior",
-    avatar: "/assets/ranks/rank-2.png",
+    avatar: resolveAsset("/assets/ranks/rank-2.png"),
     description: "Forged in the fires of consistency. Your resolve is hardening like iron.",
   },
   {
     level: 10,
     title: "Flame Bearer",
-    avatar: "/assets/ranks/rank-3.png",
+    avatar: resolveAsset("/assets/ranks/rank-3.png"),
     description: "The spark has become a flame. Keep the fire burning through every session.",
   },
   {
     level: 15,
     title: "Thunder Fist",
-    avatar: "/assets/ranks/rank-4.png",
+    avatar: resolveAsset("/assets/ranks/rank-4.png"),
     description:
       "Your strikes carry the weight of discipline. Speed and power are now your allies.",
   },
   {
     level: 20,
     title: "Steel Conqueror",
-    avatar: "/assets/ranks/rank-5.png",
+    avatar: resolveAsset("/assets/ranks/rank-5.png"),
     description: "You've conquered the initial hurdles. Your body is a temple of steel.",
   },
   {
     level: 25,
     title: "Rising Phoenix",
-    avatar: "/assets/ranks/rank-6.png",
+    avatar: resolveAsset("/assets/ranks/rank-6.png"),
     description: "From the ashes of your old self, a stronger athlete rises. Soar higher.",
   },
   {
     level: 30,
     title: "Immortal Guardian",
-    avatar: "/assets/ranks/rank-7.png",
+    avatar: resolveAsset("/assets/ranks/rank-7.png"),
     description: "Consistency is your shield. You protect your gains with unwavering discipline.",
   },
   {
     level: 40,
     title: "Champion of Will",
-    avatar: "/assets/ranks/rank-8.png",
+    avatar: resolveAsset("/assets/ranks/rank-8.png"),
     description: "Mind over matter. Your will is stronger than any resistance you face.",
   },
   {
     level: 50,
     title: "Legendary Slayer",
-    avatar: "/assets/ranks/rank-9.png",
+    avatar: resolveAsset("/assets/ranks/rank-9.png"),
     description: "You slay doubt and fatigue daily. Your progress is the stuff of legends.",
   },
   {
     level: 60,
     title: "Master of Discipline",
-    avatar: "/assets/ranks/rank-10.png",
+    avatar: resolveAsset("/assets/ranks/rank-10.png"),
     description: "The gym is your dojo. You have mastered the art of showing up.",
   },
   {
     level: 75,
     title: "Storm Emperor",
-    avatar: "/assets/ranks/rank-11.png",
+    avatar: resolveAsset("/assets/ranks/rank-11.png"),
     description: "You command the storm of your life. Your power is a force of nature.",
   },
   {
     level: 100,
     title: "Diamond Ascendant",
-    avatar: "/assets/ranks/rank-12.png",
+    avatar: resolveAsset("/assets/ranks/rank-12.png"),
     description: "Pressure has turned your effort into something unbreakable. Pure and strong.",
   },
   {
     level: 125,
     title: "Dragon Sovereign",
-    avatar: "/assets/ranks/rank-13.png",
+    avatar: resolveAsset("/assets/ranks/rank-13.png"),
     description: "The dragon within has awakened. You rule your fitness with absolute power.",
   },
   {
     level: 150,
     title: "Thunder God",
-    avatar: "/assets/ranks/rank-14.png",
+    avatar: resolveAsset("/assets/ranks/rank-14.png"),
     description: "A deity of the weights. Every rep echoes like thunder across the heavens.",
   },
   {
-    level: 175,
+    level: 187,
     title: "Inferno Overlord",
-    avatar: "/assets/ranks/rank-15.png",
+    avatar: resolveAsset("/assets/ranks/rank-15.png"),
     description:
       "You've mastered the heat. Even the toughest workouts are but a breeze to your fire.",
   },
   {
     level: 200,
     title: "Cosmic Titan",
-    avatar: "/assets/ranks/rank-16.png",
+    avatar: resolveAsset("/assets/ranks/rank-16.png"),
     description: "Your strength spans the stars. You've transcended mortal limits.",
   },
   {
     level: 250,
     title: "Demon King",
-    avatar: "/assets/ranks/rank-17.png",
+    avatar: resolveAsset("/assets/ranks/rank-17.png"),
     description:
       "The ultimate peak. You have conquered every challenge and stand alone at the top.",
   },
   {
     level: 300,
     title: "Celestial Transcendent",
-    avatar: "/assets/ranks/rank-17.png",
+    avatar: resolveAsset("/assets/ranks/rank-17.png"),
     description:
       "Beyond levels, beyond limits. You have become one with the flow of infinite energy.",
   },
