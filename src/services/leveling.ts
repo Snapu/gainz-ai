@@ -208,7 +208,7 @@ const TITLES = [
   {
     level: 300,
     title: "Celestial Transcendent",
-    avatar: resolveAsset("/assets/ranks/rank-17.png"),
+    avatar: resolveAsset("/assets/ranks/rank-18.png"),
     description:
       "Beyond levels, beyond limits. You have become one with the flow of infinite energy.",
   },
