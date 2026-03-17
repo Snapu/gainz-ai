@@ -10,6 +10,7 @@ import {
 } from "reka-ui";
 import { computed, ref, watch } from "vue";
 import { cn } from "@/lib/utils";
+import SwipeToDeleteItem from "./SwipeToDeleteItem.vue";
 
 interface Props {
   options: string[];
@@ -22,7 +23,10 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const modelValue = defineModel<string>();
-const emit = defineEmits<(e: "select-option", value: string) => void>();
+const emit = defineEmits<{
+  (e: "select-option", value: string): void;
+  (e: "delete", value: string): void;
+}>();
 
 const isOpen = ref(false);
 const searchQuery = ref("");
@@ -125,20 +129,26 @@ watch(isOpen, (val) => {
           </div>
 
           <!-- List Items -->
-          <div
-            v-for="option in filteredOptions"
-            :key="option"
-            class="group relative flex w-full items-center justify-between rounded-2xl bg-white/5 p-4 hover:bg-white/10 active:scale-[0.99] transition-all cursor-pointer"
-            @click="handleSelect(option)"
-          >
-            <div class="flex-1 min-w-0 pr-4">
-              <span class="text-lg font-bold truncate block">{{ option }}</span>
-            </div>
-            
-            <!-- Actions (Delete, etc.) -->
-            <div @click.stop class="flex items-center">
-              <slot name="item-action" :option="option" />
-            </div>
+          <div class="flex flex-col gap-2">
+            <SwipeToDeleteItem
+              v-for="option in filteredOptions"
+              :key="option"
+              @delete="emit('delete', option)"
+            >
+              <div
+                class="group relative flex w-full items-center justify-between bg-transparent p-1 active:scale-[0.99] transition-all cursor-pointer"
+                @click="handleSelect(option)"
+              >
+                <div class="flex-1 min-w-0 pr-4">
+                  <span class="text-lg font-bold truncate block">{{ option }}</span>
+                </div>
+                
+                <!-- Actions (Delete, etc.) -->
+                <div @click.stop class="flex items-center">
+                  <slot name="item-action" :option="option" />
+                </div>
+              </div>
+            </SwipeToDeleteItem>
           </div>
         </div>
         

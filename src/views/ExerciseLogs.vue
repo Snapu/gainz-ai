@@ -136,11 +136,8 @@ function toggleSession(date: string) {
 }
 
 // --- Delete Exercise Catalog ---
-const confirmingDelete = ref<string | null>(null);
-
-async function confirmDeleteExercise(name: string) {
+async function deleteExercise(name: string) {
   await exercisesStore.removeExerciseByName(name);
-  confirmingDelete.value = null;
   toast({ title: "Exercise removed from catalog", duration: 2000 });
 }
 
@@ -445,39 +442,8 @@ const formattedTime = computed(() => {
           :options="exercisesStore.exercises.map(e => e.name)"
           placeholder="Select or Search Exercise..."
           class="bg-card"
-        >
-          <template #item-action="{ option }">
-            <div v-if="confirmingDelete === option" class="flex gap-2 animate-in slide-in-from-right-2 fade-in">
-              <span class="text-xs text-destructive flex items-center pr-2 font-bold uppercase tracking-widest">Delete?</span>
-              <Button
-                variant="outline"
-                size="sm"
-                class="h-8 rounded-lg px-3 bg-card border-white/5"
-                @click.stop.prevent="confirmingDelete = null"
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                class="h-8 rounded-lg px-3"
-                @click.stop.prevent="confirmDeleteExercise(option)"
-              >
-                Yes
-              </Button>
-            </div>
-            
-            <Button
-              v-else
-              variant="ghost"
-              size="icon"
-              class="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 transition-opacity"
-              @click.stop.prevent="confirmingDelete = option"
-            >
-              <Trash class="w-4 h-4" />
-            </Button>
-          </template>
-        </ExerciseSelector>
+          @delete="deleteExercise"
+        />
 
         <!-- Exercise Stats -->
         <div
