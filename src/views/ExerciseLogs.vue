@@ -210,6 +210,9 @@ async function saveLog() {
     return;
   }
 
+  // Trigger haptic synchronously before any async operations
+  haptic.confirm();
+
   const log: ExerciseLog = {
     id: crypto.randomUUID(),
     exerciseName: formExerciseName.value,
@@ -225,7 +228,6 @@ async function saveLog() {
   // Also add to exercises store if new
   await exercisesStore.addExercise({ name: log.exerciseName });
 
-  haptic.confirm();
   toast({ title: "Logged successfully!", duration: 2000 });
   isLogFormOpen.value = false;
 }

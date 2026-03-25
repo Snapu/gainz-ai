@@ -20,11 +20,25 @@ const containerRef = ref<HTMLElement | null>(null);
 const itemRef = ref<HTMLElement | null>(null);
 const { width } = useElementSize(containerRef);
 
+const hasTriggeredHaptic = ref(false);
+
 // Initialize pointer swipe handling before computations that depend on its refs
 const { distanceX, distanceY, isSwiping } = usePointerSwipe(itemRef, {
   threshold: 0, // Catch everything for immediate detection
   onSwipeStart() {
     wasResetByScroll.value = false;
+    hasTriggeredHaptic.value = false;
+  },
+  onSwipe() {
+    // thresholdPx is defined below, but accessible in this closure by the time a swipe occurs
+    if (
+      !hasTriggeredHaptic.value &&
+      distanceX.value > (width.value * props.thresholdPercent) / 100 &&
+      !wasResetByScroll.value
+    ) {
+      haptic();
+      hasTriggeredHaptic.value = true;
+    }
   },
   onSwipeEnd(_e, direction) {
     if (direction === "left" && isThresholdReached.value && !wasResetByScroll.value) {
@@ -38,12 +52,6 @@ const thresholdPx = computed(() => (width.value * props.thresholdPercent) / 100)
 const maxSwipePx = computed(() => (width.value * props.maxSwipePercent) / 100);
 
 const isThresholdReached = computed(() => distanceX.value > thresholdPx.value);
-
-watch(isThresholdReached, (reached) => {
-  if (reached && isSwiping.value && !wasResetByScroll.value) {
-    haptic();
-  }
-});
 
 const wasResetByScroll = ref(false);
 
