@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { CalendarDate, getLocalTimeZone, parseDate, today } from "@internationalized/date";
-import { ArrowLeft, Moon, Plus, Trash } from "lucide-vue-next";
+import { CalendarDate, getLocalTimeZone, today } from "@internationalized/date";
+import { haptic } from "ios-haptics";
+import { ArrowLeft, Moon, Plus } from "lucide-vue-next";
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import RestRecoveryItem from "@/components/RestRecoveryItem.vue";
@@ -51,6 +52,7 @@ function saveEvent() {
   };
 
   eventsStore.addEvent(ev);
+  haptic.confirm();
   isAddOpen.value = false;
 
   // Reset range

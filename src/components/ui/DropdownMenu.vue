@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import {
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuPortal,
   DropdownMenuRoot,
   DropdownMenuTrigger,

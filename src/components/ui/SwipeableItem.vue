@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useElementSize, usePointerSwipe } from "@vueuse/core";
+import { haptic } from "ios-haptics";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 
 const props = withDefaults(
@@ -37,6 +38,12 @@ const thresholdPx = computed(() => (width.value * props.thresholdPercent) / 100)
 const maxSwipePx = computed(() => (width.value * props.maxSwipePercent) / 100);
 
 const isThresholdReached = computed(() => distanceX.value > thresholdPx.value);
+
+watch(isThresholdReached, (reached) => {
+  if (reached && isSwiping.value && !wasResetByScroll.value) {
+    haptic();
+  }
+});
 
 const wasResetByScroll = ref(false);
 

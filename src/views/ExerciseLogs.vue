@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { useIntervalFn } from "@vueuse/core";
+import { haptic } from "ios-haptics";
 import {
   ChevronDown,
   ChevronRight,
   ExternalLink,
-  Info,
   Menu,
   Moon,
   Pause,
@@ -12,8 +12,6 @@ import {
   Plus,
   RotateCcw,
   Sparkles,
-  Trash,
-  Trophy,
 } from "lucide-vue-next";
 import { storeToRefs } from "pinia";
 import { computed, ref, watch } from "vue";
@@ -227,7 +225,7 @@ async function saveLog() {
   // Also add to exercises store if new
   await exercisesStore.addExercise({ name: log.exerciseName });
 
-  // Vibrate / Haptic missing but simulated with UX
+  haptic.confirm();
   toast({ title: "Logged successfully!", duration: 2000 });
   isLogFormOpen.value = false;
 }
@@ -243,11 +241,13 @@ const { pause, resume, isActive } = useIntervalFn(
 );
 
 function toggleTimer() {
+  haptic();
   if (isActive.value) pause();
   else resume();
 }
 
 function resetTimer() {
+  haptic();
   pause();
   elapsedSeconds.value = 0;
 }

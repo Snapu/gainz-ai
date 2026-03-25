@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Activity, Flame, ShieldCheck, Sparkles, Zap } from "lucide-vue-next";
+import { Activity, Flame, ShieldCheck } from "lucide-vue-next";
 import { computed } from "vue";
 import type { UserProgress } from "@/services/leveling";
 import { useTrainingSummaryStore } from "@/stores/trainingSummary";
