@@ -119,7 +119,9 @@ onBeforeUnmount(() => {
     :class="[
       isThresholdReached && isSwiping && !cancelledByScroll
         ? 'bg-destructive/30 border-destructive/40 border-solid'
-        : 'bg-destructive/10 border-destructive/20 border-dashed'
+        : isSwiping && !cancelledByScroll && distanceX > 0
+        ? 'bg-destructive/10 border-destructive/20 border-dashed'
+        : 'bg-transparent border-transparent'
     ]"
     @pointercancel="snapBack"
   >
