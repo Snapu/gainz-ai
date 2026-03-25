@@ -115,7 +115,7 @@ onBeforeUnmount(() => {
 <template>
   <div
     ref="containerRef"
-    class="relative w-full overflow-hidden rounded-xl transition-colors duration-200"
+    class="relative w-full overflow-hidden rounded-2xl transition-colors duration-200"
     :class="[
       isThresholdReached && isSwiping && !cancelledByScroll
         ? 'bg-destructive/30 border-destructive/40 border-solid'
@@ -138,7 +138,7 @@ onBeforeUnmount(() => {
     <!-- Foreground content -->
     <div
       ref="itemRef"
-      class="relative w-full bg-card/95 backdrop-blur-md p-3 px-4 rounded-xl border border-white/5 shadow-sm select-none"
+      class="group relative w-full p-4 rounded-2xl border border-white/5 shadow-sm select-none transition-colors duration-300 bg-linear-to-r from-card/60 to-card/20 hover:from-card/80 hover:border-primary/20"
       :class="{
         'transition-transform duration-200 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]': !isSwiping || cancelledByScroll || distanceX < 10
       }"
@@ -147,7 +147,12 @@ onBeforeUnmount(() => {
         touchAction: isHorizontalSwipe ? 'none' : 'pan-y'
       }"
     >
-      <slot />
+      <!-- Subtle Glow effect on hover -->
+      <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl pointer-events-none"></div>
+      
+      <div class="relative z-10 w-full">
+        <slot />
+      </div>
     </div>
   </div>
 </template>

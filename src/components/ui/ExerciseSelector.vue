@@ -122,11 +122,10 @@ watch(isOpen, (val) => {
 
         <!-- Scrollable List -->
         <div class="flex-1 overflow-y-auto px-6 pb-8 space-y-2 no-scrollbar">
-          <!-- Create New Option -->
           <button
             v-if="showCreateOption"
             @click="handleCreate"
-            class="flex w-full items-center gap-4 p-4 rounded-xl bg-primary/10 border border-primary/20 text-primary animate-in fade-in slide-in-from-top-2"
+            class="flex w-full items-center gap-4 p-4 rounded-2xl bg-primary/10 border border-primary/20 text-primary animate-in fade-in slide-in-from-top-2"
           >
             <div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
               <Plus class="w-6 h-6" />
@@ -151,11 +150,11 @@ watch(isOpen, (val) => {
               @delete="emit('delete', option)"
             >
               <div
-                class="group relative flex w-full items-center justify-between bg-transparent p-1 active:scale-[0.99] transition-all cursor-pointer"
+                class="flex w-full items-center justify-between bg-transparent active:scale-[0.99] transition-all cursor-pointer"
                 @click="handleSelect(option)"
               >
-                <div class="flex-1 min-w-0 pr-4">
-                  <span class="text-lg font-bold truncate block">{{ option }}</span>
+                <div class="flex-1 min-w-0 pr-4 text-left">
+                  <span class="font-bold text-sm text-foreground tracking-tight truncate block">{{ option }}</span>
                 </div>
                 
                 <!-- Actions (Delete, etc.) -->
