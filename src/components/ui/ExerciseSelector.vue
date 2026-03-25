@@ -8,7 +8,7 @@ import {
   DialogRoot,
   DialogTitle,
 } from "reka-ui";
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { cn } from "@/lib/utils";
 import SwipeToDeleteItem from "./SwipeToDeleteItem.vue";
 
@@ -30,6 +30,14 @@ const emit = defineEmits<{
 
 const isOpen = ref(false);
 const searchQuery = ref("");
+const searchInputRef = ref<HTMLInputElement | null>(null);
+const viewportHeight = ref(window.visualViewport?.height ?? window.innerHeight);
+
+function onViewportResize() {
+  viewportHeight.value = window.visualViewport?.height ?? window.innerHeight;
+}
+
+const dialogMaxHeight = computed(() => `${viewportHeight.value * 0.9}px`);
 
 const filteredOptions = computed(() => {
   if (!searchQuery.value) return props.options;
@@ -57,9 +65,28 @@ function handleCreate() {
   handleSelect(searchQuery.value);
 }
 
-// Reset search when closing
+function onSearchFocus() {
+  // Give the keyboard time to appear, then scroll input into view
+  setTimeout(() => {
+    searchInputRef.value?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, 300);
+}
+
+// Track visualViewport resizes (keyboard open/close)
 watch(isOpen, (val) => {
-  if (!val) searchQuery.value = "";
+  if (!val) {
+    searchQuery.value = "";
+    window.visualViewport?.removeEventListener("resize", onViewportResize);
+  } else {
+    nextTick(() => {
+      onViewportResize();
+      window.visualViewport?.addEventListener("resize", onViewportResize);
+    });
+  }
+});
+
+onBeforeUnmount(() => {
+  window.visualViewport?.removeEventListener("resize", onViewportResize);
 });
 </script>
 
@@ -81,7 +108,10 @@ watch(isOpen, (val) => {
 
     <DialogPortal>
       <DialogOverlay class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out" />
-      <DialogContent class="fixed bottom-0 left-0 right-0 z-50 flex flex-col gap-0 rounded-t-[2.5rem] border-t border-white/5 bg-background/95 backdrop-blur-xl pb-safe shadow-2xl data-[state=open]:animate-slide-in-from-bottom data-[state=closed]:animate-slide-out-to-bottom outline-none max-h-[90vh]">
+      <DialogContent
+        class="fixed bottom-0 left-0 right-0 z-50 flex flex-col gap-0 rounded-t-[2.5rem] border-t border-white/5 bg-background/95 backdrop-blur-xl pb-safe shadow-2xl data-[state=open]:animate-slide-in-from-bottom data-[state=closed]:animate-slide-out-to-bottom outline-none transition-[max-height] duration-200"
+        :style="{ maxHeight: dialogMaxHeight }"
+      >
         
         <!-- Header -->
         <div class="flex items-center justify-between p-6 pb-2">
@@ -98,9 +128,11 @@ watch(isOpen, (val) => {
           <div class="relative flex items-center">
             <Search class="absolute left-4 w-5 h-5 text-muted-foreground/50 z-10" />
             <input
+              ref="searchInputRef"
               v-model="searchQuery"
               placeholder="Search or add new..."
               class="flex h-14 w-full rounded-2xl border border-white/5 bg-white/5 pl-12 pr-4 py-3 text-base font-medium placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all shadow-inner"
+              @focus="onSearchFocus"
             />
           </div>
         </div>
