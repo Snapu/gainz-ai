@@ -5,11 +5,11 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 
 const props = withDefaults(
   defineProps<{
-    thresholdPercent?: number; // percentage of width required to trigger (0-100)
-    maxSwipePercent?: number; // max visual translation as percentage of width
+    thresholdPercent?: number;
+    maxSwipePercent?: number;
   }>(),
   {
-    thresholdPercent: 50,
+    thresholdPercent: 60,
     maxSwipePercent: 80,
   },
 );
@@ -20,118 +20,95 @@ const containerRef = ref<HTMLElement | null>(null);
 const itemRef = ref<HTMLElement | null>(null);
 const { width } = useElementSize(containerRef);
 
-const hasTriggeredHaptic = ref(false);
+const thresholdPx = computed(() => (width.value * props.thresholdPercent) / 100);
+const maxSwipePx = computed(() => (width.value * props.maxSwipePercent) / 100);
 
-// Initialize pointer swipe handling before computations that depend on its refs
+const cancelledByScroll = ref(false);
+const hasTriggeredHaptic = ref(false);
+let snapBackTimer: number | null = null;
+
 const { distanceX, distanceY, isSwiping } = usePointerSwipe(itemRef, {
-  threshold: 0, // Catch everything for immediate detection
+  threshold: 0,
   onSwipeStart() {
-    wasResetByScroll.value = false;
+    cancelledByScroll.value = false;
     hasTriggeredHaptic.value = false;
   },
   onSwipe() {
-    // thresholdPx is defined below, but accessible in this closure by the time a swipe occurs
-    if (
-      !hasTriggeredHaptic.value &&
-      distanceX.value > (width.value * props.thresholdPercent) / 100 &&
-      !wasResetByScroll.value
-    ) {
+    if (!hasTriggeredHaptic.value && isThresholdReached.value && !cancelledByScroll.value) {
       haptic();
       hasTriggeredHaptic.value = true;
     }
   },
   onSwipeEnd(_e, direction) {
-    if (direction === "left" && isThresholdReached.value && !wasResetByScroll.value) {
+    if (direction === "left" && isThresholdReached.value && !cancelledByScroll.value) {
+      haptic();
       emit("action");
     }
-    reset();
+    snapBack();
   },
 });
 
-const thresholdPx = computed(() => (width.value * props.thresholdPercent) / 100);
-const maxSwipePx = computed(() => (width.value * props.maxSwipePercent) / 100);
-
 const isThresholdReached = computed(() => distanceX.value > thresholdPx.value);
 
-const wasResetByScroll = ref(false);
-
-let _resetTimer: number | null = null;
-
-function forceSnapBack() {
-  const el = itemRef.value;
-  if (!el) return;
-
-  // Ensure a smooth transition back to 0 even if pointer handling is still active
-  el.style.transition = "transform 200ms cubic-bezier(0.16,1,0.3,1)";
-  el.style.transform = "translateX(0px)";
-
-  // Notify pointer handlers that the gesture has been cancelled so usePointerSwipe can clean up
-  try {
-    el.dispatchEvent(new PointerEvent("pointercancel", { bubbles: true }));
-  } catch (e) {
-    el.dispatchEvent(new Event("pointercancel", { bubbles: true }));
-  }
-
-  if (_resetTimer) window.clearTimeout(_resetTimer);
-  _resetTimer = window.setTimeout(() => {
-    // remove our inline transition so original CSS classes control it again
-    if (el) el.style.transition = "";
-    _resetTimer = null;
-  }, 260);
-}
-
-/* duplicate usePointerSwipe initialization removed (handled above) */
-
 const visualOffset = computed(() => {
-  if (wasResetByScroll.value) return 0;
-  // Only show visual swipe after 10px horizontal movement to avoid jitter on small taps
+  if (cancelledByScroll.value) return 0;
   if (isSwiping.value && distanceX.value > 10) {
     return Math.min(distanceX.value, maxSwipePx.value);
   }
   return 0;
 });
 
-const shouldPreventScroll = computed(() => isSwiping.value && Math.abs(distanceX.value) > 10);
+const isHorizontalSwipe = computed(() => isSwiping.value && Math.abs(distanceX.value) > 10);
 
-const touchAction = computed(() => (shouldPreventScroll.value ? "none" : "pan-y"));
+// Cancel swipe when vertical movement dominates
+watch([distanceX, distanceY], ([x, y]) => {
+  if (!isSwiping.value || cancelledByScroll.value) return;
+  const absX = Math.abs(x);
+  const absY = Math.abs(y);
+  if (absY > 8 && (absY > absX || absX < 10)) {
+    cancelledByScroll.value = true;
+    snapBack();
+  }
+});
 
-function onTouchMove(e: TouchEvent) {
-  if (shouldPreventScroll.value) e.preventDefault();
-}
-
-watch(shouldPreventScroll, (prevent) => {
+// Block native scroll while swiping horizontally
+watch(isHorizontalSwipe, (prevent) => {
   const el = itemRef.value;
   if (!el) return;
   if (prevent) {
-    el.addEventListener("touchmove", onTouchMove as EventListener, { passive: false });
+    el.addEventListener("touchmove", preventTouch, { passive: false });
   } else {
-    el.removeEventListener("touchmove", onTouchMove as EventListener);
+    el.removeEventListener("touchmove", preventTouch);
   }
 });
 
-function reset() {
-  // Reset the flag and force a visual snap-back (and notify pointer handlers)
-  wasResetByScroll.value = false;
-  forceSnapBack();
+function preventTouch(e: Event) {
+  if (isHorizontalSwipe.value) e.preventDefault();
 }
 
-// Coordinate horizontal vs vertical intent
-watch([distanceX, distanceY], ([x, y]) => {
-  if (!isSwiping.value || wasResetByScroll.value) return;
+function snapBack() {
+  cancelledByScroll.value = false;
+  const el = itemRef.value;
+  if (!el) return;
 
-  const absX = Math.abs(x);
-  const absY = Math.abs(y);
+  el.style.transition = "transform 200ms cubic-bezier(0.16,1,0.3,1)";
+  el.style.transform = "translateX(0px)";
 
-  // If vertical movement is significant or dominant early on, snap back
-  if (absY > 8 && (absY > absX || absX < 10)) {
-    wasResetByScroll.value = true;
-    // Immediately force the item back and inform pointer handlers so it doesn't get stuck
-    forceSnapBack();
+  try {
+    el.dispatchEvent(new PointerEvent("pointercancel", { bubbles: true }));
+  } catch {
+    el.dispatchEvent(new Event("pointercancel", { bubbles: true }));
   }
-});
+
+  if (snapBackTimer) window.clearTimeout(snapBackTimer);
+  snapBackTimer = window.setTimeout(() => {
+    if (el) el.style.transition = "";
+    snapBackTimer = null;
+  }, 260);
+}
 
 onBeforeUnmount(() => {
-  if (_resetTimer) window.clearTimeout(_resetTimer);
+  if (snapBackTimer) window.clearTimeout(snapBackTimer);
 });
 </script>
 
@@ -140,19 +117,19 @@ onBeforeUnmount(() => {
     ref="containerRef"
     class="relative w-full overflow-hidden rounded-xl transition-colors duration-200"
     :class="[
-      isThresholdReached && isSwiping && !wasResetByScroll
+      isThresholdReached && isSwiping && !cancelledByScroll
         ? 'bg-destructive/30 border-destructive/40 border-solid'
         : 'bg-destructive/10 border-destructive/20 border-dashed'
     ]"
-    @pointercancel="reset"
+    @pointercancel="snapBack"
   >
-    <!-- Background delete action -->
+    <!-- Background action -->
     <div
       class="absolute inset-y-0 right-0 flex items-center justify-end px-6 text-destructive transition-all duration-200"
       :class="{
-        'opacity-100 scale-110': isThresholdReached && isSwiping && !wasResetByScroll,
-        'opacity-60 scale-100': !isThresholdReached && isSwiping && distanceX > 40 && !wasResetByScroll,
-        'opacity-0': !isSwiping || distanceX <= 40 || wasResetByScroll
+        'opacity-100 scale-110': isThresholdReached && isSwiping && !cancelledByScroll,
+        'opacity-60 scale-100': !isThresholdReached && isSwiping && distanceX > 40 && !cancelledByScroll,
+        'opacity-0': !isSwiping || distanceX <= 40 || cancelledByScroll
       }"
     >
       <slot name="background" />
@@ -163,11 +140,11 @@ onBeforeUnmount(() => {
       ref="itemRef"
       class="relative w-full bg-card/95 backdrop-blur-md p-3 px-4 rounded-xl border border-white/5 shadow-sm select-none"
       :class="{
-        'transition-transform duration-200 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]': !isSwiping || wasResetByScroll || distanceX < 10
+        'transition-transform duration-200 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]': !isSwiping || cancelledByScroll || distanceX < 10
       }"
       :style="{
         transform: `translateX(-${visualOffset}px)`,
-        touchAction: touchAction
+        touchAction: isHorizontalSwipe ? 'none' : 'pan-y'
       }"
     >
       <slot />
