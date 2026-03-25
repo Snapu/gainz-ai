@@ -5,8 +5,10 @@ import { ArrowLeft, Moon, Plus } from "lucide-vue-next";
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import RestRecoveryItem from "@/components/RestRecoveryItem.vue";
+import AppHeader from "@/components/ui/AppHeader.vue";
 import BottomSheet from "@/components/ui/BottomSheet.vue";
 import Button from "@/components/ui/Button.vue";
+import EmptyState from "@/components/ui/EmptyState.vue";
 import Input from "@/components/ui/Input.vue";
 import RangeCalendar from "@/components/ui/RangeCalendar.vue";
 import ToggleGroup from "@/components/ui/ToggleGroup.vue";
@@ -71,7 +73,7 @@ function remove(id: string) {
 <template>
   <div class="min-h-screen bg-background flex flex-col pt-safe">
     <!-- Header -->
-    <header class="flex items-center px-4 py-4 sticky top-0 bg-background/90 z-10 backdrop-blur-xl border-b border-white/5">
+    <AppHeader>
       <Button variant="ghost" size="icon" @click="router.back()" class="mr-4 -ml-2">
         <ArrowLeft class="w-6 h-6" />
       </Button>
@@ -79,17 +81,18 @@ function remove(id: string) {
       <Button variant="ghost" size="icon" @click="isAddOpen = true">
         <Plus class="w-6 h-6" />
       </Button>
-    </header>
+    </AppHeader>
 
     <p class="px-6 pt-4 text-sm text-muted-foreground">Track rest days, illness, injuries, and other off days so your AI coach can account for them.</p>
 
     <!-- Event List -->
     <main class="flex-1 px-6 py-6 overflow-y-auto pb-32">
-      <div v-if="sortedEvents.length === 0" class="flex flex-col items-center justify-center h-40 text-muted-foreground/50">
-        <Moon class="w-12 h-12 mb-4 opacity-50" />
-        <p class="font-medium text-lg">No off days logged.</p>
-        <p class="text-sm mt-1 opacity-70">Tap + to record a rest day, sickness, or injury.</p>
-      </div>
+      <EmptyState 
+        v-if="sortedEvents.length === 0"
+        :icon="Moon"
+        title="No off days logged."
+        description="Tap + to record a rest day, sickness, or injury."
+      />
 
       <div class="flex flex-col gap-4">
         <RestRecoveryItem 

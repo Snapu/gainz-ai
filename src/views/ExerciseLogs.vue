@@ -19,14 +19,17 @@ import AICoachingPanel from "@/components/AICoachingPanel.vue";
 import ExerciseLogItem from "@/components/ExerciseLogItem.vue";
 import MomentumFlames from "@/components/MomentumFlames.vue";
 import RankDetailsOverlay from "@/components/RankDetailsOverlay.vue";
+import AppHeader from "@/components/ui/AppHeader.vue";
 import BottomSheet from "@/components/ui/BottomSheet.vue";
 import Button from "@/components/ui/Button.vue";
 import DropdownMenu from "@/components/ui/DropdownMenu.vue";
 import DropdownMenuItem from "@/components/ui/DropdownMenuItem.vue";
+import EmptyState from "@/components/ui/EmptyState.vue";
 import ExerciseSelector from "@/components/ui/ExerciseSelector.vue";
 import NumberField from "@/components/ui/NumberField.vue";
 import Progress from "@/components/ui/Progress.vue";
 import Sparkline from "@/components/ui/Sparkline.vue";
+import UiCard from "@/components/ui/UiCard.vue";
 import { useToast } from "@/components/ui/useToast";
 import { WIZARD_STEPS } from "@/constants/wizard";
 import type { ExerciseLog } from "@/services/exerciseLogs";
@@ -267,7 +270,7 @@ const formattedTime = computed(() => {
   <div class="min-h-screen bg-background flex flex-col pt-safe relative">
     
     <!-- Top Nav -->
-    <header class="flex items-center justify-between p-4 sticky top-0 bg-background/90 z-10 backdrop-blur-xl border-b border-white/5">
+    <AppHeader class="justify-between">
       <h1 class="text-2xl font-black italic tracking-tighter">Gainz<span class="text-primary">AI</span></h1>
       <div class="flex gap-2">
         <Button variant="ghost" size="icon" @click="isAIPanelOpen = true">
@@ -312,12 +315,13 @@ const formattedTime = computed(() => {
           </DropdownMenuItem>
         </DropdownMenu>
       </div>
-    </header>
+    </AppHeader>
 
     <!-- Consistency & Leveling (Horizontal HUD - Aligned) -->
-    <button 
+    <UiCard 
+      as="button"
       @click="isRankOverlayOpen = true"
-      class="w-[calc(100%-2rem)] text-left px-5 py-5 mb-4 relative overflow-hidden rounded-2xl mx-4 mt-4 group transition-all active:scale-[0.98] duration-300 outline-none border border-white/5 bg-linear-to-r from-card/60 to-card/20 shadow-sm"
+      class="w-[calc(100%-2rem)] text-left px-5 py-5 mb-4 mx-4 mt-4 active:scale-[0.98] outline-none"
     >
       <!-- Background Depth Circles -->
       <div class="absolute inset-0 bg-background/20 z-0"></div>
@@ -356,15 +360,16 @@ const formattedTime = computed(() => {
           </div>
         </div>
       </div>
-    </button>
+    </UiCard>
 
     <!-- Logs List -->
     <main class="flex-1 px-4 pb-32 overflow-y-auto no-scrollbar">
       <div v-for="session in groupedLogs" :key="session.date" class="mt-8 overflow-hidden">
         <!-- Session Header -->
-        <button 
+        <UiCard 
+          as="button"
           @click="toggleSession(session.date)"
-          class="w-full flex items-center justify-between p-4 mb-3 rounded-2xl bg-linear-to-r from-card/60 to-card/20 border border-white/5 hover:border-primary/20 hover:from-card/80 transition-all duration-300 group relative overflow-hidden"
+          class="w-full flex items-center justify-between p-4 mb-3 hover:border-primary/20"
         >
           <!-- Subtle Glow effect on hover -->
           <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
@@ -372,11 +377,11 @@ const formattedTime = computed(() => {
           <div class="flex flex-col items-start px-1 relative z-10">
             <h3 class="text-[10px] font-black tracking-[0.2em] text-muted-foreground/60 uppercase group-hover:text-primary/60 transition-colors">{{ session.date }}</h3>
             <div class="flex items-center gap-3 mt-1.5">
-              <div class="flex flex-col items-start">
-                <span class="text-lg font-black italic tracking-tighter text-foreground group-hover:text-primary transition-colors">{{ session.stats.volume.toLocaleString() }}<span class="text-[10px] ml-0.5 not-italic text-muted-foreground">KG</span></span>
+              <div v-if="session.stats.durationMinutes > 0" class="flex flex-col items-start">
+                <span class="text-lg font-black italic tracking-tighter text-foreground group-hover:text-primary transition-colors">{{ session.stats.durationMinutes }}<span class="text-[10px] ml-0.5 not-italic text-muted-foreground font-bold tracking-tight uppercase">Min</span></span>
               </div>
               
-              <div class="h-4 w-px bg-white/10 mx-1"></div>
+              <div v-if="session.stats.durationMinutes > 0" class="h-4 w-px bg-white/10 mx-1"></div>
               
               <div class="flex items-center gap-3">
                 <div class="flex flex-col">
@@ -387,9 +392,9 @@ const formattedTime = computed(() => {
                   <span class="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">Exercises</span>
                   <span class="text-xs font-black text-foreground">{{ session.stats.exerciseCount }}</span>
                 </div>
-                <div v-if="session.stats.durationMinutes > 0" class="flex flex-col">
-                  <span class="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">Time</span>
-                  <span class="text-xs font-black text-foreground">{{ session.stats.durationMinutes }}m</span>
+                <div class="flex flex-col">
+                  <span class="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">Volume</span>
+                  <span class="text-xs font-black text-foreground">{{ session.stats.volume.toLocaleString() }}<span class="text-[8px] ml-0.5 opacity-70">KG</span></span>
                 </div>
               </div>
             </div>
@@ -402,7 +407,7 @@ const formattedTime = computed(() => {
               />
             </div>
           </div>
-        </button>
+        </UiCard>
 
         <!-- Session Content -->
         <div 
@@ -418,10 +423,12 @@ const formattedTime = computed(() => {
         </div>
       </div>
       
-      <div v-if="groupedLogs.length === 0" class="flex flex-col items-center justify-center mt-20 text-center opacity-50">
-        <p class="text-lg font-bold mb-2">No exercises yet.</p>
-        <p class="text-sm">Tap the + button to log your first set.</p>
-      </div>
+      <EmptyState 
+        v-if="groupedLogs.length === 0"
+        title="No exercises yet."
+        description="Tap the + button to log your first set."
+        class="mt-20"
+      />
     </main>
 
     <!-- FAB -->

@@ -140,17 +140,32 @@ onBeforeUnmount(() => {
     <!-- Foreground content -->
     <div
       ref="itemRef"
-      class="group relative w-full p-4 rounded-2xl border border-white/5 shadow-sm select-none transition-colors duration-300 bg-linear-to-r from-card/60 to-card/20 hover:from-card/80 hover:border-primary/20"
-      :class="{
-        'transition-transform duration-200 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]': !isSwiping || cancelledByScroll || distanceX < 10
-      }"
+      class="group relative w-full p-4 rounded-2xl border border-white/5 shadow-sm select-none transition-colors duration-300 isolate"
+      :class="[
+        {
+          'transition-transform duration-200 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]': !isSwiping || cancelledByScroll || distanceX < 10
+        },
+        !isSwiping && 'hover:border-primary/20'
+      ]"
       :style="{
         transform: `translateX(-${visualOffset}px)`,
         touchAction: isHorizontalSwipe ? 'none' : 'pan-y'
       }"
     >
+      <!-- Base opaque layer to block red from bleeding through -->
+      <div class="absolute inset-0 bg-background rounded-2xl pointer-events-none -z-10"></div>
+      
+      <!-- Gradient styling -->
+      <div 
+        class="absolute inset-0 bg-linear-to-r from-card/60 to-card/20 rounded-2xl pointer-events-none -z-10 transition-colors duration-300"
+        :class="{ 'group-hover:from-card/80': !isSwiping }"
+      ></div>
+
       <!-- Subtle Glow effect on hover -->
-      <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl pointer-events-none"></div>
+      <div 
+        class="absolute inset-0 bg-primary/5 opacity-0 transition-opacity rounded-2xl pointer-events-none -z-10"
+        :class="{ 'group-hover:opacity-100': !isSwiping }"
+      ></div>
       
       <div class="relative z-10 w-full">
         <slot />
