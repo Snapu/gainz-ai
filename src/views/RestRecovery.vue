@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { CalendarDate, getLocalTimeZone, today } from "@internationalized/date";
 import { haptic } from "ios-haptics";
-import { ArrowLeft, Moon, Plus } from "lucide-vue-next";
+import { ArrowLeft, Moon, Plus, X } from "lucide-vue-next";
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import RestRecoveryItem from "@/components/RestRecoveryItem.vue";
@@ -105,10 +105,21 @@ function remove(id: string) {
     </main>
 
     <!-- Log Recovery Bottom Sheet -->
-    <BottomSheet v-model:open="isAddOpen" title="Log Recovery">
-      <div class="flex flex-col gap-4 max-h-[80vh] overflow-y-auto px-1 pb-4">
+    <BottomSheet v-model:open="isAddOpen" content-class="p-0 gap-0">
+      <template #header>
+        <div class="flex items-center justify-between p-6 pb-2 shrink-0">
+          <h2 class="text-2xl font-bold tracking-tight">Log Recovery</h2>
+          <button @click="isAddOpen = false" class="rounded-full p-2.5 bg-white/5 hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-primary active:scale-95">
+            <X class="w-5 h-5 text-muted-foreground hover:text-foreground" />
+            <span class="sr-only">Close</span>
+          </button>
+        </div>
+      </template>
+
+      <!-- Scrollable Content -->
+      <div class="flex flex-col gap-6 overflow-y-auto px-6 py-4 no-scrollbar">
         <div>
-          <label class="text-xs font-semibold text-muted-foreground mb-2 block ml-1 uppercase tracking-wider">Type</label>
+          <label class="text-xs font-semibold text-muted-foreground mb-3 block ml-1 uppercase tracking-wider">Type</label>
           <ToggleGroup type="single" v-model="formType" class="grid grid-cols-2 gap-2">
             <ToggleGroupItem v-for="t in PRESET_TYPES" :key="t" :value="t" variant="ghost" size="sm">
               {{ t }}
@@ -117,16 +128,19 @@ function remove(id: string) {
         </div>
 
         <div v-if="formType === 'Other'" class="animate-in slide-in-from-top-2 fade-in">
-          <label class="text-xs font-semibold text-muted-foreground mb-1 block ml-1 uppercase tracking-wider">Custom Type</label>
+          <label class="text-xs font-semibold text-muted-foreground mb-2 block ml-1 uppercase tracking-wider">Custom Type</label>
           <Input v-model="formCustomType" placeholder="e.g. Travel" class="h-12" />
         </div>
 
         <div>
-          <label class="text-xs font-semibold text-muted-foreground mb-2 block ml-1 uppercase tracking-wider">Dates</label>
+          <label class="text-xs font-semibold text-muted-foreground mb-3 block ml-1 uppercase tracking-wider">Dates</label>
           <RangeCalendar v-model="dateRange" />
         </div>
+      </div>
 
-        <Button class="w-full h-14 rounded-2xl text-base font-black mt-2 shadow-lg shadow-primary/20 transition-all active:scale-[0.98]" @click="saveEvent">
+      <!-- Docked Footer Action -->
+      <div class="px-6 pb-safe pt-4 shrink-0 bg-background/95 backdrop-blur z-10 border-t border-white/5">
+        <Button class="w-full h-14 rounded-2xl text-base font-black mb-6 shadow-lg shadow-primary/20 transition-all active:scale-[0.98]" @click="saveEvent">
           Save Entry
         </Button>
       </div>
