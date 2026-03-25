@@ -11,7 +11,7 @@ import {
   DialogTitle,
   useForwardPropsEmits,
 } from "reka-ui";
-import { computed, nextTick } from "vue";
+import { computed, nextTick, watch } from "vue";
 import { useKeyboardHeight } from "@/composables/useKeyboardHeight";
 import { cn } from "@/lib/utils";
 
@@ -35,6 +35,13 @@ function handleOpenChange(isOpen: boolean) {
     stopTracking();
   }
 }
+
+// Ensure keyboard tracking starts when programmatic opens occur (v-model updates from parent)
+watch(() => props.open, (isOpen) => {
+  if (isOpen !== undefined) {
+    handleOpenChange(isOpen);
+  }
+});
 </script>
 
 <template>
