@@ -4,9 +4,11 @@ import { ArrowLeft, Check, Sparkles, X } from "lucide-vue-next";
 import { storeToRefs } from "pinia";
 import { computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import AppHeader from "@/components/ui/AppHeader.vue";
 import Button from "@/components/ui/Button.vue";
 import Input from "@/components/ui/Input.vue";
 import NumberField from "@/components/ui/NumberField.vue";
+import Textarea from "@/components/ui/Textarea.vue";
 import ToggleGroup from "@/components/ui/ToggleGroup.vue";
 import ToggleGroupItem from "@/components/ui/ToggleGroupItem.vue";
 import { WIZARD_STEPS } from "@/constants/wizard";
@@ -146,9 +148,9 @@ function skipWizard() {
 <template>
   <div class="min-h-screen bg-background flex flex-col pt-safe">
     <!-- Header -->
-    <header 
-      class="flex items-center justify-between px-4 py-4 sticky top-0 bg-background/90 z-20 backdrop-blur-xl transition-all"
-      :class="{ 'border-b border-white/5': isEditMode }"
+    <AppHeader 
+      class="justify-between transition-all z-20"
+      :class="{ 'border-b-transparent': !isEditMode }"
     >
       <!-- Left: Back Button -->
       <Button
@@ -189,7 +191,7 @@ function skipWizard() {
         Skip
       </Button>
       <div v-else class="w-12 h-12"></div>
-    </header>
+    </AppHeader>
 
     <!-- Content Area -->
     <main class="flex-1 px-6 pb-32 flex flex-col mt-4">
@@ -264,11 +266,11 @@ function skipWizard() {
         <template v-else-if="stepper.isCurrent('extra')">
           <h2 class="text-3xl font-black mb-2 tracking-tight">Additional Context</h2>
           <p class="text-muted-foreground mb-10 text-lg">Any injuries, specific focus areas, or limitations?</p>
-          <textarea
+          <Textarea
             v-model="userProfile.freeUserInput"
             placeholder="e.g. Bad left knee, want to focus on explosive strength..."
-            class="w-full flex min-h-[160px] rounded-2xl border border-input/50 bg-card/60 px-5 py-4 text-base font-medium ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary disabled:cursor-not-allowed disabled:opacity-50 transition-all shadow-inner backdrop-blur-md resize-none"
-          ></textarea>
+            class="min-h-[160px]"
+          />
         </template>
 
         <!-- API Key -->

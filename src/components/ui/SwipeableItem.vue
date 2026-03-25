@@ -118,10 +118,10 @@ onBeforeUnmount(() => {
     class="relative w-full overflow-hidden rounded-2xl transition-colors duration-200"
     :class="[
       isThresholdReached && isSwiping && !cancelledByScroll
-        ? 'bg-destructive/30 border-destructive/40 border-solid'
+        ? 'bg-destructive/30'
         : isSwiping && !cancelledByScroll && distanceX > 0
-        ? 'bg-destructive/10 border-destructive/20 border-dashed'
-        : 'bg-transparent border-transparent'
+        ? 'bg-destructive/10'
+        : 'bg-transparent'
     ]"
     @pointercancel="snapBack"
   >
@@ -140,7 +140,7 @@ onBeforeUnmount(() => {
     <!-- Foreground content -->
     <div
       ref="itemRef"
-      class="group relative w-full p-4 rounded-2xl border border-white/5 shadow-sm select-none transition-colors duration-300 isolate"
+      class="group relative w-full p-4 rounded-2xl border border-white/5 bg-background shadow-sm select-none transition-colors duration-300 isolate"
       :class="[
         {
           'transition-transform duration-200 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]': !isSwiping || cancelledByScroll || distanceX < 10
@@ -152,9 +152,6 @@ onBeforeUnmount(() => {
         touchAction: isHorizontalSwipe ? 'none' : 'pan-y'
       }"
     >
-      <!-- Base opaque layer to block red from bleeding through -->
-      <div class="absolute inset-0 bg-background rounded-2xl pointer-events-none -z-10"></div>
-      
       <!-- Gradient styling -->
       <div 
         class="absolute inset-0 bg-linear-to-r from-card/60 to-card/20 rounded-2xl pointer-events-none -z-10 transition-colors duration-300"

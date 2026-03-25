@@ -110,7 +110,7 @@ function remove(id: string) {
         <div>
           <label class="text-xs font-semibold text-muted-foreground mb-2 block ml-1 uppercase tracking-wider">Type</label>
           <ToggleGroup type="single" v-model="formType" class="grid grid-cols-2 gap-2">
-            <ToggleGroupItem v-for="t in PRESET_TYPES" :key="t" :value="t" class="h-12 py-0 justify-center font-bold border-white/5 bg-white/5 data-[state=on]:bg-primary text-sm">
+            <ToggleGroupItem v-for="t in PRESET_TYPES" :key="t" :value="t" variant="ghost" size="sm">
               {{ t }}
             </ToggleGroupItem>
           </ToggleGroup>
