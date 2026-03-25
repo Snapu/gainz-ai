@@ -33,11 +33,18 @@ const searchQuery = ref("");
 const searchInputRef = ref<HTMLInputElement | null>(null);
 const viewportHeight = ref(window.visualViewport?.height ?? window.innerHeight);
 
-function onViewportResize() {
+function onViewportChange() {
   viewportHeight.value = window.visualViewport?.height ?? window.innerHeight;
 }
 
-const dialogMaxHeight = computed(() => `${viewportHeight.value * 0.9}px`);
+const keyboardHeight = computed(() =>
+  Math.max(0, window.innerHeight - viewportHeight.value),
+);
+
+const dialogStyle = computed(() => ({
+  bottom: `${keyboardHeight.value}px`,
+  maxHeight: `${viewportHeight.value * 0.9}px`,
+}));
 
 const filteredOptions = computed(() => {
   if (!searchQuery.value) return props.options;
@@ -65,28 +72,33 @@ function handleCreate() {
   handleSelect(searchQuery.value);
 }
 
-function onSearchFocus() {
-  // Give the keyboard time to appear, then scroll input into view
-  setTimeout(() => {
-    searchInputRef.value?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, 300);
+function addViewportListeners() {
+  window.visualViewport?.addEventListener("resize", onViewportChange);
+  window.visualViewport?.addEventListener("scroll", onViewportChange);
+}
+
+function removeViewportListeners() {
+  window.visualViewport?.removeEventListener("resize", onViewportChange);
+  window.visualViewport?.removeEventListener("scroll", onViewportChange);
 }
 
 // Track visualViewport resizes (keyboard open/close)
 watch(isOpen, (val) => {
   if (!val) {
     searchQuery.value = "";
-    window.visualViewport?.removeEventListener("resize", onViewportResize);
+    removeViewportListeners();
+    // Reset to full height after closing
+    viewportHeight.value = window.innerHeight;
   } else {
     nextTick(() => {
-      onViewportResize();
-      window.visualViewport?.addEventListener("resize", onViewportResize);
+      onViewportChange();
+      addViewportListeners();
     });
   }
 });
 
 onBeforeUnmount(() => {
-  window.visualViewport?.removeEventListener("resize", onViewportResize);
+  removeViewportListeners();
 });
 </script>
 
@@ -109,8 +121,8 @@ onBeforeUnmount(() => {
     <DialogPortal>
       <DialogOverlay class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out" />
       <DialogContent
-        class="fixed bottom-0 left-0 right-0 z-50 flex flex-col gap-0 rounded-t-[2.5rem] border-t border-white/5 bg-background/95 backdrop-blur-xl pb-safe shadow-2xl data-[state=open]:animate-slide-in-from-bottom data-[state=closed]:animate-slide-out-to-bottom outline-none transition-[max-height] duration-200"
-        :style="{ maxHeight: dialogMaxHeight }"
+        class="fixed left-0 right-0 z-50 flex flex-col gap-0 rounded-t-[2.5rem] border-t border-white/5 bg-background/95 backdrop-blur-xl pb-safe shadow-2xl data-[state=open]:animate-slide-in-from-bottom data-[state=closed]:animate-slide-out-to-bottom outline-none transition-[bottom,max-height] duration-200"
+        :style="dialogStyle"
       >
         
         <!-- Header -->
@@ -132,7 +144,6 @@ onBeforeUnmount(() => {
               v-model="searchQuery"
               placeholder="Search or add new..."
               class="flex h-14 w-full rounded-2xl border border-white/5 bg-white/5 pl-12 pr-4 py-3 text-base font-medium placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all shadow-inner"
-              @focus="onSearchFocus"
             />
           </div>
         </div>
