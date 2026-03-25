@@ -8,7 +8,8 @@ import {
   DialogRoot,
   DialogTitle,
 } from "reka-ui";
-import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
+import { useKeyboardHeight } from "@/composables/useKeyboardHeight";
 import { cn } from "@/lib/utils";
 import SwipeToDeleteItem from "./SwipeToDeleteItem.vue";
 
@@ -30,20 +31,11 @@ const emit = defineEmits<{
 
 const isOpen = ref(false);
 const searchQuery = ref("");
-const searchInputRef = ref<HTMLInputElement | null>(null);
-const viewportHeight = ref(window.visualViewport?.height ?? window.innerHeight);
-
-function onViewportChange() {
-  viewportHeight.value = window.visualViewport?.height ?? window.innerHeight;
-}
-
-const keyboardHeight = computed(() =>
-  Math.max(0, window.innerHeight - viewportHeight.value),
-);
+const { keyboardHeight, visibleHeight, startTracking, stopTracking } = useKeyboardHeight();
 
 const dialogStyle = computed(() => ({
   bottom: `${keyboardHeight.value}px`,
-  maxHeight: `${viewportHeight.value * 0.9}px`,
+  maxHeight: `${visibleHeight.value * 0.9}px`,
 }));
 
 const filteredOptions = computed(() => {
@@ -72,33 +64,13 @@ function handleCreate() {
   handleSelect(searchQuery.value);
 }
 
-function addViewportListeners() {
-  window.visualViewport?.addEventListener("resize", onViewportChange);
-  window.visualViewport?.addEventListener("scroll", onViewportChange);
-}
-
-function removeViewportListeners() {
-  window.visualViewport?.removeEventListener("resize", onViewportChange);
-  window.visualViewport?.removeEventListener("scroll", onViewportChange);
-}
-
-// Track visualViewport resizes (keyboard open/close)
 watch(isOpen, (val) => {
   if (!val) {
     searchQuery.value = "";
-    removeViewportListeners();
-    // Reset to full height after closing
-    viewportHeight.value = window.innerHeight;
+    stopTracking();
   } else {
-    nextTick(() => {
-      onViewportChange();
-      addViewportListeners();
-    });
+    nextTick(startTracking);
   }
-});
-
-onBeforeUnmount(() => {
-  removeViewportListeners();
 });
 </script>
 
