@@ -7,6 +7,10 @@ import type { TrainingSummary } from "@/services/trainingSummary";
 import { localeDateString } from "@/services/utils/date";
 import type { UserProfile } from "@/stores/userProfile";
 import type { Event } from "@/types/event";
+import {
+  calculateProgressiveOverload,
+  calculateWeeklyVolume,
+} from "./fitnessMetrics";
 
 export type PreviousAiMessage = {
   role: "user" | "assistant";
@@ -50,6 +54,15 @@ Event handling:
 - Adjust workout intensity and exercise selection based on recent events (e.g., ease back after sickness/injury).
 - If user was sick/injured recently, warn about returning too quickly and recommend gradual progression.
 - Respect scheduled rest days and fasting periods in your recommendations.
+
+Here are examples of how you should respond:
+EXAMPLE 1 (Volume & Overload Analysis):
+User Data: Calculated Fitness Insights: {"weeklyVolume": [{"exerciseName": "Bench Press", "sets": 6, "totalReps": 60}], "progressiveOverload": [{"exerciseName": "Bench Press", "status": "maintained"}]}
+Coach Response: "I noticed your bench press has maintained the same weight and reps this week. Since you tracked 6 sets for chest, which is on the lower end for hypertrophy, let's bump that volume up to 10 sets next week to break this plateau."
+
+EXAMPLE 2 (Event & Constraint Adaptation):
+User Data: User is fasting today. Goal is lose_fat.
+Coach Response: "Since you're fasting today, we shouldn't push for PRs. Let's keep the intensity moderate and focus on maintaining your muscle mass while you're in a caloric deficit. We'll stick to 3 working sets for your main lifts."
 `,
 };
 
@@ -128,6 +141,14 @@ export async function askAi(
 
     const isFirstMessage = previousMessages.length === 0;
 
+    const weeklyVolume = calculateWeeklyVolume(exerciseLogs);
+    const progressiveOverload = calculateProgressiveOverload(exerciseLogs);
+    const fitnessInsights = {
+      weeklyVolume,
+      progressiveOverload,
+    };
+    const insightsJson = JSON.stringify(fitnessInsights, null, 2);
+
     const fourWeeksAgo = new Date();
     fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
     const last4WeeksLogs = exerciseLogs.filter(
@@ -172,6 +193,11 @@ ${profileJson}
 ${historicalSummarySection}Here is my ${isFirstMessage ? "recent exercise logs (last 4 weeks)" : "today's exercise logs so far"}:
 \`\`\`json
 ${logsJson}
+\`\`\`
+
+Calculated Fitness Insights (Metrics from the last 7 vs 14 days):
+\`\`\`json
+${insightsJson}
 \`\`\`
 `;
 
