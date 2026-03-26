@@ -7,6 +7,7 @@ import type { TrainingSummary } from "@/services/trainingSummary";
 import { localeDateString } from "@/services/utils/date";
 import type { UserProfile } from "@/stores/userProfile";
 import type { Event } from "@/types/event";
+import { getLearnedMuscleMap, learnFromAiResponse } from "./exerciseMuscleMap";
 import { calculateTrainingInsights } from "./trainingScience";
 
 export type PreviousAiMessage = {
@@ -74,6 +75,11 @@ export const aiResponseSchema: Schema = {
             description:
               "Optional. Assign the same identifier (e.g. 'A', 'B') to exercises that should be performed together as a superset.",
           },
+          muscleGroup: {
+            type: Type.STRING,
+            description:
+              "Primary muscle group this exercise targets. Must be one of: Chest, Back, Quads, Hamstrings, Shoulders, Biceps, Triceps, Abs, Calves, Glutes.",
+          },
         },
       },
     },
@@ -111,6 +117,7 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
 - Confusing Jargon: Never use 'RPE' without explaining it. Speak in plain language (e.g. 'leave 2 reps in tank').
 - Targets: Be definitive in the 'targetWeight' field. Use e1RM data to calculate appropriate working weights (typically 70-85% of e1RM for hypertrophy). Give exactly one numeric target.
 - Notes: NEVER use trivial cliches in the 'notes' field (e.g. "controlled execution", "deep squat"). Only provide advanced tempo/anatomical cues (e.g. "3s eccentric") or OMIT the field entirely.
+- LANGUAGE RULE: Only 'coachMessage' is shown to the user — write it in the user's locale. ALL other fields ('scratchpad', 'reasoning', 'muscleGroup', 'supersetId', 'targetWeight', 'notes') MUST be in English. This saves tokens and ensures reliable parsing.
 
 4. MID-WORKOUT BEHAVIOR (CRITICAL):
 - If the user has already logged exercises today, you are MID-WORKOUT.
@@ -273,6 +280,8 @@ export async function askAi(
   const ai = new GoogleGenAI({ apiKey });
   const today = localeDateString(new Date());
 
+  let aiResponseText = "";
+
   try {
     const startOfToday = new Date().setHours(0, 0, 0, 0);
     const todayLogs = exerciseLogs.filter((log) => log.loggedAt.getTime() > startOfToday);
@@ -341,7 +350,8 @@ export async function askAi(
 
     // Training science insights: only on first message or when not mid-workout
     if (isFirstMessage || !isMidWorkout) {
-      const insights = calculateTrainingInsights(exerciseLogs, new Date());
+      const learnedMap = getLearnedMuscleMap();
+      const insights = calculateTrainingInsights(exerciseLogs, new Date(), learnedMap);
       sections.push(`Training Insights:\n${JSON.stringify(insights)}`);
     }
 
@@ -370,7 +380,7 @@ export async function askAi(
       config: aiConfig,
     });
 
-    let aiResponseText = "";
+    aiResponseText = "";
     for await (const chunk of responseStream) {
       if (chunk.text) aiResponseText += chunk.text;
     }
@@ -379,5 +389,18 @@ export async function askAi(
   } catch (error) {
     console.error("AI request failed:", error);
     return err("generate-content-stream-failed");
+  } finally {
+    // Learn exercise→muscleGroup mappings from the AI response (fire-and-forget)
+    // This runs even if the response is malformed — we just skip bad data
+    try {
+      if (aiResponseText) {
+        const parsed = JSON.parse(aiResponseText);
+        if (Array.isArray(parsed?.recommendedWorkout)) {
+          learnFromAiResponse(parsed.recommendedWorkout);
+        }
+      }
+    } catch {
+      // Silently ignore parse errors — learning is best-effort
+    }
   }
 }

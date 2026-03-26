@@ -41,6 +41,11 @@ const router = createRouter({
       name: "impressum",
       component: () => import("../views/Impressum.vue"),
     },
+    {
+      path: "/debug",
+      name: "debug",
+      component: () => import("../views/Debug.vue"),
+    },
   ],
 });
 

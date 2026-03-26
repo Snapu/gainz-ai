@@ -322,6 +322,14 @@ const formattedTime = computed(() => {
             <span>Open Spreadsheet</span>
             <ExternalLink class="w-4 h-4 ml-auto opacity-40 group-hover:text-primary transition-colors" />
           </DropdownMenuItem>
+
+          <DropdownMenuItem 
+            @select="$router.push('/debug')"
+            class="group"
+          >
+            <span>Debug: Training Science</span>
+            <ChevronRight class="w-4 h-4 ml-auto opacity-0 group-focus:opacity-20 transition-opacity" />
+          </DropdownMenuItem>
         </DropdownMenu>
       </div>
     </AppHeader>
