@@ -37,11 +37,14 @@ function handleOpenChange(isOpen: boolean) {
 }
 
 // Ensure keyboard tracking starts when programmatic opens occur (v-model updates from parent)
-watch(() => props.open, (isOpen) => {
-  if (isOpen !== undefined) {
-    handleOpenChange(isOpen);
-  }
-});
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen !== undefined) {
+      handleOpenChange(isOpen);
+    }
+  },
+);
 </script>
 
 <template>

@@ -11,7 +11,7 @@ describe("leveling system", () => {
       expect(result.xpIntoLevel).toBe(0);
       expect(result.progressPercent).toBe(0);
       expect(result.momentum).toBe(0.5); // MOMENTUM_MIN
-      expect(result.title).toBe("🔰 Novice Challenger");
+      expect(result.title).toBe("Novice Challenger");
     });
 
     it("should calculate progress for a single exercise day", () => {
@@ -212,54 +212,54 @@ describe("leveling system", () => {
 
   describe("getTitleForLevel", () => {
     it("should return correct title for level 1", () => {
-      expect(getTitleForLevel(1)).toBe("🔰 Novice Challenger");
+      expect(getTitleForLevel(1)).toBe("Novice Challenger");
     });
 
     it("should return correct title for level 5", () => {
-      expect(getTitleForLevel(5)).toBe("⚔️ Iron Warrior");
+      expect(getTitleForLevel(5)).toBe("Iron Warrior");
     });
 
     it("should return correct title for level 10", () => {
-      expect(getTitleForLevel(10)).toBe("🔥 Flame Bearer");
+      expect(getTitleForLevel(10)).toBe("Flame Bearer");
     });
 
     it("should return correct title for level 50", () => {
-      expect(getTitleForLevel(50)).toBe("⚔️ Legendary Slayer");
+      expect(getTitleForLevel(50)).toBe("Legendary Slayer");
     });
 
     it("should return correct title for level 100", () => {
-      expect(getTitleForLevel(100)).toBe("💎 Diamond Ascendant");
+      expect(getTitleForLevel(100)).toBe("Diamond Ascendant");
     });
 
     it("should return correct title for level 300", () => {
-      expect(getTitleForLevel(300)).toBe("🌠 Celestial Transcendent");
+      expect(getTitleForLevel(300)).toBe("Celestial Transcendent");
     });
 
     it("should return previous title for levels between milestones", () => {
-      expect(getTitleForLevel(7)).toBe("⚔️ Iron Warrior"); // Between 5 and 10
-      expect(getTitleForLevel(99)).toBe("🌪️ Storm Emperor"); // Between 75 and 100
+      expect(getTitleForLevel(7)).toBe("Iron Warrior"); // Between 5 and 10
+      expect(getTitleForLevel(99)).toBe("Storm Emperor"); // Between 75 and 100
     });
 
     it("should keep highest title for very high levels", () => {
-      expect(getTitleForLevel(500)).toBe("🌠 Celestial Transcendent");
-      expect(getTitleForLevel(1000)).toBe("🌠 Celestial Transcendent");
+      expect(getTitleForLevel(500)).toBe("Celestial Transcendent");
+      expect(getTitleForLevel(1000)).toBe("Celestial Transcendent");
     });
   });
 
   describe("getNextTitleMilestone", () => {
     it("should return next milestone for level 1", () => {
       const next = getNextTitleMilestone(1);
-      expect(next).toEqual({ level: 5, title: "⚔️ Iron Warrior" });
+      expect(next).toEqual({ level: 5, title: "Iron Warrior" });
     });
 
     it("should return next milestone for level 5", () => {
       const next = getNextTitleMilestone(5);
-      expect(next).toEqual({ level: 10, title: "🔥 Flame Bearer" });
+      expect(next).toEqual({ level: 10, title: "Flame Bearer" });
     });
 
     it("should return next milestone for level 99", () => {
       const next = getNextTitleMilestone(99);
-      expect(next).toEqual({ level: 100, title: "💎 Diamond Ascendant" });
+      expect(next).toEqual({ level: 100, title: "Diamond Ascendant" });
     });
 
     it("should return null when max title is reached", () => {

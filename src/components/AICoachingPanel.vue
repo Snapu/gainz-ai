@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useTimeAgo } from "@vueuse/core";
 import DOMPurify from "dompurify";
-import { Loader2, Sparkles, Target, Info } from "lucide-vue-next";
+import { Loader2, Sparkles } from "lucide-vue-next";
 import { computed, watch } from "vue";
 import BottomSheet from "@/components/ui/BottomSheet.vue";
 import UiCard from "@/components/ui/UiCard.vue";
@@ -73,10 +73,10 @@ interface DisplayWorkoutGroup {
 function groupWorkout(workout: DisplayExercise[] | undefined): DisplayWorkoutGroup[] | null {
   if (!workout || workout.length === 0) return null;
   const groups: DisplayWorkoutGroup[] = [];
-  
+
   workout.forEach((ex) => {
     if (ex.supersetId) {
-      const existing = groups.find(g => g.isSuperset && g.id === ex.supersetId);
+      const existing = groups.find((g) => g.isSuperset && g.id === ex.supersetId);
       if (existing) {
         existing.exercises.push(ex);
       } else {
@@ -113,9 +113,9 @@ const allInsights = computed<DisplayInsight[]>(() => {
       isLatest: idx === 0,
       rawContent: msg.content,
       parsedData,
-      groupedWorkout: parsedData?.recommendedWorkout 
-        ? groupWorkout(parsedData.recommendedWorkout as DisplayExercise[]) 
-        : null
+      groupedWorkout: parsedData?.recommendedWorkout
+        ? groupWorkout(parsedData.recommendedWorkout as DisplayExercise[])
+        : null,
     };
   });
 });

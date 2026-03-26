@@ -1,4 +1,4 @@
-import { type GenerateContentConfig, GoogleGenAI, Type, type Schema } from "@google/genai";
+import { type GenerateContentConfig, GoogleGenAI, type Schema, Type } from "@google/genai";
 
 import { err, ok, type Result } from "neverthrow";
 
@@ -7,10 +7,7 @@ import type { TrainingSummary } from "@/services/trainingSummary";
 import { localeDateString } from "@/services/utils/date";
 import type { UserProfile } from "@/stores/userProfile";
 import type { Event } from "@/types/event";
-import {
-  calculateProgressiveOverload,
-  calculateWeeklyVolume,
-} from "./fitnessMetrics";
+import { calculateProgressiveOverload, calculateWeeklyVolume } from "./fitnessMetrics";
 
 export type PreviousAiMessage = {
   role: "user" | "assistant";
@@ -39,11 +36,13 @@ export const aiResponseSchema: Schema = {
   properties: {
     scratchpad: {
       type: Type.STRING,
-      description: "Internal workspace to calculate aggregate muscle group volumes across exercises, evaluate overtraining, and sketch the workout plan BEFORE writing the final message. NOT shown to user.",
+      description:
+        "Internal workspace to calculate aggregate muscle group volumes across exercises, evaluate overtraining, and sketch the workout plan BEFORE writing the final message. NOT shown to user.",
     },
     coachMessage: {
       type: Type.STRING,
-      description: "The empathetic, motivating, and analytical message from the coach. Max 2-3 short paragraphs.",
+      description:
+        "The empathetic, motivating, and analytical message from the coach. Max 2-3 short paragraphs.",
     },
     recommendedWorkout: {
       type: Type.ARRAY,
@@ -53,12 +52,28 @@ export const aiResponseSchema: Schema = {
         required: ["exerciseName", "targetSets", "targetReps"],
         properties: {
           exerciseName: { type: Type.STRING },
-          reasoning: { type: Type.STRING, description: "Your internal scratchpad to explain your logic for these targets based on user history. NOT shown to user." },
+          reasoning: {
+            type: Type.STRING,
+            description:
+              "Your internal scratchpad to explain your logic for these targets based on user history. NOT shown to user.",
+          },
           targetSets: { type: Type.INTEGER },
           targetReps: { type: Type.STRING },
-          targetWeight: { type: Type.STRING, description: "Exact numeric weight only (e.g. '60kg', 'Bodyweight'). Keep it extremely concise (1-2 words). Do not explain logic." },
-          notes: { type: Type.STRING, description: "Advanced execution cue, tempo (e.g. '3s eccentric pause'), or anatomical focus (e.g. 'Bias long head'). Omit if nothing special." },
-          supersetId: { type: Type.STRING, description: "Optional. Assign the same identifier (e.g. 'A', 'B') to exercises that should be performed together as a superset." },
+          targetWeight: {
+            type: Type.STRING,
+            description:
+              "Exact numeric weight only (e.g. '60kg', 'Bodyweight'). Keep it extremely concise (1-2 words). Do not explain logic.",
+          },
+          notes: {
+            type: Type.STRING,
+            description:
+              "Advanced execution cue, tempo (e.g. '3s eccentric pause'), or anatomical focus (e.g. 'Bias long head'). Omit if nothing special.",
+          },
+          supersetId: {
+            type: Type.STRING,
+            description:
+              "Optional. Assign the same identifier (e.g. 'A', 'B') to exercises that should be performed together as a superset.",
+          },
         },
       },
     },
@@ -128,29 +143,68 @@ function getWorkoutStatus(exerciseLogs: ExerciseLog[]): string {
   return workoutStarted ? `I already started my workout today.` : `I haven't worked out today yet.`;
 }
 
+/** Compress raw exercise logs into a compact, token-efficient string format.
+ *  Output: "Mon 3/22: Bench 3×12@52.5kg, Squat 3×10@80kg\nTue 3/23: ..." */
+function compactLogs(logs: ExerciseLog[]): string {
+  if (logs.length === 0) return "(none)";
+
+  // Group by date string
+  const byDate = new Map<string, ExerciseLog[]>();
+  for (const log of logs) {
+    const dateKey = localeDateString(log.loggedAt);
+    const existing = byDate.get(dateKey) ?? [];
+    existing.push(log);
+    byDate.set(dateKey, existing);
+  }
+
+  // Group sets within each day by exercise name
+  const lines: string[] = [];
+  for (const [date, dayLogs] of byDate) {
+    const byExercise = new Map<string, ExerciseLog[]>();
+    for (const log of dayLogs) {
+      const existing = byExercise.get(log.exerciseName) ?? [];
+      existing.push(log);
+      byExercise.set(log.exerciseName, existing);
+    }
+
+    const parts: string[] = [];
+    for (const [name, sets] of byExercise) {
+      const setStrs = sets.map((s) => {
+        const p: string[] = [];
+        if (s.reps) p.push(`${s.reps}`);
+        if (s.weight) p.push(`@${s.weight}kg`);
+        if (s.distance) p.push(`${s.distance}m`);
+        if (s.duration) p.push(`${s.duration}min`);
+        return p.join("") || "1set";
+      });
+      parts.push(`${name}: ${setStrs.join(", ")}`);
+    }
+    lines.push(`${date}: ${parts.join(" | ")}`);
+  }
+  return lines.join("\n");
+}
+
+/** Build conversation history for the API.
+ *  Only sends previous assistant responses (not the user payloads which are huge).
+ *  The current user input is always appended at the end. */
 function buildConversationContents(params: {
   previousMessages: PreviousAiMessage[];
   currentUserInput: string;
 }): Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> {
-  const conversationContents: Array<{
-    role: "user" | "model";
-    parts: Array<{ text: string }>;
-  }> = [];
+  const contents: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [];
 
-  const recentMessages = params.previousMessages.slice(-10);
-  for (const msg of recentMessages) {
-    conversationContents.push({
-      role: msg.role === "assistant" ? "model" : "user",
-      parts: [{ text: msg.content }],
-    });
+  // Only include previous assistant responses to avoid resending giant user payloads
+  const recentAssistantMessages = params.previousMessages
+    .filter((m) => m.role === "assistant")
+    .slice(-5);
+
+  for (const msg of recentAssistantMessages) {
+    contents.push({ role: "model", parts: [{ text: msg.content }] });
   }
 
-  conversationContents.push({
-    role: "user",
-    parts: [{ text: params.currentUserInput }],
-  });
+  contents.push({ role: "user", parts: [{ text: params.currentUserInput }] });
 
-  return conversationContents;
+  return contents;
 }
 
 export async function askAi(
@@ -171,14 +225,7 @@ export async function askAi(
     const todayLogs = exerciseLogs.filter((log) => log.loggedAt.getTime() > startOfToday);
 
     const isFirstMessage = previousMessages.length === 0;
-
-    const weeklyVolume = calculateWeeklyVolume(exerciseLogs);
-    const progressiveOverload = calculateProgressiveOverload(exerciseLogs);
-    const fitnessInsights = {
-      weeklyVolume,
-      progressiveOverload,
-    };
-    const insightsJson = JSON.stringify(fitnessInsights, null, 2);
+    const isMidWorkout = todayLogs.length > 0;
 
     const fourWeeksAgo = new Date();
     fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
@@ -187,62 +234,45 @@ export async function askAi(
     );
 
     const logsToInclude = isFirstMessage ? last4WeeksLogs : todayLogs;
-
     const workoutStatus = getWorkoutStatus(exerciseLogs);
 
-    const profileJson = JSON.stringify(userProfile, null, 2);
-    const logsJson = JSON.stringify(
-      logsToInclude.map((log) => ({
-        ...log,
-        timestamp: localeDateString(log.loggedAt),
-      })),
-      null,
-      2,
-    );
-    const eventsText = events
-      .map((event) => `- ${event.type}: ${event.dates.join(", ")}`)
-      .join("\n");
+    // Build the user payload — only include heavy data on first message
+    const sections: string[] = [`Today is ${today}, ${workoutStatus}`];
 
-    let historicalSummarySection = "";
+    // Profile: only on first message (it never changes mid-session)
+    if (isFirstMessage) {
+      sections.push(`Profile: ${JSON.stringify(userProfile)}`);
+    }
+
+    // Historical summaries: only on first message
     if (isFirstMessage && trainingSummaries.length > 0) {
-      const summaryJson = JSON.stringify(trainingSummaries, null, 2);
-      historicalSummarySection = `
-Here is my historical training summary (monthly aggregates from past years):
-\`\`\`json
-${summaryJson}
-\`\`\`
-
-`;
+      sections.push(`Historical training summary:\n${JSON.stringify(trainingSummaries)}`);
     }
 
-    let currentUserInput = `Today is ${today}, ${workoutStatus}
+    // Exercise logs: always send, but in compact format
+    const logLabel = isFirstMessage ? "Recent logs (last 4 weeks)" : "Today's logs";
+    sections.push(`${logLabel}:\n${compactLogs(logsToInclude)}`);
 
-Here is my profile data:
-\`\`\`json
-${profileJson}
-\`\`\`
-${historicalSummarySection}Here is my ${isFirstMessage ? "recent exercise logs (last 4 weeks)" : "today's exercise logs so far"}:
-\`\`\`json
-${logsJson}
-\`\`\`
+    // Fitness insights: only on first message or when not mid-workout
+    if (isFirstMessage || !isMidWorkout) {
+      const weeklyVolume = calculateWeeklyVolume(exerciseLogs);
+      const progressiveOverload = calculateProgressiveOverload(exerciseLogs);
+      sections.push(
+        `Fitness Insights (7d vs 14d):\n${JSON.stringify({ weeklyVolume, progressiveOverload })}`,
+      );
+    }
 
-Calculated Fitness Insights (Metrics from the last 7 vs 14 days):
-\`\`\`json
-${insightsJson}
-\`\`\`
-`;
-
+    // Events
     if (events.length > 0) {
-      currentUserInput += `
-Here are my recent health/schedule events:
-${eventsText}
-`;
+      const eventsText = events
+        .map((event) => `- ${event.type}: ${event.dates.join(", ")}`)
+        .join("\n");
+      sections.push(`Health/schedule events:\n${eventsText}`);
     }
 
-    currentUserInput += `
-Units: weight = kg, duration = minutes, distance = meters
+    sections.push(`Units: kg, minutes, meters\nLanguage: "${navigator.language}"`);
 
-Language preference: "${navigator.language}"`;
+    const currentUserInput = sections.join("\n\n");
 
     console.debug(currentUserInput);
 

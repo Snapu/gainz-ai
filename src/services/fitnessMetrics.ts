@@ -23,14 +23,14 @@ export function calculateWeeklyVolume(
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
   const recentLogs = logs.filter(
-    (log) => log.loggedAt > sevenDaysAgo && log.loggedAt <= targetDate
+    (log) => log.loggedAt > sevenDaysAgo && log.loggedAt <= targetDate,
   );
 
   const volumeMap = new Map<string, WeeklyVolume>();
 
   for (const log of recentLogs) {
     if (log.reps === undefined || log.reps === null) continue;
-    
+
     const existing = volumeMap.get(log.exerciseName) || {
       exerciseName: log.exerciseName,
       sets: 0,
@@ -39,7 +39,7 @@ export function calculateWeeklyVolume(
 
     existing.sets += 1;
     existing.totalReps += log.reps;
-    
+
     volumeMap.set(log.exerciseName, existing);
   }
 
@@ -57,21 +57,27 @@ export function calculateProgressiveOverload(
 ): ProgressiveOverload[] {
   const sevenDaysAgo = new Date(targetDate);
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  
+
   const fourteenDaysAgo = new Date(targetDate);
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
 
   const currentWeekLogs = logs.filter(
-    (log) => log.loggedAt > sevenDaysAgo && log.loggedAt <= targetDate
+    (log) => log.loggedAt > sevenDaysAgo && log.loggedAt <= targetDate,
   );
   const previousWeekLogs = logs.filter(
-    (log) => log.loggedAt >= fourteenDaysAgo && log.loggedAt <= sevenDaysAgo
+    (log) => log.loggedAt >= fourteenDaysAgo && log.loggedAt <= sevenDaysAgo,
   );
 
   const getStats = (weekLogs: ExerciseLog[]) => {
     const statsMap = new Map<string, ExerciseStats>();
     for (const log of weekLogs) {
-      if (log.weight === undefined || log.weight === null || log.reps === undefined || log.reps === null) continue;
+      if (
+        log.weight === undefined ||
+        log.weight === null ||
+        log.reps === undefined ||
+        log.reps === null
+      )
+        continue;
       const existing = statsMap.get(log.exerciseName);
       if (!existing) {
         statsMap.set(log.exerciseName, { maxWeight: log.weight, maxRepsAtMaxWeight: log.reps });
@@ -93,7 +99,7 @@ export function calculateProgressiveOverload(
 
   for (const [exerciseName, current] of currentStats.entries()) {
     const previous = previousStats.get(exerciseName);
-    if (!previous) continue; 
+    if (!previous) continue;
 
     let status: "progressed" | "maintained" | "regressed" = "maintained";
 
