@@ -1,4 +1,4 @@
-System.register(["./index-legacy-JNb6Njbs.js"],function(e,t){"use strict";var r;return{setters:[e=>{r=e.j}],execute:function(){
+System.register(["./index-legacy-DEjx8ilb.js"],function(e,t){"use strict";var r;return{setters:[e=>{r=e.j}],execute:function(){
 /**
        * @license lucide-vue-next v0.577.0 - ISC
        *

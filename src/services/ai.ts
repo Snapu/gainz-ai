@@ -143,6 +143,54 @@ function getWorkoutStatus(exerciseLogs: ExerciseLog[]): string {
   return workoutStarted ? `I already started my workout today.` : `I haven't worked out today yet.`;
 }
 
+function getWorkoutPhase(exerciseLogs: ExerciseLog[]): "planning" | "mid-workout" | "post-workout" {
+  const startOfToday = new Date().setHours(0, 0, 0, 0);
+  const todayLogs = exerciseLogs.filter((log) => log.loggedAt.getTime() > startOfToday);
+  if (todayLogs.length === 0) return "planning";
+
+  const lastLogTime = Math.max(...todayLogs.map((l) => l.loggedAt.getTime()));
+  const minutesSinceLastLog = (Date.now() - lastLogTime) / 60000;
+  // If >45 min since last set, treat as post-workout
+  return minutesSinceLastLog > 45 ? "post-workout" : "mid-workout";
+}
+
+function getDaysSinceLastWorkout(exerciseLogs: ExerciseLog[]): number | null {
+  const startOfToday = new Date().setHours(0, 0, 0, 0);
+  const pastLogs = exerciseLogs.filter((log) => log.loggedAt.getTime() < startOfToday);
+  if (pastLogs.length === 0) return null;
+
+  const lastLogDate = new Date(Math.max(...pastLogs.map((l) => l.loggedAt.getTime())));
+  const diffMs = startOfToday - lastLogDate.setHours(0, 0, 0, 0);
+  return Math.round(diffMs / 86400000);
+}
+
+function getTrainingPattern(exerciseLogs: ExerciseLog[]): string | null {
+  const fourWeeksAgo = new Date();
+  fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
+  const recentLogs = exerciseLogs.filter((l) => l.loggedAt.getTime() >= fourWeeksAgo.getTime());
+  if (recentLogs.length === 0) return null;
+
+  // Count workouts by day-of-week
+  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const dayCounts = new Map<number, number>();
+  const seenDates = new Set<string>();
+  for (const log of recentLogs) {
+    const dateKey = log.loggedAt.toDateString();
+    if (seenDates.has(dateKey)) continue;
+    seenDates.add(dateKey);
+    const day = log.loggedAt.getDay();
+    dayCounts.set(day, (dayCounts.get(day) ?? 0) + 1);
+  }
+
+  // Only include days trained ≥2 times in 4 weeks
+  const activeDays = [...dayCounts.entries()]
+    .filter(([, count]) => count >= 2)
+    .sort(([a], [b]) => a - b)
+    .map(([day]) => dayNames[day]);
+
+  return activeDays.length > 0 ? `Usual training days: ${activeDays.join(", ")}` : null;
+}
+
 /** Compress raw exercise logs into a compact, token-efficient string format.
  *  Output: "Mon 3/22: Bench 3×12@52.5kg, Squat 3×10@80kg\nTue 3/23: ..." */
 function compactLogs(logs: ExerciseLog[]): string {
@@ -235,13 +283,35 @@ export async function askAi(
 
     const logsToInclude = isFirstMessage ? last4WeeksLogs : todayLogs;
     const workoutStatus = getWorkoutStatus(exerciseLogs);
+    const phase = getWorkoutPhase(exerciseLogs);
+    const now = new Date();
+    const currentTime = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
 
     // Build the user payload — only include heavy data on first message
-    const sections: string[] = [`Today is ${today}, ${workoutStatus}`];
+    const sections: string[] = [
+      `Today is ${today} ${currentTime}, ${workoutStatus}\nPhase: ${phase}`,
+    ];
 
     // Profile: only on first message (it never changes mid-session)
     if (isFirstMessage) {
       sections.push(`Profile: ${JSON.stringify(userProfile)}`);
+
+      // Highlight freeUserInput separately so the AI treats it as a primary directive
+      if (userProfile.freeUserInput) {
+        sections.push(`User's own words about their goals:\n"${userProfile.freeUserInput}"`);
+      }
+    }
+
+    // Days since last workout (critical for recovery)
+    const restDays = getDaysSinceLastWorkout(exerciseLogs);
+    if (restDays !== null) {
+      sections.push(`Days since last workout: ${restDays}`);
+    }
+
+    // Training pattern (helps AI understand split)
+    if (isFirstMessage) {
+      const pattern = getTrainingPattern(exerciseLogs);
+      if (pattern) sections.push(pattern);
     }
 
     // Historical summaries: only on first message
@@ -250,8 +320,19 @@ export async function askAi(
     }
 
     // Exercise logs: always send, but in compact format
-    const logLabel = isFirstMessage ? "Recent logs (last 4 weeks)" : "Today's logs";
-    sections.push(`${logLabel}:\n${compactLogs(logsToInclude)}`);
+    if (isMidWorkout && previousMessages.length > 0) {
+      // Mid-workout: only send new sets since last AI response
+      const assistantMsgs = previousMessages.filter((m) => m.role === "assistant");
+      const lastAssistant = assistantMsgs[assistantMsgs.length - 1];
+      const cutoff = lastAssistant
+        ? new Date(`${lastAssistant.sessionDate}`).getTime()
+        : 0;
+      const newLogs = todayLogs.filter((l) => l.loggedAt.getTime() > cutoff);
+      sections.push(`New sets since last update:\n${compactLogs(newLogs.length > 0 ? newLogs : todayLogs)}`);
+    } else {
+      const logLabel = isFirstMessage ? "Recent logs (last 4 weeks)" : "Today's logs";
+      sections.push(`${logLabel}:\n${compactLogs(logsToInclude)}`);
+    }
 
     // Fitness insights: only on first message or when not mid-workout
     if (isFirstMessage || !isMidWorkout) {
