@@ -7,7 +7,7 @@ import type { TrainingSummary } from "@/services/trainingSummary";
 import { localeDateString } from "@/services/utils/date";
 import type { UserProfile } from "@/stores/userProfile";
 import type { Event } from "@/types/event";
-import { calculateProgressiveOverload, calculateWeeklyVolume } from "./fitnessMetrics";
+import { calculateTrainingInsights } from "./trainingScience";
 
 export type PreviousAiMessage = {
   role: "user" | "assistant";
@@ -94,18 +94,22 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
 - Infer from logs whether the user is planning, mid-workout, or finished, and adapt tone.
 - Factor in health/schedule events (e.g., ease back after sickness/injury, respect fasting/rest days).
 
-2. VOLUME & MUSCLE GROUP ANALYSIS (CRITICAL):
-- You receive a \`weeklyVolume\` array with pre-calculated total sets for exercises logged in the last 7 days.
-- Internally translate custom/localized exercise names into primary groups (Chest, Back, Quads, Hamstrings, Shoulders, Biceps, Triceps, Abs, Calves, Glutes).
-- Aggregate total sets per muscle group. Compare against hypertrophy guidelines (10-20 sets/week is optimal).
-- You MUST use the 'scratchpad' JSON field to do this grouping and math BEFORE writing your coachMessage.
+2. TRAINING SCIENCE DATA (CRITICAL):
+- You receive a 'trainingInsights' JSON containing pre-calculated scientific data. TRUST these numbers — do NOT recalculate them.
+- 'muscleGroups': Per-muscle weekly sets, volume landmark (below_MEV / at_MEV / at_MAV / above_MRV), training frequency, and hours since last trained.
+  - MEV = Minimum Effective Volume (need more volume to grow)
+  - MAV = Maximum Adaptive Volume (optimal growth zone — 10-18 sets/week)
+  - MRV = Maximum Recoverable Volume (too much — risk of overtraining)
+- 'e1rm': Estimated 1-Rep Max per exercise with a 4-session trend and plateau detection. Use this to set precise targetWeight values.
+- 'fatigue': Deload recommendation with reasoning. If shouldDeload is true, you MUST program a deload week (50-60% of normal volume, reduce intensity by 10-15%).
+- You MUST use the 'scratchpad' JSON field to analyze this data BEFORE writing your coachMessage.
 
 3. STRICT OUTPUT & TONAL RULES:
 - The user CANNOT reply. Do not ask questions or prompt for responses (e.g. never say "Let me know how it goes!").
 - Mobile-first brevity: Keep 'coachMessage' strictly to 2-3 short, punchy paragraphs. Avoid filler small talk.
 - Tone: Always use informal language (e.g. 'du' in German, 'tu' in French) matching the user's locale. Be constructive and critical when necessary.
 - Confusing Jargon: Never use 'RPE' without explaining it. Speak in plain language (e.g. 'leave 2 reps in tank').
-- Targets: Be definitive in the 'targetWeight' field. Do not dump logic (e.g. never say '52.5kg or +2.5kg from last time'). Give exactly one numeric target.
+- Targets: Be definitive in the 'targetWeight' field. Use e1RM data to calculate appropriate working weights (typically 70-85% of e1RM for hypertrophy). Give exactly one numeric target.
 - Notes: NEVER use trivial cliches in the 'notes' field (e.g. "controlled execution", "deep squat"). Only provide advanced tempo/anatomical cues (e.g. "3s eccentric") or OMIT the field entirely.
 
 4. MID-WORKOUT BEHAVIOR (CRITICAL):
@@ -115,9 +119,10 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
 
 You may receive:
 - Your previous feedback from this session (if any)
-- A \`userProfile\` JSON
-- An \`exerciseLogs\` JSON array (past sessions and today's logs)
-- An \`events\` array
+- A 'userProfile' JSON
+- An 'exerciseLogs' in compact format
+- A 'trainingInsights' JSON (e1RM, volume landmarks, deload status)
+- An 'events' array
 - User's preferred language/locale
 - Current date
 
@@ -324,23 +329,20 @@ export async function askAi(
       // Mid-workout: only send new sets since last AI response
       const assistantMsgs = previousMessages.filter((m) => m.role === "assistant");
       const lastAssistant = assistantMsgs[assistantMsgs.length - 1];
-      const cutoff = lastAssistant
-        ? new Date(`${lastAssistant.sessionDate}`).getTime()
-        : 0;
+      const cutoff = lastAssistant ? new Date(`${lastAssistant.sessionDate}`).getTime() : 0;
       const newLogs = todayLogs.filter((l) => l.loggedAt.getTime() > cutoff);
-      sections.push(`New sets since last update:\n${compactLogs(newLogs.length > 0 ? newLogs : todayLogs)}`);
+      sections.push(
+        `New sets since last update:\n${compactLogs(newLogs.length > 0 ? newLogs : todayLogs)}`,
+      );
     } else {
       const logLabel = isFirstMessage ? "Recent logs (last 4 weeks)" : "Today's logs";
       sections.push(`${logLabel}:\n${compactLogs(logsToInclude)}`);
     }
 
-    // Fitness insights: only on first message or when not mid-workout
+    // Training science insights: only on first message or when not mid-workout
     if (isFirstMessage || !isMidWorkout) {
-      const weeklyVolume = calculateWeeklyVolume(exerciseLogs);
-      const progressiveOverload = calculateProgressiveOverload(exerciseLogs);
-      sections.push(
-        `Fitness Insights (7d vs 14d):\n${JSON.stringify({ weeklyVolume, progressiveOverload })}`,
-      );
+      const insights = calculateTrainingInsights(exerciseLogs, new Date());
+      sections.push(`Training Insights:\n${JSON.stringify(insights)}`);
     }
 
     // Events
