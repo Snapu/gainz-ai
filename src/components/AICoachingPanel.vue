@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { useTimeAgo } from "@vueuse/core";
 import DOMPurify from "dompurify";
-import { Loader2, Sparkles } from "lucide-vue-next";
+import { Loader2, Sparkles, Target, Info } from "lucide-vue-next";
 import { computed, watch } from "vue";
 import BottomSheet from "@/components/ui/BottomSheet.vue";
+import UiCard from "@/components/ui/UiCard.vue";
 import { useToast } from "@/components/ui/useToast";
+import type { AiResponseData } from "@/services/ai";
 import { useAiStore } from "@/stores/ai";
 
 const props = defineProps<{ open: boolean }>();
@@ -41,13 +43,82 @@ watch(
   },
 );
 
+function tryParseAiResponse(content: string): AiResponseData | null {
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed && typeof parsed.coachMessage === "string") {
+      return parsed as AiResponseData;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+interface DisplayExercise {
+  exerciseName: string;
+  targetSets: number;
+  targetReps: string;
+  targetWeight?: string;
+  notes?: string;
+  supersetId?: string;
+}
+
+interface DisplayWorkoutGroup {
+  id: string;
+  isSuperset: boolean;
+  exercises: DisplayExercise[];
+}
+
+function groupWorkout(workout: DisplayExercise[] | undefined): DisplayWorkoutGroup[] | null {
+  if (!workout || workout.length === 0) return null;
+  const groups: DisplayWorkoutGroup[] = [];
+  
+  workout.forEach((ex) => {
+    if (ex.supersetId) {
+      const existing = groups.find(g => g.isSuperset && g.id === ex.supersetId);
+      if (existing) {
+        existing.exercises.push(ex);
+      } else {
+        groups.push({ id: ex.supersetId, isSuperset: true, exercises: [ex] });
+      }
+    } else {
+      groups.push({ id: crypto.randomUUID(), isSuperset: false, exercises: [ex] });
+    }
+  });
+  return groups;
+}
+
+interface DisplayInsight {
+  id: string;
+  timestamp: Date;
+  isLatest: boolean;
+  rawContent: string;
+  parsedData: AiResponseData | null;
+  groupedWorkout: DisplayWorkoutGroup[] | null;
+}
+
 // All AI responses, newest first
-const allInsights = computed(() =>
-  aiStore.messages
+const allInsights = computed<DisplayInsight[]>(() => {
+  const reversed = aiStore.messages
     .filter((m) => m.role === "assistant")
     .slice()
-    .reverse(),
-);
+    .reverse();
+
+  return reversed.map((msg, idx) => {
+    const parsedData = tryParseAiResponse(msg.content);
+    return {
+      id: msg.id,
+      timestamp: msg.timestamp,
+      isLatest: idx === 0,
+      rawContent: msg.content,
+      parsedData,
+      groupedWorkout: parsedData?.recommendedWorkout 
+        ? groupWorkout(parsedData.recommendedWorkout as DisplayExercise[]) 
+        : null
+    };
+  });
+});
 
 function formatTime(d: Date) {
   return useTimeAgo(d).value;
@@ -85,17 +156,62 @@ function renderMarkdown(text: string) {
             <div class="flex items-center gap-2">
               <Sparkles class="w-3.5 h-3.5 text-primary" />
               <span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                {{ idx === 0 ? 'Latest' : '' }} Insight
+                {{ insight.isLatest ? 'Latest Insight' : 'Insight' }}
               </span>
             </div>
             <span class="text-[10px] text-muted-foreground font-semibold">{{ formatTime(insight.timestamp) }}</span>
           </div>
           
-          <div 
-            class="text-sm leading-relaxed [&_strong]:text-primary [&_strong]:font-black"
-            :class="idx === 0 ? 'text-foreground/90' : 'text-foreground/50'"
-            v-html="renderMarkdown(insight.content)"
-          />
+          <template v-if="insight.parsedData">
+            <div 
+              class="text-sm leading-relaxed [&_strong]:text-primary [&_strong]:font-black"
+              :class="insight.isLatest ? 'text-foreground/90' : 'text-foreground/50'"
+              v-html="renderMarkdown(insight.parsedData.coachMessage)"
+            />
+            
+            <!-- Recommended Workout Cards -->
+            <div v-if="insight.groupedWorkout?.length" class="mt-4 flex flex-col gap-2">
+              <p class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 mb-0.5 ml-1">Today's Workout</p>
+              
+              <UiCard class="flex flex-col bg-card/40 border-white/5 divide-y divide-white/5 overflow-hidden">
+                <div 
+                  v-for="group in insight.groupedWorkout" 
+                  :key="group.id"
+                  class="flex flex-col divide-y divide-white/5"
+                >
+                  <!-- Superset Label -->
+                  <div v-if="group.isSuperset" class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/80 bg-muted/20 px-4 py-1.5 flex items-center gap-2">
+                    <Sparkles class="w-3 h-3 opacity-60" /> Superset {{ group.id }}
+                  </div>
+
+                  <!-- Exercise Items (Matches ExerciseLogItem.vue exactly) -->
+                  <div v-for="exercise in group.exercises" :key="exercise.exerciseName" class="flex flex-col px-4 py-3 hover:bg-white/[0.02] transition-colors">
+                    <div class="flex justify-between items-center w-full">
+                      <h3 class="font-bold text-sm text-foreground tracking-tight truncate pr-4">{{ exercise.exerciseName }}</h3>
+                      
+                      <div class="flex gap-3 text-xs text-muted-foreground font-semibold shrink-0">
+                        <span v-if="exercise.targetWeight" class="text-primary">{{ exercise.targetWeight }}</span>
+                        <span>{{ exercise.targetSets }}<span class="text-[10px] opacity-70 mx-0.5">&times;</span>{{ exercise.targetReps }}<span class="text-[10px] opacity-70 ml-0.5">reps</span></span>
+                      </div>
+                    </div>
+                    
+                    <div v-if="exercise.notes" class="text-[11px] text-muted-foreground/60 italic text-left mt-1.5">
+                      {{ exercise.notes }}
+                    </div>
+                  </div>
+                </div>
+              </UiCard>
+            </div>
+          </template>
+          
+          <!-- Legacy Fallback -->
+          <template v-else>
+            <div 
+              class="text-sm leading-relaxed [&_strong]:text-primary [&_strong]:font-black"
+              :class="insight.isLatest ? 'text-foreground/90' : 'text-foreground/50'"
+              v-html="renderMarkdown(insight.rawContent)"
+            />
+          </template>
 
           <div v-if="idx < allInsights.length - 1" class="border-t border-white/5 mt-2" />
         </div>
