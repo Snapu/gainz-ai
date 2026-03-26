@@ -159,6 +159,15 @@ function openLogForm() {
   isLogFormOpen.value = true;
 }
 
+function prefillFromAi(data: { exerciseName: string; reps?: number; weight?: number }) {
+  formExerciseName.value = data.exerciseName;
+  formReps.value = data.reps ?? null;
+  formWeight.value = data.weight ?? null;
+  formDistance.value = null;
+  formDuration.value = null;
+  isLogFormOpen.value = true;
+}
+
 // Auto-fill when an existing exercise is selected
 watch(formExerciseName, (name) => {
   if (!name) return;
@@ -509,7 +518,7 @@ const formattedTime = computed(() => {
       </div>
     </BottomSheet>
 
-    <AICoachingPanel v-model:open="isAIPanelOpen" />
+    <AICoachingPanel v-model:open="isAIPanelOpen" @log-exercise="prefillFromAi" />
     <RankDetailsOverlay v-model:open="isRankOverlayOpen" :progress="userProgress" />
 
   </div>

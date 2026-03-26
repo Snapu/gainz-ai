@@ -10,7 +10,10 @@ import type { AiResponseData } from "@/services/ai";
 import { useAiStore } from "@/stores/ai";
 
 const props = defineProps<{ open: boolean }>();
-const emit = defineEmits<(e: "update:open", val: boolean) => void>();
+const emit = defineEmits<{
+  (e: "update:open", val: boolean): void;
+  (e: "log-exercise", data: { exerciseName: string; reps?: number; weight?: number }): void;
+}>();
 
 const aiStore = useAiStore();
 const { toast } = useToast();
@@ -133,6 +136,30 @@ function renderMarkdown(text: string) {
     .replace(/\n/g, "<br/>");
   return DOMPurify.sanitize(`<p>${html}</p>`, { ALLOWED_TAGS: ["p", "strong", "em", "br"] });
 }
+function parseWeight(targetWeight?: string): number | undefined {
+  if (!targetWeight) return undefined;
+  // Handle both "52.5kg" and "52,5kg" (locale-dependent decimal separator)
+  const match = targetWeight.match(/(\d+(?:[.,]\d+)?)\s*kg/i);
+  return match?.[1] ? parseFloat(match[1].replace(",", ".")) : undefined;
+}
+
+function parseFirstRep(targetReps?: string): number | undefined {
+  if (!targetReps) return undefined;
+  // "8-12" → 12 (aim for the high end), "10" → 10
+  const rangeMatch = targetReps.match(/(\d+)\s*-\s*(\d+)/);
+  if (rangeMatch?.[2]) return parseInt(rangeMatch[2], 10);
+  const singleMatch = targetReps.match(/(\d+)/);
+  return singleMatch?.[1] ? parseInt(singleMatch[1], 10) : undefined;
+}
+
+function handleLogExercise(exercise: DisplayExercise) {
+  emit("log-exercise", {
+    exerciseName: exercise.exerciseName,
+    reps: parseFirstRep(exercise.targetReps),
+    weight: parseWeight(exercise.targetWeight),
+  });
+  emit("update:open", false);
+}
 </script>
 
 <template>
@@ -184,8 +211,13 @@ function renderMarkdown(text: string) {
                     <Sparkles class="w-3 h-3 opacity-60" /> Superset {{ group.id }}
                   </div>
 
-                  <!-- Exercise Items (Matches ExerciseLogItem.vue exactly) -->
-                  <div v-for="exercise in group.exercises" :key="exercise.exerciseName" class="flex flex-col px-4 py-3 hover:bg-white/[0.02] transition-colors">
+                  <!-- Exercise Items (Tappable for one-tap logging) -->
+                  <button
+                    v-for="exercise in group.exercises"
+                    :key="exercise.exerciseName"
+                    class="flex flex-col px-4 py-3 hover:bg-white/[0.04] active:bg-white/[0.06] transition-colors text-left w-full cursor-pointer"
+                    @click="handleLogExercise(exercise)"
+                  >
                     <div class="flex justify-between items-center w-full">
                       <h3 class="font-bold text-sm text-foreground tracking-tight truncate pr-4">{{ exercise.exerciseName }}</h3>
                       
@@ -198,7 +230,7 @@ function renderMarkdown(text: string) {
                     <div v-if="exercise.notes" class="text-[11px] text-muted-foreground/60 italic text-left mt-1.5">
                       {{ exercise.notes }}
                     </div>
-                  </div>
+                  </button>
                 </div>
               </UiCard>
             </div>
