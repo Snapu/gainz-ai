@@ -2,7 +2,7 @@ import { err, ok, type Result } from "neverthrow";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 
-import { askAi as askAiService } from "@/services/ai.ts";
+import { askAi as askAiService, getTodayLogsCount } from "@/services/ai.ts";
 import { localeDateString } from "@/services/utils/date";
 import { useEventsStore } from "@/stores/events";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
@@ -70,12 +70,6 @@ function cleanOldSessions() {
   });
 }
 
-function getTodayLogsCount(exerciseLogsStore: ReturnType<typeof useExerciseLogsStore>): number {
-  const startOfToday = new Date().setHours(0, 0, 0, 0);
-  return exerciseLogsStore.exerciseLogs.filter((log) => log.loggedAt.getTime() > startOfToday)
-    .length;
-}
-
 export const useAiStore = defineStore("ai", () => {
   const messages = ref<AiMessage[]>([]);
   const isLoading = ref(false);
@@ -98,12 +92,12 @@ export const useAiStore = defineStore("ai", () => {
     }
 
     const today = localeDateString(new Date());
-    const todayLogsCount = getTodayLogsCount(exerciseLogsStore);
+    const todayLogsCount = getTodayLogsCount(exerciseLogsStore.exerciseLogs);
 
     // Check if we need to make a new request
     const lastMessage = messages.value[messages.value.length - 1];
     if (
-      lastMessage &&
+      lastMessage?.role === "assistant" &&
       lastMessage.logsCount === todayLogsCount &&
       lastMessage.sessionDate === today
     ) {
@@ -145,6 +139,10 @@ export const useAiStore = defineStore("ai", () => {
       );
 
       if (result.isErr()) {
+        // Remove the "AI request" user message on failure so we can retry
+        messages.value = messages.value.filter((m) => m.id !== userMessageId);
+        saveMessagesToStorage(today, messages.value);
+
         switch (result.error) {
           case "missing-api-key":
             return err("missing-api-key");

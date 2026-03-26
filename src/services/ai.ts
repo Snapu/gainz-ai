@@ -153,15 +153,6 @@ function buildConversationContents(params: {
   return conversationContents;
 }
 
-function getLastAssistantMessageText(previousMessages: PreviousAiMessage[]): string | null {
-  for (let i = previousMessages.length - 1; i >= 0; i--) {
-    const msg = previousMessages[i];
-    if (!msg) continue;
-    if (msg.role === "assistant") return msg.content;
-  }
-  return null;
-}
-
 export async function askAi(
   apiKey: string | undefined,
   userProfile: UserProfile,
@@ -174,17 +165,6 @@ export async function askAi(
 
   const ai = new GoogleGenAI({ apiKey });
   const today = localeDateString(new Date());
-  const todayLogsCount = getTodayLogsCount(exerciseLogs);
-
-  const lastMessage = previousMessages[previousMessages.length - 1];
-  if (
-    lastMessage &&
-    lastMessage.logsCount === todayLogsCount &&
-    lastMessage.sessionDate === today
-  ) {
-    console.debug("No new logs since last AI response, using cached messages.");
-    return ok(getLastAssistantMessageText(previousMessages) ?? "");
-  }
 
   try {
     const startOfToday = new Date().setHours(0, 0, 0, 0);
