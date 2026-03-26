@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/vue";
+import { Mutex } from "async-mutex";
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { defineStore } from "pinia";
 import { computed, type Ref, ref, shallowRef, watchEffect } from "vue";
@@ -15,27 +16,32 @@ export const useSpreadsheetStore = defineStore("spreadsheet", () => {
   const isLoading = ref(false);
 
   const authStore = useAuthStore();
+  const mutex = new Mutex();
 
   async function init(accessToken: string) {
-    isLoading.value = true;
-    try {
-      const idResult = await getSpreadsheetId(SPREADSHEET_NAME, accessToken);
-      if (idResult.isErr()) {
-        console.error("Error getting spreadsheet ID:", idResult.error);
-        Sentry.captureException(idResult.error);
+    await mutex.runExclusive(async () => {
+      if (doc.value) return;
+
+      isLoading.value = true;
+      try {
+        const idResult = await getSpreadsheetId(SPREADSHEET_NAME, accessToken);
+        if (idResult.isErr()) {
+          console.error("Error getting spreadsheet ID:", idResult.error);
+          Sentry.captureException(idResult.error);
+        }
+        if (idResult.isOk() && idResult.value !== null) {
+          const loadResult = await loadSpreadsheet(idResult.value, accessToken);
+          if (loadResult.isOk()) doc.value = loadResult.value as GoogleSpreadsheet;
+        } else if (idResult.isOk()) {
+          const createResult = await createSpreadsheet(SPREADSHEET_NAME, accessToken);
+          if (createResult.isOk()) doc.value = createResult.value as GoogleSpreadsheet;
+        }
+      } catch (error) {
+        console.error("Failed to init spreadsheet", error);
+      } finally {
+        isLoading.value = false;
       }
-      if (idResult.isOk() && idResult.value !== null) {
-        const loadResult = await loadSpreadsheet(idResult.value, accessToken);
-        if (loadResult.isOk()) doc.value = loadResult.value as GoogleSpreadsheet;
-      } else {
-        const createResult = await createSpreadsheet(SPREADSHEET_NAME, accessToken);
-        if (createResult.isOk()) doc.value = createResult.value as GoogleSpreadsheet;
-      }
-    } catch (error) {
-      console.error("Failed to init spreadsheet", error);
-    } finally {
-      isLoading.value = false;
-    }
+    });
   }
 
   watchEffect(() => {
@@ -56,5 +62,5 @@ export const useSpreadsheetStore = defineStore("spreadsheet", () => {
     }
   }
 
-  return { isLoading, doc, spreadsheetUrl, openInBrowser };
+  return { isLoading, doc, spreadsheetUrl, openInBrowser, init };
 });
