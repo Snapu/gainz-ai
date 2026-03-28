@@ -1,24 +1,12 @@
 <script setup lang="ts">
-import { useIntervalFn } from "@vueuse/core";
 import { haptic } from "ios-haptics";
-import {
-  ChevronDown,
-  ChevronRight,
-  ExternalLink,
-  Menu,
-  Moon,
-  Pause,
-  Play,
-  Plus,
-  RotateCcw,
-  Sparkles,
-} from "lucide-vue-next";
+import { ChevronRight, ExternalLink, Menu, Moon, Plus, Sparkles } from "lucide-vue-next";
 import { storeToRefs } from "pinia";
 import { computed, ref, watch } from "vue";
 import AICoachingPanel from "@/components/AICoachingPanel.vue";
-import ExerciseLogItem from "@/components/ExerciseLogItem.vue";
-import MomentumFlames from "@/components/MomentumFlames.vue";
 import RankDetailsOverlay from "@/components/RankDetailsOverlay.vue";
+import SessionLogGroup from "@/components/SessionLogGroup.vue";
+import UserProgressCard from "@/components/UserProgressCard.vue";
 import AppHeader from "@/components/ui/AppHeader.vue";
 import BottomSheet from "@/components/ui/BottomSheet.vue";
 import Button from "@/components/ui/Button.vue";
@@ -27,10 +15,10 @@ import DropdownMenuItem from "@/components/ui/DropdownMenuItem.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
 import ExerciseSelector from "@/components/ui/ExerciseSelector.vue";
 import NumberField from "@/components/ui/NumberField.vue";
-import Progress from "@/components/ui/Progress.vue";
 import Sparkline from "@/components/ui/Sparkline.vue";
 import UiCard from "@/components/ui/UiCard.vue";
 import { useToast } from "@/components/ui/useToast";
+import WorkoutTimer from "@/components/WorkoutTimer.vue";
 import { WIZARD_STEPS } from "@/constants/wizard";
 import type { ExerciseLog } from "@/services/exerciseLogs";
 import { calculateUserProgress } from "@/services/leveling";
@@ -251,36 +239,6 @@ async function saveLog() {
   toast({ title: "Logged successfully!", duration: 2000 });
   isLogFormOpen.value = false;
 }
-
-// --- Stopwatch Timer ---
-const elapsedSeconds = ref(0);
-const { pause, resume, isActive } = useIntervalFn(
-  () => {
-    elapsedSeconds.value++;
-  },
-  1000,
-  { immediate: false },
-);
-
-function toggleTimer() {
-  haptic();
-  if (isActive.value) pause();
-  else resume();
-}
-
-function resetTimer() {
-  haptic();
-  pause();
-  elapsedSeconds.value = 0;
-}
-
-const formattedTime = computed(() => {
-  const m = Math.floor(elapsedSeconds.value / 60)
-    .toString()
-    .padStart(2, "0");
-  const s = (elapsedSeconds.value % 60).toString().padStart(2, "0");
-  return `${m}:${s}`;
-});
 </script>
 
 <template>
@@ -343,110 +301,20 @@ const formattedTime = computed(() => {
     </AppHeader>
 
     <!-- Consistency & Leveling (Horizontal HUD - Aligned) -->
-    <UiCard 
-      as="button"
-      @click="isRankOverlayOpen = true"
-      class="w-[calc(100%-2rem)] text-left px-5 py-5 mb-4 mx-4 mt-4 active:scale-[0.98] outline-none"
-    >
-      <!-- Background Depth Circles -->
-      <div class="absolute inset-0 bg-background/20 z-0"></div>
-      <div class="absolute -top-16 -right-16 w-32 h-32 bg-primary/10 blur-[80px] rounded-full"></div>
-      <div class="absolute -bottom-8 -left-8 w-24 h-24 bg-primary/10 blur-[60px] rounded-full"></div>
-      
-      <!-- Content Row -->
-      <div class="relative z-10 flex items-center gap-5">
-        <!-- Avatar Section -->
-        <div class="relative flex-shrink-0">
-          <div class="relative w-24 h-24 rounded-2xl overflow-hidden border border-white/10 shadow-lg">
-            <img :src="userProgress.avatar" :alt="userProgress.title" class="w-full h-full object-cover" />
-          </div>
-        </div>
-
-        <!-- Info Column -->
-        <div class="flex-1 min-w-0 flex flex-col gap-2">
-          <h2 class="text-xl font-black italic tracking-tighter text-foreground truncate leading-none mb-1">
-            {{ userProgress.title }}
-          </h2>
-          
-          <div class="flex flex-col gap-2">
-            <!-- Typographic Level (Aligned with stats) -->
-            <div class="text-xs font-semibold flex items-baseline">
-              <span class="text-[10px] text-muted-foreground opacity-70 mr-1 uppercase tracking-tighter">lvl</span>
-              <span class="text-primary">{{ userProgress.level }}</span>
-            </div>
-            
-            <!-- Simple Progress Bar -->
-            <Progress :model-value="userProgress.progressPercent" class="bg-white/5 rounded-full" />
-          </div>
-
-          <!-- Mini Status Footer -->
-          <div class="flex items-center justify-end">
-            <MomentumFlames :momentum="userProgress.momentum" />
-          </div>
-        </div>
-      </div>
-    </UiCard>
+    <UserProgressCard :progress="userProgress" @click="isRankOverlayOpen = true" />
 
     <!-- Logs List -->
     <main class="flex-1 px-4 pb-32 overflow-y-auto no-scrollbar">
-      <div v-for="session in groupedLogs" :key="session.date" class="mt-8 overflow-hidden">
-        <!-- Session Header -->
-        <UiCard 
-          as="button"
-          @click="toggleSession(session.date)"
-          class="w-full flex items-center justify-between p-4 mb-3 hover:border-primary/20"
-        >
-          <!-- Subtle Glow effect on hover -->
-          <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-          
-          <div class="flex flex-col items-start px-1 relative z-10">
-            <h3 class="text-[10px] font-black tracking-[0.2em] text-muted-foreground/60 uppercase group-hover:text-primary/60 transition-colors">{{ session.date }}</h3>
-            <div class="flex items-center gap-3 mt-1.5">
-              <div v-if="session.stats.durationMinutes > 0" class="flex flex-col items-start">
-                <span class="text-lg font-black italic tracking-tighter text-foreground group-hover:text-primary transition-colors">{{ session.stats.durationMinutes }}<span class="text-[10px] ml-0.5 not-italic text-muted-foreground font-bold tracking-tight uppercase">Min</span></span>
-              </div>
-              
-              <div v-if="session.stats.durationMinutes > 0" class="h-4 w-px bg-white/10 mx-1"></div>
-              
-              <div class="flex items-center gap-3">
-                <div class="flex flex-col">
-                  <span class="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">Sets</span>
-                  <span class="text-xs font-black text-foreground">{{ session.stats.sets }}</span>
-                </div>
-                <div class="flex flex-col">
-                  <span class="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">Exercises</span>
-                  <span class="text-xs font-black text-foreground">{{ session.stats.exerciseCount }}</span>
-                </div>
-                <div class="flex flex-col">
-                  <span class="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">Volume</span>
-                  <span class="text-xs font-black text-foreground">{{ session.stats.volume.toLocaleString() }}<span class="text-[8px] ml-0.5 opacity-70">KG</span></span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="flex items-center gap-2 relative z-10">
-            <div class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-primary/10 transition-colors">
-              <ChevronDown 
-                class="w-4 h-4 text-muted-foreground group-hover:text-primary transition-all duration-300"
-                :class="{ '-rotate-180': !collapsedSessions[session.date] }"
-              />
-            </div>
-          </div>
-        </UiCard>
-
-        <!-- Session Content -->
-        <div 
-          v-show="!collapsedSessions[session.date]"
-          class="flex flex-col gap-2 animate-in fade-in slide-in-from-top-2 duration-300"
-        >
-          <ExerciseLogItem 
-            v-for="log in session.logs" 
-            :key="log.id" 
-            :log="log"
-            @delete="logsStore.removeExerciseLog($event)"
-          />
-        </div>
-      </div>
+      <SessionLogGroup
+        v-for="session in groupedLogs"
+        :key="session.date"
+        :date="session.date"
+        :logs="session.logs"
+        :stats="session.stats"
+        :is-collapsed="!!collapsedSessions[session.date]"
+        @toggle="toggleSession(session.date)"
+        @delete-log="logsStore.removeExerciseLog"
+      />
       
       <EmptyState 
         v-if="groupedLogs.length === 0"
@@ -515,18 +383,7 @@ const formattedTime = computed(() => {
         </div>
 
         <!-- Stopwatch -->
-        <div class="flex items-center justify-between bg-card/50 p-4 rounded-2xl border border-white/5 mt-2">
-          <div class="font-mono text-3xl font-bold tracking-tight text-primary">{{ formattedTime }}</div>
-          <div class="flex gap-2">
-            <Button variant="secondary" size="icon" @click="resetTimer" class="h-12 w-12 rounded-xl">
-              <RotateCcw class="w-5 h-5" />
-            </Button>
-            <Button variant="secondary" size="icon" @click="toggleTimer" class="h-12 w-12 rounded-xl">
-              <Pause v-if="isActive" class="w-5 h-5" />
-              <Play v-else class="w-5 h-5 ml-1" />
-            </Button>
-          </div>
-        </div>
+        <WorkoutTimer />
 
         <Button class="w-full h-16 rounded-2xl text-lg mt-2" @click="saveLog">
           Save Set
