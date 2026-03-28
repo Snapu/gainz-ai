@@ -16,7 +16,6 @@ import EmptyState from "@/components/ui/EmptyState.vue";
 import ExerciseSelector from "@/components/ui/ExerciseSelector.vue";
 import NumberField from "@/components/ui/NumberField.vue";
 import Sparkline from "@/components/ui/Sparkline.vue";
-import UiCard from "@/components/ui/UiCard.vue";
 import { useToast } from "@/components/ui/useToast";
 import WorkoutTimer from "@/components/WorkoutTimer.vue";
 import { WIZARD_STEPS } from "@/constants/wizard";

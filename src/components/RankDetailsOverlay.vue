@@ -1,10 +1,23 @@
 <script setup lang="ts">
-import { Activity, Flame, ShieldCheck } from "lucide-vue-next";
+import {
+  Activity,
+  ArrowUpRight,
+  Brain,
+  Flame,
+  Info,
+  ShieldCheck,
+  TrendingUp,
+  Zap,
+} from "lucide-vue-next";
 import { computed } from "vue";
+import { getLearnedMuscleMap } from "@/services/exerciseMuscleMap";
 import type { UserProgress } from "@/services/leveling";
-import { useTrainingSummaryStore } from "@/stores/trainingSummary";
+import type { MuscleGroup, VolumeLandmark } from "@/services/trainingScience";
+import { calculateTrainingInsights } from "@/services/trainingScience";
+import { useExerciseLogsStore } from "@/stores/exerciseLogs";
 import { useUserProfileStore } from "@/stores/userProfile";
 import BottomSheet from "./ui/BottomSheet.vue";
+import UiCard from "./ui/UiCard.vue";
 
 const props = defineProps<{
   progress: UserProgress;
@@ -12,152 +25,237 @@ const props = defineProps<{
 
 const modelValue = defineModel<boolean>("open");
 
-const trainingStore = useTrainingSummaryStore();
+const logsStore = useExerciseLogsStore();
 const userStore = useUserProfileStore();
 
-// Algorithmic Difficulty: Estimated weeks to breach the next level
+// --- Training Science Integration ---
+const insights = computed(() => {
+  const learnedMap = getLearnedMuscleMap();
+  return calculateTrainingInsights(logsStore.exerciseLogs, new Date(), learnedMap);
+});
+
+// --- Adaptive Phase Detection ---
+const trainingPhase = computed(() => {
+  const { fatigue } = insights.value;
+  if (fatigue.shouldDeload)
+    return { label: "DELOAD PHASE", color: "text-orange-400", bg: "bg-orange-400/10" };
+
+  const trend = fatigue.weeklyTotalSets;
+  if (trend.length >= 2 && trend[trend.length - 1]! > trend[trend.length - 2]!) {
+    return { label: "ACCUMULATION", color: "text-primary", bg: "bg-primary/10" };
+  }
+  return { label: "STABILIZATION", color: "text-blue-400", bg: "bg-blue-400/10" };
+});
+
+// --- Muscle Groups for Saturation Grid ---
+const ALL_PRIMARY_GROUPS: MuscleGroup[] = [
+  "Chest",
+  "Back",
+  "Quads",
+  "Hamstrings",
+  "Shoulders",
+  "Biceps",
+  "Triceps",
+  "Glutes",
+];
+
+const muscleStats = computed(() => {
+  return ALL_PRIMARY_GROUPS.map((group) => {
+    const data = insights.value.muscleGroups[group];
+    return {
+      group,
+      sets: data?.sets ?? 0,
+      landmark: data?.landmark ?? "below_MEV",
+      hours: data?.hoursSinceLastTrained,
+    };
+  });
+});
+
+// --- Neural Efficiency (Top Milestones) ---
+const topMilestones = computed(() => {
+  return Object.entries(insights.value.e1rm)
+    .sort(([, a], [, b]) => b.e1rm - a.e1rm)
+    .slice(0, 3)
+    .map(([name, data]) => ({ name, ...data }));
+});
+
+// --- Existing Meta Metrics (Repositioned) ---
 const gritScore = computed(() => {
   const targetWorkouts = userStore.userProfile.workoutDaysPerWeek || 3;
   const weeklyXP = targetWorkouts * 100 * props.progress.momentum;
   const xpNeeded = props.progress.xpForNextLevel - props.progress.xpIntoLevel;
-  const weeks = xpNeeded / (weeklyXP || 1);
-  return Math.ceil(weeks);
+  return Math.ceil(xpNeeded / (weeklyXP || 1));
 });
 
-// Real Training Insights
-const trainingInsights = computed(() => {
-  if (trainingStore.summaries.length === 0) return null;
+function landmarkColor(landmark: VolumeLandmark): string {
+  switch (landmark) {
+    case "below_MEV":
+      return "bg-red-400/20";
+    case "at_MEV":
+      return "bg-yellow-400/40";
+    case "at_MAV":
+      return "bg-primary";
+    case "above_MRV":
+      return "bg-orange-500";
+    default:
+      return "bg-white/5";
+  }
+}
 
-  const sorted = [...trainingStore.summaries].sort((a, b) => {
-    if (a.year !== b.year) return b.year - a.year;
-    return b.month - a.month;
-  });
-
-  const latest = sorted[0];
-  if (!latest) return null;
-
-  const totalMonthlyVolume = trainingStore.summaries
-    .filter((s) => s.year === latest.year && s.month === latest.month)
-    .reduce((sum, s) => sum + (s.totalVolume || 0), 0);
-
-  return {
-    month: new Date(latest.year, latest.month - 1).toLocaleString("default", { month: "long" }),
-    volume: totalMonthlyVolume,
-    days: latest.workoutDays,
-  };
-});
-
-// Personalized Performance Analysis
-const performanceStatus = computed(() => {
-  const m = props.progress.momentum;
-  if (m > 1.1)
-    return {
-      status: "PEAK PERFORMANCE",
-      text: trainingInsights.value
-        ? `With ${trainingInsights.value.days} sessions this month, your volume is exceeding elite standards. You are operating at maximum efficiency.`
-        : "Your current output is exceeding elite standards. You are operating at maximum efficiency with perfect consistency.",
-      color: "text-fuchsia-400",
-    };
-  if (m > 0.95)
-    return {
-      status: "PRIME ALIGNMENT",
-      text: trainingInsights.value
-        ? `Maintained ${trainingInsights.value.days} sessions as planned. You are in perfect sync with your training goals.`
-        : "You are in perfect sync with your training goals. Sustaining this level of discipline will yield optimal results.",
-      color: "text-primary",
-    };
-  if (m > 0.75)
-    return {
-      status: "STABILIZED GROWTH",
-      text: trainingInsights.value
-        ? `Gained solid volume in ${trainingInsights.value.month}. Your routine is consistent, but increasing frequency would unlock more growth.`
-        : "Your routine is solid and consistent. Increasing session density slightly would accelerate your progression.",
-      color: "text-blue-400",
-    };
-  return {
-    status: "REBUILDING",
-    text: trainingInsights.value
-      ? `With only ${trainingInsights.value.days} sessions logged in ${trainingInsights.value.month}, your consistency has dipped. Focus on re-establishing your baseline.`
-      : "Your training frequency has dipped. Focus on rebuilding your baseline habit to restore your momentum.",
-    color: "text-muted-foreground",
-  };
-});
+function landmarkLabel(landmark: VolumeLandmark): string {
+  return landmark.replace("_", " ").toUpperCase();
+}
 </script>
 
 <template>
   <BottomSheet v-model:open="modelValue" :title="progress.title">
-    <div class="flex flex-col items-center gap-6 py-4">
-      <!-- Large Avatar Container -->
-      <div class="relative group">
-        <div class="relative w-64 h-64 rounded-2xl overflow-hidden border border-white/5 bg-linear-to-b from-card to-background shadow-2xl">
-          <img :src="progress.avatar" :alt="progress.title" class="w-full h-full object-cover" />
+    <div class="flex flex-col gap-6 py-4 px-2 max-h-[85vh] overflow-y-auto no-scrollbar">
+      
+      <!-- Identity Section -->
+      <header class="flex flex-col items-center gap-4">
+        <div class="relative">
+          <div class="w-40 h-40 rounded-3xl overflow-hidden border border-white/5 shadow-2xl relative">
+            <img :src="progress.avatar" :alt="progress.title" class="w-full h-full object-cover" />
+            <div class="absolute inset-0 bg-linear-to-t from-background/60 to-transparent"></div>
+          </div>
+          <!-- Level Badge -->
+          <div class="absolute -bottom-2 -right-2 bg-primary text-background px-3 py-1 rounded-lg font-black italic shadow-xl border border-white/10">
+            L{{ progress.level }}
+          </div>
         </div>
         
-        <!-- Typographic Level Overlay -->
-        <div class="absolute -bottom-3 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-xl bg-background/80 backdrop-blur-md border border-white/5 shadow-xl flex items-baseline gap-1">
-          <span class="text-[10px] font-black uppercase tracking-tighter text-muted-foreground opacity-70">lvl</span>
-          <span class="text-lg font-black italic text-primary leading-none">{{ progress.level }}</span>
+        <div class="text-center">
+          <h2 class="text-2xl font-black italic tracking-tighter uppercase leading-none">{{ progress.title }}</h2>
+          <div class="flex items-center justify-center gap-2 mt-2">
+            <span :class="['text-[10px] font-black px-2 py-0.5 rounded-full tracking-widest', trainingPhase.bg, trainingPhase.color]">
+              {{ trainingPhase.label }}
+            </span>
+          </div>
         </div>
-      </div>
+      </header>
 
-      <!-- Performance Report -->
-      <div class="w-full space-y-4 px-2">
-        
-        <!-- Performance Analysis Section -->
-        <div class="p-5 rounded-2xl bg-linear-to-r from-card/60 to-card/20 border border-white/5 space-y-3 relative overflow-hidden">
+      <!-- System Recovery & Fatigue -->
+      <section class="space-y-3">
+        <div class="flex items-center gap-2 px-1">
+          <Activity class="w-3 h-3 text-muted-foreground" />
+          <h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60">System Recovery Capacity</h3>
+        </div>
+        <UiCard class="p-4 space-y-4 bg-linear-to-br from-card/80 to-card/40">
           <div class="flex items-center justify-between">
-            <h3 :class="['text-[10px] font-black uppercase tracking-[0.3em]', performanceStatus.color]">
-              Status: {{ performanceStatus.status }}
-            </h3>
-            <Activity class="w-3 h-3 opacity-20" />
-          </div>
-          <p class="text-base font-medium leading-relaxed italic text-foreground/90">
-            "{{ performanceStatus.text }}"
-          </p>
-        </div>
-
-        <!-- Level Stats Grid -->
-        <div class="grid grid-cols-2 gap-3 w-full">
-          <div class="p-4 rounded-2xl bg-linear-to-r from-card/60 to-card/20 border border-white/5 flex flex-col items-center gap-1">
-            <span class="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50">Grit Score</span>
-            <div class="flex items-baseline gap-1">
-              <span class="text-xl font-black italic tabular-nums text-foreground">~{{ gritScore }}</span>
-              <span class="text-[10px] text-muted-foreground font-bold uppercase">Weeks</span>
+            <div class="flex flex-col">
+              <span class="text-xs font-bold text-foreground">Adaptive Readiness</span>
+              <span class="text-[10px] text-muted-foreground">Volume Trend vs. Fatigue</span>
             </div>
-            <span class="text-[8px] text-muted-foreground/40 text-center leading-tight px-1">Estimated Rank Horizon at current pace</span>
-          </div>
-          <div class="p-4 rounded-2xl bg-linear-to-r from-card/60 to-card/20 border border-white/5 flex flex-col items-center gap-1">
-            <span class="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50">Momentum</span>
-            <div class="flex items-center gap-1">
-              <Flame class="w-4 h-4 text-primary" />
-              <span class="text-xl font-black italic tabular-nums text-foreground">{{ (progress.momentum * 100).toFixed(0) }}%</span>
+            <div class="flex gap-1 items-end h-8">
+              <div 
+                v-for="(sets, i) in insights.fatigue.weeklyTotalSets" 
+                :key="i"
+                class="w-3 bg-primary/20 rounded-t-sm transition-all duration-500"
+                :style="{ height: `${Math.min(100, (sets / 40) * 100)}%`, backgroundColor: i === 3 ? 'var(--color-primary)' : '' }"
+              ></div>
             </div>
-            <span class="text-[8px] text-muted-foreground/40 text-center leading-tight">Current training efficiency</span>
           </div>
-        </div>
+          
+          <div v-if="insights.fatigue.reason" class="flex gap-3 p-3 rounded-xl bg-orange-400/5 border border-orange-400/10">
+            <Info class="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+            <p class="text-[11px] leading-relaxed text-orange-400/90 italic">
+              {{ insights.fatigue.reason }}
+            </p>
+          </div>
+          <div v-else class="flex gap-3 p-3 rounded-xl bg-primary/5 border border-primary/10">
+            <ShieldCheck class="w-4 h-4 text-primary shrink-0 mt-0.5" />
+            <p class="text-[11px] leading-relaxed text-primary/80 italic">
+              Recovery capacity is high. System is optimized for progressive accumulation.
+            </p>
+          </div>
+        </UiCard>
+      </section>
 
-        <!-- Volume Valor (Real Data Integration) -->
-        <div v-if="trainingInsights" class="p-5 rounded-2xl bg-linear-to-br from-primary/5 to-card/20 border border-white/5 relative overflow-hidden text-left">
-          <div class="absolute top-0 right-0 p-3 opacity-10">
-            <ShieldCheck class="w-12 h-12 text-primary" />
-          </div>
-          <div class="relative z-10">
-            <p class="text-[10px] font-black uppercase tracking-widest text-primary/60 mb-2">Performance Insight: {{ trainingInsights.month }}</p>
-            <div class="flex items-center gap-4">
-              <div class="flex flex-col">
-                <span class="text-[9px] font-bold text-muted-foreground/60 uppercase">Monthly Volume</span>
-                <span class="text-lg font-black italic text-foreground">{{ trainingInsights.volume.toLocaleString() }}<span class="text-[10px] ml-0.5 opacity-50">kg</span></span>
+      <!-- Anatomical Saturation Grid -->
+      <section class="space-y-3">
+        <div class="flex items-center gap-2 px-1">
+          <Brain class="w-3 h-3 text-muted-foreground" />
+          <h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60">Structural Saturation</h3>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <UiCard v-for="stat in muscleStats" :key="stat.group" class="p-3 bg-card/40 border-white/5 flex flex-col gap-2">
+            <div class="flex justify-between items-start">
+              <span class="text-[11px] font-bold">{{ stat.group }}</span>
+              <span class="text-[9px] font-black tabular-nums opacity-60">{{ stat.sets }}S</span>
+            </div>
+            <!-- Landmark Bar -->
+            <div class="h-1.5 w-full bg-white/5 rounded-full overflow-hidden flex gap-0.5">
+              <div class="h-full flex-1 rounded-full transition-all duration-700" :class="landmarkColor(stat.landmark)"></div>
+            </div>
+            <span class="text-[8px] font-black uppercase tracking-tighter opacity-40">
+              {{ landmarkLabel(stat.landmark) }}
+            </span>
+          </UiCard>
+        </div>
+      </section>
+
+      <!-- Neural Milestones -->
+      <section class="space-y-3">
+        <div class="flex items-center gap-2 px-1">
+          <Zap class="w-3 h-3 text-muted-foreground" />
+          <h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60">Neural Force Evolution</h3>
+        </div>
+        <UiCard class="divide-y divide-white/5 overflow-hidden">
+          <div v-for="ex in topMilestones" :key="ex.name" class="p-4 flex items-center justify-between">
+            <div class="flex flex-col">
+              <span class="text-xs font-bold truncate max-w-[160px]">{{ ex.name }}</span>
+              <div class="flex items-center gap-2 mt-1">
+                <TrendingUp class="w-3 h-3 text-primary" />
+                <span class="text-[10px] font-mono text-muted-foreground">{{ ex.trend.join(' · ') }}</span>
               </div>
-              <div class="w-px h-8 bg-white/5"></div>
-              <div class="flex flex-col">
-                <span class="text-[9px] font-bold text-muted-foreground/60 uppercase">Active Sessions</span>
-                <span class="text-lg font-black italic text-foreground">{{ trainingInsights.days }}<span class="text-[10px] ml-0.5 opacity-50">days</span></span>
+            </div>
+            <div class="flex flex-col items-end">
+              <div class="flex items-baseline gap-1">
+                <span class="text-sm font-black italic tabular-nums">{{ ex.e1rm }}</span>
+                <span class="text-[9px] font-bold text-muted-foreground uppercase">e1rm</span>
               </div>
+              <span v-if="ex.plateau" class="text-[8px] font-black text-orange-400 uppercase tracking-tighter">Plateau Detected</span>
             </div>
           </div>
-        </div>
+        </UiCard>
+      </section>
 
-      </div>
+      <!-- Metagame Metrics -->
+      <footer class="grid grid-cols-2 gap-3 mt-2 border-t border-white/5 pt-6 pb-4">
+        <div class="flex flex-col items-center">
+          <div class="flex items-center gap-1.5 mb-1">
+            <Flame class="w-3 h-3 text-orange-400" />
+            <span class="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Momentum</span>
+          </div>
+          <span class="text-xl font-black italic">{{ (progress.momentum * 100).toFixed(0) }}%</span>
+          <p class="text-[8px] text-muted-foreground mt-1">Consistency Resonance</p>
+        </div>
+        <div class="flex flex-col items-center">
+          <div class="flex items-center gap-1.5 mb-1">
+            <ArrowUpRight class="w-3 h-3 text-blue-400" />
+            <span class="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Grit Score</span>
+          </div>
+          <span class="text-xl font-black italic">~{{ gritScore }}</span>
+          <p class="text-[8px] text-muted-foreground mt-1">Weeks to Evolution</p>
+        </div>
+      </footer>
+
+      <!-- Lore Footer -->
+      <p class="text-[10px] text-center text-muted-foreground/40 italic px-8 py-4 leading-relaxed line-clamp-2">
+        "{{ progress.description }}"
+      </p>
+
     </div>
   </BottomSheet>
 </template>
+
+<style scoped>
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+</style>
+
