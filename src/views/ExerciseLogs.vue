@@ -149,6 +149,7 @@ const formReps = ref<number | null>(null);
 const formWeight = ref<number | null>(null);
 const formDistance = ref<number | null>(null);
 const formDuration = ref<number | null>(null);
+const skipHistoryAutoFill = ref(false);
 
 function openLogForm() {
   formExerciseName.value = "";
@@ -160,6 +161,7 @@ function openLogForm() {
 }
 
 function prefillFromAi(data: { exerciseName: string; reps?: number; weight?: number }) {
+  skipHistoryAutoFill.value = true;
   formExerciseName.value = data.exerciseName;
   formReps.value = data.reps ?? null;
   formWeight.value = data.weight ?? null;
@@ -171,6 +173,12 @@ function prefillFromAi(data: { exerciseName: string; reps?: number; weight?: num
 // Auto-fill when an existing exercise is selected
 watch(formExerciseName, (name) => {
   if (!name) return;
+
+  if (skipHistoryAutoFill.value) {
+    skipHistoryAutoFill.value = false;
+    return;
+  }
+
   const lastLog = logsStore.lastLogForExercise(name);
   if (lastLog) {
     if (lastLog.reps) formReps.value = lastLog.reps;
