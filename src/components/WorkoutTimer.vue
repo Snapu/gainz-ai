@@ -1,36 +1,63 @@
 <script setup lang="ts">
-import { useIntervalFn } from "@vueuse/core";
+import { useDocumentVisibility, useIntervalFn } from "@vueuse/core";
 import { haptic } from "ios-haptics";
 import { Pause, Play, RotateCcw } from "lucide-vue-next";
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import Button from "@/components/ui/Button.vue";
 
-const elapsedSeconds = ref(0);
+const accumulatedSeconds = ref(0);
+const startTime = ref<number | null>(null);
+const displaySeconds = ref(0);
+
 const { pause, resume, isActive } = useIntervalFn(
   () => {
-    elapsedSeconds.value++;
+    updateDisplay();
   },
   1000,
   { immediate: false },
 );
 
+function updateDisplay() {
+  if (startTime.value !== null) {
+    const now = Date.now();
+    displaySeconds.value = accumulatedSeconds.value + Math.floor((now - startTime.value) / 1000);
+  }
+}
+
+// Ensure the timer immediately corrects its value if the browser suspended Javascript while sleeping
+const visibility = useDocumentVisibility();
+watch(visibility, (current) => {
+  if (current === "visible" && isActive.value) {
+    updateDisplay();
+  }
+});
+
 function toggleTimer() {
   haptic();
-  if (isActive.value) pause();
-  else resume();
+  if (isActive.value) {
+    updateDisplay();
+    accumulatedSeconds.value = displaySeconds.value;
+    startTime.value = null;
+    pause();
+  } else {
+    startTime.value = Date.now();
+    resume();
+  }
 }
 
 function resetTimer() {
   haptic();
   pause();
-  elapsedSeconds.value = 0;
+  accumulatedSeconds.value = 0;
+  startTime.value = null;
+  displaySeconds.value = 0;
 }
 
 const formattedTime = computed(() => {
-  const m = Math.floor(elapsedSeconds.value / 60)
+  const m = Math.floor(displaySeconds.value / 60)
     .toString()
     .padStart(2, "0");
-  const s = (elapsedSeconds.value % 60).toString().padStart(2, "0");
+  const s = (displaySeconds.value % 60).toString().padStart(2, "0");
   return `${m}:${s}`;
 });
 </script>
