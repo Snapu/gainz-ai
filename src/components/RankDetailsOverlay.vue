@@ -134,16 +134,16 @@ function landmarkLabel(landmark: VolumeLandmark): string {
         </div>
       </header>
 
-      <!-- System Recovery & Fatigue -->
+      <!-- Physiological Readiness & Fatigue -->
       <section class="space-y-3">
         <div class="flex items-center gap-2 px-1">
           <Activity class="w-3 h-3 text-muted-foreground" />
-          <h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60">System Recovery Capacity</h3>
+          <h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60">Physiological Readiness</h3>
         </div>
         <UiCard class="p-4 space-y-4 bg-linear-to-br from-card/80 to-card/40">
           <div class="flex items-center justify-between">
             <div class="flex flex-col">
-              <span class="text-xs font-bold text-foreground">Adaptive Readiness</span>
+              <span class="text-xs font-bold text-foreground">Fatigue Analysis</span>
               <span class="text-[10px] text-muted-foreground">Volume Trend vs. Fatigue</span>
             </div>
             <div class="flex gap-1 items-end h-8">
@@ -165,17 +165,17 @@ function landmarkLabel(landmark: VolumeLandmark): string {
           <div v-else class="flex gap-3 p-3 rounded-xl bg-primary/5 border border-primary/10">
             <ShieldCheck class="w-4 h-4 text-primary shrink-0 mt-0.5" />
             <p class="text-[11px] leading-relaxed text-primary/80 italic">
-              Recovery capacity is high. System is optimized for progressive accumulation.
+              Recovery status is optimal. High capacity for progressive accumulation.
             </p>
           </div>
         </UiCard>
       </section>
 
-      <!-- Anatomical Saturation Grid -->
+      <!-- Volume Distribution Grid -->
       <section class="space-y-3">
         <div class="flex items-center gap-2 px-1">
           <Brain class="w-3 h-3 text-muted-foreground" />
-          <h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60">Structural Saturation</h3>
+          <h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60">Volume Distribution</h3>
         </div>
         <div class="grid grid-cols-2 gap-2">
           <UiCard v-for="stat in muscleStats" :key="stat.group" class="p-3 bg-card/40 border-white/5 flex flex-col gap-2">
@@ -194,11 +194,11 @@ function landmarkLabel(landmark: VolumeLandmark): string {
         </div>
       </section>
 
-      <!-- Neural Milestones -->
+      <!-- Performance Benchmarks -->
       <section class="space-y-3">
         <div class="flex items-center gap-2 px-1">
           <Zap class="w-3 h-3 text-muted-foreground" />
-          <h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60">Neural Force Evolution</h3>
+          <h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60">Force Production Trends</h3>
         </div>
         <UiCard class="divide-y divide-white/5 overflow-hidden">
           <div v-for="ex in topMilestones" :key="ex.name" class="p-4 flex items-center justify-between">
@@ -220,7 +220,7 @@ function landmarkLabel(landmark: VolumeLandmark): string {
         </UiCard>
       </section>
 
-      <!-- Metagame Metrics -->
+      <!-- Performance Analytics -->
       <footer class="grid grid-cols-2 gap-3 mt-2 border-t border-white/5 pt-6 pb-4">
         <div class="flex flex-col items-center">
           <div class="flex items-center gap-1.5 mb-1">
@@ -228,7 +228,7 @@ function landmarkLabel(landmark: VolumeLandmark): string {
             <span class="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Momentum</span>
           </div>
           <span class="text-xl font-black italic">{{ (progress.momentum * 100).toFixed(0) }}%</span>
-          <p class="text-[8px] text-muted-foreground mt-1">Consistency Resonance</p>
+          <p class="text-[8px] text-muted-foreground mt-1">Adherence Score</p>
         </div>
         <div class="flex flex-col items-center">
           <div class="flex items-center gap-1.5 mb-1">
@@ -236,11 +236,11 @@ function landmarkLabel(landmark: VolumeLandmark): string {
             <span class="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Grit Score</span>
           </div>
           <span class="text-xl font-black italic">~{{ gritScore }}</span>
-          <p class="text-[8px] text-muted-foreground mt-1">Weeks to Evolution</p>
+          <p class="text-[8px] text-muted-foreground mt-1">Weeks to Next Rank</p>
         </div>
       </footer>
 
-      <!-- Lore Footer -->
+      <!-- Athlete Manifesto -->
       <p class="text-[10px] text-center text-muted-foreground/40 italic px-8 py-4 leading-relaxed line-clamp-2">
         "{{ progress.description }}"
       </p>

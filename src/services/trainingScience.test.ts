@@ -51,6 +51,14 @@ describe("calculateE1RM", () => {
     // 52.5 × (1 + 12/30) = 52.5 × 1.4 = 73.5
     expect(calculateE1RM(52.5, 12)).toBe(73.5);
   });
+
+  it("should adjust e1RM based on RPE", () => {
+    // 100x10 @ RPE 10 -> effective reps = 10 -> e1RM = 133.3
+    expect(calculateE1RM(100, 10, 10)).toBe(133.3);
+
+    // 100x10 @ RPE 8 -> effective reps = 12 -> e1RM = 100 * (1 + 12/30) = 140
+    expect(calculateE1RM(100, 10, 8)).toBe(140);
+  });
 });
 
 // --- getMuscleGroup ---

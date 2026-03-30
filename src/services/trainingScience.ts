@@ -28,6 +28,7 @@ export interface ExerciseE1RM {
   e1rm: number;
   trend: number[];
   plateau: boolean;
+  bestRPE?: number;
 }
 
 export interface FatigueInsight {
@@ -159,12 +160,16 @@ export function getMuscleGroup(
 
 // --- e1RM Calculation ---
 
-/** Epley formula: weight × (1 + reps / 30). Only valid for reps 1-30. */
-export function calculateE1RM(weight: number, reps: number): number {
+/** Epley formula: weight × (1 + reps / 30), adjusted for RPE. */
+export function calculateE1RM(weight: number, reps: number, rpe?: number): number {
   if (reps <= 0 || weight <= 0) return 0;
-  if (reps === 1) return weight;
   if (reps > 30) return 0; // formula unreliable above 30 reps
-  return Math.round(weight * (1 + reps / 30) * 10) / 10;
+
+  // RPE adjustment: if RPE 8, it's effectively 2 more reps left in the tank.
+  const effectiveReps = reps + (10 - (rpe ?? 10));
+  if (effectiveReps === 1) return weight;
+
+  return Math.round(weight * (1 + effectiveReps / 30) * 10) / 10;
 }
 
 /**
@@ -210,7 +215,7 @@ export function calculateE1RMInsights(
       let best = 0;
       for (const log of sessionLogs) {
         if (log.weight != null && log.reps != null) {
-          const e1rm = calculateE1RM(log.weight, log.reps);
+          const e1rm = calculateE1RM(log.weight, log.reps, log.rpe);
           if (e1rm > best) best = e1rm;
         }
       }

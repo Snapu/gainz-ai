@@ -5,6 +5,7 @@ import { storeToRefs } from "pinia";
 import { computed, ref, watch } from "vue";
 import AICoachingPanel from "@/components/AICoachingPanel.vue";
 import RankDetailsOverlay from "@/components/RankDetailsOverlay.vue";
+import RestTimerToast from "@/components/RestTimerToast.vue";
 import SessionLogGroup from "@/components/SessionLogGroup.vue";
 import UserProgressCard from "@/components/UserProgressCard.vue";
 import AppHeader from "@/components/ui/AppHeader.vue";
@@ -17,7 +18,6 @@ import ExerciseSelector from "@/components/ui/ExerciseSelector.vue";
 import NumberField from "@/components/ui/NumberField.vue";
 import Sparkline from "@/components/ui/Sparkline.vue";
 import { useToast } from "@/components/ui/useToast";
-import WorkoutTimer from "@/components/WorkoutTimer.vue";
 import { WIZARD_STEPS } from "@/constants/wizard";
 import type { ExerciseLog } from "@/services/exerciseLogs";
 import { calculateUserProgress } from "@/services/leveling";
@@ -25,6 +25,7 @@ import { summaryToWorkoutDates } from "@/services/trainingSummary";
 import { localeDateString } from "@/services/utils/date";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
 import { useExercisesStore } from "@/stores/exercises";
+import { useRestTimerStore } from "@/stores/restTimer";
 import { useSpreadsheetStore } from "@/stores/spreadsheet";
 import { useTrainingSummaryStore } from "@/stores/trainingSummary";
 import { useUserProfileStore } from "@/stores/userProfile";
@@ -34,7 +35,11 @@ const logsStore = useExerciseLogsStore();
 const exercisesStore = useExercisesStore();
 const summaryStore = useTrainingSummaryStore();
 const spreadsheetStore = useSpreadsheetStore();
+const restTimerStore = useRestTimerStore();
 const { toast } = useToast();
+
+// --- Rest Timer ---
+const { isResting, formattedTime: formattedRestTime } = storeToRefs(restTimerStore);
 
 const { userProfile } = storeToRefs(profileStore);
 const { exerciseLogs } = storeToRefs(logsStore);
@@ -100,6 +105,12 @@ const groupedLogs = computed(() => {
   });
 });
 
+const todayLogs = computed(() => {
+  const todayStr = localeDateString(new Date());
+  const todaySession = groupedLogs.value.find((s) => s.date === todayStr);
+  return todaySession ? todaySession.logs : [];
+});
+
 // Initialize collapsed state: only first (most recent) is expanded by default
 watch(
   groupedLogs,
@@ -136,7 +147,19 @@ const formReps = ref<number | null>(null);
 const formWeight = ref<number | null>(null);
 const formDistance = ref<number | null>(null);
 const formDuration = ref<number | null>(null);
+const formRpe = ref<number>(10);
 const skipHistoryAutoFill = ref(false);
+
+const rpeLabel = computed(() => {
+  if (formRpe.value === 10) return "10 - Absolute Max (0 RIR)";
+  if (formRpe.value === 9.5) return "9.5 - Maybe 1 more (0-1 RIR)";
+  if (formRpe.value === 9) return "9 - 1 Rep Left (1 RIR)";
+  if (formRpe.value === 8.5) return "8.5 - Definitely 1, maybe 2";
+  if (formRpe.value === 8) return "8 - 2 Reps Left (2 RIR)";
+  if (formRpe.value === 7.5) return "7.5 - Definitely 2, maybe 3";
+  if (formRpe.value === 7) return "7 - 3 Reps Left (3 RIR)";
+  return `${formRpe.value} - Lower Intensity`;
+});
 
 function openLogForm() {
   formExerciseName.value = "";
@@ -144,7 +167,15 @@ function openLogForm() {
   formWeight.value = null;
   formDistance.value = null;
   formDuration.value = null;
+  formRpe.value = 10;
   isLogFormOpen.value = true;
+}
+
+function handleFabClick() {
+  if (isResting.value) {
+    restTimerStore.reset();
+  }
+  openLogForm();
 }
 
 function prefillFromAi(data: { exerciseName: string; reps?: number; weight?: number }) {
@@ -227,6 +258,7 @@ async function saveLog() {
     weight: formWeight.value ?? undefined,
     distance: formDistance.value ?? undefined,
     duration: formDuration.value ?? undefined,
+    rpe: formRpe.value,
     loggedAt: new Date(),
   };
 
@@ -235,7 +267,10 @@ async function saveLog() {
   // Also add to exercises store if new
   await exercisesStore.addExercise({ name: log.exerciseName });
 
-  toast({ title: "Logged successfully!", duration: 2000 });
+  // Auto-start rest timer
+  restTimerStore.reset();
+  restTimerStore.start();
+
   isLogFormOpen.value = false;
 }
 </script>
@@ -245,7 +280,9 @@ async function saveLog() {
     
     <!-- Top Nav -->
     <AppHeader class="justify-between">
-      <h1 class="text-2xl font-black italic tracking-tighter">Gainz<span class="text-primary">AI</span></h1>
+      <div class="flex items-center gap-2">
+        <h1 class="text-2xl font-black italic tracking-tighter">Gainz<span class="text-primary">AI</span></h1>
+      </div>
       <div class="flex gap-2">
         <Button variant="ghost" size="icon" @click="isAIPanelOpen = true">
           <Sparkles class="w-5 h-5 text-primary" />
@@ -323,12 +360,22 @@ async function saveLog() {
       />
     </main>
 
-    <!-- FAB -->
-    <div class="fixed bottom-6 right-6 z-20 pb-safe">
+    <!-- Rest Timer Toast (Independent Fixed Layer) -->
+    <Transition name="fade-slide">
+      <div v-if="isResting" class="fixed bottom-10 right-28 z-40 mb-safe pointer-events-auto">
+        <RestTimerToast
+          :formatted-time="formattedRestTime"
+          @dismiss="restTimerStore.reset()"
+        />
+      </div>
+    </Transition>
+
+    <!-- Primary FAB -->
+    <div class="fixed bottom-10 right-10 z-30 pb-safe pointer-events-auto">
       <Button 
-        class="w-16 h-16 rounded-3xl shadow-2xl shadow-primary/30 active:scale-95 transition-transform" 
+        class="relative w-16 h-16 rounded-full shadow-2xl active:scale-95 transition-all z-10" 
         size="icon" 
-        @click="openLogForm"
+        @click="handleFabClick"
       >
         <Plus class="w-8 h-8" />
       </Button>
@@ -382,9 +429,23 @@ async function saveLog() {
         </div>
 
         <!-- Stopwatch -->
-        <WorkoutTimer />
+        <!-- RPE Slider -->
+        <div class="space-y-3 px-1 mt-2">
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Effort (RPE)</span>
+            <span class="text-xs font-bold text-primary">{{ rpeLabel }}</span>
+          </div>
+          <input 
+            type="range" 
+            min="6" 
+            max="10" 
+            step="0.5" 
+            v-model.number="formRpe"
+            class="w-full h-2 bg-white/5 rounded-lg appearance-none cursor-pointer accent-primary"
+          />
+        </div>
 
-        <Button class="w-full h-16 rounded-2xl text-lg mt-2" @click="saveLog">
+        <Button class="w-full h-16 rounded-2xl text-lg mt-4" @click="saveLog">
           Save Set
         </Button>
       </div>
@@ -392,6 +453,27 @@ async function saveLog() {
 
     <AICoachingPanel v-model:open="isAIPanelOpen" @log-exercise="prefillFromAi" />
     <RankDetailsOverlay v-model:open="isRankOverlayOpen" :progress="userProgress" />
-
   </div>
 </template>
+
+<style scoped>
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.fade-slide-enter-active,
+.fade-slide-leave-active {
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.fade-slide-enter-from,
+.fade-slide-leave-to {
+  transform: translateX(10px);
+  opacity: 0;
+}
+
+</style>

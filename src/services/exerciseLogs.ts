@@ -18,6 +18,7 @@ export const ExerciseLogSchema = z.object({
   weight: optionalNumberSchema,
   distance: optionalNumberSchema,
   duration: optionalNumberSchema,
+  rpe: optionalNumberSchema,
   loggedAt: z.coerce.date(),
 });
 
@@ -29,7 +30,16 @@ const getSheet = (doc: GoogleSpreadsheet) => doc.sheetsByTitle[SHEET_NAME];
 const addSheet = (doc: GoogleSpreadsheet) =>
   doc.addSheet({
     title: SHEET_NAME,
-    headerValues: ["id", "exerciseName", "reps", "weight", "distance", "duration", "loggedAt"],
+    headerValues: [
+      "id",
+      "exerciseName",
+      "reps",
+      "weight",
+      "distance",
+      "duration",
+      "rpe",
+      "loggedAt",
+    ],
   });
 
 async function migrateExistingLogs(doc: GoogleSpreadsheet): Promise<void> {
