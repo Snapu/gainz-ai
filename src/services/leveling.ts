@@ -41,30 +41,28 @@
  * CONFIGURATION CONSTANTS
  * ====================================================== */
 
-const BASE_XP_PER_EXERCISE_DAY = 100;
+import type { ExerciseLog } from "./exerciseLogs";
+import { calculateE1RM, calculateMuscleGroupInsights } from "./trainingScience";
 
-// Momentum (consistency multiplier)
-const MOMENTUM_MIN = 0.5; // cold start / inactivity
-const MOMENTUM_MAX = 1.25; // elite long-term consistency
+const BASE_XP_PER_SESSION = 50;
+const BASE_XP_PER_SET = 10;
+const XP_PR_BREAKTHROUGH = 500;
+const XP_VOLUME_MAV_BONUS = 200;
+const XP_CONSISTENCY_BONUS = 150;
 
-// Momentum gain
-const MOMENTUM_GAIN_WEEK = 0.03; // any active week
-const MOMENTUM_GAIN_GOAL = 0.02; // meeting weekly goal
+// Readiness (Evolved Momentum)
+const READINESS_MIN = 0.5;
+const READINESS_MAX = 1.5;
+const READINESS_GAIN_WEEK = 0.05;
+const READINESS_GAIN_GOAL = 0.03;
+const READINESS_LOSS_MISSED_WEEK = 0.1;
+const READINESS_LOSS_FATIGUE = 0.08;
 
-// Momentum decay (missing weeks hurts)
-const MOMENTUM_LOSS_MISSED_WEEK = 0.08;
-
-// Level curve (exponential, no hard cap)
-// Tuned for ~Level 100 after 3 years of consistent training
-const LEVEL_XP_BASE = 330;
-const LEVEL_XP_GROWTH = 1.01;
-
-// Recovery buffer for disciplined users
-const HIGH_MOMENTUM_THRESHOLD = 1.0;
-const FREE_MISSED_WEEKS_AT_HIGH_MOMENTUM = 1;
-
-// Overtraining / grinding protection
-const EXTRA_EXERCISE_DAY_CAP = 1;
+// Level curve (Piecewise Exponential + Linear)
+// Tuned for ~Level 300 after 10-12 years of consistent training
+const LEVEL_XP_BASE = 500;
+const LEVEL_XP_GROWTH = 1.005;
+const LEVEL_XP_LINEAR = 100;
 
 /* ======================================================
  * TYPES
@@ -76,10 +74,25 @@ export interface UserProgress {
   xpIntoLevel: number;
   xpForNextLevel: number;
   progressPercent: number;
-  momentum: number; // consistency multiplier
-  title: string; // anime-style rank title
-  description: string; // motivational lore/description
-  avatar: string; // path to rank-specific avatar
+  momentum: number; // readiness multiplier
+  readiness: number;
+  title: string;
+  description: string;
+  avatar: string;
+  // --- Career Stats ---
+  totalWorkoutDays: number;
+  totalVolumeKg: number;
+  totalSets: number;
+  totalReps: number;
+  journeyDurationWeeks: number;
+  firstSessionDate: Date;
+  // --- XP Pillars ---
+  xpBreakdown: {
+    discipline: number;
+    intensity: number;
+    progression: number;
+    mastery: number;
+  };
 }
 
 /* ======================================================
@@ -331,13 +344,17 @@ function groupByWeek(dates: Date[]): Map<number, Date[]> {
 
 /**
  * XP required to advance FROM a given level.
- *
- * Exponential curve:
- * - early levels feel achievable
- * - high levels represent lifestyle commitment
  */
 function xpForLevel(level: number): number {
-  return Math.floor(LEVEL_XP_BASE * LEVEL_XP_GROWTH ** level);
+  return Math.floor(LEVEL_XP_BASE * LEVEL_XP_GROWTH ** level + LEVEL_XP_LINEAR);
+}
+
+function getRpeMultiplier(rpe?: number): number {
+  if (rpe === undefined || rpe === null) return 0.5; // Unknown effort
+  if (rpe >= 9) return 2.5; // Near failure
+  if (rpe >= 7) return 1.5; // Effective volume
+  if (rpe >= 5) return 1.0; // Maintenance volume
+  return 0.5; // Warmup / Recovery
 }
 
 /* ======================================================
@@ -345,110 +362,164 @@ function xpForLevel(level: number): number {
  * ====================================================== */
 
 /**
- * Calculate long-term training progress.
- *
- * @param exerciseDates
- *   Dates on which the user performed at least one exercise.
- *   (Raw logs; may include multiple entries per day.)
- *
- * @param aimedWorkoutsPerWeek
- *   Intended number of exercise days per week.
- *
- * @returns UserProgress
- *   Level, XP, and consistency momentum.
+ * Calculate long-term training progress using multi-pillar XP sources.
  */
 export function calculateUserProgress(
-  exerciseDates: Date[],
+  logs: ExerciseLog[],
   aimedWorkoutsPerWeek: number,
 ): UserProgress {
-  /* ----------------------------------
-   * New / inactive user
-   * ---------------------------------- */
-  if (exerciseDates.length === 0) {
+  if (logs.length === 0) {
     return {
       level: 1,
       totalXP: 0,
       xpIntoLevel: 0,
       xpForNextLevel: xpForLevel(1),
       progressPercent: 0,
-      momentum: MOMENTUM_MIN,
+      momentum: READINESS_MIN,
+      readiness: READINESS_MIN,
       title: getTitleForLevel(1),
       description: TITLES[0].description,
       avatar: getAvatarForLevel(1),
+      totalWorkoutDays: 0,
+      totalVolumeKg: 0,
+      totalSets: 0,
+      totalReps: 0,
+      journeyDurationWeeks: 0,
+      firstSessionDate: new Date(),
+      xpBreakdown: { discipline: 0, intensity: 0, progression: 0, mastery: 0 },
     };
   }
 
-  /* ----------------------------------
-   * Normalize input data
-   * ---------------------------------- */
+  // Sort logs chronologically
+  const sortedLogs = [...logs].sort((a, b) => a.loggedAt.getTime() - b.loggedAt.getTime());
 
-  // Sort chronologically
-  const sortedDates = [...exerciseDates].sort((a, b) => a.getTime() - b.getTime());
+  // Group logs by week
+  const logsByWeek = new Map<number, ExerciseLog[]>();
+  for (const log of sortedLogs) {
+    const weekKey = startOfWeek(log.loggedAt).getTime();
+    if (!logsByWeek.has(weekKey)) logsByWeek.set(weekKey, []);
+    logsByWeek.get(weekKey)!.push(log);
+  }
 
-  // Deduplicate by calendar day → exercise days
-  const uniqueExerciseDays = dedupeExerciseDays(sortedDates);
-
-  // Group exercise days by week
-  const weeks = groupByWeek(uniqueExerciseDays);
-  const weekKeys = [...weeks.keys()].sort();
-
-  let momentum = MOMENTUM_MIN;
+  const weekKeys = [...logsByWeek.keys()].sort();
+  let readiness = READINESS_MIN;
   let totalXP = 0;
   let previousWeek: number | null = null;
 
-  /* ----------------------------------
-   * Weekly evaluation loop
-   * ---------------------------------- */
+  // Track max e1RM per exercise for "Breakthrough" XP
+  const historyE1RM = new Map<string, number>();
+
+  // Career Totals
+  let totalVolumeKg = 0;
+  let totalSets = 0;
+  let totalReps = 0;
+  const uniqueDays = new Set<string>();
+
+  // XP Pillar Accumulators
+  let xpDiscipline = 0;
+  let xpIntensity = 0;
+  let xpProgression = 0;
+  let xpMastery = 0;
+
   for (const weekKey of weekKeys) {
-    /* ---- Handle missed weeks ---- */
+    const weekLogs = logsByWeek.get(weekKey)!;
+    const weekEnd = new Date(weekKey + 7 * 24 * 60 * 60 * 1000);
+
+    /* ---- 1. Readiness Decay (Missed Weeks) ---- */
     if (previousWeek !== null) {
       const weeksMissed = (weekKey - previousWeek) / (7 * 24 * 60 * 60 * 1000) - 1;
-
       if (weeksMissed > 0) {
-        const effectiveMissed =
-          momentum >= HIGH_MOMENTUM_THRESHOLD
-            ? Math.max(0, weeksMissed - FREE_MISSED_WEEKS_AT_HIGH_MOMENTUM)
-            : weeksMissed;
-
-        momentum -= effectiveMissed * MOMENTUM_LOSS_MISSED_WEEK;
+        // High readiness gives forgiveness
+        const effectiveMissed = readiness >= 1.0 ? Math.max(0, weeksMissed - 1) : weeksMissed;
+        readiness -= effectiveMissed * READINESS_LOSS_MISSED_WEEK;
       }
     }
 
-    /* ---- Current week ---- */
-    const exerciseDaysThisWeek = weeks.get(weekKey)!.length;
+    /* ---- 2. Weekly Momentum Growth & Fatigue ---- */
+    const uniqueDaysThisWeek = new Set(weekLogs.map((l) => toDayKey(l.loggedAt))).size;
 
-    // Momentum inertia:
-    // high consistency is harder to build, but more stable
-    const inertia = momentum > 1.0 ? 0.5 : 1.0;
+    // Build readiness with any activity
+    readiness += READINESS_GAIN_WEEK;
 
-    // Any active week builds momentum
-    momentum += MOMENTUM_GAIN_WEEK * inertia;
-
-    // Meeting weekly goal grants bonus
-    if (exerciseDaysThisWeek >= aimedWorkoutsPerWeek) {
-      momentum += MOMENTUM_GAIN_GOAL * inertia;
+    // Bonus for meeting goal
+    if (uniqueDaysThisWeek >= aimedWorkoutsPerWeek) {
+      readiness += READINESS_GAIN_GOAL;
     }
 
-    momentum = clamp(momentum, MOMENTUM_MIN, MOMENTUM_MAX);
+    // Fatigue penalty: check if we should have deloaded
+    const lastLogOfContext = weekLogs[weekLogs.length - 1]!;
+    const logsUpToWeek = sortedLogs.filter((l) => l.loggedAt <= lastLogOfContext.loggedAt);
+    const insights = calculateMuscleGroupInsights(logsUpToWeek, weekEnd);
 
-    /* ---- XP calculation ---- */
-    const effectiveExerciseDays = Math.min(
-      exerciseDaysThisWeek,
-      aimedWorkoutsPerWeek + EXTRA_EXERCISE_DAY_CAP,
-    );
+    // Fatigue detection (heuristic: if many groups are above MRV)
+    const overreachingGroups = Object.values(insights).filter(
+      (i) => i!.landmark === "above_MRV",
+    ).length;
+    if (overreachingGroups >= 2) {
+      readiness -= READINESS_LOSS_FATIGUE;
+    }
 
-    totalXP += effectiveExerciseDays * BASE_XP_PER_EXERCISE_DAY * momentum;
+    readiness = clamp(readiness, READINESS_MIN, READINESS_MAX);
 
+    /* ---- 3. XP Pillar Calculation ---- */
+    let weeklyXP = 0;
+
+    // Pillar: Discipline (Daily base)
+    weeklyXP += uniqueDaysThisWeek * BASE_XP_PER_SESSION;
+
+    // Pillar: Intensity (Set-by-set)
+    for (const log of weekLogs) {
+      uniqueDays.add(toDayKey(log.loggedAt));
+      if (log.reps && log.weight) {
+        const setXP = BASE_XP_PER_SET * getRpeMultiplier(log.rpe);
+        weeklyXP += setXP;
+        xpIntensity += setXP * readiness;
+
+        totalVolumeKg += (log.weight || 0) * (log.reps || 0);
+        totalSets += 1;
+        totalReps += log.reps || 0;
+
+        // Pillar: Progression (PRs / Strength Breakthroughs)
+        const currentE1RM = calculateE1RM(log.weight, log.reps, log.rpe);
+        const prevBest = historyE1RM.get(log.exerciseName) || 0;
+
+        if (currentE1RM > prevBest * 1.025 && prevBest > 0) {
+          weeklyXP += XP_PR_BREAKTHROUGH;
+          xpProgression += XP_PR_BREAKTHROUGH * readiness;
+        }
+
+        if (currentE1RM > prevBest) {
+          historyE1RM.set(log.exerciseName, currentE1RM);
+        }
+      }
+    }
+
+    // Pillar: Symmetry (Hitting MAV Landmarks)
+    const mavHits = Object.values(insights).filter(
+      (i) => i!.landmark === "at_MAV" || i!.landmark === "above_MRV",
+    ).length;
+    const masteryXP = mavHits * XP_VOLUME_MAV_BONUS;
+    weeklyXP += masteryXP;
+    xpMastery += masteryXP * readiness;
+
+    // Pillar: Goals
+    if (uniqueDaysThisWeek >= aimedWorkoutsPerWeek) {
+      const goalXP = XP_CONSISTENCY_BONUS;
+      weeklyXP += goalXP;
+      xpDiscipline += goalXP * readiness;
+    }
+
+    // Assign remaining breakdown
+    // (Approximation: Discipline already handled via session base and goal)
+    xpDiscipline += uniqueDaysThisWeek * BASE_XP_PER_SESSION * readiness;
+
+    totalXP += weeklyXP * readiness;
     previousWeek = weekKey;
   }
 
-  /* ----------------------------------
-   * Level resolution
-   * ---------------------------------- */
-
+  /* ---- 4. Level Resolution ---- */
   let level = 1;
   let xpRemaining = totalXP;
-
   while (xpRemaining >= xpForLevel(level)) {
     xpRemaining -= xpForLevel(level);
     level++;
@@ -456,24 +527,37 @@ export function calculateUserProgress(
 
   const xpForNext = xpForLevel(level);
   const progressPercent = Math.floor((xpRemaining / xpForNext) * 100);
-
-  /* ----------------------------------
-   * Title and Avatar resolution
-   * ---------------------------------- */
   const rankInfo = getRankInfoForLevel(level);
 
-  /* ----------------------------------
-   * Final result
-   * ---------------------------------- */
   return {
     level,
     totalXP: Math.floor(totalXP),
     xpIntoLevel: Math.floor(xpRemaining),
     xpForNextLevel: xpForNext,
     progressPercent,
-    momentum,
+    momentum: readiness,
+    readiness,
     title: rankInfo.title,
     description: (rankInfo as any).description,
     avatar: rankInfo.avatar,
+    totalWorkoutDays: uniqueDays.size,
+    totalVolumeKg: Math.floor(totalVolumeKg),
+    totalSets,
+    totalReps,
+    journeyDurationWeeks: Math.max(
+      1,
+      Math.ceil(
+        (sortedLogs[sortedLogs.length - 1]!.loggedAt.getTime() -
+          sortedLogs[0]!.loggedAt.getTime()) /
+          (7 * 24 * 60 * 60 * 1000),
+      ),
+    ),
+    firstSessionDate: sortedLogs[0]!.loggedAt,
+    xpBreakdown: {
+      discipline: Math.floor(xpDiscipline),
+      intensity: Math.floor(xpIntensity),
+      progression: Math.floor(xpProgression),
+      mastery: Math.floor(xpMastery),
+    },
   };
 }

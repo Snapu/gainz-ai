@@ -179,6 +179,58 @@ export function summaryToWorkoutDates(summaries: TrainingSummary[]): Date[] {
   return dates;
 }
 
+/**
+ * Reconstruct ExerciseLogs from TrainingSummary for XP calculation.
+ * This is an approximation since raw log data for summarized months is archived.
+ */
+export function summaryToExerciseLogs(summaries: TrainingSummary[]): ExerciseLog[] {
+  const logs: ExerciseLog[] = [];
+  const datesByYearMonth = new Map<string, Date[]>();
+
+  // Map summaries to their workout dates first
+  const workoutDaysMap = getWorkoutDaysFromSummary(summaries);
+  for (const [key, days] of workoutDaysMap) {
+    const parts = key.split("-");
+    const year = Number(parts[0]);
+    const month = Number(parts[1]);
+    const dates: Date[] = [];
+    for (let i = 0; i < days; i++) {
+      const dayOfMonth = Math.min(1 + i * 2, 28);
+      dates.push(new Date(year, month - 1, dayOfMonth));
+    }
+    datesByYearMonth.set(key, dates);
+  }
+
+  for (const summary of summaries) {
+    const key = `${summary.year}-${summary.month}`;
+    const dates = datesByYearMonth.get(key) || [];
+    if (dates.length === 0) continue;
+
+    // Distribute sets across the workout days in that month
+    const setsPerDay = Math.ceil(summary.sets / dates.length);
+    let setsRemaining = summary.sets;
+
+    for (let i = 0; i < dates.length && setsRemaining > 0; i++) {
+      const date = dates[i]!;
+      const setsThisDay = Math.min(setsPerDay, setsRemaining);
+
+      for (let s = 0; s < setsThisDay; s++) {
+        logs.push({
+          id: `hist-${summary.year}-${summary.month}-${summary.exerciseName}-${setsRemaining}`,
+          exerciseName: summary.exerciseName,
+          loggedAt: date,
+          weight: summary.maxWeight, // Approximation: use maxWeight for all historical sets
+          reps: summary.totalReps ? Math.floor(summary.totalReps / summary.sets) : 10, // Approximation
+          rpe: 8, // Sensible default for consistency
+        });
+        setsRemaining--;
+      }
+    }
+  }
+
+  return logs;
+}
+
 export function getYearsSummarized(summaries: TrainingSummary[]): Set<number> {
   return new Set(summaries.map((s) => s.year));
 }

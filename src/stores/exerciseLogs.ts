@@ -47,7 +47,7 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
     return add(exerciseLog);
   };
 
-  const removeExerciseLog: typeof add = async (exerciseLog) => {
+  const removeExerciseLog: typeof remove = async (exerciseLog) => {
     console.log("Removing exercise log", exerciseLog);
     return remove(exerciseLog);
   };

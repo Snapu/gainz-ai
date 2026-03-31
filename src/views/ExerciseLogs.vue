@@ -21,7 +21,7 @@ import { useToast } from "@/components/ui/useToast";
 import { WIZARD_STEPS } from "@/constants/wizard";
 import type { ExerciseLog } from "@/services/exerciseLogs";
 import { calculateUserProgress } from "@/services/leveling";
-import { summaryToWorkoutDates } from "@/services/trainingSummary";
+import { summaryToExerciseLogs, summaryToWorkoutDates } from "@/services/trainingSummary";
 import { localeDateString } from "@/services/utils/date";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
 import { useExercisesStore } from "@/stores/exercises";
@@ -49,10 +49,11 @@ const isRankOverlayOpen = ref(false);
 
 // --- Leveling ---
 const userProgress = computed(() => {
-  const historicalDates = summaryToWorkoutDates(summaryStore.summaries);
-  const currentDates = exerciseLogs.value.map((l) => l.loggedAt);
-  const allDates = [...historicalDates, ...currentDates];
-  return calculateUserProgress(allDates, userProfile.value.workoutDaysPerWeek || 3);
+  const historicalLogs = summaryToExerciseLogs(summaryStore.summaries);
+  const currentLogs = exerciseLogs.value;
+  const allLogs = [...historicalLogs, ...currentLogs];
+
+  return calculateUserProgress(allLogs, userProfile.value.workoutDaysPerWeek || 3);
 });
 
 // --- Group Logs ---
