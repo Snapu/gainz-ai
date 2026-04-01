@@ -38,15 +38,15 @@ import UiCard from "./ui/UiCard.vue";
  * SECTION 2: TRAINING MOMENTUM (Fatigue & Recovery Status)
  * - Data Source: TrainingInsights.fatigue (from trainingScience.ts)
  *   - shouldDeload, reason, weeklyTotalSets (4-week trend)
- * - Visual: Recovery Diagnostics section (lines 250-292)
+ * - Visual: Fatigue Status section (lines 250-292)
  *   - 4-week volume trend chart with color coding
  *   - Fatigue alert or optimal status badge
  *   - Momentum indicator computed from insights.fatigue
  *
- * SECTION 3: WEEKLY VOLUME (Muscle Group Saturation Landmarks)
+ * SECTION 3: WEEKLY VOLUME (Muscle Group Volume Landmarks)
  * - Data Source: TrainingInsights.muscleGroups (from trainingScience.ts)
  *   - sets, landmark (below_MEV/at_MEV/at_MAV/above_MRV), hoursSinceLastTrained
- * - Visual: Muscle Saturation grid (lines 294-325)
+ * - Visual: Muscle Volume grid (lines 294-325)
  *   - 2-column grid of 8 primary muscle groups
  *   - Per-group: set count, landmark bar, hours since trained
  *   - Landmark colors: red (below), yellow (maintenance), primary (optimal), orange (overreaching)
@@ -65,17 +65,17 @@ import UiCard from "./ui/UiCard.vue";
  *   - Career stats: totalWorkoutDays, totalVolumeKg, totalSets, totalReps, journeyDurationWeeks, firstSessionDate
  * - Visual: Mastery Distribution (lines 361-387) + Career Statistics (lines 389-428)
  *   - Stacked bar showing XP pillar percentages (Discipline, Intensity, Progression, Mastery)
- *   - Career grid: Started date, Volume moved, Combat days, Total reps
- *   - Grit score (sustainability projection): estimated weeks to next level
+ *   - Career grid: Started date, Volume moved, Training Sessions, Total reps
+ *   - Estimated Progress score: estimated weeks to next level
  *
- * TERMINOLOGY MAPPING (Replace Throughout Codebase)
- * ==================================================
- * - "Combat Days" → "Training Sessions" (line 406: currently "Combat Days")
- * - "Legacy Start" → "Started" (line 398: currently "Legacy Start")
- * - "Adaptive Readiness" → "Training Momentum" (line 234: currently "Adaptive Readiness")
- * - "Muscle Saturation" → "Weekly Volume" (line 299: currently "Muscle Saturation")
- * - "Recovery Diagnostics" → "Fatigue Status" (line 255: currently "Recovery Diagnostics")
- * - "Athlete Manifesto" → [REMOVE LABEL] (line 431: currently displays quote only, no label)
+ * TERMINOLOGY MAPPING (Completed)
+ * ================================
+ * ✓ "Combat Days" → "Training Sessions"
+ * ✓ "Legacy Start" → "Started"
+ * ✓ "Adaptive Readiness" → "Training Momentum"
+ * ✓ "Muscle Saturation" → "Weekly Volume"
+ * ✓ "Recovery Diagnostics" → "Fatigue Status"
+ * ✓ "Athlete Manifesto" → Removed label
  *
  * DATA SOURCE VALIDATION
  * ======================
@@ -309,7 +309,7 @@ const momentumEffect = computed(() => {
         <div class="space-y-3 relative z-10 pt-2 border-t border-white/5">
           <div class="flex justify-between items-end px-0.5">
             <div class="flex flex-col">
-              <span class="text-[9px] font-black uppercase tracking-[0.15em] text-muted-foreground/50">Adaptive Readiness</span>
+               <span class="text-[9px] font-black uppercase tracking-[0.15em] text-muted-foreground/50">Training Momentum</span>
               <span class="text-[11px] font-bold text-foreground">Peak Performance Potential</span>
             </div>
             <div class="text-right">
@@ -333,7 +333,7 @@ const momentumEffect = computed(() => {
         <div class="flex items-center justify-between px-1">
           <div class="flex items-center gap-2">
             <Activity class="w-3 h-3 text-primary/60" />
-            <h3 class="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/70">Recovery Diagnostics</h3>
+            <h3 class="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/70">Fatigue Status</h3>
           </div>
         </div>
 
@@ -375,7 +375,7 @@ const momentumEffect = computed(() => {
         <div class="flex items-center justify-between px-1">
           <div class="flex items-center gap-2">
             <Brain class="w-3 h-3 text-primary/60" />
-            <h3 class="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/70">Muscle Saturation</h3>
+            <h3 class="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/70">Weekly Volume</h3>
           </div>
           <span class="text-[8px] font-black uppercase text-muted-foreground/40 italic">Landmark-Based Analysis</span>
         </div>
@@ -474,7 +474,7 @@ const momentumEffect = computed(() => {
           </div>
           <div class="grid grid-cols-2 gap-y-6 gap-x-8">
             <div class="space-y-1.5">
-              <span class="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.2em] block">Legacy Start</span>
+               <span class="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.2em] block">Started</span>
               <span class="text-xs font-black italic">{{ formattedStartDate }}</span>
             </div>
             <div class="space-y-1.5 text-right">
@@ -482,7 +482,7 @@ const momentumEffect = computed(() => {
               <span class="text-xs font-black italic text-primary">{{ formattedTotalVolume }}</span>
             </div>
             <div class="space-y-1.5">
-              <span class="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.2em] block">Combat Days</span>
+               <span class="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.2em] block">Training Sessions</span>
               <span class="text-xs font-black italic">{{ progress.totalWorkoutDays }} Sessions</span>
             </div>
             <div class="space-y-1.5 text-right">
@@ -498,11 +498,11 @@ const momentumEffect = computed(() => {
           <!-- Grit Score Integrated -->
           <div class="pt-2 border-t border-white/5 flex items-center justify-between">
             <div class="flex flex-col">
-              <span class="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/60">Sustainability Projection</span>
+               <span class="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/60">Weeks to Next Level</span>
               <span class="text-[9px] text-muted-foreground/40 italic">Estimated weeks to evolve rank</span>
             </div>
             <div class="flex items-baseline gap-1.5">
-              <span class="text-[9px] font-black uppercase opacity-40">Grit</span>
+              <span class="text-[9px] font-black uppercase opacity-40">Estimated Progress</span>
               <span class="text-2xl font-black italic tracking-tighter text-primary">~{{ gritScore }}</span>
               <span class="text-[9px] font-black uppercase opacity-40">Wks</span>
             </div>
@@ -510,7 +510,7 @@ const momentumEffect = computed(() => {
         </div>
       </UiCard>
 
-      <!-- Athlete Manifesto (Refined) -->
+      <!-- Quote -->
       <p class="text-[9px] text-center text-muted-foreground/30 italic px-10 py-6 leading-relaxed uppercase tracking-widest">
         "{{ progress.description }}"
       </p>
