@@ -115,7 +115,9 @@ const trainingPhase = computed(() => {
     return { label: "DELOAD PHASE", color: "text-orange-400", bg: "bg-orange-400/10" };
 
   const trend = fatigue.weeklyTotalSets;
-  if (trend.length >= 2 && trend[trend.length - 1]! > trend[trend.length - 2]!) {
+  const last = trend[trend.length - 1];
+  const previous = trend[trend.length - 2];
+  if (trend.length >= 2 && last !== undefined && previous !== undefined && last > previous) {
     return { label: "ACCUMULATION", color: "text-primary", bg: "bg-primary/10" };
   }
   return { label: "STABILIZATION", color: "text-blue-400", bg: "bg-blue-400/10" };
@@ -266,7 +268,10 @@ const momentumEffect = computed(() => {
     <div class="flex flex-col gap-6 pt-6 pb-12 px-2 overflow-x-hidden">
       
       <!-- Unified Status HUD -->
-      <UiCard class="p-5 flex flex-col gap-6 border-white/10 shadow-2xl relative overflow-visible">
+      <UiCard
+        class="p-5 flex flex-col gap-6 border-white/10 shadow-2xl relative overflow-visible"
+        data-section="rank-hero"
+      >
         <!-- Background Ambient Glow -->
         <div class="absolute -top-20 -right-20 w-40 h-40 bg-primary/20 blur-[100px] rounded-full"></div>
         
@@ -321,51 +326,52 @@ const momentumEffect = computed(() => {
       </UiCard>
 
       <!-- Optimal Recovery Section -->
-      <section class="space-y-3">
+      <UiCard
+        class="p-4 space-y-4 bg-linear-to-br from-card/80 to-card/40 border-white/5"
+        data-section="training-momentum"
+      >
         <div class="flex items-center justify-between px-1">
           <div class="flex items-center gap-2">
             <Activity class="w-3 h-3 text-primary/60" />
             <h3 class="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/70">Recovery Diagnostics</h3>
           </div>
         </div>
-        
-        <UiCard class="p-4 space-y-4 bg-linear-to-br from-card/80 to-card/40 border-white/5">
-          <div class="flex items-center justify-between">
-            <div class="flex flex-col">
-              <span class="text-xs font-bold text-foreground">Fatigue Load</span>
-              <span class="text-[9px] text-muted-foreground uppercase tracking-tight">4-Week Volume Trend</span>
-            </div>
-            <div class="flex gap-1.5 items-end h-8">
-              <div 
-                v-for="(sets, i) in insights.fatigue.weeklyTotalSets" 
-                :key="i"
-                class="w-3 rounded-t-[2px] transition-all duration-700"
-                :class="i === 3 ? 'bg-primary shadow-[0_0_8px_rgba(var(--color-primary-rgb),0.4)]' : 'bg-white/10'"
-                :style="{ height: `${Math.max(15, Math.min(100, (sets / 40) * 100))}%` }"
-              ></div>
-            </div>
+
+        <div class="flex items-center justify-between">
+          <div class="flex flex-col">
+            <span class="text-xs font-bold text-foreground">Fatigue Load</span>
+            <span class="text-[9px] text-muted-foreground uppercase tracking-tight">4-Week Volume Trend</span>
           </div>
-          
-          <div v-if="insights.fatigue.reason" class="flex gap-3 p-3 rounded-xl bg-orange-400/5 border border-orange-400/10">
-            <Info class="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
-            <p class="text-[11px] leading-relaxed text-orange-400/90 italic">
-              {{ insights.fatigue.reason }}
+          <div class="flex gap-1.5 items-end h-8">
+            <div
+              v-for="(sets, i) in insights.fatigue.weeklyTotalSets"
+              :key="i"
+              class="w-3 rounded-t-[2px] transition-all duration-700"
+              :class="i === 3 ? 'bg-primary shadow-[0_0_8px_rgba(var(--color-primary-rgb),0.4)]' : 'bg-white/10'"
+              :style="{ height: `${Math.max(15, Math.min(100, (sets / 40) * 100))}%` }"
+            ></div>
+          </div>
+        </div>
+
+        <div v-if="insights.fatigue.reason" class="flex gap-3 p-3 rounded-xl bg-orange-400/5 border border-orange-400/10">
+          <Info class="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+          <p class="text-[11px] leading-relaxed text-orange-400/90 italic">
+            {{ insights.fatigue.reason }}
+          </p>
+        </div>
+        <div v-else class="flex gap-3 p-3 rounded-xl bg-emerald-400/5 border border-emerald-400/10">
+          <ShieldCheck class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+          <div class="flex flex-col gap-0.5">
+            <span class="text-[10px] font-black uppercase text-emerald-400 tracking-wider">Status: Optimal</span>
+            <p class="text-[11px] leading-relaxed text-emerald-400/80 italic">
+              High internal capacity detect. Safe for progressive accumulation.
             </p>
           </div>
-          <div v-else class="flex gap-3 p-3 rounded-xl bg-emerald-400/5 border border-emerald-400/10">
-            <ShieldCheck class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-            <div class="flex flex-col gap-0.5">
-               <span class="text-[10px] font-black uppercase text-emerald-400 tracking-wider">Status: Optimal</span>
-               <p class="text-[11px] leading-relaxed text-emerald-400/80 italic">
-                 High internal capacity detect. Safe for progressive accumulation.
-               </p>
-            </div>
-          </div>
-        </UiCard>
-      </section>
+        </div>
+      </UiCard>
 
       <!-- Muscle Symmetry Section -->
-      <section class="space-y-4">
+      <UiCard class="p-4 space-y-4" data-section="weekly-volume">
         <div class="flex items-center justify-between px-1">
           <div class="flex items-center gap-2">
             <Brain class="w-3 h-3 text-primary/60" />
@@ -373,14 +379,14 @@ const momentumEffect = computed(() => {
           </div>
           <span class="text-[8px] font-black uppercase text-muted-foreground/40 italic">Landmark-Based Analysis</span>
         </div>
-        
+
         <div class="grid grid-cols-2 gap-2">
           <UiCard v-for="stat in muscleStats" :key="stat.group" class="p-3 bg-card/40 border-white/5 flex flex-col gap-2.5 relative group overflow-hidden">
             <div class="flex justify-between items-center">
               <span class="text-[11px] font-black uppercase tracking-tight italic">{{ stat.group }}</span>
               <span class="text-[10px] font-black tabular-nums text-primary">{{ stat.sets }} sets</span>
             </div>
-            
+
             <!-- Contextual Landmark Bar -->
             <div class="space-y-1.5">
               <div class="h-1 w-full bg-white/5 rounded-full overflow-hidden flex gap-0.5">
@@ -388,26 +394,26 @@ const momentumEffect = computed(() => {
               </div>
               <div class="flex justify-between items-center">
                 <span class="text-[8px] font-black uppercase tracking-widest opacity-60">
-                   {{ landmarkLabel(stat.landmark) }}
+                  {{ landmarkLabel(stat.landmark) }}
                 </span>
                 <span v-if="stat.hours !== null" class="text-[8px] font-bold opacity-30">{{ stat.hours }}h ago</span>
               </div>
             </div>
           </UiCard>
         </div>
-      </section>
+      </UiCard>
 
       <!-- Force Production Section -->
-      <section class="space-y-3">
-        <div class="flex items-center justify-between px-1">
+      <UiCard class="overflow-hidden border-white/5" data-section="strength-progress">
+        <div class="flex items-center justify-between px-5 pt-4 pb-3">
           <div class="flex items-center gap-2">
             <Zap class="w-3 h-3 text-primary/60" />
             <h3 class="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/70">Strength Milestones</h3>
           </div>
           <span class="text-[8px] font-black uppercase text-muted-foreground/40 italic">e1RM Dynamics</span>
         </div>
-        
-        <UiCard class="divide-y divide-white/5 overflow-hidden border-white/5">
+
+        <div class="divide-y divide-white/5">
           <div v-for="ex in topMilestones" :key="ex.name" class="p-4 flex items-center justify-between hover:bg-white/[0.02] transition-colors">
             <div class="flex flex-col min-w-0">
               <span class="text-xs font-black uppercase italic tracking-tight truncate">{{ ex.name }}</span>
@@ -428,19 +434,22 @@ const momentumEffect = computed(() => {
               <span v-if="ex.plateau" class="text-[8px] font-black text-orange-400 uppercase tracking-[0.1em] bg-orange-400/10 px-1.5 py-0.5 rounded mt-1">Plateau</span>
             </div>
           </div>
-        </UiCard>
-      </section>
+        </div>
+      </UiCard>
 
-      <!-- Mastery Pillars Section -->
-      <section class="space-y-3">
+      <!-- Training Journey Section -->
+      <UiCard
+        class="p-5 bg-linear-to-br from-card/40 to-background/40 border-white/5 space-y-6"
+        data-section="training-journey"
+      >
         <div class="flex items-center gap-2 px-1">
           <TrendingUp class="w-3 h-3 text-primary/60" />
           <h3 class="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/70">Mastery Distribution</h3>
         </div>
-        <UiCard class="p-5 bg-linear-to-br from-card/40 to-background/40 border-white/5">
+        <div>
           <div class="flex h-2.5 w-full rounded-full overflow-hidden mb-6 bg-white/5 shadow-inner">
-            <div 
-              v-for="pillar in xpPillars" 
+            <div
+              v-for="pillar in xpPillars"
               :key="pillar.label"
               class="h-full transition-all duration-1000 first:rounded-l-full last:rounded-r-full"
               :class="pillar.color"
@@ -456,49 +465,50 @@ const momentumEffect = computed(() => {
               </div>
             </div>
           </div>
-        </UiCard>
-      </section>
-
-      <!-- Athlete Journey Section -->
-      <section class="space-y-3">
-        <div class="flex items-center gap-2 px-1">
-          <History class="w-3 h-3 text-primary/60" />
-          <h3 class="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/70">Career Statistics</h3>
         </div>
-        <UiCard class="p-5 border-white/5">
-           <div class="grid grid-cols-2 gap-y-6 gap-x-8">
-             <div class="space-y-1.5">
-               <span class="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.2em] block">Legacy Start</span>
-               <span class="text-xs font-black italic">{{ formattedStartDate }}</span>
-             </div>
-             <div class="space-y-1.5 text-right">
-               <span class="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.2em] block">Volume Moved</span>
-               <span class="text-xs font-black italic text-primary">{{ formattedTotalVolume }}</span>
-             </div>
-             <div class="space-y-1.5">
-               <span class="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.2em] block">Combat Days</span>
-               <span class="text-xs font-black italic">{{ progress.totalWorkoutDays }} Sessions</span>
-             </div>
-             <div class="space-y-1.5 text-right">
-               <span class="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.2em] block">Total Repetitions</span>
-               <span class="text-xs font-black italic tabular-nums">{{ progress.totalSets.toLocaleString() }}</span>
-             </div>
-           </div>
 
-           <!-- Grit Score Integrated -->
-           <div class="mt-8 pt-6 border-t border-white/5 flex items-center justify-between">
-              <div class="flex flex-col">
-                <span class="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/60">Sustainability Projection</span>
-                <span class="text-[9px] text-muted-foreground/40 italic">Estimated weeks to evolve rank</span>
-              </div>
-              <div class="flex items-baseline gap-1.5">
-                <span class="text-[9px] font-black uppercase opacity-40">Grit</span>
-                <span class="text-2xl font-black italic tracking-tighter text-primary">~{{ gritScore }}</span>
-                <span class="text-[9px] font-black uppercase opacity-40">Wks</span>
-              </div>
-           </div>
-        </UiCard>
-      </section>
+        <div class="border-t border-white/5 pt-6 space-y-6">
+          <div class="flex items-center gap-2 px-1">
+            <History class="w-3 h-3 text-primary/60" />
+            <h3 class="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/70">Career Statistics</h3>
+          </div>
+          <div class="grid grid-cols-2 gap-y-6 gap-x-8">
+            <div class="space-y-1.5">
+              <span class="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.2em] block">Legacy Start</span>
+              <span class="text-xs font-black italic">{{ formattedStartDate }}</span>
+            </div>
+            <div class="space-y-1.5 text-right">
+              <span class="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.2em] block">Volume Moved</span>
+              <span class="text-xs font-black italic text-primary">{{ formattedTotalVolume }}</span>
+            </div>
+            <div class="space-y-1.5">
+              <span class="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.2em] block">Combat Days</span>
+              <span class="text-xs font-black italic">{{ progress.totalWorkoutDays }} Sessions</span>
+            </div>
+            <div class="space-y-1.5 text-right">
+              <span class="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.2em] block">Total Repetitions</span>
+              <span class="text-xs font-black italic tabular-nums">{{ progress.totalSets.toLocaleString() }}</span>
+            </div>
+            <div class="space-y-1.5">
+              <span class="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.2em] block">Journey Duration</span>
+              <span class="text-xs font-black italic">{{ progress.journeyDurationWeeks }} Weeks</span>
+            </div>
+          </div>
+
+          <!-- Grit Score Integrated -->
+          <div class="pt-2 border-t border-white/5 flex items-center justify-between">
+            <div class="flex flex-col">
+              <span class="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/60">Sustainability Projection</span>
+              <span class="text-[9px] text-muted-foreground/40 italic">Estimated weeks to evolve rank</span>
+            </div>
+            <div class="flex items-baseline gap-1.5">
+              <span class="text-[9px] font-black uppercase opacity-40">Grit</span>
+              <span class="text-2xl font-black italic tracking-tighter text-primary">~{{ gritScore }}</span>
+              <span class="text-[9px] font-black uppercase opacity-40">Wks</span>
+            </div>
+          </div>
+        </div>
+      </UiCard>
 
       <!-- Athlete Manifesto (Refined) -->
       <p class="text-[9px] text-center text-muted-foreground/30 italic px-10 py-6 leading-relaxed uppercase tracking-widest">
@@ -541,4 +551,3 @@ const momentumEffect = computed(() => {
   to { filter: brightness(1.4) saturate(1.2); }
 }
 </style>
-
