@@ -1,38 +1,15 @@
 import { describe, expect, it } from "vitest";
-import type { UserProgress } from "@/services/leveling";
 import type { TrainingInsights } from "@/services/trainingScience";
+import {
+  computeMomentumEffect,
+  computeTrainingPhase,
+  computeXpPillars,
+  consistencyLabel,
+  formatJourneyDuration,
+  formatVolume,
+} from "./useRankDetailsData";
 
 // --- TEST HELPERS ---
-
-/**
- * Creates a minimal UserProgress object for testing
- */
-function createMockProgress(overrides?: Partial<UserProgress>): UserProgress {
-  return {
-    level: 1,
-    totalXP: 0,
-    xpIntoLevel: 0,
-    xpForNextLevel: 500,
-    progressPercent: 0,
-    momentum: 1.0,
-    title: "Novice Challenger",
-    description: "Every legend starts with a single rep.",
-    avatar: "/assets/ranks/rank-1.png",
-    totalWorkoutDays: 0,
-    totalVolumeKg: 0,
-    totalSets: 0,
-    totalReps: 0,
-    journeyDurationWeeks: 0,
-    firstSessionDate: new Date(),
-    xpBreakdown: {
-      discipline: 0,
-      intensity: 0,
-      progression: 0,
-      mastery: 0,
-    },
-    ...overrides,
-  };
-}
 
 /**
  * Creates a minimal TrainingInsights object for testing
@@ -278,10 +255,10 @@ describe("useRankDetailsData composable", () => {
       };
       const pillars = computeXpPillars(breakdown);
       expect(pillars).toHaveLength(4);
-      expect(pillars[0]!.percent).toBe(50);
-      expect(pillars[1]!.percent).toBe(30);
-      expect(pillars[2]!.percent).toBe(15);
-      expect(pillars[3]!.percent).toBe(5);
+      expect(pillars[0]?.percent).toBe(50);
+      expect(pillars[1]?.percent).toBe(30);
+      expect(pillars[2]?.percent).toBe(15);
+      expect(pillars[3]?.percent).toBe(5);
     });
 
     it("handles zero values", () => {
@@ -292,10 +269,10 @@ describe("useRankDetailsData composable", () => {
         mastery: 0,
       };
       const pillars = computeXpPillars(breakdown);
-      expect(pillars[0]!.percent).toBe(100);
-      expect(pillars[1]!.percent).toBe(0);
-      expect(pillars[2]!.percent).toBe(0);
-      expect(pillars[3]!.percent).toBe(0);
+      expect(pillars[0]?.percent).toBe(100);
+      expect(pillars[1]?.percent).toBe(0);
+      expect(pillars[2]?.percent).toBe(0);
+      expect(pillars[3]?.percent).toBe(0);
     });
 
     it("returns correct color for each pillar", () => {
@@ -307,10 +284,10 @@ describe("useRankDetailsData composable", () => {
       };
       const pillars = computeXpPillars(breakdown);
       expect(pillars).toHaveLength(4);
-      expect(pillars[0]!.color).toBe("bg-blue-500");
-      expect(pillars[1]!.color).toBe("bg-red-500");
-      expect(pillars[2]!.color).toBe("bg-primary");
-      expect(pillars[3]!.color).toBe("bg-fuchsia-500");
+      expect(pillars[0]?.color).toBe("bg-blue-500");
+      expect(pillars[1]?.color).toBe("bg-red-500");
+      expect(pillars[2]?.color).toBe("bg-primary");
+      expect(pillars[3]?.color).toBe("bg-fuchsia-500");
     });
 
     it("returns correct label for each pillar", () => {
@@ -321,10 +298,10 @@ describe("useRankDetailsData composable", () => {
         mastery: 25,
       };
       const pillars = computeXpPillars(breakdown);
-      expect(pillars[0]!.label).toBe("Discipline");
-      expect(pillars[1]!.label).toBe("Intensity");
-      expect(pillars[2]!.label).toBe("Progression");
-      expect(pillars[3]!.label).toBe("Mastery");
+      expect(pillars[0]?.label).toBe("Discipline");
+      expect(pillars[1]?.label).toBe("Intensity");
+      expect(pillars[2]?.label).toBe("Progression");
+      expect(pillars[3]?.label).toBe("Mastery");
     });
 
     it("maintains value property from breakdown", () => {
@@ -335,10 +312,10 @@ describe("useRankDetailsData composable", () => {
         mastery: 50,
       };
       const pillars = computeXpPillars(breakdown);
-      expect(pillars[0]!.value).toBe(100);
-      expect(pillars[1]!.value).toBe(200);
-      expect(pillars[2]!.value).toBe(150);
-      expect(pillars[3]!.value).toBe(50);
+      expect(pillars[0]?.value).toBe(100);
+      expect(pillars[1]?.value).toBe(200);
+      expect(pillars[2]?.value).toBe(150);
+      expect(pillars[3]?.value).toBe(50);
     });
 
     it("uses fallback total of 1 when all values are zero", () => {
@@ -444,9 +421,9 @@ describe("useRankDetailsData composable", () => {
           }),
         ),
       ];
-      expect(phases[0]!.label).toBe("STABILIZATION");
-      expect(phases[1]!.label).toBe("ACCUMULATION");
-      expect(phases[2]!.label).toBe("DELOAD PHASE");
+      expect(phases[0]?.label).toBe("STABILIZATION");
+      expect(phases[1]?.label).toBe("ACCUMULATION");
+      expect(phases[2]?.label).toBe("DELOAD PHASE");
     });
 
     it("formats large volume progression correctly", () => {
@@ -459,71 +436,3 @@ describe("useRankDetailsData composable", () => {
     });
   });
 });
-
-// --- PLACEHOLDER FUNCTIONS (to be implemented in Task 4) ---
-
-/**
- * Returns the consistency label based on momentum level
- * @param momentum Training momentum (1.0-2.0 scale)
- * @returns Consistency label string
- */
-function consistencyLabel(momentum: number): string {
-  throw new Error("Not implemented");
-}
-
-/**
- * Formats a volume in kg to a readable string with appropriate unit
- * @param kg Volume in kilograms
- * @returns Formatted volume string
- */
-function formatVolume(kg: number): string {
-  throw new Error("Not implemented");
-}
-
-/**
- * Computes the current training phase based on insights
- * @param insights Training insights
- * @returns Training phase object with label, color, and background
- */
-function computeTrainingPhase(insights: TrainingInsights): {
-  label: string;
-  color: string;
-  bg: string;
-} {
-  throw new Error("Not implemented");
-}
-
-/**
- * Computes momentum effect styles based on momentum level
- * @param momentum Training momentum
- * @returns Effect object with glow and animation classes
- */
-function computeMomentumEffect(momentum: number): {
-  glowClass: boolean;
-  animationClass: boolean;
-} {
-  throw new Error("Not implemented");
-}
-
-/**
- * Computes XP pillar breakdown with percentages
- * @param xpBreakdown XP breakdown object
- * @returns Array of pillar objects with label, value, percent, and color
- */
-function computeXpPillars(xpBreakdown: UserProgress["xpBreakdown"]): Array<{
-  label: string;
-  value: number;
-  percent: number;
-  color: string;
-}> {
-  throw new Error("Not implemented");
-}
-
-/**
- * Formats journey duration from weeks to readable format
- * @param weeks Number of weeks
- * @returns Formatted duration string
- */
-function formatJourneyDuration(weeks: number): string {
-  throw new Error("Not implemented");
-}
