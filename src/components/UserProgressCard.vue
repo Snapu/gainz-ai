@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import Progress from "@/components/ui/Progress.vue";
+import RadialProgress from "@/components/ui/RadialProgress.vue";
 import UiCard from "@/components/ui/UiCard.vue";
 import type { UserProgress } from "@/services/leveling";
 
@@ -54,12 +55,21 @@ const readinessEffect = computed(() => {
     
     <!-- Content Row -->
     <div class="relative z-10 flex items-center gap-5">
-      <!-- Avatar Section -->
-      <div class="relative flex-shrink-0">
-        <div class="relative w-24 h-24 rounded-2xl overflow-hidden border border-white/10 shadow-lg group-hover:border-primary/30 transition-colors">
-          <img :src="progress.avatar" :alt="progress.title" class="w-full h-full object-cover" />
+      <!-- Avatar Section with Radial Progress -->
+      <RadialProgress :progress="progress.progressPercent" :size="96" :stroke-width="3">
+        <div class="flex flex-col items-center justify-center gap-1">
+          <!-- Avatar Image -->
+          <div class="relative w-20 h-20 rounded-2xl overflow-hidden border border-white/10 shadow-lg group-hover:border-primary/30 transition-colors">
+            <img :src="progress.avatar" :alt="progress.title" class="w-full h-full object-cover" />
+          </div>
+          <!-- Level Badge -->
+          <div class="text-center">
+            <span class="text-xs font-black italic text-primary bg-white/5 px-2 py-0.5 rounded-full">
+              L{{ progress.level }}
+            </span>
+          </div>
         </div>
-      </div>
+      </RadialProgress>
 
       <!-- Info Column -->
       <div class="flex-1 min-w-0 flex flex-col gap-2">

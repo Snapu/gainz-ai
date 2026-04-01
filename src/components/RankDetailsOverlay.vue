@@ -33,7 +33,7 @@ import UiCard from "./ui/UiCard.vue";
  * - Visual: Header section (lines 200-247)
  *   - Large centered 224x224px avatar with level badge overlay
  *   - Rank title with training phase badge (DELOAD/ACCUMULATION/STABILIZATION)
- *   - XP progress bar with readiness effect glow
+ *   - XP progress bar with momentum effect glow
  *
  * SECTION 2: TRAINING MOMENTUM (Fatigue & Recovery Status)
  * - Data Source: TrainingInsights.fatigue (from trainingScience.ts)
@@ -230,8 +230,8 @@ const formattedTotalVolume = computed(() => {
   return kg >= 1000 ? `${(kg / 1000).toFixed(1)} tons` : `${kg} kg`;
 });
 
-const readinessEffect = computed(() => {
-  const r = props.progress.readiness;
+const momentumEffect = computed(() => {
+  const r = props.progress.momentum;
 
   if (r < 0.7) {
     return {
@@ -272,8 +272,8 @@ const readinessEffect = computed(() => {
         
         <header class="flex flex-col items-center gap-6 relative z-10 text-center py-2">
           <div class="relative group">
-            <!-- Intense Backglow based on readiness -->
-            <div :class="['absolute inset-0 blur-[40px] opacity-20 transition-all duration-1000', readinessEffect.indicator.includes('emerald') ? 'bg-emerald-400' : 'bg-primary']"></div>
+             <!-- Intense Backglow based on momentum -->
+             <div :class="['absolute inset-0 blur-[40px] opacity-20 transition-all duration-1000', momentumEffect.indicator.includes('emerald') ? 'bg-emerald-400' : 'bg-primary']"></div>
             
             <div class="w-56 h-56 rounded-[2rem] overflow-hidden border-2 border-white/20 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.6)] relative z-10 transition-transform duration-500 group-hover:scale-[1.02]">
               <img :src="progress.avatar" :alt="progress.title" class="w-full h-full object-cover" />
@@ -288,7 +288,7 @@ const readinessEffect = computed(() => {
           
           <div class="flex flex-col items-center gap-2 relative z-10">
             <div class="flex items-center gap-3">
-               <div :class="['w-2 h-2 rounded-full shadow-[0_0_8px_rgba(var(--color-primary-rgb),0.8)]', readinessEffect.indicator.includes('emerald') ? 'bg-emerald-400' : 'bg-primary']"></div>
+                <div :class="['w-2 h-2 rounded-full shadow-[0_0_8px_rgba(var(--color-primary-rgb),0.8)]', momentumEffect.indicator.includes('emerald') ? 'bg-emerald-400' : 'bg-primary']"></div>
                <span class="text-[11px] font-black uppercase tracking-[0.4em] text-muted-foreground/60 leading-none">Rank Status</span>
             </div>
             <h2 class="text-3xl font-black italic tracking-tighter uppercase leading-none drop-shadow-2xl">{{ progress.title }}</h2>
@@ -314,8 +314,8 @@ const readinessEffect = computed(() => {
           <Progress 
             :model-value="progress.progressPercent" 
             class="h-2 rounded-full transition-all duration-1000"
-            :class="readinessEffect.container"
-            :indicator-class="readinessEffect.indicator"
+            :class="momentumEffect.container"
+            :indicator-class="momentumEffect.indicator"
           />
         </div>
       </UiCard>
