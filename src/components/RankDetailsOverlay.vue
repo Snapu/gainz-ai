@@ -11,6 +11,13 @@ import {
 } from "lucide-vue-next";
 import { computed } from "vue";
 import Progress from "@/components/ui/Progress.vue";
+import {
+  computeTrainingPhase,
+  computeXpPillars,
+  consistencyLabel,
+  formatJourneyDuration,
+  formatVolume,
+} from "@/composables/useRankDetailsData";
 import { getLearnedMuscleMap } from "@/services/exerciseMuscleMap";
 import type { UserProgress } from "@/services/leveling";
 import type { MuscleGroup, VolumeLandmark } from "@/services/trainingScience";
@@ -109,19 +116,7 @@ const insights = computed(() => {
 });
 
 // --- Adaptive Phase Detection ---
-const trainingPhase = computed(() => {
-  const { fatigue } = insights.value;
-  if (fatigue.shouldDeload)
-    return { label: "DELOAD PHASE", color: "text-orange-400", bg: "bg-orange-400/10" };
-
-  const trend = fatigue.weeklyTotalSets;
-  const last = trend[trend.length - 1];
-  const previous = trend[trend.length - 2];
-  if (trend.length >= 2 && last !== undefined && previous !== undefined && last > previous) {
-    return { label: "ACCUMULATION", color: "text-primary", bg: "bg-primary/10" };
-  }
-  return { label: "STABILIZATION", color: "text-blue-400", bg: "bg-blue-400/10" };
-});
+const trainingPhase = computed(() => computeTrainingPhase(insights.value));
 
 // --- Muscle Groups for Saturation Grid ---
 const ALL_PRIMARY_GROUPS: MuscleGroup[] = [
@@ -193,31 +188,7 @@ function landmarkLabel(landmark: VolumeLandmark): string {
   }
 }
 
-const xpPillars = computed(() => {
-  const { discipline, intensity, progression, mastery } = props.progress.xpBreakdown;
-  const total = discipline + intensity + progression + mastery || 1;
-  return [
-    {
-      label: "Discipline",
-      value: discipline,
-      percent: (discipline / total) * 100,
-      color: "bg-blue-500",
-    },
-    {
-      label: "Intensity",
-      value: intensity,
-      percent: (intensity / total) * 100,
-      color: "bg-red-500",
-    },
-    {
-      label: "Progression",
-      value: progression,
-      percent: (progression / total) * 100,
-      color: "bg-primary",
-    },
-    { label: "Mastery", value: mastery, percent: (mastery / total) * 100, color: "bg-fuchsia-500" },
-  ];
-});
+const xpPillars = computed(() => computeXpPillars(props.progress.xpBreakdown));
 
 const formattedStartDate = computed(() => {
   return new Intl.DateTimeFormat("en-US", {
@@ -227,10 +198,7 @@ const formattedStartDate = computed(() => {
   }).format(props.progress.firstSessionDate);
 });
 
-const formattedTotalVolume = computed(() => {
-  const kg = props.progress.totalVolumeKg;
-  return kg >= 1000 ? `${(kg / 1000).toFixed(1)} tons` : `${kg} kg`;
-});
+const formattedTotalVolume = computed(() => formatVolume(props.progress.totalVolumeKg));
 
 const momentumEffect = computed(() => {
   const r = props.progress.momentum;
