@@ -20,6 +20,79 @@ import { useUserProfileStore } from "@/stores/userProfile";
 import BottomSheet from "./ui/BottomSheet.vue";
 import UiCard from "./ui/UiCard.vue";
 
+/**
+ * RANK DETAILS OVERLAY - SECTION STRUCTURE
+ * =========================================
+ *
+ * This component displays comprehensive progress data organized in 5 intuitive sections.
+ * Each section is designed for Wave 3 restructure with clear data source attribution.
+ *
+ * SECTION 1: RANK HERO (Rank HUD & XP Progress)
+ * - Data Source: UserProgress (from leveling.ts)
+ *   - avatar, level, title, progressPercent, momentum
+ * - Visual: Header section (lines 200-247)
+ *   - Large centered 224x224px avatar with level badge overlay
+ *   - Rank title with training phase badge (DELOAD/ACCUMULATION/STABILIZATION)
+ *   - XP progress bar with readiness effect glow
+ *
+ * SECTION 2: TRAINING MOMENTUM (Fatigue & Recovery Status)
+ * - Data Source: TrainingInsights.fatigue (from trainingScience.ts)
+ *   - shouldDeload, reason, weeklyTotalSets (4-week trend)
+ * - Visual: Recovery Diagnostics section (lines 250-292)
+ *   - 4-week volume trend chart with color coding
+ *   - Fatigue alert or optimal status badge
+ *   - Momentum indicator computed from insights.fatigue
+ *
+ * SECTION 3: WEEKLY VOLUME (Muscle Group Saturation Landmarks)
+ * - Data Source: TrainingInsights.muscleGroups (from trainingScience.ts)
+ *   - sets, landmark (below_MEV/at_MEV/at_MAV/above_MRV), hoursSinceLastTrained
+ * - Visual: Muscle Saturation grid (lines 294-325)
+ *   - 2-column grid of 8 primary muscle groups
+ *   - Per-group: set count, landmark bar, hours since trained
+ *   - Landmark colors: red (below), yellow (maintenance), primary (optimal), orange (overreaching)
+ *
+ * SECTION 4: STRENGTH PROGRESS (e1RM Trends & Top Lifts)
+ * - Data Source: TrainingInsights.e1rm (from trainingScience.ts)
+ *   - e1rm, trend (last 4 sessions), plateau detection
+ * - Visual: Force Production section (lines 327-359)
+ *   - Top 3 exercises by current e1RM
+ *   - Trend sparkline (mini inline chart) for each
+ *   - Plateau indicator when e1RM plateaus
+ *
+ * SECTION 5: TRAINING JOURNEY (XP Breakdown & Career Stats)
+ * - Data Source: UserProgress (from leveling.ts) + computed xpPillars
+ *   - xpBreakdown: { discipline, intensity, progression, mastery }
+ *   - Career stats: totalWorkoutDays, totalVolumeKg, totalSets, totalReps, journeyDurationWeeks, firstSessionDate
+ * - Visual: Mastery Distribution (lines 361-387) + Career Statistics (lines 389-428)
+ *   - Stacked bar showing XP pillar percentages (Discipline, Intensity, Progression, Mastery)
+ *   - Career grid: Started date, Volume moved, Combat days, Total reps
+ *   - Grit score (sustainability projection): estimated weeks to next level
+ *
+ * TERMINOLOGY MAPPING (Replace Throughout Codebase)
+ * ==================================================
+ * - "Combat Days" → "Training Sessions" (line 406: currently "Combat Days")
+ * - "Legacy Start" → "Started" (line 398: currently "Legacy Start")
+ * - "Adaptive Readiness" → "Training Momentum" (line 234: currently "Adaptive Readiness")
+ * - "Muscle Saturation" → "Weekly Volume" (line 299: currently "Muscle Saturation")
+ * - "Recovery Diagnostics" → "Fatigue Status" (line 255: currently "Recovery Diagnostics")
+ * - "Athlete Manifesto" → [REMOVE LABEL] (line 431: currently displays quote only, no label)
+ *
+ * DATA SOURCE VALIDATION
+ * ======================
+ * ✓ UserProgress: avatar, level, title, progressPercent, momentum, totalWorkoutDays,
+ *   totalVolumeKg, totalSets, totalReps, journeyDurationWeeks, firstSessionDate, xpBreakdown
+ * ✓ TrainingInsights: muscleGroups, e1rm, fatigue
+ * ✓ Computed Fields: gritScore, xpPillars, trainingPhase, topMilestones, muscleStats
+ *
+ * TYPE SOURCES
+ * ============
+ * UserProgress: defined in src/services/leveling.ts (lines 71-96)
+ * TrainingInsights: defined in src/services/trainingScience.ts (lines 40-44)
+ * MuscleGroupInsight: defined in src/services/trainingScience.ts (lines 20-25)
+ * ExerciseE1RM: defined in src/services/trainingScience.ts (lines 27-32)
+ * FatigueInsight: defined in src/services/trainingScience.ts (lines 34-38)
+ */
+
 const props = defineProps<{
   progress: UserProgress;
 }>();
