@@ -55,9 +55,10 @@ describe("useOfflineSyncedStore (Workbox-simplified)", () => {
       });
 
       await vi.waitFor(() => {
-        expect(mockFetchRemote).toHaveBeenCalledTimes(1);
+        expect(store.isLoading.value).toBe(false);
       });
 
+      expect(mockFetchRemote).toHaveBeenCalledTimes(1);
       expect(store.items.value).toEqual(remoteItems);
     });
 
@@ -72,9 +73,10 @@ describe("useOfflineSyncedStore (Workbox-simplified)", () => {
       });
 
       await vi.waitFor(() => {
-        expect(mockFetchRemote).toHaveBeenCalledTimes(1);
+        expect(store.isLoading.value).toBe(false);
       });
 
+      expect(mockFetchRemote).toHaveBeenCalledTimes(1);
       expect(store.items.value).toEqual([]);
     });
 
@@ -111,7 +113,9 @@ describe("useOfflineSyncedStore (Workbox-simplified)", () => {
         removeRemote: mockRemoveRemote,
       });
 
-      await vi.waitFor(() => store.isLoading.value === false);
+      await vi.waitFor(() => {
+        expect(store.isLoading.value).toBe(false);
+      });
 
       const newItem: TestItem = { id: "1", name: "New Item", value: 100 };
       await store.add(newItem);
@@ -131,7 +135,9 @@ describe("useOfflineSyncedStore (Workbox-simplified)", () => {
         removeRemote: mockRemoveRemote,
       });
 
-      await vi.waitFor(() => store.isLoading.value === false);
+      await vi.waitFor(() => {
+        expect(store.isLoading.value).toBe(false);
+      });
 
       const newItem: TestItem = { id: "1", name: "New Item", value: 100 };
       await store.add(newItem);
@@ -154,7 +160,9 @@ describe("useOfflineSyncedStore (Workbox-simplified)", () => {
         removeRemote: mockRemoveRemote,
       });
 
-      await vi.waitFor(() => store.isLoading.value === false);
+      await vi.waitFor(() => {
+        expect(store.isLoading.value).toBe(false);
+      });
 
       await store.remove(existingItem);
 
@@ -174,7 +182,9 @@ describe("useOfflineSyncedStore (Workbox-simplified)", () => {
         removeRemote: mockRemoveRemote,
       });
 
-      await vi.waitFor(() => store.isLoading.value === false);
+      await vi.waitFor(() => {
+        expect(store.isLoading.value).toBe(false);
+      });
 
       await store.remove(existingItem);
 
@@ -197,7 +207,9 @@ describe("useOfflineSyncedStore (Workbox-simplified)", () => {
         updateRemote: mockUpdateRemote,
       });
 
-      await vi.waitFor(() => store.isLoading.value === false);
+      await vi.waitFor(() => {
+        expect(store.isLoading.value).toBe(false);
+      });
 
       const updatedItem: TestItem = { id: "1", name: "Updated", value: 100 };
       await store.update(updatedItem);
@@ -218,7 +230,9 @@ describe("useOfflineSyncedStore (Workbox-simplified)", () => {
         // No updateRemote provided
       });
 
-      await vi.waitFor(() => store.isLoading.value === false);
+      await vi.waitFor(() => {
+        expect(store.isLoading.value).toBe(false);
+      });
 
       const item: TestItem = { id: "1", name: "Item", value: 50 };
       await store.update(item);
@@ -247,7 +261,9 @@ describe("useOfflineSyncedStore (Workbox-simplified)", () => {
         removeRemote: mockRemoveRemote,
       });
 
-      await vi.waitFor(() => store.isLoading.value === false);
+      await vi.waitFor(() => {
+        expect(store.isLoading.value).toBe(false);
+      });
 
       expect(store.items.value).toEqual(initialItems);
 
@@ -272,7 +288,9 @@ describe("useOfflineSyncedStore (Workbox-simplified)", () => {
         removeRemote: mockRemoveRemote,
       });
 
-      await vi.waitFor(() => store.isLoading.value === false);
+      await vi.waitFor(() => {
+        expect(store.isLoading.value).toBe(false);
+      });
 
       // Call refresh multiple times concurrently
       const refreshPromises = [store.refresh(), store.refresh(), store.refresh()];
