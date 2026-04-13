@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import Progress from "@/components/ui/Progress.vue";
 import RadialProgress from "@/components/ui/RadialProgress.vue";
 import UiCard from "@/components/ui/UiCard.vue";
+import { 
+  consistencyLabel, 
+  computeMomentumTheme 
+} from "@/composables/useRankDetailsData";
 import type { UserProgress } from "@/services/leveling";
 
 const props = defineProps<{
@@ -11,131 +14,62 @@ const props = defineProps<{
 
 defineEmits<(e: "click") => void>();
 
-const readinessEffect = computed(() => {
-  const r = props.progress.readiness;
+const consistencyTier = computed(() => consistencyLabel(props.progress.momentum));
 
-  if (r < 0.7) {
-    return {
-      indicator: "from-blue-400 to-blue-600",
-      container: "shadow-[0_0_12px_rgba(59,130,246,0.2)] animate-pulse-slow",
-    };
-  }
-
-  if (r < 0.9) {
-    return {
-      indicator: "from-cyan-300 to-cyan-500",
-      container: "shadow-[0_0_12px_rgba(34,211,238,0.2)] animate-pulse-standard",
-    };
-  }
-
-  if (r <= 1.15) {
-    return {
-      indicator: "from-emerald-300 to-emerald-500",
-      container: "shadow-[0_0_15px_rgba(52,211,153,0.3)] animate-pulse-fast",
-    };
-  }
-
-  return {
-    indicator: "from-fuchsia-400 to-purple-500",
-    container: "shadow-[0_0_20px_rgba(192,38,211,0.4)] animate-pulse-hyper",
-  };
-});
+const momentumStatus = computed(() => computeMomentumTheme(props.progress.momentum));
 </script>
 
 <template>
   <UiCard 
     as="button"
     @click="$emit('click')"
-    class="w-[calc(100%-2rem)] text-left px-5 py-5 mb-4 mx-4 mt-4 active:scale-[0.98] outline-none group"
+    class="w-[calc(100%-2rem)] text-left px-5 py-4 mb-4 mx-4 mt-4 active:scale-[0.98] outline-none group relative overflow-hidden transition-all duration-300 border-border/40 shadow-sm"
   >
-    <!-- Background Depth Circles -->
-    <div class="absolute inset-0 bg-background/20 z-0"></div>
-    <div class="absolute -top-16 -right-16 w-32 h-32 bg-primary/10 blur-[80px] rounded-full"></div>
-    <div class="absolute -bottom-8 -left-8 w-24 h-24 bg-primary/10 blur-[60px] rounded-full"></div>
-    
     <!-- Content Row -->
     <div class="relative z-10 flex items-center gap-5">
+      
       <!-- Avatar Section with Radial Progress -->
-      <RadialProgress :progress="progress.progressPercent" :size="96" :stroke-width="3">
-        <div class="flex flex-col items-center justify-center gap-1">
-          <!-- Avatar Image -->
-          <div class="relative w-20 h-20 rounded-2xl overflow-hidden border border-white/10 shadow-lg group-hover:border-primary/30 transition-colors">
+      <div class="relative shrink-0 flex items-center justify-center">
+        <RadialProgress 
+          :progress="progress.progressPercent" 
+          :size="92" 
+          :stroke-width="4.5"
+          class="transition-all duration-1000"
+          :class="momentumStatus.color"
+        >
+          <!-- Inner Avatar Image -->
+          <div class="relative w-20 h-20 rounded-full overflow-hidden border border-border group-hover:border-primary/40 transition-colors shadow-sm">
             <img :src="progress.avatar" :alt="progress.title" class="w-full h-full object-cover" />
           </div>
-          <!-- Level Badge -->
-          <div class="text-center">
-            <span class="text-xs font-black italic text-primary bg-white/5 px-2 py-0.5 rounded-full">
-              L{{ progress.level }}
-            </span>
-          </div>
-        </div>
-      </RadialProgress>
-
-      <!-- Info Column -->
-      <div class="flex-1 min-w-0 flex flex-col gap-2">
-        <h2 class="text-xl font-black italic tracking-tighter text-foreground truncate leading-none mb-1 group-hover:text-primary transition-colors">
-            {{ progress.title }}
-          </h2>
+        </RadialProgress>
         
-        <div class="flex flex-col gap-2">
-          <!-- Level Only -->
-          <div class="flex items-baseline shrink-0">
-            <span class="text-[10px] text-muted-foreground opacity-70 mr-1 uppercase tracking-tighter font-bold">lvl</span>
-            <span class="text-primary font-black italic leading-none">{{ progress.level }}</span>
-          </div>
-          
-          <!-- Simple Progress Bar -->
-          <Progress 
-            :model-value="progress.progressPercent" 
-            class="bg-white/5 rounded-full transition-all duration-1000"
-            :class="readinessEffect.container"
-            :indicator-class="readinessEffect.indicator"
-          />
-
-          <!-- Readiness Metrics Below Bar -->
-          <div class="flex items-center justify-between px-0.5">
-            <span class="text-[8px] text-muted-foreground opacity-40 uppercase tracking-[0.2em] font-black">
-              Readiness
-            </span>
-            <div class="flex items-baseline gap-1.5 text-right">
-              <span class="text-[8px] font-black uppercase text-primary/80 tracking-widest leading-none">
-                {{ progress.readiness < 0.7 ? 'Recovering' : progress.readiness < 0.9 ? 'Stabilizing' : progress.readiness <= 1.15 ? 'Ready' : 'Flow State' }}
-              </span>
-              <span class="text-[11px] font-black italic text-primary leading-none tabular-nums">
-                {{ (progress.readiness * 100).toFixed(0) }}%
-              </span>
-            </div>
-          </div>
+        <!-- Level Badge Overlay -->
+        <div class="absolute bottom-0 right-0 translate-x-1 translate-y-1 bg-primary text-primary-foreground px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-widest border-2 border-background shadow-md z-20">
+          Lvl {{ progress.level }}
         </div>
       </div>
-    </div>
 
-    <!-- Active Buff Overlay (Optional Glow) -->
-    <div v-if="progress.momentum > 1.15" class="absolute inset-0 bg-primary/5 pointer-events-none animate-pulse"></div>
+      <!-- Info Column -->
+      <div class="flex-1 min-w-0 flex flex-col justify-center ml-1">
+        <span class="text-[10px] font-medium uppercase tracking-widest text-muted-foreground mb-1">
+          Active Rank
+        </span>
+        <h2 class="text-xl font-bold tracking-tight text-foreground truncate leading-none group-hover:text-primary transition-colors mb-2.5">
+          {{ progress.title }}
+        </h2>
+        
+        <div class="flex items-center gap-1.5">
+          <div :class="['w-2 h-2 rounded-full animate-pulse shadow-sm', momentumStatus.color.replace('text-', 'bg-')]"></div>
+          <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {{ consistencyTier }}
+          </span>
+        </div>
+      </div>
+
+      <!-- Subtle Pointer -->
+      <div class="shrink-0 text-muted-foreground/30 group-hover:text-primary group-hover:translate-x-1 transition-all">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+    </div>
   </UiCard>
 </template>
-
-<style scoped>
-.animate-pulse-slow {
-  animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-.animate-pulse-standard {
-  animation: pulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-.animate-pulse-fast {
-  animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-.animate-pulse-hyper {
-  animation: pulse 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite, glow-pulse 1.2s alternate infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { transform: scale(1); filter: brightness(1); }
-  50% { transform: scale(1.01); filter: brightness(1.2); }
-}
-
-@keyframes glow-pulse {
-  from { filter: brightness(1); }
-  to { filter: brightness(1.4) saturate(1.2); }
-}
-</style>

@@ -41,6 +41,9 @@ importers:
       '@vueuse/core':
         specifier: ^14.1.0
         version: 14.1.0(vue@3.5.27(typescript@5.9.3))
+      apexcharts:
+        specifier: ^5.10.4
+        version: 5.10.4
       async-mutex:
         specifier: ^0.5.0
         version: 0.5.0
@@ -86,6 +89,9 @@ importers:
       vue-router:
         specifier: ^4.6.4
         version: 4.6.4(vue@3.5.27(typescript@5.9.3))
+      vue3-apexcharts:
+        specifier: ^1.11.1
+        version: 1.11.1(apexcharts@5.10.4)(vue@3.5.27(typescript@5.9.3))
       vue3-google-login:
         specifier: ^2.0.34
         version: 2.0.34(vue@3.5.27(typescript@5.9.3))
@@ -1705,6 +1711,9 @@ packages:
   ansis@4.2.0:
     resolution: {integrity: sha512-HqZ5rWlFjGiV0tDm3UxxgNRqsOTniqoKZu0pIAfh7TZQMGuZK+hH0drySty0si0QXj1ieop4+SkSfPZBPPkHig==}
     engines: {node: '>=14'}
+
+  apexcharts@5.10.4:
+    resolution: {integrity: sha512-gt0VUqZ2+mr25ScbUcKZgJr96jKYm4vjOcxEWCEh/E5F4dWqhyo3dBhPRvNNnkKiWxkMd2cBwj3ZYH3rK39fkA==}
 
   aria-hidden@1.2.6:
     resolution: {integrity: sha512-ik3ZgC9dY/lYVVM++OISsaYDeg1tb0VtP5uL3ouh1koGOaUMDPpbFIei4JkFimWUFPn90sbMNMXQAIVOlnYKJA==}
@@ -3453,6 +3462,12 @@ packages:
     hasBin: true
     peerDependencies:
       typescript: '>=5.0.0'
+
+  vue3-apexcharts@1.11.1:
+    resolution: {integrity: sha512-MbN3vg8bMG19wc0Lm1HkeQvODgLm56DgpIxtNUO0xpf/JCzYWVGE4jzXp2JISzy2s3Kul1yOxNQUYsLvKQ5L9g==}
+    peerDependencies:
+      apexcharts: '>=5.10.0'
+      vue: '>=3.0.0'
 
   vue3-google-login@2.0.34:
     resolution: {integrity: sha512-YLEYcv8eKzA7BLsTciDogvxXxyJga4879HkmvWjYsm1t0mJ0Vx5A1EWKMx0YCtMQ2VwQJGy3F8aOw6zO+KkUhA==}
@@ -5278,6 +5293,8 @@ snapshots:
   ansi-styles@6.2.3: {}
 
   ansis@4.2.0: {}
+
+  apexcharts@5.10.4: {}
 
   aria-hidden@1.2.6:
     dependencies:
@@ -7131,6 +7148,11 @@ snapshots:
       '@volar/typescript': 2.4.27
       '@vue/language-core': 3.2.3
       typescript: 5.9.3
+
+  vue3-apexcharts@1.11.1(apexcharts@5.10.4)(vue@3.5.27(typescript@5.9.3)):
+    dependencies:
+      apexcharts: 5.10.4
+      vue: 3.5.27(typescript@5.9.3)
 
   vue3-google-login@2.0.34(vue@3.5.27(typescript@5.9.3)):
     dependencies:

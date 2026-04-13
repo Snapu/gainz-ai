@@ -4,6 +4,8 @@ import { ChevronRight, ExternalLink, Menu, Moon, Plus, Sparkles } from "lucide-v
 import { storeToRefs } from "pinia";
 import { computed, ref, watch } from "vue";
 import AICoachingPanel from "@/components/AICoachingPanel.vue";
+import BodyStatusCard from "@/components/BodyStatusCard.vue";
+import BodyStatusOverlay from "@/components/BodyStatusOverlay.vue";
 import RankDetailsOverlay from "@/components/RankDetailsOverlay.vue";
 import RestTimerToast from "@/components/RestTimerToast.vue";
 import SessionLogGroup from "@/components/SessionLogGroup.vue";
@@ -21,6 +23,8 @@ import { useToast } from "@/components/ui/useToast";
 import { WIZARD_STEPS } from "@/constants/wizard";
 import type { ExerciseLog } from "@/services/exerciseLogs";
 import { calculateUserProgress } from "@/services/leveling";
+import { getLearnedMuscleMap } from "@/services/exerciseMuscleMap";
+import { calculateTrainingInsights } from "@/services/trainingScience";
 import { summaryToExerciseLogs, summaryToWorkoutDates } from "@/services/trainingSummary";
 import { localeDateString } from "@/services/utils/date";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
@@ -46,6 +50,7 @@ const { exerciseLogs } = storeToRefs(logsStore);
 
 const isAIPanelOpen = ref(false);
 const isRankOverlayOpen = ref(false);
+const isBodyStatusOverlayOpen = ref(false);
 
 // --- Leveling ---
 const userProgress = computed(() => {
@@ -54,6 +59,16 @@ const userProgress = computed(() => {
   const allLogs = [...historicalLogs, ...currentLogs];
 
   return calculateUserProgress(allLogs, userProfile.value.workoutDaysPerWeek || 3);
+});
+
+// --- Training Science ---
+const trainingInsights = computed(() => {
+  const historicalLogs = summaryToExerciseLogs(summaryStore.summaries);
+  const currentLogs = exerciseLogs.value;
+  const allLogs = [...historicalLogs, ...currentLogs];
+  const learnedMap = getLearnedMuscleMap();
+  
+  return calculateTrainingInsights(allLogs, new Date(), learnedMap);
 });
 
 // --- Group Logs ---
@@ -339,6 +354,7 @@ async function saveLog() {
 
     <!-- Consistency & Leveling (Horizontal HUD - Aligned) -->
     <UserProgressCard :progress="userProgress" @click="isRankOverlayOpen = true" />
+    <BodyStatusCard :insights="trainingInsights" @click="isBodyStatusOverlayOpen = true" />
 
     <!-- Logs List -->
     <main class="flex-1 px-4 pb-32 overflow-y-auto no-scrollbar">
@@ -454,6 +470,7 @@ async function saveLog() {
 
     <AICoachingPanel v-model:open="isAIPanelOpen" @log-exercise="prefillFromAi" />
     <RankDetailsOverlay v-model:open="isRankOverlayOpen" :progress="userProgress" />
+    <BodyStatusOverlay v-model:open="isBodyStatusOverlayOpen" :insights="trainingInsights" />
   </div>
 </template>
 

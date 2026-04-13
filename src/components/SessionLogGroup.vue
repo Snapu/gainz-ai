@@ -28,38 +28,44 @@ defineEmits<{
     <UiCard 
       as="button"
       @click="$emit('toggle')"
-      class="w-full flex items-center justify-between p-4 mb-3 hover:border-primary/20 group"
+      class="w-full flex items-center justify-between p-5 mb-3 hover:border-primary/40 group border-border/40 shadow-sm transition-all"
     >
-      <!-- Subtle Glow effect on hover -->
-      <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-      
-      <div class="flex flex-col items-start px-1 relative z-10">
-        <h3 class="text-[10px] font-black tracking-[0.2em] text-muted-foreground/60 uppercase group-hover:text-primary/60 transition-colors">{{ date }}</h3>
-        <div class="flex items-center gap-3 mt-1.5">
-          <div v-if="stats.durationMinutes > 0" class="flex flex-col items-start">
-            <span class="text-lg font-black italic tracking-tighter text-foreground group-hover:text-primary transition-colors">{{ stats.durationMinutes }}<span class="text-[10px] ml-0.5 not-italic text-muted-foreground font-bold tracking-tight uppercase">Min</span></span>
+      <div class="flex flex-col items-start relative z-10 w-full">
+        <h3 class="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase mb-2 group-hover:text-primary/80 transition-colors">{{ date }}</h3>
+        
+        <div class="flex items-center gap-4 w-full">
+          <!-- Duration -->
+          <div v-if="stats.durationMinutes > 0" class="flex items-baseline gap-1 min-w-[3rem]">
+            <span class="text-2xl font-bold tracking-tight text-foreground group-hover:text-primary transition-colors">{{ stats.durationMinutes }}</span>
+            <span class="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Min</span>
           </div>
           
-          <div v-if="stats.durationMinutes > 0" class="h-4 w-px bg-white/10 mx-1"></div>
+          <div v-if="stats.durationMinutes > 0" class="h-6 w-px bg-border/50 mx-1"></div>
           
-          <div class="flex items-center gap-3">
-            <div class="flex flex-col">
-              <span class="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">Sets</span>
-              <span class="text-xs font-black text-foreground">{{ stats.sets }}</span>
+          <!-- Quick Stats -->
+          <div class="flex items-center gap-5 flex-1">
+            <div class="flex flex-col items-start gap-0.5">
+              <span class="text-[9px] font-semibold text-muted-foreground uppercase tracking-widest">Sets</span>
+              <span class="text-sm font-bold text-foreground">{{ stats.sets }}</span>
             </div>
-            <div class="flex flex-col">
-              <span class="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">Exercises</span>
-              <span class="text-xs font-black text-foreground">{{ stats.exerciseCount }}</span>
+            <div class="flex flex-col items-start gap-0.5">
+              <span class="text-[9px] font-semibold text-muted-foreground uppercase tracking-widest">Exercises</span>
+              <span class="text-sm font-bold text-foreground">{{ stats.exerciseCount }}</span>
             </div>
-            <div class="flex flex-col">
-              <span class="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">Volume</span>
-              <span class="text-xs font-black text-foreground">{{ stats.volume.toLocaleString() }}<span class="text-[8px] ml-0.5 opacity-70">KG</span></span>
+            <div class="flex flex-col items-start gap-0.5">
+              <span class="text-[9px] font-semibold text-muted-foreground uppercase tracking-widest">Volume</span>
+              <span class="text-sm font-bold text-foreground flex items-baseline gap-0.5">
+                {{ stats.volume.toLocaleString() }}
+                <span class="text-[8px] text-muted-foreground uppercase">KG</span>
+              </span>
             </div>
           </div>
         </div>
       </div>
-      <div class="flex items-center gap-2 relative z-10">
-        <div class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+      
+      <!-- Chevron -->
+      <div class="flex items-center justify-center shrink-0 ml-2 relative z-10">
+        <div class="w-8 h-8 rounded-full bg-muted/50 flex items-center justify-center group-hover:bg-primary/10 transition-colors">
           <ChevronDown 
             class="w-4 h-4 text-muted-foreground group-hover:text-primary transition-all duration-300"
             :class="{ '-rotate-180': !isCollapsed }"
