@@ -389,7 +389,7 @@ export function calculateUserProgress(
 
   // Sort logs chronologically (only if needed for performance)
   const isSorted = logs.every(
-    (l, i) => i === 0 || l.loggedAt.getTime() >= logs[i - 1].loggedAt.getTime(),
+    (l, i) => i === 0 || l.loggedAt.getTime() >= logs[i - 1]!.loggedAt.getTime(),
   );
   const sortedLogs = isSorted
     ? logs
