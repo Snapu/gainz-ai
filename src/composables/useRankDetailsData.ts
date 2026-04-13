@@ -24,17 +24,27 @@ export function computeTrainingPhase(insights: TrainingInsights): {
   const { fatigue } = insights;
 
   if (fatigue.shouldDeload) {
-    return { label: "Deload Phase", color: "text-orange-400", bg: "bg-orange-400/10" };
+    return { label: "Deload", color: "text-orange-500", bg: "bg-orange-500/10" };
   }
 
   const trend = fatigue.weeklyTotalSets;
   const last = trend[trend.length - 1] ?? 0;
   const previous = trend[trend.length - 2] ?? 0;
-  if (trend.length >= 2 && last > previous) {
-    return { label: "Accumulation", color: "text-primary", bg: "bg-primary/10" };
+
+  // Below Minimum Volume (MV) for the whole body
+  // Trailing 14-day global volume sum. MEV for a full body is roughly 12 sets/week.
+  // If sum is < 24 sets over 14 days, systemic tension is fundamentally lost.
+  if (last + previous < 24) {
+    return { label: "Inactive", color: "text-muted-foreground", bg: "bg-muted-foreground/10" };
   }
 
-  return { label: "Stabilization", color: "text-cyan-400", bg: "bg-cyan-400/10" };
+  // Active progression
+  if (trend.length >= 2 && last > previous && last >= 10) {
+    return { label: "Build", color: "text-primary", bg: "bg-primary/10" };
+  }
+
+  // Baseline maintenance
+  return { label: "Maintain", color: "text-cyan-400", bg: "bg-cyan-400/10" };
 }
 
 export function computeMomentumTheme(momentum: number): {

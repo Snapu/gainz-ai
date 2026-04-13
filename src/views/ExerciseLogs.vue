@@ -4,8 +4,8 @@ import { ChevronRight, ExternalLink, Menu, Moon, Plus, Sparkles } from "lucide-v
 import { storeToRefs } from "pinia";
 import { computed, ref, watch } from "vue";
 import AICoachingPanel from "@/components/AICoachingPanel.vue";
-import BodyStatusCard from "@/components/BodyStatusCard.vue";
-import BodyStatusOverlay from "@/components/BodyStatusOverlay.vue";
+import TrainingPhaseCard from "@/components/TrainingPhaseCard.vue";
+import TrainingPhaseOverlay from "@/components/TrainingPhaseOverlay.vue";
 import RankDetailsOverlay from "@/components/RankDetailsOverlay.vue";
 import RestTimerToast from "@/components/RestTimerToast.vue";
 import SessionLogGroup from "@/components/SessionLogGroup.vue";
@@ -50,7 +50,7 @@ const { exerciseLogs } = storeToRefs(logsStore);
 
 const isAIPanelOpen = ref(false);
 const isRankOverlayOpen = ref(false);
-const isBodyStatusOverlayOpen = ref(false);
+const isTrainingPhaseOverlayOpen = ref(false);
 
 // --- Leveling ---
 const userProgress = computed(() => {
@@ -354,7 +354,7 @@ async function saveLog() {
 
     <!-- Consistency & Leveling (Horizontal HUD - Aligned) -->
     <UserProgressCard :progress="userProgress" @click="isRankOverlayOpen = true" />
-    <BodyStatusCard :insights="trainingInsights" @click="isBodyStatusOverlayOpen = true" />
+    <TrainingPhaseCard :insights="trainingInsights" @click="isTrainingPhaseOverlayOpen = true" />
 
     <!-- Logs List -->
     <main class="flex-1 px-4 pb-32 overflow-y-auto no-scrollbar">
@@ -470,7 +470,7 @@ async function saveLog() {
 
     <AICoachingPanel v-model:open="isAIPanelOpen" @log-exercise="prefillFromAi" />
     <RankDetailsOverlay v-model:open="isRankOverlayOpen" :progress="userProgress" />
-    <BodyStatusOverlay v-model:open="isBodyStatusOverlayOpen" :insights="trainingInsights" />
+    <TrainingPhaseOverlay v-model:open="isTrainingPhaseOverlayOpen" :insights="trainingInsights" />
   </div>
 </template>
 

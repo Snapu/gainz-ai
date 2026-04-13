@@ -6,125 +6,170 @@ const props = defineProps<{
   muscleGroups: Partial<Record<MuscleGroup, MuscleGroupInsight>>;
 }>();
 
-/** Color-coding for each stimulus landmark (Pill Backgrounds) */
-function getLandmarkStyles(landmark?: VolumeLandmark): string {
-  if (!landmark) return "border-white/10 bg-white/5 text-muted-foreground/60";
+function getDotColor(landmark?: VolumeLandmark): string {
+  if (!landmark) return "bg-white/30 border-white/50";
   switch (landmark) {
-    case "below_MEV": return "border-yellow-500/20 bg-yellow-500/10 text-yellow-500/80 shadow-[0_0_10px_rgba(234,179,8,0.1)]"; // Maintenance
-    case "at_MEV": return "border-emerald-500/20 bg-emerald-500/10 text-emerald-500/80 shadow-[0_0_10px_rgba(16,185,129,0.1)]"; // Progressive Minimum
-    case "at_MAV": return "border-cyan-400/30 bg-cyan-400/10 text-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.2)]"; // Optimal Stimulus
-    case "above_MRV": return "border-red-500/40 bg-red-500/10 text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)] animate-pulse"; // Recovery Limit
-    default: return "border-white/10 bg-white/5 text-muted-foreground/60";
+    case "below_MEV": return "bg-yellow-500 border-yellow-300 shadow-[0_0_10px_rgba(234,179,8,1)]";
+    case "at_MEV": return "bg-emerald-500 border-emerald-300 shadow-[0_0_10px_rgba(16,185,129,1)]";
+    case "at_MAV": return "bg-cyan-400 border-cyan-200 shadow-[0_0_15px_rgba(34,211,238,1)]";
+    case "above_MRV": return "bg-red-500 border-red-300 shadow-[0_0_20px_rgba(239,68,68,1)] animate-pulse";
+    default: return "bg-white/30 border-white/50";
   }
 }
 
-/** Pre-defined coordinates for each muscle group on the generated blueprint 
- * Based on 100% width/height of the container. 
- * Front View: ~0-50% width | Back View: ~50-100% width
- */
-const MUSCLE_COORDINATES: Record<MuscleGroup, { top: string; left: string; side?: 'L' | 'R' }> = {
-  "Shoulders": { top: '23%', left: '33%', side: 'R' }, // Anchored to one side for minimalism
-  "Chest": { top: '28%', left: '25%' },
-  "Abs": { top: '42%', left: '25%' },
-  "Biceps": { top: '38%', left: '12%', side: 'L' },
-  "Quads": { top: '68%', left: '21%', side: 'L' },
-  "Back": { top: '30%', left: '75%' },
-  "Triceps": { top: '38%', left: '88%', side: 'R' },
-  "Glutes": { top: '50%', left: '75%' },
-  "Hamstrings": { top: '70%', left: '79%', side: 'R' },
-  "Calves": { top: '88%', left: '75%' }
+function getLineColor(landmark?: VolumeLandmark): string {
+  if (!landmark) return "rgba(255,255,255,0.25)";
+  switch (landmark) {
+    case "below_MEV": return "#eab308";
+    case "at_MEV": return "#10b981";
+    case "at_MAV": return "#22d3ee";
+    case "above_MRV": return "#ef4444";
+    default: return "rgba(255,255,255,0.25)";
+  }
+}
+
+function getJargon(landmark?: VolumeLandmark): string {
+  switch (landmark) {
+    case "below_MEV": return "Maintenance";
+    case "at_MEV": return "Minimum Effective";
+    case "at_MAV": return "Optimal Hypertrophy";
+    case "above_MRV": return "Overreaching";
+    default: return "Under-Stimulated";
+  }
+}
+
+interface MuscleNode {
+  dot: { x: number; y: number }; 
+  textAnchor: { x: number; y: number };
+  align: 'left' | 'right'; 
+}
+
+// X coordinates mapped mathematically for 200% width cropped halves
+
+const MUSCLE_MAP_FRONT: Record<MuscleGroup, MuscleNode> = {
+  Chest:     { dot: { x: 52, y: 31 }, textAnchor: { x: 6, y: 22 }, align: 'left' },  
+  Biceps:    { dot: { x: 32, y: 39 }, textAnchor: { x: 6, y: 39 }, align: 'left' },  
+  Abs:       { dot: { x: 50, y: 44 }, textAnchor: { x: 6, y: 48 }, align: 'left' },  
+  Quads:     { dot: { x: 44, y: 64 }, textAnchor: { x: 6, y: 64 }, align: 'left' },  
+  Shoulders: { dot: { x: 68, y: 26 }, textAnchor: { x: 94, y: 15 }, align: 'right' }
 };
 
-const activeGroups = computed(() => {
-  return Object.entries(MUSCLE_COORDINATES)
-    .map(([group, coords]) => ({
-      name: group as MuscleGroup,
-      coords,
-      status: props.muscleGroups[group as MuscleGroup]
-    }))
-    .filter(g => g.status && g.status.sets > 0);
+const MUSCLE_MAP_BACK: Record<MuscleGroup, MuscleNode> = {
+  Back:       { dot: { x: 50, y: 33 }, textAnchor: { x: 6, y: 25 }, align: 'left' }, 
+  Triceps:    { dot: { x: 72, y: 39 }, textAnchor: { x: 94, y: 39 }, align: 'right' },  
+  Glutes:     { dot: { x: 52, y: 49 }, textAnchor: { x: 94, y: 49 }, align: 'right' },  
+  Hamstrings: { dot: { x: 64, y: 65 }, textAnchor: { x: 94, y: 65 }, align: 'right' },  
+  Calves:     { dot: { x: 64, y: 82 }, textAnchor: { x: 94, y: 82 }, align: 'right' }   
+};
+
+const views = computed(() => {
+  const front = Object.entries(MUSCLE_MAP_FRONT).map(([group, node]) => ({
+      name: group as MuscleGroup, node, status: props.muscleGroups[group as MuscleGroup]
+  }));
+  const back = Object.entries(MUSCLE_MAP_BACK).map(([group, node]) => ({
+      name: group as MuscleGroup, node, status: props.muscleGroups[group as MuscleGroup]
+  }));
+
+  return [
+    { id: 'front-view', alignImage: 'left-0', muscles: front, title: 'Anterior View' },
+    { id: 'back-view', alignImage: 'right-0', muscles: back, title: 'Posterior View' }
+  ];
 });
+
+function getAnchorStyle(node: MuscleNode) {
+  if (node.align === 'right') {
+    return {
+      right: `${100 - node.textAnchor.x}%`,
+      top: `${node.textAnchor.y}%`,
+      textAlign: 'right' as const,
+      flexDirection: 'column' as const,
+      alignItems: 'flex-end' as const
+    };
+  } else {
+    return {
+      left: `${node.textAnchor.x}%`,
+      top: `${node.textAnchor.y}%`,
+      textAlign: 'left' as const,
+      flexDirection: 'column' as const,
+      alignItems: 'flex-start' as const
+    };
+  }
+}
 </script>
 
 <template>
-  <div class="relative w-full aspect-square max-w-[500px] mx-auto select-none overflow-hidden rounded-xl border border-white/5 bg-black/40">
+  <div class="flex flex-col gap-12 w-full max-w-[400px] mx-auto select-none overflow-visible">
     
-    <!-- Anatomical Blueprint Background -->
-    <img 
-      src="@/assets/anatomical_blueprint.png" 
-      alt="Anatomical Blueprint"
-      class="absolute inset-0 w-full h-full object-contain opacity-70 grayscale contrast-125 brightness-90 mix-blend-screen pointer-events-none"
-    />
+    <div v-for="view in views" :key="view.id" class="relative w-full aspect-[1/2] mt-4">
+      
+      <!-- Ghost Holographic Label -->
+      <div class="absolute -top-3 left-1/2 -translate-x-1/2 z-30 font-sans tracking-[0.2em] text-[11px] font-bold text-muted-foreground/80 uppercase whitespace-nowrap">
+         {{ view.title }}
+      </div>
 
-    <!-- HUD Grid Overlay (Subtle Aesthetic) -->
-    <div class="absolute inset-0 pointer-events-none opacity-5 z-0">
-       <div class="w-full h-full bg-[linear-gradient(rgba(34,211,238,0.2)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,0.2)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
+      <!-- Image Crop Wrapper - Ultra subtle ghosting -->
+      <div class="absolute inset-0 overflow-hidden bg-transparent">
+         <img 
+           src="@/assets/muscle_map_anime.png" 
+           class="absolute inset-y-0 w-[200%] h-full max-w-none object-cover pointer-events-none opacity-[0.25] invert mix-blend-screen"
+           :class="view.alignImage"
+         />
+      </div>
+
+      <!-- SVG Overlay for Connecting Lines - Thinner precision strokes -->
+      <svg class="absolute inset-0 w-full h-full pointer-events-none z-0 overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
+         <line 
+           v-for="muscle in view.muscles" 
+           :key="'line-'+muscle.name"
+           :x1="muscle.node.dot.x" 
+           :y1="muscle.node.dot.y" 
+           :x2="muscle.node.textAnchor.x" 
+           :y2="muscle.node.textAnchor.y" 
+           :stroke="getLineColor(muscle.status?.landmark)" 
+           stroke-width="0.15" 
+           stroke-dasharray="1.5, 2.5"
+           class="opacity-60"
+         />
+      </svg>
+
+      <!-- DOTS & TEXT LABELS -->
+      <template v-for="muscle in view.muscles" :key="muscle.name">
+         
+         <!-- Glowing Dot -->
+         <div 
+           class="absolute transform -translate-x-1/2 -translate-y-1/2 w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full border transition-all duration-700 z-10"
+           :style="{ left: `${muscle.node.dot.x}%`, top: `${muscle.node.dot.y}%` }"
+           :class="getDotColor(muscle.status?.landmark)"
+         >
+           <span 
+             class="absolute inset-0 rounded-full animate-ping opacity-60"
+             :class="getDotColor(muscle.status?.landmark).split(' ')[0]"
+           ></span>
+         </div>
+
+         <!-- Stacked Callout HUD - Soft glass integration -->
+         <div 
+           class="absolute flex justify-center transform -translate-y-1/2 z-20 pointer-events-none"
+           :style="getAnchorStyle(muscle.node)"
+         >
+            <span class="text-[10px] sm:text-[12px] font-black uppercase tracking-[0.2em] text-foreground/90 leading-none mb-0.5 sm:mb-1">
+              {{ muscle.name }}
+            </span>
+            <span class="text-[8px] sm:text-[8.5px] font-mono text-muted-foreground uppercase tracking-[0.1em] bg-background/40 px-1 py-[1.5px] rounded backdrop-blur-md mb-0.5 whitespace-nowrap">
+              {{ getJargon(muscle.status?.landmark) }}
+            </span>
+            <span class="text-[9.5px] sm:text-[11px] font-mono font-bold whitespace-nowrap opacity-90 mt-[1px]" :style="{ color: getLineColor(muscle.status?.landmark) }">
+              {{ muscle.status?.sets || 0 }} <span class="opacity-50 font-sans text-[7.5px] sm:text-[8.5px] font-normal tracking-wide">SETS/WK</span>
+            </span>
+         </div>
+
+      </template>
+
     </div>
-
-    <!-- DATA CALLOUTS -->
-    <div 
-      v-for="muscle in activeGroups" 
-      :key="muscle.name"
-      class="absolute transform -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 group transition-all duration-700"
-      :style="{ top: muscle.coords.top, left: muscle.coords.left }"
-    >
-       <!-- Callout Anchor Line (Optional, keeping it clean for now) -->
-       
-       <!-- Data Pill -->
-       <div 
-         class="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-sm border backdrop-blur-md transition-all duration-500"
-         :class="getLandmarkStyles(muscle.status?.landmark)"
-       >
-          <span class="text-[7px] font-black uppercase tracking-[0.25em] opacity-40 leading-none">
-            {{ muscle.name }}
-          </span>
-          <div class="flex items-baseline gap-1">
-             <span class="text-xs font-mono font-black italic tracking-tighter">{{ muscle.status?.sets }}</span>
-             <span class="text-[7px] font-black uppercase opacity-20">sets</span>
-          </div>
-       </div>
-
-       <!-- Position Indicator (Glow Point) -->
-       <div class="absolute -inset-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300" :class="[getLandmarkStyles(muscle.status?.landmark).split(' ')[0], 'bg-current opacity-5']"></div>
-    </div>
-
-    <!-- Legend Overlay -->
-    <div class="absolute bottom-4 inset-x-8 flex items-center justify-between pointer-events-none">
-        <div class="flex flex-col gap-1.5">
-           <div class="flex items-center gap-3">
-              <div class="w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.5)]"></div>
-              <span class="text-[8px] font-black uppercase tracking-[0.3em] text-cyan-400/40">Optimal</span>
-           </div>
-           <div class="flex items-center gap-3">
-              <div class="w-1.5 h-1.5 rounded-full bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.5)]"></div>
-              <span class="text-[8px] font-black uppercase tracking-[0.3em] text-yellow-500/40">Maintenance</span>
-           </div>
-        </div>
-        
-        <div class="flex flex-col items-end opacity-20">
-           <span class="text-[7px] font-black uppercase tracking-[0.5em]">Mapping Active</span>
-           <span class="text-[6px] font-mono">CODE-ANNOTATED V4.1</span>
-        </div>
-    </div>
-
-    <!-- Scan Line Effect -->
-    <div class="absolute inset-0 pointer-events-none z-10 scan-line"></div>
   </div>
 </template>
 
 <style scoped>
-.scan-line {
-  background: linear-gradient(
-    to bottom,
-    transparent 50%,
-    rgba(0, 0, 0, 0.05) 51%,
-    transparent 52%
-  );
-  background-size: 100% 4px;
-  opacity: 0.2;
-}
-
-/* Ensure the pill font is high-performance */
 .font-mono {
   font-family: 'JetBrains Mono', 'Roboto Mono', monospace;
 }
