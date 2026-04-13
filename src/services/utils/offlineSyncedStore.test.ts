@@ -10,7 +10,7 @@ vi.mock("@vueuse/core", () => ({
     const isLoading = ref(true);
 
     // Execute async function and update state
-    Promise.resolve(fn()).then((result: any) => {
+    Promise.resolve(fn()).then((result: unknown) => {
       state.value = result;
       isLoading.value = false;
     });

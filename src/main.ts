@@ -1,7 +1,7 @@
 import * as Sentry from "@sentry/vue";
 
 import { createPinia } from "pinia";
-import { createApp, watch } from "vue";
+import { createApp } from "vue";
 import vue3GoogleLogin from "vue3-google-login";
 
 import App from "@/App.vue";

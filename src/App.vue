@@ -18,7 +18,7 @@ const userProfileStore = useUserProfileStore();
 const spreadsheetStore = useSpreadsheetStore();
 
 const { needRefresh, updateServiceWorker } = useRegisterSW({
-  onRegisteredSW(swUrl, registration) {
+  onRegisteredSW(_swUrl, registration) {
     if (registration) {
       // Check for updates every hour
       const interval = setInterval(
