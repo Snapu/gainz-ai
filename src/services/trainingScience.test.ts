@@ -6,6 +6,8 @@ import {
   calculateFatigueInsight,
   calculateMuscleGroupInsights,
   calculateTrainingInsights,
+  computeSystemicPhase,
+  type FatigueInsight,
   getMuscleGroup,
 } from "./trainingScience";
 
@@ -235,14 +237,14 @@ describe("calculateMuscleGroupInsights", () => {
 // --- Deload Detection ---
 
 describe("calculateFatigueInsight", () => {
-  it("should detect deload when volume rises for 4 consecutive weeks", () => {
+  it("should detect deload when volume rises for 4 consecutive weeks above 40 sets", () => {
     const targetDate = new Date("2026-03-25T12:00:00Z");
     const logs: ExerciseLog[] = [];
 
-    // Week 1: 10 sets, Week 2: 12, Week 3: 14, Week 4: 18
+    // Week 1: 30 sets, Week 2: 35, Week 3: 40, Week 4: 45
+    const weekSets = [30, 35, 40, 45];
     for (let w = 3; w >= 0; w--) {
-      const setsThisWeek = 10 + (3 - w) * 3;
-      for (let s = 0; s < setsThisWeek; s++) {
+      for (let s = 0; s < weekSets[3 - w]!; s++) {
         const d = new Date(targetDate);
         d.setDate(d.getDate() - w * 7 - 1);
         logs.push(createLog("Bench Press", d, 60, 10));
@@ -324,5 +326,275 @@ describe("calculateTrainingInsights", () => {
     expect(insights.muscleGroups.Shoulders).toBeDefined();
     expect(insights.muscleGroups.Shoulders!.sets).toBe(1);
     expect(insights.e1rm["My Custom Press"]).toBeDefined();
+  });
+
+  it("should include phase in the result", () => {
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    const insights = calculateTrainingInsights([], targetDate);
+
+    expect(insights.phase).toBeDefined();
+    expect(["Inactive", "Maintain", "Build", "Deload"]).toContain(insights.phase);
+  });
+
+  it("should return 'Inactive' phase for an empty log set", () => {
+    const insights = calculateTrainingInsights([]);
+    expect(insights.phase).toBe("Inactive");
+  });
+});
+
+// --- Systemic Phase Detection ---
+
+describe("computeSystemicPhase", () => {
+  function fatigue(overrides?: Partial<FatigueInsight>): FatigueInsight {
+    return {
+      shouldDeload: false,
+      weeklyTotalSets: [],
+      ...overrides,
+    };
+  }
+
+  it("returns 'Deload' when shouldDeload is true regardless of volume", () => {
+    expect(
+      computeSystemicPhase(
+        fatigue({
+          shouldDeload: true,
+          weeklyTotalSets: [5, 5, 5, 5],
+        }),
+      ),
+    ).toBe("Deload");
+  });
+
+  it("returns 'Inactive' when 2-week trailing volume is below 24", () => {
+    expect(
+      computeSystemicPhase(
+        fatigue({
+          weeklyTotalSets: [10, 12, 5, 5],
+        }),
+      ),
+    ).toBe("Inactive");
+  });
+
+  it("returns 'Inactive' with empty trend", () => {
+    expect(
+      computeSystemicPhase(
+        fatigue({
+          weeklyTotalSets: [],
+        }),
+      ),
+    ).toBe("Inactive");
+  });
+
+  it("returns 'Inactive' with single-entry trend", () => {
+    expect(
+      computeSystemicPhase(
+        fatigue({
+          weeklyTotalSets: [10],
+        }),
+      ),
+    ).toBe("Inactive");
+  });
+
+  it("returns 'Build' when volume is increasing and above threshold", () => {
+    expect(
+      computeSystemicPhase(
+        fatigue({
+          weeklyTotalSets: [10, 12, 14, 16],
+        }),
+      ),
+    ).toBe("Build");
+  });
+
+  it("returns 'Maintain' when volume is stable above threshold", () => {
+    expect(
+      computeSystemicPhase(
+        fatigue({
+          weeklyTotalSets: [14, 14, 14, 14],
+        }),
+      ),
+    ).toBe("Maintain");
+  });
+
+  it("returns 'Maintain' when volume decreases but stays above threshold", () => {
+    expect(
+      computeSystemicPhase(
+        fatigue({
+          weeklyTotalSets: [20, 18, 16, 14],
+        }),
+      ),
+    ).toBe("Maintain");
+  });
+
+  it("returns 'Deload' with priority over Build", () => {
+    // Even if volume is increasing, deload flag takes precedence
+    expect(
+      computeSystemicPhase(
+        fatigue({
+          shouldDeload: true,
+          weeklyTotalSets: [10, 12, 14, 16],
+        }),
+      ),
+    ).toBe("Deload");
+  });
+
+  it("handles boundary case at exactly 24 total 2-week volume", () => {
+    // last=12, previous=12 → sum=24, NOT < 24 → should NOT be Inactive
+    expect(
+      computeSystemicPhase(
+        fatigue({
+          weeklyTotalSets: [10, 10, 12, 12],
+        }),
+      ),
+    ).toBe("Maintain");
+  });
+
+  it("handles volume just under threshold (23 total)", () => {
+    expect(
+      computeSystemicPhase(
+        fatigue({
+          weeklyTotalSets: [10, 10, 11, 12],
+        }),
+      ),
+    ).toBe("Inactive");
+  });
+});
+
+// --- Volume Landmark Edge Cases ---
+
+describe("volume landmark edge cases", () => {
+  it("should classify Abs with 0 sets as below_MEV (mev=0 edge case)", () => {
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    // No ab exercises → Abs should not appear in results at all
+    const logs = [createLog("Bench Press", new Date("2026-03-23T12:00:00Z"), 60, 10)];
+    const insights = calculateMuscleGroupInsights(logs, targetDate);
+    expect(insights.Abs).toBeUndefined();
+  });
+
+  it("should classify Chest at exact MEV boundary (8 sets)", () => {
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    const logs: ExerciseLog[] = [];
+    for (let i = 0; i < 8; i++) {
+      logs.push(createLog("Bench Press", new Date("2026-03-23T12:00:00Z"), 60, 10));
+    }
+    const insights = calculateMuscleGroupInsights(logs, targetDate);
+    expect(insights.Chest!.landmark).toBe("at_MEV");
+  });
+
+  it("should classify Chest just below MEV (7 sets) as below_MEV", () => {
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    const logs: ExerciseLog[] = [];
+    for (let i = 0; i < 7; i++) {
+      logs.push(createLog("Bench Press", new Date("2026-03-23T12:00:00Z"), 60, 10));
+    }
+    const insights = calculateMuscleGroupInsights(logs, targetDate);
+    expect(insights.Chest!.landmark).toBe("below_MEV");
+  });
+
+  it("should classify Chest at exact MRV boundary (22 sets) as above_MRV", () => {
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    const logs: ExerciseLog[] = [];
+    for (let i = 0; i < 22; i++) {
+      logs.push(createLog("Bench Press", new Date("2026-03-23T12:00:00Z"), 60, 10));
+    }
+    const insights = calculateMuscleGroupInsights(logs, targetDate);
+    expect(insights.Chest!.landmark).toBe("above_MRV");
+  });
+
+  it("should classify Chest at mavHigh boundary (18 sets) as approaching_MRV", () => {
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    const logs: ExerciseLog[] = [];
+    for (let i = 0; i < 18; i++) {
+      logs.push(createLog("Bench Press", new Date("2026-03-23T12:00:00Z"), 60, 10));
+    }
+    const insights = calculateMuscleGroupInsights(logs, targetDate);
+    expect(insights.Chest!.landmark).toBe("approaching_MRV");
+  });
+
+  it("should classify Chest at 11 sets as at_MEV (below new mavLow=12)", () => {
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    const logs: ExerciseLog[] = [];
+    for (let i = 0; i < 11; i++) {
+      logs.push(createLog("Bench Press", new Date("2026-03-23T12:00:00Z"), 60, 10));
+    }
+    const insights = calculateMuscleGroupInsights(logs, targetDate);
+    expect(insights.Chest!.landmark).toBe("at_MEV");
+  });
+});
+
+// --- e1RM RPE Edge Cases ---
+
+describe("calculateE1RM RPE edge cases", () => {
+  it("should handle RPE 6 correctly (4 reps in reserve)", () => {
+    // 100x5 @ RPE 6 → effective reps = 5 + 4 = 9
+    // e1RM = 100 * (1 + 9/30) = 130
+    expect(calculateE1RM(100, 5, 6)).toBe(130);
+  });
+
+  it("should treat undefined RPE as RPE 10", () => {
+    expect(calculateE1RM(100, 10)).toBe(calculateE1RM(100, 10, 10));
+  });
+
+  it("should handle 1 rep at RPE 10 (true 1RM)", () => {
+    // effectiveReps = 1 + (10-10) = 1 → returns weight directly
+    expect(calculateE1RM(100, 1, 10)).toBe(100);
+  });
+
+  it("should handle 1 rep at RPE 8 (2 reps in reserve)", () => {
+    // effectiveReps = 1 + 2 = 3
+    // e1RM = 100 * (1 + 3/30) = 110
+    expect(calculateE1RM(100, 1, 8)).toBe(110);
+  });
+});
+
+// --- Fatigue Detection Edge Cases ---
+
+describe("calculateFatigueInsight edge cases", () => {
+  it("should not trigger deload when volume increases but stays under 40 in final week", () => {
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    const logs: ExerciseLog[] = [];
+
+    // 4 weeks: 20, 25, 30, 35 — increasing but week 4 under 40
+    const weekSets = [20, 25, 30, 35];
+    for (let w = 3; w >= 0; w--) {
+      for (let s = 0; s < weekSets[3 - w]!; s++) {
+        const d = new Date(targetDate);
+        d.setDate(d.getDate() - w * 7 - 1);
+        logs.push(createLog("Bench Press", d, 60, 10));
+      }
+    }
+
+    const e1rm = calculateE1RMInsights(logs);
+    const fatigue = calculateFatigueInsight(logs, e1rm, targetDate);
+    expect(fatigue.shouldDeload).toBe(false);
+  });
+
+  it("should not trigger deload for a single declining exercise", () => {
+    const e1rm = {
+      "Bench Press": { e1rm: 70, trend: [80, 70], plateau: false },
+    };
+    const fatigue = calculateFatigueInsight([], e1rm);
+    expect(fatigue.shouldDeload).toBe(false);
+  });
+
+  it("should require >5% decline for e1RM performance trigger", () => {
+    // 3% decline should NOT trigger
+    const e1rm = {
+      "Bench Press": { e1rm: 97, trend: [100, 97], plateau: false },
+      Squat: { e1rm: 97, trend: [100, 97], plateau: false },
+    };
+    const fatigue = calculateFatigueInsight([], e1rm);
+    expect(fatigue.shouldDeload).toBe(false);
+  });
+
+  it("should filter out logs without reps from weekly set count", () => {
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    const logs = [
+      // This log has no reps (cardio/distance-based) — should be excluded
+      createLog("Running", new Date("2026-03-23T12:00:00Z"), undefined, undefined),
+      createLog("Bench Press", new Date("2026-03-23T12:00:00Z"), 60, 10),
+    ];
+    const e1rm = calculateE1RMInsights(logs);
+    const fatigue = calculateFatigueInsight(logs, e1rm, targetDate);
+    // Only the Bench Press log should count
+    expect(fatigue.weeklyTotalSets[3]).toBe(1);
   });
 });

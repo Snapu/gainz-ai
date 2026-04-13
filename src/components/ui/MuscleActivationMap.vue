@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { MuscleGroup, VolumeLandmark, MuscleGroupInsight } from "@/services/trainingScience";
+import type { MuscleGroup, MuscleGroupInsight, VolumeLandmark } from "@/services/trainingScience";
 
 const props = defineProps<{
   muscleGroups: Partial<Record<MuscleGroup, MuscleGroupInsight>>;
@@ -9,89 +9,114 @@ const props = defineProps<{
 function getDotColor(landmark?: VolumeLandmark): string {
   if (!landmark) return "bg-white/30 border-white/50";
   switch (landmark) {
-    case "below_MEV": return "bg-yellow-500 border-yellow-300 shadow-[0_0_10px_rgba(234,179,8,1)]";
-    case "at_MEV": return "bg-emerald-500 border-emerald-300 shadow-[0_0_10px_rgba(16,185,129,1)]";
-    case "at_MAV": return "bg-cyan-400 border-cyan-200 shadow-[0_0_15px_rgba(34,211,238,1)]";
-    case "above_MRV": return "bg-red-500 border-red-300 shadow-[0_0_20px_rgba(239,68,68,1)] animate-pulse";
-    default: return "bg-white/30 border-white/50";
+    case "below_MEV":
+      return "bg-yellow-500 border-yellow-300 shadow-[0_0_10px_rgba(234,179,8,1)]";
+    case "at_MEV":
+      return "bg-emerald-500 border-emerald-300 shadow-[0_0_10px_rgba(16,185,129,1)]";
+    case "at_MAV":
+      return "bg-cyan-400 border-cyan-200 shadow-[0_0_15px_rgba(34,211,238,1)]";
+    case "approaching_MRV":
+      return "bg-orange-500 border-orange-300 shadow-[0_0_15px_rgba(249,115,22,1)]";
+    case "above_MRV":
+      return "bg-red-500 border-red-300 shadow-[0_0_20px_rgba(239,68,68,1)] animate-pulse";
+    default:
+      return "bg-white/30 border-white/50";
   }
 }
 
 function getLineColor(landmark?: VolumeLandmark): string {
   if (!landmark) return "rgba(255,255,255,0.25)";
   switch (landmark) {
-    case "below_MEV": return "#eab308";
-    case "at_MEV": return "#10b981";
-    case "at_MAV": return "#22d3ee";
-    case "above_MRV": return "#ef4444";
-    default: return "rgba(255,255,255,0.25)";
+    case "below_MEV":
+      return "#eab308";
+    case "at_MEV":
+      return "#10b981";
+    case "at_MAV":
+      return "#22d3ee";
+    case "approaching_MRV":
+      return "#f97316";
+    case "above_MRV":
+      return "#ef4444";
+    default:
+      return "rgba(255,255,255,0.25)";
   }
 }
 
 function getJargon(landmark?: VolumeLandmark): string {
   switch (landmark) {
-    case "below_MEV": return "Maintenance";
-    case "at_MEV": return "Minimum Effective";
-    case "at_MAV": return "Optimal Hypertrophy";
-    case "above_MRV": return "Overreaching";
-    default: return "Under-Stimulated";
+    case "below_MEV":
+      return "Maintenance";
+    case "at_MEV":
+      return "Minimum Effective";
+    case "at_MAV":
+      return "Optimal Hypertrophy";
+    case "approaching_MRV":
+      return "Near Max Recovery";
+    case "above_MRV":
+      return "Overreaching";
+    default:
+      return "Under-Stimulated";
   }
 }
 
 interface MuscleNode {
-  dot: { x: number; y: number }; 
+  dot: { x: number; y: number };
   textAnchor: { x: number; y: number };
-  align: 'left' | 'right'; 
+  align: "left" | "right";
 }
 
 // X coordinates mapped mathematically for 200% width cropped halves
 
-const MUSCLE_MAP_FRONT: Record<MuscleGroup, MuscleNode> = {
-  Chest:     { dot: { x: 52, y: 31 }, textAnchor: { x: 6, y: 22 }, align: 'left' },  
-  Biceps:    { dot: { x: 32, y: 39 }, textAnchor: { x: 6, y: 39 }, align: 'left' },  
-  Abs:       { dot: { x: 50, y: 44 }, textAnchor: { x: 6, y: 48 }, align: 'left' },  
-  Quads:     { dot: { x: 44, y: 64 }, textAnchor: { x: 6, y: 64 }, align: 'left' },  
-  Shoulders: { dot: { x: 68, y: 26 }, textAnchor: { x: 94, y: 15 }, align: 'right' }
+const MUSCLE_MAP_FRONT: Partial<Record<MuscleGroup, MuscleNode>> = {
+  Chest: { dot: { x: 52, y: 31 }, textAnchor: { x: 6, y: 22 }, align: "left" },
+  Biceps: { dot: { x: 32, y: 39 }, textAnchor: { x: 6, y: 39 }, align: "left" },
+  Abs: { dot: { x: 50, y: 44 }, textAnchor: { x: 6, y: 48 }, align: "left" },
+  Quads: { dot: { x: 44, y: 64 }, textAnchor: { x: 6, y: 64 }, align: "left" },
+  Shoulders: { dot: { x: 68, y: 26 }, textAnchor: { x: 94, y: 15 }, align: "right" },
 };
 
-const MUSCLE_MAP_BACK: Record<MuscleGroup, MuscleNode> = {
-  Back:       { dot: { x: 50, y: 33 }, textAnchor: { x: 6, y: 25 }, align: 'left' }, 
-  Triceps:    { dot: { x: 72, y: 39 }, textAnchor: { x: 94, y: 39 }, align: 'right' },  
-  Glutes:     { dot: { x: 52, y: 49 }, textAnchor: { x: 94, y: 49 }, align: 'right' },  
-  Hamstrings: { dot: { x: 64, y: 65 }, textAnchor: { x: 94, y: 65 }, align: 'right' },  
-  Calves:     { dot: { x: 64, y: 82 }, textAnchor: { x: 94, y: 82 }, align: 'right' }   
+const MUSCLE_MAP_BACK: Partial<Record<MuscleGroup, MuscleNode>> = {
+  Back: { dot: { x: 50, y: 33 }, textAnchor: { x: 6, y: 25 }, align: "left" },
+  Triceps: { dot: { x: 72, y: 39 }, textAnchor: { x: 94, y: 39 }, align: "right" },
+  Glutes: { dot: { x: 52, y: 49 }, textAnchor: { x: 94, y: 49 }, align: "right" },
+  Hamstrings: { dot: { x: 64, y: 65 }, textAnchor: { x: 94, y: 65 }, align: "right" },
+  Calves: { dot: { x: 64, y: 82 }, textAnchor: { x: 94, y: 82 }, align: "right" },
 };
 
 const views = computed(() => {
   const front = Object.entries(MUSCLE_MAP_FRONT).map(([group, node]) => ({
-      name: group as MuscleGroup, node, status: props.muscleGroups[group as MuscleGroup]
+    name: group as MuscleGroup,
+    node,
+    status: props.muscleGroups[group as MuscleGroup],
   }));
   const back = Object.entries(MUSCLE_MAP_BACK).map(([group, node]) => ({
-      name: group as MuscleGroup, node, status: props.muscleGroups[group as MuscleGroup]
+    name: group as MuscleGroup,
+    node,
+    status: props.muscleGroups[group as MuscleGroup],
   }));
 
   return [
-    { id: 'front-view', alignImage: 'left-0', muscles: front, title: 'Anterior View' },
-    { id: 'back-view', alignImage: 'right-0', muscles: back, title: 'Posterior View' }
+    { id: "front-view", alignImage: "left-0", muscles: front, title: "Anterior View" },
+    { id: "back-view", alignImage: "right-0", muscles: back, title: "Posterior View" },
   ];
 });
 
 function getAnchorStyle(node: MuscleNode) {
-  if (node.align === 'right') {
+  if (node.align === "right") {
     return {
       right: `${100 - node.textAnchor.x}%`,
       top: `${node.textAnchor.y}%`,
-      textAlign: 'right' as const,
-      flexDirection: 'column' as const,
-      alignItems: 'flex-end' as const
+      textAlign: "right" as const,
+      flexDirection: "column" as const,
+      alignItems: "flex-end" as const,
     };
   } else {
     return {
       left: `${node.textAnchor.x}%`,
       top: `${node.textAnchor.y}%`,
-      textAlign: 'left' as const,
-      flexDirection: 'column' as const,
-      alignItems: 'flex-start' as const
+      textAlign: "left" as const,
+      flexDirection: "column" as const,
+      alignItems: "flex-start" as const,
     };
   }
 }

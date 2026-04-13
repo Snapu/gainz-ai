@@ -5,6 +5,7 @@ export interface DonutChartItem {
   label: string;
   value: number;
   percent: number;
+  color: string;
   colorClass: string;
 }
 
@@ -26,19 +27,19 @@ const circumference = computed(() => 2 * Math.PI * radius.value);
 
 const segments = computed(() => {
   let accumulatedPercent = 0;
-  
+
   return props.data
-    .filter(item => item.percent > 0)
+    .filter((item) => item.percent > 0)
     .map((item) => {
       const startPercent = accumulatedPercent;
       accumulatedPercent += item.percent;
-      
+
       // Calculate dasharray and dashoffset
       // Dasharray: [segment_length, gap_length]
       // Dashoffset: distance from 12 o'clock (top)
       const dashLength = (item.percent / 100) * circumference.value;
       const gapLength = circumference.value - dashLength;
-      
+
       // SVG dashoffset rotates counter-clockwise.
       // To start at 12 o'clock, we rotate -90deg or 25% of circumference.
       // But standard way is to use transform rotate on the group or circle.

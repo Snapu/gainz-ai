@@ -2,10 +2,7 @@
 import { computed } from "vue";
 import RadialProgress from "@/components/ui/RadialProgress.vue";
 import UiCard from "@/components/ui/UiCard.vue";
-import { 
-  consistencyLabel, 
-  computeReadinessTheme 
-} from "@/composables/useUserProgression";
+import { computeReadinessTheme, consistencyLabel } from "@/composables/useUserProgression";
 import type { UserProgress } from "@/services/leveling";
 
 const props = defineProps<{

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { MuscleGroup, VolumeLandmark, MuscleGroupInsight } from "@/services/trainingScience";
+import type { MuscleGroup, MuscleGroupInsight, VolumeLandmark } from "@/services/trainingScience";
 
 const props = defineProps<{
   muscleGroups: Partial<Record<MuscleGroup, MuscleGroupInsight>>;
@@ -10,11 +10,18 @@ const props = defineProps<{
 function getLandmarkColor(landmark?: VolumeLandmark): string {
   if (!landmark) return "fill-white/5";
   switch (landmark) {
-    case "below_MEV": return "fill-yellow-500/40"; // Maintenance
-    case "at_MEV": return "fill-emerald-500/40"; // Progressive Minimum
-    case "at_MAV": return "fill-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.6)]"; // Optimal Stimulus
-    case "above_MRV": return "fill-red-500 drop-shadow-[0_0_12px_rgba(239,68,68,0.8)] animate-pulse"; // Recovery Limit
-    default: return "fill-white/5";
+    case "below_MEV":
+      return "fill-yellow-500/40"; // Maintenance
+    case "at_MEV":
+      return "fill-emerald-500/40"; // Progressive Minimum
+    case "at_MAV":
+      return "fill-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.6)]"; // Optimal Stimulus
+    case "approaching_MRV":
+      return "fill-orange-500 drop-shadow-[0_0_10px_rgba(249,115,22,0.7)]"; // Near Limit
+    case "above_MRV":
+      return "fill-red-500 drop-shadow-[0_0_12px_rgba(239,68,68,0.8)] animate-pulse"; // Recovery Limit
+    default:
+      return "fill-white/5";
   }
 }
 
@@ -23,9 +30,18 @@ function getGroupStatus(group: MuscleGroup) {
   return props.muscleGroups[group] ?? { sets: 0, landmark: "below_MEV" as const };
 }
 
-/** SVG Human Body Paths (Stylized Blueprint) 
- * Simplified shapes for anterior (front) and posterior (back)
- */
+const ALL_PRIMARY_GROUPS: MuscleGroup[] = [
+  "Shoulders",
+  "Chest",
+  "Back",
+  "Abs",
+  "Quads",
+  "Hamstrings",
+  "Biceps",
+  "Triceps",
+  "Glutes",
+  "Calves",
+];
 </script>
 
 <template>

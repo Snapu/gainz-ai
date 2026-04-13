@@ -4,11 +4,11 @@ import { ChevronRight, ExternalLink, Menu, Moon, Plus, Sparkles } from "lucide-v
 import { storeToRefs } from "pinia";
 import { computed, ref, watch } from "vue";
 import AICoachingPanel from "@/components/AICoachingPanel.vue";
-import TrainingPhaseCard from "@/components/TrainingPhaseCard.vue";
-import TrainingPhaseOverlay from "@/components/TrainingPhaseOverlay.vue";
 import RankDetailsOverlay from "@/components/RankDetailsOverlay.vue";
 import RestTimerToast from "@/components/RestTimerToast.vue";
 import SessionLogGroup from "@/components/SessionLogGroup.vue";
+import TrainingPhaseCard from "@/components/TrainingPhaseCard.vue";
+import TrainingPhaseOverlay from "@/components/TrainingPhaseOverlay.vue";
 import UserProgressCard from "@/components/UserProgressCard.vue";
 import AppHeader from "@/components/ui/AppHeader.vue";
 import BottomSheet from "@/components/ui/BottomSheet.vue";
@@ -22,8 +22,8 @@ import Sparkline from "@/components/ui/Sparkline.vue";
 import { useToast } from "@/components/ui/useToast";
 import { WIZARD_STEPS } from "@/constants/wizard";
 import type { ExerciseLog } from "@/services/exerciseLogs";
-import { calculateUserProgress } from "@/services/leveling";
 import { getLearnedMuscleMap } from "@/services/exerciseMuscleMap";
+import { calculateUserProgress } from "@/services/leveling";
 import { calculateTrainingInsights } from "@/services/trainingScience";
 import { summaryToExerciseLogs, summaryToWorkoutDates } from "@/services/trainingSummary";
 import { localeDateString } from "@/services/utils/date";
@@ -67,7 +67,7 @@ const trainingInsights = computed(() => {
   const currentLogs = exerciseLogs.value;
   const allLogs = [...historicalLogs, ...currentLogs];
   const learnedMap = getLearnedMuscleMap();
-  
+
   return calculateTrainingInsights(allLogs, new Date(), learnedMap);
 });
 

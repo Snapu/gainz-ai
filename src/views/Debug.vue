@@ -59,6 +59,8 @@ function landmarkColor(landmark: string): string {
       return "text-yellow-400";
     case "at_MAV":
       return "text-green-400";
+    case "approaching_MRV":
+      return "text-orange-400";
     case "above_MRV":
       return "text-red-400";
     default:

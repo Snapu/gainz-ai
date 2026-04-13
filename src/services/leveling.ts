@@ -290,7 +290,7 @@ function clamp(value: number, min: number, max: number): number {
  * of how many exercises occurred on that day.
  */
 function toDayKey(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 }
 
 /**
@@ -319,9 +319,8 @@ function dedupeExerciseDays(dates: Date[]): Date[] {
  * - mirrors real training cycles
  */
 function startOfWeek(date: Date): Date {
-  const d = new Date(date);
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const day = d.getDay() || 7; // Sunday → 7
-  d.setHours(0, 0, 0, 0);
   d.setDate(d.getDate() - day + 1);
   return d;
 }
@@ -388,8 +387,13 @@ export function calculateUserProgress(
     };
   }
 
-  // Sort logs chronologically
-  const sortedLogs = [...logs].sort((a, b) => a.loggedAt.getTime() - b.loggedAt.getTime());
+  // Sort logs chronologically (only if needed for performance)
+  const isSorted = logs.every(
+    (l, i) => i === 0 || l.loggedAt.getTime() >= logs[i - 1].loggedAt.getTime(),
+  );
+  const sortedLogs = isSorted
+    ? logs
+    : [...logs].sort((a, b) => a.loggedAt.getTime() - b.loggedAt.getTime());
 
   // Group logs by week
   const logsByWeek = new Map<number, ExerciseLog[]>();
@@ -419,6 +423,11 @@ export function calculateUserProgress(
   let xpProgression = 0;
   let xpMastery = 0;
 
+  // Sliding window for insights (prevents O(N^2) filtering)
+  let windowStartIndex = 0;
+  let windowEndIndex = 0;
+  const slidingWindowDuration = 30 * 24 * 60 * 60 * 1000; // 30 days buffer
+
   for (const weekKey of weekKeys) {
     const weekLogs = logsByWeek.get(weekKey)!;
     const weekEnd = new Date(weekKey + 7 * 24 * 60 * 60 * 1000);
@@ -444,10 +453,20 @@ export function calculateUserProgress(
       readiness += READINESS_GAIN_GOAL;
     }
 
-    // Fatigue penalty: check if we should have deloaded
-    const lastLogOfContext = weekLogs[weekLogs.length - 1]!;
-    const logsUpToWeek = sortedLogs.filter((l) => l.loggedAt <= lastLogOfContext.loggedAt);
-    const insights = calculateMuscleGroupInsights(logsUpToWeek, weekEnd);
+    // Fatigue detection: uses a sliding window of logs for performance
+    const windowStartTime = weekEnd.getTime() - slidingWindowDuration;
+    while (windowEndIndex < sortedLogs.length && sortedLogs[windowEndIndex]!.loggedAt <= weekEnd) {
+      windowEndIndex++;
+    }
+    while (
+      windowStartIndex < windowEndIndex &&
+      sortedLogs[windowStartIndex]!.loggedAt.getTime() < windowStartTime
+    ) {
+      windowStartIndex++;
+    }
+
+    const logsForInsights = sortedLogs.slice(windowStartIndex, windowEndIndex);
+    const insights = calculateMuscleGroupInsights(logsForInsights, weekEnd);
 
     // Fatigue detection (heuristic: if many groups are above MRV)
     const overreachingGroups = Object.values(insights).filter(

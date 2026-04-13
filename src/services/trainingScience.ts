@@ -15,7 +15,7 @@ export type MuscleGroup =
   | "Calves"
   | "Glutes";
 
-export type VolumeLandmark = "below_MEV" | "at_MEV" | "at_MAV" | "above_MRV";
+export type VolumeLandmark = "below_MEV" | "at_MEV" | "at_MAV" | "approaching_MRV" | "above_MRV";
 
 export type SystemicPhase = "Inactive" | "Maintain" | "Build" | "Deload";
 
@@ -247,10 +247,10 @@ const VOLUME_LANDMARKS: Record<
   MuscleGroup,
   { mev: number; mavLow: number; mavHigh: number; mrv: number }
 > = {
-  Chest: { mev: 8, mavLow: 10, mavHigh: 18, mrv: 22 },
-  Back: { mev: 8, mavLow: 10, mavHigh: 20, mrv: 25 },
-  Quads: { mev: 6, mavLow: 8, mavHigh: 18, mrv: 20 },
-  Hamstrings: { mev: 4, mavLow: 6, mavHigh: 14, mrv: 16 },
+  Chest: { mev: 8, mavLow: 12, mavHigh: 18, mrv: 22 },
+  Back: { mev: 8, mavLow: 14, mavHigh: 20, mrv: 25 },
+  Quads: { mev: 6, mavLow: 12, mavHigh: 18, mrv: 20 },
+  Hamstrings: { mev: 4, mavLow: 10, mavHigh: 14, mrv: 16 },
   Shoulders: { mev: 6, mavLow: 8, mavHigh: 18, mrv: 22 },
   Biceps: { mev: 4, mavLow: 6, mavHigh: 14, mrv: 20 },
   Triceps: { mev: 4, mavLow: 6, mavHigh: 14, mrv: 18 },
@@ -262,6 +262,7 @@ const VOLUME_LANDMARKS: Record<
 function getVolumeLandmark(sets: number, group: MuscleGroup): VolumeLandmark {
   const thresholds = VOLUME_LANDMARKS[group];
   if (sets >= thresholds.mrv) return "above_MRV";
+  if (sets >= thresholds.mavHigh) return "approaching_MRV";
   if (sets >= thresholds.mavLow) return "at_MAV";
   if (sets >= thresholds.mev) return "at_MEV";
   return "below_MEV";
@@ -376,7 +377,7 @@ export function calculateFatigueInsight(
   let shouldDeload = false;
   let reason: string | undefined;
 
-  if (volumeIncreasing && weeklyTotalSets[3]! > 15) {
+  if (volumeIncreasing && weeklyTotalSets[3]! > 40) {
     shouldDeload = true;
     reason = "Volume has increased for 4 consecutive weeks. Schedule a deload to allow recovery.";
   } else if (performanceDecline) {

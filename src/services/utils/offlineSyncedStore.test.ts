@@ -40,7 +40,7 @@ describe("useOfflineSyncedStore (Workbox-simplified)", () => {
   });
 
   describe("Initialization", () => {
-    it.skip("should fetch remote items on initialization", async () => {
+    it("should fetch remote items on initialization", async () => {
       const remoteItems: TestItem[] = [
         { id: "1", name: "Item 1", value: 10 },
         { id: "2", name: "Item 2", value: 20 },
@@ -100,7 +100,7 @@ describe("useOfflineSyncedStore (Workbox-simplified)", () => {
   });
 
   describe("Add operation", () => {
-    it.skip("should optimistically add item and call remote", async () => {
+    it("should optimistically add item and call remote", async () => {
       mockFetchRemote.mockResolvedValue(ok([]));
       mockAddRemote.mockResolvedValue(ok(undefined));
 
@@ -142,7 +142,7 @@ describe("useOfflineSyncedStore (Workbox-simplified)", () => {
   });
 
   describe("Remove operation", () => {
-    it.skip("should optimistically remove item and call remote", async () => {
+    it("should optimistically remove item and call remote", async () => {
       const existingItem: TestItem = { id: "1", name: "Existing", value: 50 };
       mockFetchRemote.mockResolvedValue(ok([existingItem]));
       mockRemoveRemote.mockResolvedValue(ok(undefined));
@@ -162,7 +162,7 @@ describe("useOfflineSyncedStore (Workbox-simplified)", () => {
       expect(mockRemoveRemote).toHaveBeenCalledWith(existingItem);
     });
 
-    it.skip("should revert optimistic remove on immediate error", async () => {
+    it("should revert optimistic remove on immediate error", async () => {
       const existingItem: TestItem = { id: "1", name: "Existing", value: 50 };
       mockFetchRemote.mockResolvedValue(ok([existingItem]));
       mockRemoveRemote.mockResolvedValue(err(new Error("Remove failed")));
@@ -184,7 +184,7 @@ describe("useOfflineSyncedStore (Workbox-simplified)", () => {
   });
 
   describe("Update operation", () => {
-    it.skip("should optimistically update item and call remote", async () => {
+    it("should optimistically update item and call remote", async () => {
       const existingItem: TestItem = { id: "1", name: "Old", value: 50 };
       mockFetchRemote.mockResolvedValue(ok([existingItem]));
       mockUpdateRemote.mockResolvedValue(ok(undefined));
@@ -229,7 +229,7 @@ describe("useOfflineSyncedStore (Workbox-simplified)", () => {
   });
 
   describe("Refresh operation", () => {
-    it.skip("should re-fetch remote data on refresh", async () => {
+    it("should re-fetch remote data on refresh", async () => {
       const initialItems: TestItem[] = [{ id: "1", name: "Initial", value: 10 }];
       const updatedItems: TestItem[] = [
         { id: "1", name: "Initial", value: 10 },

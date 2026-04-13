@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import { 
-  Activity, 
-} from "lucide-vue-next";
+import { Activity } from "lucide-vue-next";
 import { computed } from "vue";
-import type { TrainingInsights, SystemicPhase } from "@/services/trainingScience";
+import type { SystemicPhase, TrainingInsights } from "@/services/trainingScience";
 import BottomSheet from "./ui/BottomSheet.vue";
 import MuscleActivationMap from "./ui/MuscleActivationMap.vue";
 
@@ -28,7 +26,7 @@ const dynamicInsight = computed(() => {
   if (props.insights.fatigue.reason) return props.insights.fatigue.reason;
 
   const currentVolume = props.insights.fatigue.weeklyTotalSets[3] || 0;
-  
+
   if (props.insights.phase === "Inactive" || currentVolume < 5) {
     return "Volume is too low to maintain your current muscle. Focus on getting back to a consistent weekly routine.";
   }

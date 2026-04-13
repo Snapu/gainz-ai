@@ -1,19 +1,16 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import Progress from "@/components/ui/Progress.vue";
-import { 
-  computeReadinessTheme, 
-  computeXpPillars, 
-  formatJourneyDuration,
-  consistencyLabel,
-  formatVolume
-} from "@/composables/useUserProgression";
-import { 
-  getNextTitleMilestone,
-  type UserProgress 
-} from "@/services/leveling";
-import UiDonutChart from "@/components/ui/UiDonutChart.vue";
 import type { DonutChartItem } from "@/components/ui/UiDonutChart.vue";
+import UiDonutChart from "@/components/ui/UiDonutChart.vue";
+import {
+  computeReadinessTheme,
+  computeXpPillars,
+  consistencyLabel,
+  formatJourneyDuration,
+  formatVolume,
+} from "@/composables/useUserProgression";
+import { getNextTitleMilestone, type UserProgress } from "@/services/leveling";
 import { useUserProfileStore } from "@/stores/userProfile";
 import BottomSheet from "./ui/BottomSheet.vue";
 import UiCard from "./ui/UiCard.vue";
@@ -36,9 +33,9 @@ const gritScore = computed(() => {
 
 const xpPillars = computed<DonutChartItem[]>(() => {
   const rawPillars = computeXpPillars(props.progress.xpBreakdown);
-  return rawPillars.map(p => ({
+  return rawPillars.map((p) => ({
     ...p,
-    colorClass: p.color.replace('bg-', 'text-')
+    colorClass: p.color.replace("bg-", "text-"),
   }));
 });
 
@@ -50,7 +47,9 @@ const nextRank = computed(() => getNextTitleMilestone(props.progress.level));
 
 const formattedStartDate = computed(() => {
   return new Intl.DateTimeFormat("en-US", {
-    month: "short", day: "numeric", year: "numeric",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
   }).format(props.progress.firstSessionDate);
 });
 

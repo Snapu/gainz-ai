@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed } from "vue";
 import { ChevronRight } from "lucide-vue-next";
+import { computed } from "vue";
 import UiCard from "@/components/ui/UiCard.vue";
-import type { TrainingInsights, SystemicPhase } from "@/services/trainingScience";
+import type { SystemicPhase, TrainingInsights } from "@/services/trainingScience";
 
 const props = defineProps<{
   insights: TrainingInsights;
