@@ -11,8 +11,7 @@ function createMockProgress(overrides?: Partial<UserProgress>): UserProgress {
     xpIntoLevel: 200,
     xpForNextLevel: 300,
     progressPercent: 66.67,
-    momentum: 1.5,
-    readiness: 0.8,
+    readiness: 1.5,
     title: "Iron Fist",
     description: "A warrior's journey begins",
     avatar: "/avatars/rank-10.webp",
@@ -33,7 +32,7 @@ function createMockProgress(overrides?: Partial<UserProgress>): UserProgress {
 }
 
 describe("RankDetailsOverlay", () => {
-  it("renders all 5 section data attributes", () => {
+  it("renders the rank hero section", () => {
     const wrapper = mount(RankDetailsOverlay, {
       props: {
         open: true,
@@ -47,15 +46,12 @@ describe("RankDetailsOverlay", () => {
             template: "<div :data-section=\"$attrs['data-section']\"><slot /></div>",
           },
           Progress: { template: "<div></div>" },
+          UiDonutChart: { template: "<div><slot /></div>" },
         },
       },
     });
 
     expect(wrapper.find('[data-section="rank-hero"]').exists()).toBe(true);
-    expect(wrapper.find('[data-section="training-momentum"]').exists()).toBe(true);
-    expect(wrapper.find('[data-section="weekly-volume"]').exists()).toBe(true);
-    expect(wrapper.find('[data-section="strength-progress"]').exists()).toBe(true);
-    expect(wrapper.find('[data-section="training-journey"]').exists()).toBe(true);
   });
 
   it("displays user progress data", () => {
@@ -72,13 +68,14 @@ describe("RankDetailsOverlay", () => {
             template: "<div :data-section=\"$attrs['data-section']\"><slot /></div>",
           },
           Progress: { template: "<div></div>" },
+          UiDonutChart: { template: "<div><slot /></div>" },
         },
       },
     });
 
     const text = wrapper.text();
     expect(text).toContain("Iron Fist");
-    expect(text).toContain("L10");
+    expect(text).toContain("Level 10");
   });
 
   it("mounts without errors", () => {
@@ -96,6 +93,7 @@ describe("RankDetailsOverlay", () => {
               template: "<div :data-section=\"$attrs['data-section']\"><slot /></div>",
             },
             Progress: { template: "<div></div>" },
+            UiDonutChart: { template: "<div><slot /></div>" },
           },
         },
       });

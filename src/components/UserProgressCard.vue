@@ -4,8 +4,8 @@ import RadialProgress from "@/components/ui/RadialProgress.vue";
 import UiCard from "@/components/ui/UiCard.vue";
 import { 
   consistencyLabel, 
-  computeMomentumTheme 
-} from "@/composables/useRankDetailsData";
+  computeReadinessTheme 
+} from "@/composables/useUserProgression";
 import type { UserProgress } from "@/services/leveling";
 
 const props = defineProps<{
@@ -14,9 +14,9 @@ const props = defineProps<{
 
 defineEmits<(e: "click") => void>();
 
-const consistencyTier = computed(() => consistencyLabel(props.progress.momentum));
+const consistencyTier = computed(() => consistencyLabel(props.progress.readiness));
 
-const momentumStatus = computed(() => computeMomentumTheme(props.progress.momentum));
+const readinessTheme = computed(() => computeReadinessTheme(props.progress.readiness));
 </script>
 
 <template>
@@ -35,7 +35,7 @@ const momentumStatus = computed(() => computeMomentumTheme(props.progress.moment
           :size="92" 
           :stroke-width="4.5"
           class="transition-all duration-1000"
-          :class="momentumStatus.color"
+          :class="readinessTheme.color"
         >
           <!-- Inner Avatar Image -->
           <div class="relative w-20 h-20 rounded-full overflow-hidden border border-border group-hover:border-primary/40 transition-colors shadow-sm">
@@ -59,7 +59,7 @@ const momentumStatus = computed(() => computeMomentumTheme(props.progress.moment
         </h2>
         
         <div class="flex items-center gap-1.5">
-          <div :class="['w-2 h-2 rounded-full animate-pulse shadow-sm', momentumStatus.color.replace('text-', 'bg-')]"></div>
+          <div :class="['w-2 h-2 rounded-full animate-pulse shadow-sm', readinessTheme.color.replace('text-', 'bg-')]"></div>
           <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {{ consistencyTier }}
           </span>

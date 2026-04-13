@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import Progress from "@/components/ui/Progress.vue";
-import {
-  computeMomentumTheme,
-  computeXpPillars,
-  formatVolume,
-} from "@/composables/useRankDetailsData";
+import { 
+  computeReadinessTheme, 
+  computeXpPillars, 
+  formatJourneyDuration,
+  consistencyLabel,
+  formatVolume
+} from "@/composables/useUserProgression";
 import { 
   getNextTitleMilestone,
   type UserProgress 
@@ -27,7 +29,7 @@ const userStore = useUserProfileStore();
 // --- Progression Metrics ---
 const gritScore = computed(() => {
   const targetWorkouts = userStore.userProfile.workoutDaysPerWeek || 3;
-  const weeklyXP = targetWorkouts * 100 * props.progress.momentum;
+  const weeklyXP = targetWorkouts * 100 * props.progress.readiness;
   const xpNeeded = props.progress.xpForNextLevel - props.progress.xpIntoLevel;
   return Math.max(1, Math.ceil(xpNeeded / (weeklyXP || 1)));
 });
@@ -54,7 +56,7 @@ const formattedStartDate = computed(() => {
 
 const formattedTotalVolume = computed(() => formatVolume(props.progress.totalVolumeKg));
 
-const momentumEffect = computed(() => computeMomentumTheme(props.progress.readiness));
+const readinessTheme = computed(() => computeReadinessTheme(props.progress.readiness));
 </script>
 
 <template>
@@ -119,8 +121,8 @@ const momentumEffect = computed(() => computeMomentumTheme(props.progress.readin
             <div class="pt-4 border-t border-border/40">
               <div class="flex justify-between items-center mb-2">
                  <span class="text-xs text-muted-foreground font-medium uppercase tracking-wider">Readiness</span>
-                 <span :class="['text-sm font-bold', momentumEffect.color]">
-                    {{ (progress.momentum * 100).toFixed(0) }}%
+                 <span :class="['text-sm font-bold', readinessTheme.color]">
+                    {{ (progress.readiness * 100).toFixed(0) }}%
                  </span>
               </div>
               <div class="flex gap-1 h-1.5">
@@ -128,8 +130,8 @@ const momentumEffect = computed(() => computeMomentumTheme(props.progress.readin
                   v-for="i in 10" :key="i"
                   class="flex-1 rounded-full transition-all duration-300"
                   :class="[
-                    (progress.momentum * 10) >= i 
-                      ? (momentumEffect.color.replace('text-', 'bg-')) 
+                    (progress.readiness * 10) >= i 
+                      ? (readinessTheme.color.replace('text-', 'bg-')) 
                       : 'bg-muted'
                   ]"
                 ></div>

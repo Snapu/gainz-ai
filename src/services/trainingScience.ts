@@ -17,6 +17,8 @@ export type MuscleGroup =
 
 export type VolumeLandmark = "below_MEV" | "at_MEV" | "at_MAV" | "above_MRV";
 
+export type SystemicPhase = "Inactive" | "Maintain" | "Build" | "Deload";
+
 export interface MuscleGroupInsight {
   sets: number;
   landmark: VolumeLandmark;
@@ -41,6 +43,7 @@ export interface TrainingInsights {
   muscleGroups: Partial<Record<MuscleGroup, MuscleGroupInsight>>;
   e1rm: Record<string, ExerciseE1RM>;
   fatigue: FatigueInsight;
+  phase: SystemicPhase;
 }
 
 // --- Exercise → Muscle Group Mapping ---
@@ -384,6 +387,36 @@ export function calculateFatigueInsight(
   return { shouldDeload, reason, weeklyTotalSets };
 }
 
+// --- Systemic Phase Detection ---
+
+/**
+ * Determine the athlete's current training phase from fatigue telemetry.
+ *
+ * Phase mapping:
+ * - Deload:   Fatigue signals have triggered a mandatory recovery period.
+ * - Build:    Volume is actively increasing week-over-week above MEV.
+ * - Maintain: Volume is sufficient to preserve current adaptations.
+ * - Inactive: Volume is below the minimum effective threshold.
+ */
+export function computeSystemicPhase(fatigue: FatigueInsight): SystemicPhase {
+  if (fatigue.shouldDeload) return "Deload";
+
+  const trend = fatigue.weeklyTotalSets;
+  const last = trend[trend.length - 1] ?? 0;
+  const previous = trend[trend.length - 2] ?? 0;
+
+  // Below Minimum Volume (MV) for the whole body
+  // Trailing 14-day global volume sum. MEV for a full body is roughly 12 sets/week.
+  // If sum is < 24 sets over 14 days, systemic tension is fundamentally lost.
+  if (last + previous < 24) return "Inactive";
+
+  // Active progression
+  if (trend.length >= 2 && last > previous && last >= 10) return "Build";
+
+  // Baseline maintenance
+  return "Maintain";
+}
+
 // --- Main Entry Point ---
 
 /**
@@ -399,6 +432,7 @@ export function calculateTrainingInsights(
   const e1rm = calculateE1RMInsights(logs, overrideMap);
   const muscleGroups = calculateMuscleGroupInsights(logs, targetDate, overrideMap);
   const fatigue = calculateFatigueInsight(logs, e1rm, targetDate);
+  const phase = computeSystemicPhase(fatigue);
 
-  return { muscleGroups, e1rm, fatigue };
+  return { muscleGroups, e1rm, fatigue, phase };
 }

@@ -18,8 +18,8 @@
  * - Input represents calendar days on which any exercise occurred
  * - Multiple exercises on the same day count as one exercise day
  * - Progress is evaluated on a weekly cadence
- * - A consistency-based momentum multiplier affects XP gain
- * - Missing weeks reduces momentum; sustained consistency restores it
+ * - A consistency-based readiness multiplier affects XP gain
+ * - Missing weeks reduces readiness; sustained consistency restores it
  *
  * SAFEGUARDS
  * ----------
@@ -74,7 +74,6 @@ export interface UserProgress {
   xpIntoLevel: number;
   xpForNextLevel: number;
   progressPercent: number;
-  momentum: number; // readiness multiplier
   readiness: number;
   title: string;
   description: string;
@@ -375,7 +374,6 @@ export function calculateUserProgress(
       xpIntoLevel: 0,
       xpForNextLevel: xpForLevel(1),
       progressPercent: 0,
-      momentum: READINESS_MIN,
       readiness: READINESS_MIN,
       title: getTitleForLevel(1),
       description: TITLES[0].description,
@@ -435,7 +433,7 @@ export function calculateUserProgress(
       }
     }
 
-    /* ---- 2. Weekly Momentum Growth & Fatigue ---- */
+    /* ---- 2. Weekly Readiness Growth & Fatigue ---- */
     const uniqueDaysThisWeek = new Set(weekLogs.map((l) => toDayKey(l.loggedAt))).size;
 
     // Build readiness with any activity
@@ -535,7 +533,6 @@ export function calculateUserProgress(
     xpIntoLevel: Math.floor(xpRemaining),
     xpForNextLevel: xpForNext,
     progressPercent,
-    momentum: readiness,
     readiness,
     title: rankInfo.title,
     description: (rankInfo as any).description,

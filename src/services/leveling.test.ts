@@ -20,7 +20,7 @@ describe("leveling system", () => {
 
       expect(result.level).toBe(1);
       expect(result.totalXP).toBe(0);
-      expect(result.momentum).toBe(0.5); // READINESS_MIN
+      expect(result.readiness).toBe(0.5); // READINESS_MIN
       expect(result.title).toBe("Novice Challenger");
     });
 
@@ -30,10 +30,10 @@ describe("leveling system", () => {
 
       expect(result.level).toBe(1);
       expect(result.totalXP).toBeGreaterThan(0);
-      expect(result.momentum).toBeGreaterThan(0.5);
+      expect(result.readiness).toBeGreaterThan(0.5);
     });
 
-    it("should build momentum over consistent weeks", () => {
+    it("should build readiness over consistent weeks", () => {
       const logs: ExerciseLog[] = [];
       const startDate = new Date("2026-01-05"); // Monday
 
@@ -48,12 +48,12 @@ describe("leveling system", () => {
 
       const result = calculateUserProgress(logs, 3);
 
-      expect(result.momentum).toBeGreaterThan(0.5);
-      expect(result.momentum).toBeLessThanOrEqual(1.5); // READINESS_MAX
+      expect(result.readiness).toBeGreaterThan(0.5);
+      expect(result.readiness).toBeLessThanOrEqual(1.5); // READINESS_MAX
       expect(result.level).toBeGreaterThan(1);
     });
 
-    it("should reduce momentum when weeks are missed", () => {
+    it("should reduce readiness when weeks are missed", () => {
       const logs: ExerciseLog[] = [];
       const startDate = new Date("2026-01-05"); // Monday
 
@@ -73,10 +73,10 @@ describe("leveling system", () => {
       const result = calculateUserProgress(logs, 3);
 
       // Momentum should decay during the gap
-      expect(result.momentum).toBeLessThan(0.8);
+      expect(result.readiness).toBeLessThan(0.8);
     });
 
-    it("should cap momentum at 1.5", () => {
+    it("should cap readiness at 1.5", () => {
       const logs: ExerciseLog[] = [];
       const startDate = new Date("2026-01-05");
 
@@ -91,7 +91,7 @@ describe("leveling system", () => {
 
       const result = calculateUserProgress(logs, 3);
 
-      expect(result.momentum).toBe(1.5);
+      expect(result.readiness).toBe(1.5);
     });
 
     it("should award progression XP for hitting e1RM PRs (>2.5%)", () => {

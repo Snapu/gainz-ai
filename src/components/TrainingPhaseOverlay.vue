@@ -1,15 +1,11 @@
 <script setup lang="ts">
 import { 
   Activity, 
-  Info, 
 } from "lucide-vue-next";
 import { computed } from "vue";
-import {
-  computeTrainingPhase,
-} from "@/composables/useRankDetailsData";
-import type { TrainingInsights } from "@/services/trainingScience";
+import type { TrainingInsights, SystemicPhase } from "@/services/trainingScience";
 import BottomSheet from "./ui/BottomSheet.vue";
-import BodyHeatMap2D from "./ui/BodyHeatMap2D.vue";
+import MuscleActivationMap from "./ui/MuscleActivationMap.vue";
 
 const props = defineProps<{
   insights: TrainingInsights;
@@ -17,34 +13,15 @@ const props = defineProps<{
 
 const modelValue = defineModel<boolean>("open");
 
-// --- Adaptive Phase Detection (Domain Alignment) ---
-const trainingPhase = computed(() => computeTrainingPhase(props.insights));
+// --- Presentation-layer phase theme mapping ---
+const PHASE_THEME: Record<SystemicPhase, { textClass: string }> = {
+  Deload: { textClass: "text-orange-500" },
+  Build: { textClass: "text-primary" },
+  Maintain: { textClass: "text-cyan-400" },
+  Inactive: { textClass: "text-muted-foreground/80" },
+};
 
-// Calculate metrics for SVG Radial Gauge
-const gaugeMeta = computed(() => {
-  const label = trainingPhase.value.label;
-  if (label === 'Deload') return { 
-    percent: 100, 
-    strokeClass: 'stroke-orange-500', 
-    textClass: 'text-orange-500',
-  };
-  if (label === 'Build') return { 
-    percent: 66.6, 
-    strokeClass: 'stroke-primary', 
-    textClass: 'text-primary',
-  };
-  if (label === 'Maintain') return { 
-    percent: 33.3, 
-    strokeClass: 'stroke-cyan-400', 
-    textClass: 'text-cyan-400',
-  };
-  // Inactive Baseline (Dormant State - 0%)
-  return { 
-    percent: 0, 
-    strokeClass: 'stroke-muted-foreground/30', 
-    textClass: 'text-muted-foreground/80',
-  };
-});
+const phaseTheme = computed(() => PHASE_THEME[props.insights.phase]);
 
 // Context-aware insight mapping
 const dynamicInsight = computed(() => {
@@ -52,16 +29,15 @@ const dynamicInsight = computed(() => {
 
   const currentVolume = props.insights.fatigue.weeklyTotalSets[3] || 0;
   
-  // Phase below maintaining -> Inconsistent/Inactive
-  if (trainingPhase.value.label === 'Inactive' || currentVolume < 5) {
+  if (props.insights.phase === "Inactive" || currentVolume < 5) {
     return "Volume is too low to maintain your current muscle. Focus on getting back to a consistent weekly routine.";
   }
 
-  if (trainingPhase.value.label === 'Maintain') {
+  if (props.insights.phase === "Maintain") {
     return "You're hitting enough volume to maintain your gains. When you're ready to grow, start pushing more sets incrementally.";
   }
 
-  // Accumulation fallback
+  // Build fallback
   return "You're consistently driving progressive overload. Keep pushing the intensity and volume to build muscle.";
 });
 </script>
@@ -80,8 +56,8 @@ const dynamicInsight = computed(() => {
            <span class="text-[10px] font-black uppercase tracking-[0.25em] text-muted-foreground/60 mb-2.5">
              Training Phase
            </span>
-           <h1 :class="['text-5xl md:text-6xl font-black uppercase tracking-tight mb-4 drop-shadow-sm', gaugeMeta.textClass]">
-             {{ trainingPhase.label }}
+           <h1 :class="['text-5xl md:text-6xl font-black uppercase tracking-tight mb-4 drop-shadow-sm', phaseTheme.textClass]">
+             {{ insights.phase }}
            </h1>
            <p class="text-[15px] font-medium leading-relaxed text-foreground/80 max-w-sm">
              {{ dynamicInsight }}
@@ -137,7 +113,7 @@ const dynamicInsight = computed(() => {
           </div>
 
           <div class="-mx-6">
-             <BodyHeatMap2D :muscle-groups="insights.muscleGroups" />
+             <MuscleActivationMap :muscle-groups="insights.muscleGroups" />
           </div>
         </section>
 

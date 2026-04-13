@@ -1,11 +1,10 @@
 import type { UserProgress } from "@/services/leveling";
-import type { TrainingInsights } from "@/services/trainingScience";
 
-export function consistencyLabel(momentum: number): string {
-  if (momentum < 0.7) return "Developing Foundation";
-  if (momentum < 0.9) return "Building Rhythm";
-  if (momentum < 1.1) return "Solid Consistency";
-  if (momentum < 1.3) return "Elite Discipline";
+export function consistencyLabel(readiness: number): string {
+  if (readiness < 0.7) return "Developing Foundation";
+  if (readiness < 0.9) return "Building Rhythm";
+  if (readiness < 1.1) return "Solid Consistency";
+  if (readiness < 1.3) return "Elite Discipline";
   return "Unstoppable Force";
 }
 
@@ -16,49 +15,18 @@ export function formatVolume(kg: number): string {
   return `${kg} kg`;
 }
 
-export function computeTrainingPhase(insights: TrainingInsights): {
-  label: string;
-  color: string;
-  bg: string;
-} {
-  const { fatigue } = insights;
-
-  if (fatigue.shouldDeload) {
-    return { label: "Deload", color: "text-orange-500", bg: "bg-orange-500/10" };
-  }
-
-  const trend = fatigue.weeklyTotalSets;
-  const last = trend[trend.length - 1] ?? 0;
-  const previous = trend[trend.length - 2] ?? 0;
-
-  // Below Minimum Volume (MV) for the whole body
-  // Trailing 14-day global volume sum. MEV for a full body is roughly 12 sets/week.
-  // If sum is < 24 sets over 14 days, systemic tension is fundamentally lost.
-  if (last + previous < 24) {
-    return { label: "Inactive", color: "text-muted-foreground", bg: "bg-muted-foreground/10" };
-  }
-
-  // Active progression
-  if (trend.length >= 2 && last > previous && last >= 10) {
-    return { label: "Build", color: "text-primary", bg: "bg-primary/10" };
-  }
-
-  // Baseline maintenance
-  return { label: "Maintain", color: "text-cyan-400", bg: "bg-cyan-400/10" };
-}
-
-export function computeMomentumTheme(momentum: number): {
+export function computeReadinessTheme(readiness: number): {
   color: string;
   glow: string;
   border: string;
 } {
-  if (momentum < 0.7)
+  if (readiness < 0.7)
     return { color: "text-blue-400", glow: "bg-blue-400/20", border: "border-blue-400/30" };
-  if (momentum < 0.9)
+  if (readiness < 0.9)
     return { color: "text-cyan-400", glow: "bg-cyan-400/20", border: "border-cyan-400/30" };
-  if (momentum < 1.1)
+  if (readiness < 1.1)
     return { color: "text-primary", glow: "bg-primary/20", border: "border-primary/30" };
-  if (momentum < 1.3)
+  if (readiness < 1.3)
     return {
       color: "text-emerald-400",
       glow: "bg-emerald-400/20",

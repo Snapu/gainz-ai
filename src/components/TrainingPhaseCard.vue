@@ -2,8 +2,7 @@
 import { computed } from "vue";
 import { ChevronRight } from "lucide-vue-next";
 import UiCard from "@/components/ui/UiCard.vue";
-import { computeTrainingPhase } from "@/composables/useRankDetailsData";
-import type { TrainingInsights } from "@/services/trainingScience";
+import type { TrainingInsights, SystemicPhase } from "@/services/trainingScience";
 
 const props = defineProps<{
   insights: TrainingInsights;
@@ -11,7 +10,14 @@ const props = defineProps<{
 
 defineEmits<(e: "click") => void>();
 
-const trainingPhase = computed(() => computeTrainingPhase(props.insights));
+const PHASE_THEME: Record<SystemicPhase, { textClass: string }> = {
+  Deload: { textClass: "text-orange-500" },
+  Build: { textClass: "text-primary" },
+  Maintain: { textClass: "text-cyan-400" },
+  Inactive: { textClass: "text-muted-foreground" },
+};
+
+const phaseTheme = computed(() => PHASE_THEME[props.insights.phase]);
 </script>
 
 <template>
@@ -29,7 +35,7 @@ const trainingPhase = computed(() => computeTrainingPhase(props.insights));
         <!-- Main Phase Label -->
         <div class="flex items-baseline gap-1 min-w-[5rem]">
           <span class="text-2xl font-bold tracking-tight text-foreground uppercase group-hover:text-primary transition-colors">
-            {{ trainingPhase.label }}
+            {{ insights.phase }}
           </span>
         </div>
         
