@@ -23,7 +23,7 @@ defineEmits<{
 </script>
 
 <template>
-  <div class="mt-8 overflow-hidden">
+  <div class="mt-4 overflow-hidden">
     <!-- Session Header -->
     <UiCard 
       as="button"

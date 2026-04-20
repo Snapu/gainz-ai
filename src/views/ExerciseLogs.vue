@@ -4,10 +4,8 @@ import { ChevronRight, ExternalLink, Menu, Moon, Plus, Sparkles } from "lucide-v
 import { storeToRefs } from "pinia";
 import { computed, ref, watch } from "vue";
 import AICoachingPanel from "@/components/AICoachingPanel.vue";
-import RankDetailsOverlay from "@/components/RankDetailsOverlay.vue";
 import RestTimerToast from "@/components/RestTimerToast.vue";
 import SessionLogGroup from "@/components/SessionLogGroup.vue";
-import TrainingPhaseCard from "@/components/TrainingPhaseCard.vue";
 import TrainingPhaseOverlay from "@/components/TrainingPhaseOverlay.vue";
 import UserProgressCard from "@/components/UserProgressCard.vue";
 import AppHeader from "@/components/ui/AppHeader.vue";
@@ -49,7 +47,6 @@ const { userProfile } = storeToRefs(profileStore);
 const { exerciseLogs } = storeToRefs(logsStore);
 
 const isAIPanelOpen = ref(false);
-const isRankOverlayOpen = ref(false);
 const isTrainingPhaseOverlayOpen = ref(false);
 
 // --- Leveling ---
@@ -352,9 +349,12 @@ async function saveLog() {
       </div>
     </AppHeader>
 
-    <!-- Consistency & Leveling (Horizontal HUD - Aligned) -->
-    <UserProgressCard :progress="userProgress" @click="isRankOverlayOpen = true" />
-    <TrainingPhaseCard :insights="trainingInsights" @click="isTrainingPhaseOverlayOpen = true" />
+    <!-- Unified Journey HUD -->
+    <UserProgressCard 
+      :progress="userProgress" 
+      :insights="trainingInsights" 
+      @click="isTrainingPhaseOverlayOpen = true" 
+    />
 
     <!-- Logs List -->
     <main class="flex-1 px-4 pb-32 overflow-y-auto no-scrollbar">
@@ -469,7 +469,6 @@ async function saveLog() {
     </BottomSheet>
 
     <AICoachingPanel v-model:open="isAIPanelOpen" @log-exercise="prefillFromAi" />
-    <RankDetailsOverlay v-model:open="isRankOverlayOpen" :progress="userProgress" />
     <TrainingPhaseOverlay v-model:open="isTrainingPhaseOverlayOpen" :insights="trainingInsights" />
   </div>
 </template>
