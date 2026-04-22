@@ -156,18 +156,23 @@ function getAnchorStyle(node: MuscleNode) {
       </div>
     </div>
 
-    <div :key="currentView.id" class="relative w-full aspect-[1/2] animate-in fade-in zoom-in-95 duration-500">
+    <div class="relative w-full aspect-[1/2]">
       
-      <!-- Image Crop Wrapper - Ultra subtle ghosting -->
-      <div class="absolute inset-0 overflow-hidden bg-transparent">
-         <img 
-           src="@/assets/muscle_map_anime.png" 
-           class="absolute inset-y-0 w-[200%] h-full max-w-none pointer-events-none opacity-[0.25] invert mix-blend-screen transition-all duration-700 ease-in-out object-fill"
-           :class="currentView.alignImage"
-           :style="{ transform: currentView.offsetStyle }"
-         />
+      <!-- IMAGE LAYER (Screen blended on the stacking context root to drop the black background) -->
+      <div :key="'img-'+currentView.id" class="absolute inset-0 w-full h-full animate-in fade-in zoom-in-95 duration-500 mix-blend-screen">
+        <div class="absolute inset-0 overflow-hidden bg-transparent">
+           <img 
+             src="@/assets/muscle_map_anime.png" 
+             class="absolute inset-y-0 w-[200%] h-full max-w-none pointer-events-none opacity-[0.25] invert transition-all duration-700 ease-in-out object-fill"
+             :class="currentView.alignImage"
+             :style="{ transform: currentView.offsetStyle }"
+           />
+        </div>
       </div>
 
+      <!-- OVERLAY LAYER (Normal blending to preserve text legibility) -->
+      <div :key="'overlay-'+currentView.id" class="absolute inset-0 w-full h-full animate-in fade-in zoom-in-95 duration-500 pointer-events-none">
+        
         <!-- SVG Overlay for Connecting Lines -->
         <svg class="absolute inset-0 w-full h-full pointer-events-none z-0 overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
            <line 
@@ -217,6 +222,7 @@ function getAnchorStyle(node: MuscleNode) {
 
         </template>
 
+      </div>
     </div>
   </div>
 </template>
