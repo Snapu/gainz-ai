@@ -3,6 +3,7 @@ import { Mutex } from "async-mutex";
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { defineStore } from "pinia";
 import { computed, type Ref, ref, shallowRef, watchEffect } from "vue";
+import { useAuthErrorHandler } from "@/composables/useAuthErrorHandler";
 import {
   createSpreadsheet,
   getSpreadsheetId,
@@ -18,6 +19,15 @@ export const useSpreadsheetStore = defineStore("spreadsheet", () => {
   const authStore = useAuthStore();
   const mutex = new Mutex();
 
+  const { handleAuthError } = useAuthErrorHandler();
+
+  // Clear doc when user logs out
+  watchEffect(() => {
+    if (!authStore.isLoggedIn && doc.value) {
+      doc.value = null;
+    }
+  });
+
   async function init(accessToken: string) {
     await mutex.runExclusive(async () => {
       if (doc.value) return;
@@ -26,14 +36,26 @@ export const useSpreadsheetStore = defineStore("spreadsheet", () => {
       try {
         const idResult = await getSpreadsheetId(SPREADSHEET_NAME, accessToken);
         if (idResult.isErr()) {
+          if (idResult.error === "auth-failed") {
+            handleAuthError();
+            return;
+          }
           console.error("Error getting spreadsheet ID:", idResult.error);
           Sentry.captureException(idResult.error);
         }
         if (idResult.isOk() && idResult.value !== null) {
           const loadResult = await loadSpreadsheet(idResult.value, accessToken);
+          if (loadResult.isErr() && loadResult.error === "auth-failed") {
+            handleAuthError();
+            return;
+          }
           if (loadResult.isOk()) doc.value = loadResult.value as GoogleSpreadsheet;
         } else if (idResult.isOk()) {
           const createResult = await createSpreadsheet(SPREADSHEET_NAME, accessToken);
+          if (createResult.isErr() && createResult.error === "auth-failed") {
+            handleAuthError();
+            return;
+          }
           if (createResult.isOk()) doc.value = createResult.value as GoogleSpreadsheet;
         }
       } catch (error) {
