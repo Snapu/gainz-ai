@@ -1,8 +1,5 @@
 import type { UserProgress } from "@/services/leveling";
 
-
-
-
 export function computeReadinessTheme(readiness: number): {
   color: string;
   glow: string;
@@ -26,4 +23,3 @@ export function computeReadinessTheme(readiness: number): {
     border: "border-fuchsia-400/30",
   };
 }
-

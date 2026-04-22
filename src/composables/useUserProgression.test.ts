@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { TrainingInsights } from "@/services/trainingScience";
 import { computeSystemicPhase } from "@/services/trainingScience";
-import {
-  computeReadinessTheme,
-} from "./useUserProgression";
+import { computeReadinessTheme } from "./useUserProgression";
 
 // --- TEST HELPERS ---
 
@@ -27,9 +25,6 @@ function createMockInsights(overrides?: Partial<TrainingInsights>): TrainingInsi
 // --- TESTS ---
 
 describe("useUserProgression composable", () => {
-
-
-
   describe("computeSystemicPhase (domain engine)", () => {
     it("returns 'Deload' when shouldDeload is true", () => {
       const insights = createMockInsights({
@@ -109,12 +104,9 @@ describe("useUserProgression composable", () => {
     });
   });
 
-
   // --- INTEGRATION TESTS ---
 
   describe("integration: consistent user journey", () => {
-
-
     it("shows proper phase transitions", () => {
       const phases = [
         createMockInsights({
@@ -131,7 +123,5 @@ describe("useUserProgression composable", () => {
       expect(phases[1]).toBe("Build");
       expect(phases[2]).toBe("Deload");
     });
-
-
   });
 });

@@ -1,5 +1,7 @@
 # AGENTS.md - Gainz AI Development Guide
 
+> **Self-Correction Policy**: If you encounter information in this file that is outdated, incorrect, or no longer matches the actual codebase, you must correct it before proceeding with your task.
+
 This file provides guidance for AI coding agents working on the Gainz AI project.
 
 ## Project Overview
