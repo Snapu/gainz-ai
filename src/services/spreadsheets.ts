@@ -6,7 +6,9 @@ export const SPREADSHEET_NAME = "Gainz AI App Database";
 export async function getSpreadsheetId(
   name: string,
   accessToken: string,
-): Promise<Result<string | null, "get-spreadsheet-id-failed" | "parse-data-failed">> {
+): Promise<
+  Result<string | null, "get-spreadsheet-id-failed" | "parse-data-failed" | "auth-failed">
+> {
   const query = `name='${name}' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false and 'me' in owners`;
 
   try {
@@ -21,6 +23,9 @@ export async function getSpreadsheetId(
 
     if (!response.ok) {
       console.debug("Failed to get spreadsheet ID. Response:", response);
+      if (response.status === 401 || response.status === 403) {
+        return err("auth-failed");
+      }
       return err("get-spreadsheet-id-failed");
     }
     const data = await response.json();
@@ -41,7 +46,7 @@ export async function getSpreadsheetId(
 export async function loadSpreadsheet(
   id: string,
   accessToken: string,
-): Promise<Result<GoogleSpreadsheet, "load-spreadsheet-failed">> {
+): Promise<Result<GoogleSpreadsheet, "load-spreadsheet-failed" | "auth-failed">> {
   try {
     const doc = new GoogleSpreadsheet(id, { token: accessToken });
     await doc.loadInfo();
@@ -52,6 +57,17 @@ export async function loadSpreadsheet(
     return ok(doc);
   } catch (error) {
     console.error(`Failed to load spreadsheet with id ${id}. Error:`, error);
+    if (
+      error &&
+      typeof error === "object" &&
+      "response" in error &&
+      error.response &&
+      typeof error.response === "object" &&
+      "status" in error.response &&
+      (error.response.status === 401 || error.response.status === 403)
+    ) {
+      return err("auth-failed");
+    }
     return err("load-spreadsheet-failed");
   }
 }
@@ -59,7 +75,7 @@ export async function loadSpreadsheet(
 export async function createSpreadsheet(
   name: string,
   accessToken: string,
-): Promise<Result<GoogleSpreadsheet, "create-spreadsheet-failed">> {
+): Promise<Result<GoogleSpreadsheet, "create-spreadsheet-failed" | "auth-failed">> {
   try {
     const doc = await GoogleSpreadsheet.createNewSpreadsheetDocument(
       { token: accessToken },
@@ -70,6 +86,17 @@ export async function createSpreadsheet(
     return ok(doc);
   } catch (error) {
     console.warn(`Failed to create new spreadsheet with name ${name}. Error:`, error);
+    if (
+      error &&
+      typeof error === "object" &&
+      "response" in error &&
+      error.response &&
+      typeof error.response === "object" &&
+      "status" in error.response &&
+      (error.response.status === 401 || error.response.status === 403)
+    ) {
+      return err("auth-failed");
+    }
     return err("create-spreadsheet-failed");
   }
 }
