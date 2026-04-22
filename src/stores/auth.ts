@@ -63,5 +63,11 @@ export const useAuthStore = defineStore("auth", () => {
         });
       });
   }
-  return { accessToken, isLoggedIn, login };
+
+  function logout() {
+    accessToken.value = null;
+    expiresAt.value = null;
+  }
+
+  return { accessToken, expiresAt, isLoggedIn, login, logout };
 });
