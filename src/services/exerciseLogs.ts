@@ -85,7 +85,7 @@ async function migrateExistingLogs(doc: GoogleSpreadsheet): Promise<void> {
 
 export async function loadExerciseLogs(
   doc: GoogleSpreadsheet,
-): Promise<Result<ExerciseLog[], "load-failed" | "parse-data-failed">> {
+): Promise<Result<ExerciseLog[], "load-failed" | "parse-data-failed" | "auth-failed">> {
   const sheet = getSheet(doc) ?? (await addSheet(doc));
 
   // Run migration for existing data (only runs once)
@@ -99,6 +99,21 @@ export async function loadExerciseLogs(
       rows.map((row) => row.toObject()),
     );
   } catch (error) {
+    // Check for auth errors from google-spreadsheet
+    if (
+      error &&
+      typeof error === "object" &&
+      "response" in error &&
+      error.response &&
+      typeof error.response === "object" &&
+      "status" in error.response
+    ) {
+      const status = error.response.status;
+      if (status === 401 || status === 403) {
+        console.error("Auth failed during loadExerciseLogs. Error:", error);
+        return err("auth-failed");
+      }
+    }
     console.error("Failed to load exercise logs. Error:", error);
     return err("load-failed");
   }
@@ -107,7 +122,7 @@ export async function loadExerciseLogs(
 export async function addExerciseLog(
   exerciseLog: ExerciseLog,
   doc: GoogleSpreadsheet,
-): Promise<Result<void, "add-failed" | "duplicate-name">> {
+): Promise<Result<void, "add-failed" | "duplicate-name" | "auth-failed">> {
   try {
     const sheet = getSheet(doc) ?? (await addSheet(doc));
 
@@ -120,6 +135,21 @@ export async function addExerciseLog(
     await sheet.addRow(ExerciseLogSchema.parse(logWithId));
     return ok();
   } catch (error) {
+    // Check for auth errors
+    if (
+      error &&
+      typeof error === "object" &&
+      "response" in error &&
+      error.response &&
+      typeof error.response === "object" &&
+      "status" in error.response
+    ) {
+      const status = error.response.status;
+      if (status === 401 || status === 403) {
+        console.error("Auth failed during addExerciseLog. Error:", error);
+        return err("auth-failed");
+      }
+    }
     console.error("failed to add exercise log. Error:", error);
     if (error instanceof ZodError) console.error(z.prettifyError(error));
     return err("add-failed");
@@ -129,7 +159,7 @@ export async function addExerciseLog(
 export async function deleteExerciseLog(
   exerciseLog: ExerciseLog,
   doc: GoogleSpreadsheet,
-): Promise<Result<void, "delete-failed">> {
+): Promise<Result<void, "delete-failed" | "auth-failed">> {
   const sheet = getSheet(doc);
   if (!sheet) {
     console.error("Failed to delete exercise log. Sheet does not exist.");
@@ -142,6 +172,21 @@ export async function deleteExerciseLog(
     await rowToDelete?.delete();
     return ok();
   } catch (error) {
+    // Check for auth errors
+    if (
+      error &&
+      typeof error === "object" &&
+      "response" in error &&
+      error.response &&
+      typeof error.response === "object" &&
+      "status" in error.response
+    ) {
+      const status = error.response.status;
+      if (status === 401 || status === 403) {
+        console.error("Auth failed during deleteExerciseLog. Error:", error);
+        return err("auth-failed");
+      }
+    }
     console.error("Failed to delete exercise log. Error:", error);
     return err("delete-failed");
   }
