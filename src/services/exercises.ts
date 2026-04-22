@@ -18,7 +18,7 @@ const addSheet = (doc: GoogleSpreadsheet) =>
 
 export async function loadExercises(
   doc: GoogleSpreadsheet,
-): Promise<Result<Exercise[], "load-failed" | "parse-data-failed">> {
+): Promise<Result<Exercise[], "load-failed" | "parse-data-failed" | "auth-failed">> {
   const sheet = getSheet(doc) ?? (await addSheet(doc));
   try {
     const rows = await sheet.getRows<Exercise>();
@@ -27,6 +27,21 @@ export async function loadExercises(
       rows.map((row) => row.toObject()),
     );
   } catch (error) {
+    // Check for auth errors from google-spreadsheet
+    if (
+      error &&
+      typeof error === "object" &&
+      "response" in error &&
+      error.response &&
+      typeof error.response === "object" &&
+      "status" in error.response
+    ) {
+      const status = error.response.status;
+      if (status === 401 || status === 403) {
+        console.error("Auth failed during loadExercises. Error:", error);
+        return err("auth-failed");
+      }
+    }
     console.error("Failed to load exercises. Error:", error);
     return err("load-failed");
   }
@@ -35,12 +50,27 @@ export async function loadExercises(
 export async function addExercise(
   exercise: Exercise,
   doc: GoogleSpreadsheet,
-): Promise<Result<void, "add-failed" | "duplicate-name">> {
+): Promise<Result<void, "add-failed" | "duplicate-name" | "auth-failed">> {
   try {
     const sheet = getSheet(doc) ?? (await addSheet(doc));
     await sheet.addRow(ExerciseSchema.parse(exercise));
     return ok();
   } catch (error) {
+    // Check for auth errors
+    if (
+      error &&
+      typeof error === "object" &&
+      "response" in error &&
+      error.response &&
+      typeof error.response === "object" &&
+      "status" in error.response
+    ) {
+      const status = error.response.status;
+      if (status === 401 || status === 403) {
+        console.error("Auth failed during addExercise. Error:", error);
+        return err("auth-failed");
+      }
+    }
     console.error("failed to add exercise. Error:", error);
     return err("add-failed");
   }
@@ -49,7 +79,7 @@ export async function addExercise(
 export async function deleteExercise(
   exercise: Exercise,
   doc: GoogleSpreadsheet,
-): Promise<Result<void, "delete-failed">> {
+): Promise<Result<void, "delete-failed" | "auth-failed">> {
   const sheet = getSheet(doc);
   if (!sheet) {
     console.error("Failed to delete exercise. Sheet does not exist.");
@@ -60,6 +90,21 @@ export async function deleteExercise(
     await rows.find((row) => row.get("name") === exercise.name)?.delete();
     return ok();
   } catch (error) {
+    // Check for auth errors
+    if (
+      error &&
+      typeof error === "object" &&
+      "response" in error &&
+      error.response &&
+      typeof error.response === "object" &&
+      "status" in error.response
+    ) {
+      const status = error.response.status;
+      if (status === 401 || status === 403) {
+        console.error("Auth failed during deleteExercise. Error:", error);
+        return err("auth-failed");
+      }
+    }
     console.error("Failed to delete exercise. Error:", error);
     return err("delete-failed");
   }
