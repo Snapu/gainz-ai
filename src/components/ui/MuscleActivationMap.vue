@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import type { MuscleGroup, MuscleGroupInsight, VolumeLandmark } from "@/services/trainingScience";
 
 const props = defineProps<{
@@ -68,19 +68,19 @@ interface MuscleNode {
 // X coordinates mapped mathematically for 200% width cropped halves
 
 const MUSCLE_MAP_FRONT: Partial<Record<MuscleGroup, MuscleNode>> = {
-  Chest: { dot: { x: 52, y: 31 }, textAnchor: { x: 6, y: 22 }, align: "left" },
-  Biceps: { dot: { x: 32, y: 39 }, textAnchor: { x: 6, y: 39 }, align: "left" },
-  Abs: { dot: { x: 50, y: 44 }, textAnchor: { x: 6, y: 48 }, align: "left" },
-  Quads: { dot: { x: 44, y: 64 }, textAnchor: { x: 6, y: 64 }, align: "left" },
-  Shoulders: { dot: { x: 68, y: 26 }, textAnchor: { x: 94, y: 15 }, align: "right" },
+  Chest: { dot: { x: 48, y: 31 }, textAnchor: { x: 6, y: 22 }, align: "left" },
+  Biceps: { dot: { x: 28, y: 39 }, textAnchor: { x: 6, y: 39 }, align: "left" },
+  Abs: { dot: { x: 46, y: 44 }, textAnchor: { x: 6, y: 48 }, align: "left" },
+  Quads: { dot: { x: 40, y: 64 }, textAnchor: { x: 6, y: 64 }, align: "left" },
+  Shoulders: { dot: { x: 64, y: 26 }, textAnchor: { x: 94, y: 15 }, align: "right" },
 };
 
 const MUSCLE_MAP_BACK: Partial<Record<MuscleGroup, MuscleNode>> = {
-  Back: { dot: { x: 50, y: 33 }, textAnchor: { x: 6, y: 25 }, align: "left" },
-  Triceps: { dot: { x: 72, y: 39 }, textAnchor: { x: 94, y: 39 }, align: "right" },
-  Glutes: { dot: { x: 52, y: 49 }, textAnchor: { x: 94, y: 49 }, align: "right" },
-  Hamstrings: { dot: { x: 64, y: 65 }, textAnchor: { x: 94, y: 65 }, align: "right" },
-  Calves: { dot: { x: 64, y: 82 }, textAnchor: { x: 94, y: 82 }, align: "right" },
+  Back: { dot: { x: 52, y: 33 }, textAnchor: { x: 6, y: 25 }, align: "left" },
+  Triceps: { dot: { x: 74, y: 39 }, textAnchor: { x: 94, y: 39 }, align: "right" },
+  Glutes: { dot: { x: 54, y: 49 }, textAnchor: { x: 94, y: 49 }, align: "right" },
+  Hamstrings: { dot: { x: 66, y: 65 }, textAnchor: { x: 94, y: 65 }, align: "right" },
+  Calves: { dot: { x: 66, y: 82 }, textAnchor: { x: 94, y: 82 }, align: "right" },
 };
 
 const views = computed(() => {
@@ -96,10 +96,23 @@ const views = computed(() => {
   }));
 
   return [
-    { id: "front-view", alignImage: "left-0", muscles: front, title: "Anterior View" },
-    { id: "back-view", alignImage: "right-0", muscles: back, title: "Posterior View" },
+    {
+      id: "front-view",
+      alignImage: "left-0",
+      offsetStyle: "translateX(-1.5%)",
+      muscles: front,
+    },
+    {
+      id: "back-view",
+      alignImage: "right-0",
+      offsetStyle: "translateX(1.5%)",
+      muscles: back,
+    },
   ];
 });
+
+const currentViewIndex = ref(0);
+const currentView = computed(() => views.value[currentViewIndex.value]!);
 
 function getAnchorStyle(node: MuscleNode) {
   if (node.align === "right") {
@@ -123,72 +136,86 @@ function getAnchorStyle(node: MuscleNode) {
 </script>
 
 <template>
-  <div class="flex flex-col gap-12 w-full max-w-[400px] mx-auto select-none overflow-visible">
+  <div class="flex flex-col w-full max-w-[400px] mx-auto select-none overflow-visible">
     
-    <div v-for="view in views" :key="view.id" class="relative w-full aspect-[1/2] mt-4">
-      
-      <!-- Ghost Holographic Label -->
-      <div class="absolute -top-3 left-1/2 -translate-x-1/2 z-30 font-sans tracking-[0.2em] text-[11px] font-bold text-muted-foreground/80 uppercase whitespace-nowrap">
-         {{ view.title }}
+    <!-- Toggle -->
+    <div class="flex justify-center mb-2 z-40 relative">
+      <div class="inline-flex bg-muted/50 p-1 rounded-full items-center w-[240px]">
+        <button 
+          @click="currentViewIndex = 0" 
+          :class="['flex-1 py-2 rounded-full text-[10px] uppercase tracking-widest font-black transition-colors', currentViewIndex === 0 ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground']"
+        >
+          Anterior
+        </button>
+        <button 
+          @click="currentViewIndex = 1" 
+          :class="['flex-1 py-2 rounded-full text-[10px] uppercase tracking-widest font-black transition-colors', currentViewIndex === 1 ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground']"
+        >
+          Posterior
+        </button>
       </div>
+    </div>
 
+    <div :key="currentView.id" class="relative w-full aspect-[1/2] animate-in fade-in zoom-in-95 duration-500">
+      
       <!-- Image Crop Wrapper - Ultra subtle ghosting -->
       <div class="absolute inset-0 overflow-hidden bg-transparent">
          <img 
            src="@/assets/muscle_map_anime.png" 
-           class="absolute inset-y-0 w-[200%] h-full max-w-none object-cover pointer-events-none opacity-[0.25] invert mix-blend-screen"
-           :class="view.alignImage"
+           class="absolute inset-y-0 w-[200%] h-full max-w-none pointer-events-none opacity-[0.25] invert mix-blend-screen transition-all duration-700 ease-in-out object-fill"
+           :class="currentView.alignImage"
+           :style="{ transform: currentView.offsetStyle }"
          />
       </div>
 
-      <!-- SVG Overlay for Connecting Lines - Thinner precision strokes -->
-      <svg class="absolute inset-0 w-full h-full pointer-events-none z-0 overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
-         <line 
-           v-for="muscle in view.muscles" 
-           :key="'line-'+muscle.name"
-           :x1="muscle.node.dot.x" 
-           :y1="muscle.node.dot.y" 
-           :x2="muscle.node.textAnchor.x" 
-           :y2="muscle.node.textAnchor.y" 
-           :stroke="getLineColor(muscle.status?.landmark)" 
-           stroke-width="0.15" 
-           stroke-dasharray="1.5, 2.5"
-           class="opacity-60"
-         />
-      </svg>
+        <!-- SVG Overlay for Connecting Lines -->
+        <svg class="absolute inset-0 w-full h-full pointer-events-none z-0 overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
+           <line 
+             v-for="muscle in currentView.muscles" 
+             :key="'line-'+muscle.name"
+             :x1="muscle.node.dot.x" 
+             :y1="muscle.node.dot.y" 
+             :x2="muscle.node.textAnchor.x" 
+             :y2="muscle.node.textAnchor.y" 
+             :stroke="getLineColor(muscle.status?.landmark)" 
+             stroke-width="0.15" 
+             stroke-dasharray="1.5, 2.5"
+             class="opacity-60"
+           />
+        </svg>
 
-      <!-- DOTS & TEXT LABELS -->
-      <template v-for="muscle in view.muscles" :key="muscle.name">
-         
-         <!-- Glowing Dot -->
-         <div 
-           class="absolute transform -translate-x-1/2 -translate-y-1/2 w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full border transition-all duration-700 z-10"
-           :style="{ left: `${muscle.node.dot.x}%`, top: `${muscle.node.dot.y}%` }"
-           :class="getDotColor(muscle.status?.landmark)"
-         >
-           <span 
-             class="absolute inset-0 rounded-full animate-ping opacity-60"
-             :class="getDotColor(muscle.status?.landmark).split(' ')[0]"
-           ></span>
-         </div>
+        <!-- DOTS & TEXT LABELS -->
+        <template v-for="muscle in currentView.muscles" :key="muscle.name">
+           
+           <!-- Glowing Dot -->
+           <div 
+             class="absolute transform -translate-x-1/2 -translate-y-1/2 w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full border transition-all duration-700 z-10"
+             :style="{ left: `${muscle.node.dot.x}%`, top: `${muscle.node.dot.y}%` }"
+             :class="getDotColor(muscle.status?.landmark)"
+           >
+             <span 
+               class="absolute inset-0 rounded-full animate-ping opacity-60"
+               :class="getDotColor(muscle.status?.landmark).split(' ')[0]"
+             ></span>
+           </div>
 
-         <!-- Stacked Callout HUD - Soft glass integration -->
-         <div 
-           class="absolute flex justify-center transform -translate-y-1/2 z-20 pointer-events-none"
-           :style="getAnchorStyle(muscle.node)"
-         >
-            <span class="text-[10px] sm:text-[12px] font-black uppercase tracking-[0.2em] text-foreground/90 leading-none mb-0.5 sm:mb-1">
-              {{ muscle.name }}
-            </span>
-            <span class="text-[8px] sm:text-[8.5px] font-mono text-muted-foreground uppercase tracking-[0.1em] bg-background/40 px-1 py-[1.5px] rounded backdrop-blur-md mb-0.5 whitespace-nowrap">
-              {{ getJargon(muscle.status?.landmark) }}
-            </span>
-            <span class="text-[9.5px] sm:text-[11px] font-mono font-bold whitespace-nowrap opacity-90 mt-[1px]" :style="{ color: getLineColor(muscle.status?.landmark) }">
-              {{ muscle.status?.sets || 0 }} <span class="opacity-50 font-sans text-[7.5px] sm:text-[8.5px] font-normal tracking-wide">SETS/WK</span>
-            </span>
-         </div>
+           <!-- Stacked Callout HUD - Soft glass integration -->
+           <div 
+             class="absolute flex justify-center transform -translate-y-1/2 z-20 pointer-events-none"
+             :style="getAnchorStyle(muscle.node)"
+           >
+              <span class="text-[10px] sm:text-[12px] font-black uppercase tracking-[0.2em] text-foreground/90 leading-none mb-0.5 sm:mb-1">
+                {{ muscle.name }}
+              </span>
+              <span class="text-[8px] sm:text-[8.5px] font-mono text-muted-foreground uppercase tracking-[0.1em] bg-background/40 px-1 py-[1.5px] rounded backdrop-blur-md mb-0.5 whitespace-nowrap">
+                {{ getJargon(muscle.status?.landmark) }}
+              </span>
+              <span class="text-[9.5px] sm:text-[11px] font-mono font-bold whitespace-nowrap opacity-90 mt-[1px]" :style="{ color: getLineColor(muscle.status?.landmark) }">
+                {{ muscle.status?.sets || 0 }} <span class="opacity-50 font-sans text-[7.5px] sm:text-[8.5px] font-normal tracking-wide">SETS/WK</span>
+              </span>
+           </div>
 
-      </template>
+        </template>
 
     </div>
   </div>

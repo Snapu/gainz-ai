@@ -43,7 +43,7 @@ const phaseTheme = computed(() => PHASE_THEME[props.insights.phase]);
         <div class="absolute inset-0 bg-linear-to-t from-black/80 via-transparent to-transparent"></div>
         
         <!-- Level Progress -->
-        <div class="absolute bottom-3 left-3 flex items-center gap-2">
+        <div class="absolute bottom-5 left-5 flex items-center gap-2">
            <RadialProgress 
             :progress="progress.progressPercent" 
             :size="40" 
