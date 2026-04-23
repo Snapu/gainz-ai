@@ -25,13 +25,13 @@ export function useToast() {
     const id = options.id || Math.random().toString(36).substring(2, 9);
     const toastData = { ...options, id };
     toasts.value.push(toastData);
-    
+
     // Handle countdown
     if (options.countdown) {
       let remainingSeconds = options.countdown.seconds;
       const countdownInterval = setInterval(() => {
         remainingSeconds--;
-        
+
         // Update countdown in toasts array
         const toastIndex = toasts.value.findIndex((t) => t.id === id);
         if (toastIndex !== -1) {
@@ -40,7 +40,7 @@ export function useToast() {
             currentToast.countdown.seconds = remainingSeconds;
           }
         }
-        
+
         // When countdown reaches 0, call onComplete and dismiss
         if (remainingSeconds <= 0) {
           clearInterval(countdownInterval);
@@ -50,18 +50,18 @@ export function useToast() {
           dismiss(id);
         }
       }, 1000);
-      
+
       // Store interval ID for cleanup
       toastData.countdownIntervalId = countdownInterval as unknown as number;
     }
-    
+
     // Only auto-dismiss if not persistent and no countdown
     if (!options.persistent && !options.countdown && options.duration !== Infinity) {
       setTimeout(() => {
         dismiss(id);
       }, options.duration ?? 5000);
     }
-    
+
     return id;
   }
 

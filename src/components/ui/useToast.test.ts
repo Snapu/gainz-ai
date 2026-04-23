@@ -45,10 +45,10 @@ describe("useToast", () => {
     });
 
     expect(toasts.value[0]?.countdown?.seconds).toBe(3);
-    
+
     vi.advanceTimersByTime(1000);
     expect(toasts.value[0]?.countdown?.seconds).toBe(2);
-    
+
     vi.advanceTimersByTime(1000);
     expect(toasts.value[0]?.countdown?.seconds).toBe(1);
   });
@@ -66,7 +66,7 @@ describe("useToast", () => {
     });
 
     vi.advanceTimersByTime(2000);
-    
+
     expect(onComplete).toHaveBeenCalledTimes(1);
     expect(toasts.value).toHaveLength(0); // Toast dismissed
   });

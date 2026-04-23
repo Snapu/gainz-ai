@@ -1,7 +1,7 @@
+import * as Sentry from "@sentry/vue";
 import { useRouter } from "vue-router";
 import { useToast } from "@/components/ui/useToast";
 import { useAuthStore } from "@/stores/auth";
-import * as Sentry from "@sentry/vue";
 
 /**
  * Composable for handling authentication failures.

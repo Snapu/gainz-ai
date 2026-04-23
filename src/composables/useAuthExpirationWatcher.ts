@@ -1,8 +1,9 @@
 // src/composables/useAuthExpirationWatcher.ts
+
+import * as Sentry from "@sentry/vue";
 import { onUnmounted, ref } from "vue";
 import { useToast } from "@/components/ui/useToast";
 import { useAuthStore } from "@/stores/auth";
-import * as Sentry from "@sentry/vue";
 
 const WARNING_THRESHOLD = 5 * 60 * 1000; // 5 minutes in milliseconds
 const CHECK_INTERVAL = 30 * 1000; // 30 seconds
