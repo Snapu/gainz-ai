@@ -32,9 +32,14 @@ const { toasts, dismiss } = useToast();
       ]"
     >
       <div class="grid gap-1">
-        <ToastTitle v-if="t.title" class="text-base font-bold text-foreground">
-          {{ t.title }}
-        </ToastTitle>
+        <div v-if="t.title" class="flex items-center justify-between gap-2">
+          <ToastTitle class="text-base font-bold text-foreground">
+            {{ t.title }}
+          </ToastTitle>
+          <span v-if="t.countdown" class="text-xs font-mono text-foreground/60">
+            {{ t.countdown.seconds }}s
+          </span>
+        </div>
         <ToastDescription v-if="t.description" class="text-sm opacity-90">
           {{ t.description }}
         </ToastDescription>
