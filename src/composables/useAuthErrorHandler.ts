@@ -1,6 +1,7 @@
 import { useRouter } from "vue-router";
-import { useAuthStore } from "@/stores/auth";
 import { useToast } from "@/components/ui/useToast";
+import { useAuthStore } from "@/stores/auth";
+import * as Sentry from "@sentry/vue";
 
 /**
  * Composable for handling authentication failures.
@@ -18,10 +19,10 @@ export function useAuthErrorHandler() {
   const router = useRouter();
 
   function handleAuthError(context?: string): void {
-    // Log context if provided (for debugging)
-    if (context) {
-      console.error(`Auth error in context: ${context}`);
-    }
+    Sentry.captureMessage("Auth expired during API call", {
+      level: "warning",
+      tags: { category: "auth-expiration", context: context || "unknown" },
+    });
 
     // 1. Log the user out
     authStore.logout();
