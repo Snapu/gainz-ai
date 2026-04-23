@@ -12,18 +12,18 @@ describe("useAuthStore", () => {
     it("should clear accessToken", () => {
       const store = useAuthStore();
       store.accessToken = "test-token";
-      
+
       store.logout();
-      
+
       expect(store.accessToken).toBeNull();
     });
 
     it("should clear expiresAt", () => {
       const store = useAuthStore();
       store.expiresAt = Date.now() + 3600000;
-      
+
       store.logout();
-      
+
       expect(store.expiresAt).toBeNull();
     });
 
@@ -32,9 +32,9 @@ describe("useAuthStore", () => {
       store.accessToken = "test-token";
       store.expiresAt = Date.now() + 3600000;
       expect(store.isLoggedIn).toBe(true);
-      
+
       store.logout();
-      
+
       expect(store.isLoggedIn).toBe(false);
     });
   });

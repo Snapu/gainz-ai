@@ -1,8 +1,8 @@
-import { useRouter } from "vue-router";
-import { ref } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useAuthStore } from "@/stores/auth";
+import { ref } from "vue";
+import { useRouter } from "vue-router";
 import { useToast } from "@/components/ui/useToast";
+import { useAuthStore } from "@/stores/auth";
 import { useAuthErrorHandler } from "./useAuthErrorHandler";
 
 vi.mock("vue-router");
