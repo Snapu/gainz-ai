@@ -6,6 +6,7 @@ import { onMounted, onUnmounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import Toaster from "@/components/ui/Toaster.vue";
 import { useToast } from "@/components/ui/useToast";
+import { useAuthExpirationWatcher } from "@/composables/useAuthExpirationWatcher";
 import { useAuthStore } from "@/stores/auth";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
 import { useExercisesStore } from "@/stores/exercises";
@@ -16,6 +17,9 @@ const router = useRouter();
 const authStore = useAuthStore();
 const userProfileStore = useUserProfileStore();
 const spreadsheetStore = useSpreadsheetStore();
+
+// Start watching for auth expiration
+useAuthExpirationWatcher();
 
 const { needRefresh, updateServiceWorker } = useRegisterSW({
   onRegisteredSW(_swUrl, registration) {
