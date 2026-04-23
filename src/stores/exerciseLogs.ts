@@ -1,6 +1,7 @@
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { defineStore } from "pinia";
 import { computed, watch } from "vue";
+import { useAuthErrorHandler } from "@/composables/useAuthErrorHandler";
 import {
   addExerciseLog as addExerciseLog_,
   deleteExerciseLog as deleteExerciseLog_,
@@ -12,6 +13,7 @@ import { useSpreadsheetStore } from "./spreadsheet";
 
 export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
   const spreadsheetStore = useSpreadsheetStore();
+  const { handleAuthError } = useAuthErrorHandler();
   const {
     items: exerciseLogs,
     isLoading,
@@ -29,10 +31,13 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
   // Refresh when spreadsheet doc becomes available (handles page refresh race condition)
   watch(
     () => spreadsheetStore.doc,
-    (doc) => {
+    async (doc) => {
       if (doc && exerciseLogs.value.length === 0) {
         console.log("[exerciseLogs] Spreadsheet ready, refreshing logs");
-        void refresh();
+        const result = await refresh();
+        if (result.isErr() && result.error === "auth-failed") {
+          handleAuthError("exercise-log-load");
+        }
       }
     },
   );
@@ -44,12 +49,22 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
 
   const addExerciseLog: typeof add = async (exerciseLog) => {
     console.log("Adding exercise log", exerciseLog);
-    return add(exerciseLog);
+    const result = await add(exerciseLog);
+    if (result.isErr() && result.error === "auth-failed") {
+      handleAuthError("exercise-log-add");
+      return result;
+    }
+    return result;
   };
 
   const removeExerciseLog: typeof remove = async (exerciseLog) => {
     console.log("Removing exercise log", exerciseLog);
-    return remove(exerciseLog);
+    const result = await remove(exerciseLog);
+    if (result.isErr() && result.error === "auth-failed") {
+      handleAuthError("exercise-log-delete");
+      return result;
+    }
+    return result;
   };
 
   function lastLogForExercise(exerciseName: string) {

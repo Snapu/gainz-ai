@@ -1,6 +1,6 @@
 import { useAsyncState, useDebounceFn, useDocumentVisibility, useOnline } from "@vueuse/core";
 
-import type { Result } from "neverthrow";
+import { err, ok, type Result } from "neverthrow";
 import { ref, watch } from "vue";
 
 type UseOfflineSyncedStoreParams<T> = {
@@ -38,7 +38,7 @@ export function useOfflineSyncedStore<T>({
   const debouncedRefresh = useDebounceFn(async () => {
     if (isOnline.value) {
       console.log("App visible. Syncing with remote to prevent stale data...");
-      await refresh();
+      void refresh();
     }
   }, 1000);
 
@@ -48,8 +48,8 @@ export function useOfflineSyncedStore<T>({
     }
   });
 
-  async function refresh() {
-    if (isRefreshing.value) return; // Prevent concurrent refreshes
+  async function refresh(): Promise<Result<T[], unknown>> {
+    if (isRefreshing.value) return err("refresh-in-progress"); // Prevent concurrent refreshes
     isRefreshing.value = true;
 
     try {
@@ -58,12 +58,13 @@ export function useOfflineSyncedStore<T>({
       if (result.isOk()) {
         items.value = result.value;
       }
+      return result;
     } finally {
       isRefreshing.value = false;
     }
   }
 
-  async function add(item: T) {
+  async function add(item: T): Promise<Result<void, unknown>> {
     // Optimistically update UI - create new array to trigger reactivity
     items.value = [...items.value, item];
 
@@ -74,9 +75,10 @@ export function useOfflineSyncedStore<T>({
       const itemId = getId(item);
       items.value = items.value.filter((i) => getId(i) !== itemId);
     }
+    return result;
   }
 
-  async function remove(item: T) {
+  async function remove(item: T): Promise<Result<void, unknown>> {
     // Optimistically update UI
     const originalItems = [...items.value];
     const itemId = getId(item);
@@ -88,12 +90,13 @@ export function useOfflineSyncedStore<T>({
       // Revert on immediate error
       items.value = originalItems;
     }
+    return result;
   }
 
-  async function update(item: T) {
+  async function update(item: T): Promise<Result<void, unknown>> {
     if (!updateRemote) {
       console.warn("updateRemote handler not provided");
-      return;
+      return err("no-update-handler");
     }
 
     // Optimistically update UI
@@ -111,6 +114,7 @@ export function useOfflineSyncedStore<T>({
       // Could revert here, but typically updates are idempotent
       // and will be retried by Workbox
     }
+    return result;
   }
 
   return { items, isLoading, isOnline, isRefreshing, add, remove, update, refresh };

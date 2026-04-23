@@ -1,6 +1,7 @@
 import { useDebounceFn, useLocalStorage } from "@vueuse/core";
 import { defineStore } from "pinia";
 import { computed, ref, watch, watchEffect } from "vue";
+import { useAuthErrorHandler } from "@/composables/useAuthErrorHandler";
 import {
   type EquipmentOption,
   type FitnessGoal,
@@ -28,6 +29,8 @@ export const useUserProfileStore = defineStore("userProfile", () => {
   const hasCompletedSetup = useLocalStorage<boolean>("hasCompletedSetup", false);
   const apiKey = useLocalStorage<string | null>("userProfile:apiKey", null);
   const isLoading = ref(false);
+
+  const { handleAuthError } = useAuthErrorHandler();
 
   const setupCompleted = computed(() => hasCompletedSetup.value);
 
@@ -60,6 +63,11 @@ export const useUserProfileStore = defineStore("userProfile", () => {
       result.isOk() ? "OK" : "ERR",
       result.isOk() ? result.value : result.error,
     );
+    if (result.isErr() && result.error === "auth-failed") {
+      handleAuthError("user-profile-load");
+      isLoading.value = false;
+      return;
+    }
     if (result.isOk() && result.value) {
       userProfile.value = { ...result.value };
       const hasData = profileHasData(result.value);
@@ -80,6 +88,10 @@ export const useUserProfileStore = defineStore("userProfile", () => {
     if (!doc) return;
 
     const result = await saveUserProfile(userProfile.value, doc);
+    if (result.isErr() && result.error === "auth-failed") {
+      handleAuthError("user-profile-save");
+      return;
+    }
     if (result.isOk()) {
       hasCompletedSetup.value = true;
     }
