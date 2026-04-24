@@ -265,13 +265,14 @@ export function calculateE1RMInsights(
       .sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
       .slice(-4);
 
-    // Best e1RM per session. Only consider sets with ≤12 reps to prevent warm-up / high-rep
-    // light sets from inflating the estimate: Brzycki gives unreliable values for reps ≥13
-    // (e.g. 40kg × 25 reps → e1RM ≈ 120kg), which falsely elevates the plateau threshold.
+    // Best e1RM per session. Only consider sets with ≤20 reps: the formula becomes
+    // unreliable above 20 reps (Brzycki denominator approaches zero near rep 30), but
+    // using ≤12 was too strict — it produced e1rm=0 for all fat-loss / endurance athletes
+    // who train entirely in the 13–20 rep range, breaking weight prescription for them.
     const trend = sortedSessions.map(([, sessionLogs]) => {
       let best = 0;
       for (const log of sessionLogs) {
-        if (log.weight != null && log.reps != null && log.reps <= 12) {
+        if (log.weight != null && log.reps != null && log.reps <= 20) {
           const e1rm = calculateE1RM(log.weight, log.reps, log.rpe);
           if (e1rm > best) best = e1rm;
         }
@@ -287,7 +288,7 @@ export function calculateE1RMInsights(
     let bestRPE: number | undefined;
     let bestForRPECheck = 0;
     for (const log of latestSessionLogs) {
-      if (log.weight != null && log.reps != null && log.reps <= 12) {
+      if (log.weight != null && log.reps != null && log.reps <= 20) {
         const e1rm = calculateE1RM(log.weight, log.reps, log.rpe);
         if (e1rm > bestForRPECheck) {
           bestForRPECheck = e1rm;
@@ -296,10 +297,13 @@ export function calculateE1RMInsights(
       }
     }
 
-    // Plateau: last 3+ e1RM values within ±2% of each other
+    // Plateau: last 3+ non-zero e1RM values within ±2% of each other.
+    // Filter zeros to prevent sessions where all sets were outside the rep window
+    // (e.g. a session with only >20 rep sets) from polluting the trend.
     let plateau = false;
-    if (trend.length >= 3) {
-      const last3 = trend.slice(-3);
+    const nonZeroTrend = trend.filter((v) => v > 0);
+    if (nonZeroTrend.length >= 3) {
+      const last3 = nonZeroTrend.slice(-3);
       const avg = last3.reduce((a, b) => a + b, 0) / last3.length;
       plateau = last3.every((v) => Math.abs(v - avg) / avg <= 0.02);
     }
@@ -474,7 +478,7 @@ export function calculateFatigueInsight(
     weeklyTonnage.push(
       weekLogs.reduce((sum, l) => {
         const rpeMultiplier = (l.rpe ?? 10) / 10;
-        return sum + (l.weight ?? 0) * (l.reps ?? 0) * rpeMultiplier;
+        return sum + (l.weight ?? 70) * (l.reps ?? 0) * rpeMultiplier;
       }, 0),
     );
   }
@@ -594,7 +598,9 @@ function computeACWR(logs: ExerciseLog[], targetDate: Date): number | null {
     .filter((l) => now - l.loggedAt.getTime() <= 7 * msPerDay)
     .reduce((s, l) => {
       const rpeMultiplier = (l.rpe ?? 10) / 10;
-      return s + (l.weight ?? 0) * (l.reps ?? 0) * rpeMultiplier;
+      // Use 70kg as a bodyweight proxy for exercises logged without weight (e.g. Pull-Ups, Push-Ups).
+      // Without this, bodyweight athletes always produce acuteLoad=0 → ACWR=null → wrong advice.
+      return s + (l.weight ?? 70) * (l.reps ?? 0) * rpeMultiplier;
     }, 0);
 
   // Chronic baseline = load from days 8–28 (older than the acute window)
@@ -606,7 +612,7 @@ function computeACWR(logs: ExerciseLog[], targetDate: Date): number | null {
     })
     .reduce((s, l) => {
       const rpeMultiplier = (l.rpe ?? 10) / 10;
-      return s + (l.weight ?? 0) * (l.reps ?? 0) * rpeMultiplier;
+      return s + (l.weight ?? 70) * (l.reps ?? 0) * rpeMultiplier;
     }, 0);
 
   if (preAcuteLoad === 0) return null;
@@ -617,7 +623,7 @@ function computeACWR(logs: ExerciseLog[], targetDate: Date): number | null {
   const allWindowLogs = logs.filter((l) => now - l.loggedAt.getTime() <= 28 * msPerDay);
   const chronicLoad = allWindowLogs.reduce((s, l) => {
     const rpeMultiplier = (l.rpe ?? 10) / 10;
-    return s + (l.weight ?? 0) * (l.reps ?? 0) * rpeMultiplier;
+    return s + (l.weight ?? 70) * (l.reps ?? 0) * rpeMultiplier;
   }, 0);
 
   // Count active weeks = how many complete 7-day buckets are covered by training history.
