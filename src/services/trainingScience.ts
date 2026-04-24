@@ -114,15 +114,17 @@ const DEFAULT_EXERCISE_ACTIVATION_MAP: Record<string, MuscleActivation> = {
   "Reverse Flyes": act("Shoulders"),
 
   // Quads (compound leg movements credit Glutes + Hamstrings)
-  Squat: act("Quads", ["Glutes", 0.6], ["Hamstrings", 0.3]),
-  Kniebeuge: act("Quads", ["Glutes", 0.6], ["Hamstrings", 0.3]),
+  // Squats: Hamstrings coefficient reduced to 0.1 — Squats provide near-zero dynamic hamstring stimulus
+  // (muscle doesn't lengthen under load; isometric only). Hip hinges retain full coefficients.
+  Squat: act("Quads", ["Glutes", 0.6], ["Hamstrings", 0.1]),
+  Kniebeuge: act("Quads", ["Glutes", 0.6], ["Hamstrings", 0.1]),
   "Front Squat": act("Quads", ["Glutes", 0.4]),
-  "Leg Press": act("Quads", ["Glutes", 0.4], ["Hamstrings", 0.2]),
-  Beinpresse: act("Quads", ["Glutes", 0.4], ["Hamstrings", 0.2]),
+  "Leg Press": act("Quads", ["Glutes", 0.4], ["Hamstrings", 0.1]),
+  Beinpresse: act("Quads", ["Glutes", 0.4], ["Hamstrings", 0.1]),
   "Leg Extension": act("Quads"),
-  Lunges: act("Quads", ["Glutes", 0.6], ["Hamstrings", 0.3]),
-  Ausfallschritte: act("Quads", ["Glutes", 0.6], ["Hamstrings", 0.3]),
-  "Bulgarian Split Squat": act("Quads", ["Glutes", 0.7], ["Hamstrings", 0.3]),
+  Lunges: act("Quads", ["Glutes", 0.6], ["Hamstrings", 0.2]),
+  Ausfallschritte: act("Quads", ["Glutes", 0.6], ["Hamstrings", 0.2]),
+  "Bulgarian Split Squat": act("Quads", ["Glutes", 0.7], ["Hamstrings", 0.2]),
 
   // Hamstrings
   "Romanian Deadlift": act("Hamstrings", ["Glutes", 0.7], ["Back", 0.4]),
@@ -283,16 +285,16 @@ const VOLUME_LANDMARKS: Record<
   MuscleGroup,
   { mev: number; mavLow: number; mavHigh: number; mrv: number }
 > = {
-  Chest: { mev: 8, mavLow: 12, mavHigh: 18, mrv: 22 },
-  Back: { mev: 8, mavLow: 14, mavHigh: 20, mrv: 25 },
-  Quads: { mev: 6, mavLow: 12, mavHigh: 18, mrv: 20 },
-  Hamstrings: { mev: 4, mavLow: 10, mavHigh: 14, mrv: 16 },
-  Shoulders: { mev: 6, mavLow: 8, mavHigh: 18, mrv: 22 },
-  Biceps: { mev: 4, mavLow: 6, mavHigh: 14, mrv: 20 },
-  Triceps: { mev: 4, mavLow: 6, mavHigh: 14, mrv: 18 },
-  Abs: { mev: 0, mavLow: 4, mavHigh: 16, mrv: 20 },
-  Calves: { mev: 6, mavLow: 8, mavHigh: 14, mrv: 16 },
-  Glutes: { mev: 0, mavLow: 4, mavHigh: 12, mrv: 16 },
+  Chest:      { mev: 8, mavLow: 12, mavHigh: 18, mrv: 22 },
+  Back:       { mev: 8, mavLow: 14, mavHigh: 20, mrv: 25 },
+  Quads:      { mev: 6, mavLow: 12, mavHigh: 18, mrv: 20 },
+  Hamstrings: { mev: 6, mavLow: 10, mavHigh: 16, mrv: 20 }, // MEV raised (compounds provide little dynamic stimulus)
+  Shoulders:  { mev: 6, mavLow: 12, mavHigh: 20, mrv: 24 }, // MAV Low raised (pressing already covers front delt MEV)
+  Biceps:     { mev: 4, mavLow: 8,  mavHigh: 18, mrv: 24 }, // Pulling compounds inflate effective sets fast
+  Triceps:    { mev: 4, mavLow: 8,  mavHigh: 16, mrv: 20 }, // Pressing compounds inflate; MRV capped by elbow stress
+  Abs:        { mev: 0, mavLow: 8,  mavHigh: 16, mrv: 22 }, // Compounds = stability only, not hypertrophy
+  Calves:     { mev: 6, mavLow: 10, mavHigh: 18, mrv: 22 }, // Slow-twitch dominant, very fatigue-resistant
+  Glutes:     { mev: 6, mavLow: 8,  mavHigh: 16, mrv: 20 }, // Gets large secondary volume from squats/hinges/lunges
 };
 
 function getVolumeLandmark(sets: number, group: MuscleGroup): VolumeLandmark {
