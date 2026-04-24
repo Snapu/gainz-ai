@@ -10,6 +10,12 @@ import type { Event } from "@/types/event";
 import { getLearnedMuscleMap, learnFromAiResponse } from "./exerciseMuscleMap";
 import { calculateTrainingInsights } from "./trainingScience";
 
+const INITIAL_LOG_WINDOW_DAYS = 14;
+const EXTENDED_LOG_WINDOW_DAYS = 28;
+const MIN_INITIAL_LOG_ENTRIES = 12;
+const MAX_SUMMARIES_IN_PROMPT = 6;
+const MAX_ASSISTANT_HISTORY_MESSAGES = 3;
+
 export type PreviousAiMessage = {
   role: "user" | "assistant";
   content: string;
@@ -251,20 +257,75 @@ function compactLogs(logs: ExerciseLog[]): string {
 
     const parts: string[] = [];
     for (const [name, sets] of byExercise) {
-      const setStrs = sets.map((s) => {
-        const p: string[] = [];
-        if (s.reps) p.push(`${s.reps}`);
-        if (s.weight) p.push(`@${s.weight}kg`);
-        if (s.distance) p.push(`${s.distance}m`);
-        if (s.duration) p.push(`${s.duration}min`);
-        if (s.rpe) p.push(`@RPE${s.rpe}`);
-        return p.join("") || "1set";
-      });
-      parts.push(`${name}: ${setStrs.join(", ")}`);
+      const reps = sets.map((s) => s.reps).filter((v): v is number => typeof v === "number");
+      const weights = sets
+        .map((s) => s.weight)
+        .filter((v): v is number => typeof v === "number");
+      const rpes = sets.map((s) => s.rpe).filter((v): v is number => typeof v === "number");
+      const durations = sets
+        .map((s) => s.duration)
+        .filter((v): v is number => typeof v === "number");
+      const distances = sets
+        .map((s) => s.distance)
+        .filter((v): v is number => typeof v === "number");
+
+      const summaryParts = [`${sets.length} sets`];
+
+      if (reps.length > 0) {
+        const minReps = Math.min(...reps);
+        const maxReps = Math.max(...reps);
+        summaryParts.push(minReps === maxReps ? `${maxReps} reps` : `${minReps}-${maxReps} reps`);
+      }
+
+      if (weights.length > 0) {
+        const minWeight = Math.min(...weights);
+        const maxWeight = Math.max(...weights);
+        summaryParts.push(
+          minWeight === maxWeight ? `${maxWeight}kg` : `${minWeight}-${maxWeight}kg`,
+        );
+      }
+
+      if (distances.length > 0) {
+        const totalDistance = Math.round(distances.reduce((acc, v) => acc + v, 0));
+        summaryParts.push(`${totalDistance}m total`);
+      }
+
+      if (durations.length > 0) {
+        const totalMinutes = Math.round(durations.reduce((acc, v) => acc + v, 0));
+        summaryParts.push(`${totalMinutes}min total`);
+      }
+
+      if (rpes.length > 0) {
+        const lastRpe = rpes[rpes.length - 1];
+        summaryParts.push(`last @RPE${lastRpe}`);
+      }
+
+      parts.push(`${name}: ${summaryParts.join(", ")}`);
     }
     lines.push(`${date}: ${parts.join(" | ")}`);
   }
   return lines.join("\n");
+}
+
+function getRecentLogs(exerciseLogs: ExerciseLog[], days: number): ExerciseLog[] {
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+  return exerciseLogs.filter((log) => log.loggedAt.getTime() >= since.getTime());
+}
+
+function getInitialLogsWindow(exerciseLogs: ExerciseLog[]): { logs: ExerciseLog[]; label: string } {
+  const last2WeeksLogs = getRecentLogs(exerciseLogs, INITIAL_LOG_WINDOW_DAYS);
+  if (last2WeeksLogs.length >= MIN_INITIAL_LOG_ENTRIES) {
+    return {
+      logs: last2WeeksLogs,
+      label: `Recent logs (last ${INITIAL_LOG_WINDOW_DAYS / 7} weeks)`,
+    };
+  }
+
+  return {
+    logs: getRecentLogs(exerciseLogs, EXTENDED_LOG_WINDOW_DAYS),
+    label: `Recent logs (last ${EXTENDED_LOG_WINDOW_DAYS / 7} weeks)`,
+  };
 }
 
 /** Build conversation history for the API.
@@ -279,7 +340,7 @@ function buildConversationContents(params: {
   // Only include previous assistant responses to avoid resending giant user payloads
   const recentAssistantMessages = params.previousMessages
     .filter((m) => m.role === "assistant")
-    .slice(-5);
+    .slice(-MAX_ASSISTANT_HISTORY_MESSAGES);
 
   for (const msg of recentAssistantMessages) {
     contents.push({ role: "model", parts: [{ text: msg.content }] });
@@ -312,13 +373,8 @@ export async function askAi(
     const isFirstMessage = previousMessages.length === 0;
     const isMidWorkout = todayLogs.length > 0;
 
-    const fourWeeksAgo = new Date();
-    fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
-    const last4WeeksLogs = exerciseLogs.filter(
-      (log) => log.loggedAt.getTime() >= fourWeeksAgo.getTime(),
-    );
-
-    const logsToInclude = isFirstMessage ? last4WeeksLogs : todayLogs;
+    const initialWindow = getInitialLogsWindow(exerciseLogs);
+    const logsToInclude = isFirstMessage ? initialWindow.logs : todayLogs;
     const workoutStatus = getWorkoutStatus(exerciseLogs);
     const phase = getWorkoutPhase(exerciseLogs);
     const now = new Date();
@@ -353,7 +409,8 @@ export async function askAi(
 
     // Historical summaries: only on first message
     if (isFirstMessage && trainingSummaries.length > 0) {
-      sections.push(`Historical training summary:\n${JSON.stringify(trainingSummaries)}`);
+      const summariesForPrompt = trainingSummaries.slice(-MAX_SUMMARIES_IN_PROMPT);
+      sections.push(`Historical training summary:\n${JSON.stringify(summariesForPrompt)}`);
     }
 
     // Exercise logs: always send, but in compact format
@@ -367,7 +424,7 @@ export async function askAi(
         `New sets since last update:\n${compactLogs(newLogs.length > 0 ? newLogs : todayLogs)}`,
       );
     } else {
-      const logLabel = isFirstMessage ? "Recent logs (last 4 weeks)" : "Today's logs";
+      const logLabel = isFirstMessage ? initialWindow.label : "Today's logs";
       sections.push(`${logLabel}:\n${compactLogs(logsToInclude)}`);
     }
 

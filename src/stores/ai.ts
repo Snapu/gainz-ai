@@ -73,6 +73,7 @@ function cleanOldSessions() {
 export const useAiStore = defineStore("ai", () => {
   const messages = ref<AiMessage[]>([]);
   const isLoading = ref(false);
+  const inFlightRequest = ref<Promise<Result<void, "missing-api-key" | "ai-failed">> | null>(null);
 
   const userProfileStore = useUserProfileStore();
   const exerciseLogsStore = useExerciseLogsStore();
@@ -86,6 +87,21 @@ export const useAiStore = defineStore("ai", () => {
   cleanOldSessions();
 
   async function askAi(): Promise<Result<void, "missing-api-key" | "ai-failed">> {
+    if (inFlightRequest.value) {
+      return inFlightRequest.value;
+    }
+
+    const request = runAskAi();
+    inFlightRequest.value = request;
+
+    try {
+      return await request;
+    } finally {
+      inFlightRequest.value = null;
+    }
+  }
+
+  async function runAskAi(): Promise<Result<void, "missing-api-key" | "ai-failed">> {
     const apiKey = userProfileStore.apiKey;
     if (!apiKey) {
       return err("missing-api-key");

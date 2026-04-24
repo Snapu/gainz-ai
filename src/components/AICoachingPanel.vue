@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useTimeAgo } from "@vueuse/core";
+import { useDebounceFn, useTimeAgo } from "@vueuse/core";
 import DOMPurify from "dompurify";
 import { Loader2, Sparkles } from "lucide-vue-next";
 import { computed, watch } from "vue";
@@ -24,24 +24,28 @@ const internalOpen = computed({
 });
 
 // Auto-fetch insights when the panel opens
+const debouncedAskAi = useDebounceFn(() => {
+  aiStore.askAi().then((result) => {
+    if (result.isErr()) {
+      const description =
+        result.error === "missing-api-key"
+          ? "No API Key configured! Please add one in your profile."
+          : "Failed to get AI response. Please try again.";
+
+      toast({
+        title: "AI Coaching Error",
+        description,
+        variant: "destructive",
+      });
+    }
+  });
+}, 500);
+
 watch(
   () => props.open,
   (isOpen) => {
     if (isOpen && !aiStore.isLoading) {
-      aiStore.askAi().then((result) => {
-        if (result.isErr()) {
-          const description =
-            result.error === "missing-api-key"
-              ? "No API Key configured! Please add one in your profile."
-              : "Failed to get AI response. Please try again.";
-
-          toast({
-            title: "AI Coaching Error",
-            description,
-            variant: "destructive",
-          });
-        }
-      });
+      debouncedAskAi();
     }
   },
 );
