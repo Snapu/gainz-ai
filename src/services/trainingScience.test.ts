@@ -314,7 +314,7 @@ describe("calculateMuscleGroupInsights", () => {
 // --- Deload Detection ---
 
 describe("calculateFatigueInsight", () => {
-  it("should detect deload when volume rises for 4 consecutive weeks above 40 sets", () => {
+  it("should detect deload when volume rises for 4 consecutive weeks above 125% of prior average", () => {
     const targetDate = new Date("2026-03-25T12:00:00Z");
     const logs: ExerciseLog[] = [];
 
@@ -627,12 +627,12 @@ describe("calculateE1RM RPE edge cases", () => {
 // --- Fatigue Detection Edge Cases ---
 
 describe("calculateFatigueInsight edge cases", () => {
-  it("should not trigger deload when volume increases but stays under 40 in final week", () => {
+  it("should not trigger deload when volume increases gradually (no 25%+ spike vs prior average)", () => {
     const targetDate = new Date("2026-03-25T12:00:00Z");
     const logs: ExerciseLog[] = [];
 
-    // 4 weeks: 20, 25, 30, 35 — increasing but week 4 under 40
-    const weekSets = [20, 25, 30, 35];
+    // 4 weeks: 20, 22, 24, 26 — increasing but week 4 is only ~10% above prior avg (22) → no spike
+    const weekSets = [20, 22, 24, 26];
     for (let w = 3; w >= 0; w--) {
       for (let s = 0; s < weekSets[3 - w]!; s++) {
         const d = new Date(targetDate);

@@ -37,6 +37,7 @@ export interface MuscleGroupInsight {
   landmark: VolumeLandmark;
   frequencyPerWeek: number;
   hoursSinceLastTrained: number | null;
+  recoveryReady: boolean;
 }
 
 export interface ExerciseE1RM {
@@ -307,6 +308,20 @@ function getVolumeLandmark(sets: number, group: MuscleGroup): VolumeLandmark {
   return "below_MEV";
 }
 
+// Minimum recovery window per muscle group before the next training stimulus
+const RECOVERY_HOURS: Record<MuscleGroup, number> = {
+  Chest: 48,
+  Back: 72,
+  Quads: 72,
+  Hamstrings: 72,
+  Shoulders: 48,
+  Biceps: 48,
+  Triceps: 48,
+  Abs: 24,
+  Calves: 24,
+  Glutes: 48,
+};
+
 /**
  * Calculate per-muscle-group volume landmarks, frequency, and recovery status.
  * Primary muscles receive full set credit (1.0); secondary muscles receive fractional credit.
@@ -387,11 +402,15 @@ export function calculateMuscleGroupInsights(
       ? Math.round((targetDate.getTime() - lastTrained.getTime()) / 3600000)
       : null;
 
+    const minRecovery = RECOVERY_HOURS[group];
+    const recoveryReady = hoursSince === null ? true : hoursSince >= minRecovery;
+
     result[group] = {
       sets: Math.round(sets * 10) / 10, // round to 1 decimal for fractional secondary sets
       landmark: getVolumeLandmark(sets, group),
       frequencyPerWeek: Math.round((days / 2) * 10) / 10, // sessions per week over 14 days
       hoursSinceLastTrained: hoursSince,
+      recoveryReady,
     };
   }
 
@@ -441,7 +460,15 @@ export function calculateFatigueInsight(
   let shouldDeload = false;
   let reason: string | undefined;
 
-  if (volumeIncreasing && weeklyTotalSets[3]! > 40) {
+  // Relative threshold: trigger deload if current week exceeds prior 3-week average by 25%+
+  // (adapts to the athlete's baseline; replaces hardcoded >40 absolute threshold)
+  const priorAvg =
+    weeklyTotalSets.length >= 4
+      ? (weeklyTotalSets[0]! + weeklyTotalSets[1]! + weeklyTotalSets[2]!) / 3
+      : 0;
+  const volumeSpike = priorAvg > 0 && weeklyTotalSets[3]! > priorAvg * 1.25;
+
+  if (volumeIncreasing && volumeSpike) {
     shouldDeload = true;
     reason = "Volume has increased for 4 consecutive weeks. Schedule a deload to allow recovery.";
   } else if (performanceDecline) {

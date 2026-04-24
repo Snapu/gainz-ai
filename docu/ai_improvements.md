@@ -124,7 +124,7 @@ or vague weight targets.
 
 ---
 
-### [🟠] #9 — Goal-based protocol differentiation
+### ✅ #9 — Goal-based protocol differentiation
 
 **Problem:** `fitnessGoal` exists in the profile but the prompt handles all goals with
 hypertrophy-centric language.
@@ -142,7 +142,7 @@ hypertrophy-centric language.
 
 ---
 
-### [🟠] #10 — Add rest periods to recommended workout
+### ✅ #10 — Add rest periods to recommended workout
 
 **Problem:** `recommendedWorkout` items have no rest period field. Rest is a critical training
 variable (hypertrophy: 60–90s, strength: 3–5min).
@@ -298,7 +298,7 @@ Update system prompt section 2:
 
 ---
 
-### [🟠] #5 — Make deload threshold relative, not absolute
+### ✅ #5 — Make deload threshold relative, not absolute
 
 **File:** `src/services/trainingScience.ts` — `calculateFatigueInsight()`
 
@@ -367,7 +367,7 @@ sessions, the AI should suggest a mechanical variant, not just the same exercise
 
 ---
 
-### [🟠] #14 — Pre-compute recovery readiness per muscle
+### ✅ #14 — Pre-compute recovery readiness per muscle
 
 **File:** `src/services/trainingScience.ts` — `MuscleGroupInsight`
 
@@ -463,7 +463,7 @@ Glutes: { mev: 4, mavLow: 6, mavHigh: 12, mrv: 16 },
 2. ✅ **Low-risk architecture:** *(all done)*
    #18 (strip scratchpad from history), #20 (set temperature)
 
-3. **Medium complexity (new fields + prompt updates):**
+3. ✅ **Medium complexity (new fields + prompt updates):** *(all done)*
    #9 (goal protocols), #10 (rest periods schema), #14 (recovery readiness), #5 (relative deload threshold)
 
 4. **Higher complexity (new calculations + tests required):**
