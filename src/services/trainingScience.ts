@@ -297,15 +297,18 @@ export function calculateE1RMInsights(
       }
     }
 
-    // Plateau: last 3+ non-zero e1RM values within ±2% of each other.
+    // Plateau: last 3+ non-zero e1RM values within ±3% of each other.
     // Filter zeros to prevent sessions where all sets were outside the rep window
     // (e.g. a session with only >20 rep sets) from polluting the trend.
+    // Using ±3% (not ±2%): the Epley/Brzycki ensemble produces 2–4% formula noise
+    // when the same athlete logs different rep counts across sessions (e.g. 8 vs 12).
+    // At ±2% the threshold was inside formula noise — genuine progress was masked as plateau.
     let plateau = false;
     const nonZeroTrend = trend.filter((v) => v > 0);
     if (nonZeroTrend.length >= 3) {
       const last3 = nonZeroTrend.slice(-3);
       const avg = last3.reduce((a, b) => a + b, 0) / last3.length;
-      plateau = last3.every((v) => Math.abs(v - avg) / avg <= 0.02);
+      plateau = last3.every((v) => Math.abs(v - avg) / avg <= 0.03);
     }
 
     result[exerciseName] = { e1rm: currentE1RM, trend, plateau, bestRPE };

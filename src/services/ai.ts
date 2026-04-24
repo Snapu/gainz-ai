@@ -113,7 +113,7 @@ export const aiResponseSchema: Schema = {
             },
           },
           restSeconds: {
-            type: Type.NUMBER,
+            type: Type.INTEGER,
             description:
               "Recommended rest between sets in seconds. 180–300 for strength (1–5 reps), 90–180 for hypertrophy (6–12 reps), 30–60 for fat loss/endurance (12–20 reps), 15–30 for endurance/circuit (20–25 reps).",
           },
@@ -198,7 +198,7 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
     Isolation / small-muscle (Curls, Lateral Raises, Flyes, Cable work) → +1.25kg (or nearest available increment, min 2.5kg if fractional plates unavailable)
     Compound upper-body (Bench Press, Row, Overhead Press)              → +2.5kg
     Pull-Ups                                                            → +2.5kg via weight belt if available; otherwise add 1 rep until hitting the top of the rep range on all sets, then note in reasoning that a weight belt is needed to continue overload
-    Compound lower-body (Squat, Deadlift, Romanian Deadlift, Leg Press) → +5kg
+    Compound lower-body (Squat, Deadlift, Romanian Deadlift, Leg Press, Hip Thrust, Bulgarian Split Squat) → +5kg
   Step 2 — otherwise, keep the same weight and push reps higher within the range.
   Never increase weight and reps simultaneously.
   IMPORTANT: 'targetReps' MUST always be a range (e.g. "6-12", "8-10", "15-20"). Never output AMRAP, "failure", or a single number.
@@ -471,6 +471,8 @@ export async function askAi(
 
   let aiResponseText = "";
 
+  const AI_TIMEOUT_MS = 90_000;
+
   try {
     const startOfToday = new Date().setHours(0, 0, 0, 0);
     const todayLogs = exerciseLogs.filter((log) => log.loggedAt.getTime() > startOfToday);
@@ -562,15 +564,34 @@ export async function askAi(
       currentUserInput,
     });
 
-    const responseStream = await ai.models.generateContentStream({
-      model: "gemini-2.5-flash",
-      contents: conversationContents,
-      config: aiConfig,
-    });
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("AI request timed out")), AI_TIMEOUT_MS),
+    );
+    const responseStream = await Promise.race([
+      ai.models.generateContentStream({
+        model: "gemini-2.5-flash",
+        contents: conversationContents,
+        config: aiConfig,
+      }),
+      timeoutPromise,
+    ]);
 
     aiResponseText = "";
     for await (const chunk of responseStream) {
       if (chunk.text) aiResponseText += chunk.text;
+    }
+
+    // Validate the response has the minimum required field before returning ok().
+    // Gemini can return truncated JSON if the output hits the max token limit or
+    // a stream chunk is dropped (common on mobile/Capacitor). Returning ok(malformedJSON)
+    // would silently crash the Pinia store's JSON.parse call.
+    try {
+      const parsed = JSON.parse(aiResponseText);
+      if (typeof parsed?.coachMessage !== "string" || parsed.coachMessage.trim() === "") {
+        return err("generate-content-stream-failed");
+      }
+    } catch {
+      return err("generate-content-stream-failed");
     }
 
     return ok(aiResponseText);
