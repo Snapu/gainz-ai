@@ -622,10 +622,11 @@ function computeACWR(logs: ExerciseLog[], targetDate: Date): number | null {
   // Use oldest-log age rounded up to nearest week (max 4).
   // This correctly handles partial history (e.g. week-2 athlete has 2 active weeks, not 4)
   // and avoids boundary-date edge cases in per-bucket scanning.
-  const oldestLogAge =
-    allWindowLogs.length > 0
-      ? Math.max(...allWindowLogs.map((l) => now - l.loggedAt.getTime()))
-      : 0;
+  // Use reduce instead of spread to avoid stack overflow for large log arrays.
+  const oldestLogAge = allWindowLogs.reduce(
+    (max, l) => Math.max(max, now - l.loggedAt.getTime()),
+    0,
+  );
   const activeWeeks = Math.min(Math.ceil(oldestLogAge / (7 * msPerDay)), 4);
 
   const chronicWeekly = chronicLoad / Math.max(activeWeeks, 1);

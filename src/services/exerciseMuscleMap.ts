@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/vue";
 import type { MuscleActivation, MuscleGroup, SecondaryMuscleActivation } from "./trainingScience";
+import { getMuscleActivation } from "./trainingScience";
 
 const STORAGE_KEY = "exerciseMuscleMap";
 const MAX_ENTRIES = 200;
@@ -158,6 +159,14 @@ export function learnFromAiResponse(
 
     const key = normalizeKey(ex.exerciseName);
     if (!key) continue;
+
+    // Never overwrite entries that exist in the default activation map.
+    // The default map contains hand-verified, high-quality mappings — AI-learned entries
+    // should only fill gaps for exercises the default map doesn't know about.
+    if (getMuscleActivation(ex.exerciseName)) {
+      skippedCount++;
+      continue;
+    }
 
     map[key] = { primaryMuscle: rawPrimary, secondaryMuscles, updatedAt: now };
     learnedCount++;

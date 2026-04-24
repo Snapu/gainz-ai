@@ -20,6 +20,8 @@ export type PreviousAiMessage = {
   role: "user" | "assistant";
   content: string;
   sessionDate: string;
+  /** ISO timestamp of when this message was created. Used to find new sets since last AI response. */
+  timestamp: string;
   logsCount: number;
 };
 
@@ -151,16 +153,21 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
   - MAV = Maximum Adaptive Volume (optimal growth zone — 10-18 sets/week)
   - MRV = Maximum Recoverable Volume (too much — risk of overtraining)
   - BINDING: If any muscle shows landmark 'above_MRV', reduce its programmed sets to mavHigh equivalent this session, even if shouldDeload is false.
+  - BINDING: If any muscle shows landmark 'approaching_MRV', cap new primary sets for that muscle to ≤2 this session to prevent crossing into overtraining.
   - BINDING: Never prescribe primary sets for a muscle where recoveryReady=false, unless no other muscle group needs work — in that case halve the set count and note the early re-stimulation in reasoning.
 - 'e1rm': Estimated 1-Rep Max per exercise with a 4-session trend and plateau detection. Use this to set precise targetWeight values.
   - If plateau=true AND the exercise appears in the last 4 session logs, SWITCH to a mechanical variant for that movement pattern instead of repeating the same exercise.
     IMPORTANT: Only suggest variants using equipment listed in the user's equipmentAccess profile. Skip any variant that requires unavailable equipment.
-    Bench Press      → Incline Dumbbell Press or Cable Flyes
-    Squat            → Bulgarian Split Squat or Leg Press
-    Pull-Ups         → Lat Pulldown or Chest-Supported Row
-    Overhead Press   → Dumbbell Shoulder Press or Arnold Press
-    Deadlift         → Romanian Deadlift or Trap Bar Deadlift
-- 'fatigue': Deload recommendation with reasoning. If shouldDeload is true, you MUST program a deload week (50-60% of normal volume, reduce intensity by 10-15%).
+    Bench Press        → Incline Dumbbell Press or Cable Flyes
+    Squat              → Bulgarian Split Squat or Leg Press
+    Pull-Ups           → Lat Pulldown or Chest-Supported Row
+    Overhead Press     → Dumbbell Shoulder Press or Arnold Press
+    Deadlift           → Romanian Deadlift or Trap Bar Deadlift
+    Romanian Deadlift  → Good Mornings or Nordic Curl
+    Hip Thrust         → Glute Bridge or Cable Kickback
+    Leg Curl           → Nordic Curl or Romanian Deadlift
+    Lateral Raises     → Cable Lateral Raise or Machine Lateral Raise
+- 'fatigue': Deload recommendation with reasoning. If shouldDeload is true, you MUST program a deload week (50-60% of normal volume). Reduce intensity by 10–15 percentage points on the e1RM scale (e.g., normally prescribing 75% e1RM → deload at 60–65% e1RM, NOT just -10% of the kg weight).
   - 'fatigue.weeklyTonnage': Total kg lifted per week (RPE-adjusted weight × reps per set). Use alongside weeklyTotalSets for load-aware fatigue assessment. A 50%+ week-over-week tonnage spike is a red flag even if set count is stable (this matches the deload trigger threshold in the code).
 - 'acwr': Acute:Chronic Workload Ratio (7-day tonnage ÷ avg weekly 28-day tonnage). Safe zone: 0.8–1.3. If > 1.3, reduce today’s volume by 15–20%. If > 1.5, strongly recommend rest or deload. If < 0.8, the athlete is undertraining — increase today's volume by 15–20% to rebuild the training stimulus. If null, insufficient history — proceed conservatively.- 'mesocycleWeek': Weeks into the current training block since the last deload (or since first session if no deload detected). Typical mesocycle = 4 weeks. Week 1: conservative volume at MEV. Weeks 2–3: progressive increase toward MAV. Week 4: peak volume approaching MRV. Week 5+: deload is overdue — flag this to the athlete.- Your 'scratchpad' MUST follow this exact structure BEFORE writing coachMessage:
   1. VOLUME: List each muscle group — current sets vs. MEV/MAV/MRV landmark (e.g. "Chest: 6 sets → below_MEV, needs 8+").
@@ -195,6 +202,7 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
   1–5 reps (strength)              → 180–300s
   6–12 reps (hypertrophy)           → 90–180s  ← longer rest yields greater mechanical tension and hypertrophy
   12–20 reps (fat loss / endurance) → 30–60s
+  20–25 reps (endurance/circuit)    → 15–30s between exercises, or 0s in true circuit (move directly to next station)
 - Exercise Order (MANDATORY): Always order recommendedWorkout with compound multi-joint movements first (e.g. Squat, Bench Press, Deadlift, Row, OHP), isolation movements last (e.g. Curls, Flyes, Lateral Raises). Within each category, order by the session's priority muscle group.
 - Notes: NEVER use trivial cliches in the 'notes' field (e.g. "controlled execution", "deep squat"). Only provide advanced tempo/anatomical cues (e.g. "3s eccentric") or OMIT the field entirely.
 - LANGUAGE RULE: Only 'coachMessage' is shown to the user — write it in the user's locale. ALL other fields ('scratchpad', 'reasoning', 'muscleGroup', 'supersetId', 'targetWeight', 'notes') MUST be in English. This saves tokens and ensures reliable parsing.
@@ -227,7 +235,7 @@ Coach Response: {"scratchpad": "1. VOLUME: Not assessed — event override (fast
 
 EXAMPLE 3 (Deload Week):
 User Data: Training Insights: {"fatigue": {"shouldDeload": true, "reason": "Volume has increased for 4 consecutive weeks.", "weeklyTotalSets": [28, 33, 38, 44]}}
-Coach Response: {"scratchpad": "1. VOLUME: Not relevant this week — deload triggered. 2. E1RM: Not pushing intensity. 3. FATIGUE: shouldDeload=true, 4 weeks of increasing volume (28→33→38→44 sets). 4. RECOVERY: All muscles need systemic rest. 5. WEIGHTS: Reduce by 15% across the board. Bench e1RM 120kg → deload target = 70% = 84 → round to 85kg. 6. PLAN: 2 sets per compound only, no isolation.", "coachMessage": "Four weeks of climbing volume — your body is telling you to back off. This is a planned deload, not a setback. Drop the weight 15% and cut to 2 sets per exercise. You'll come back noticeably stronger next week.", "recommendedWorkout": [{"exerciseName": "Bench Press", "reasoning": "Deload: 2 sets at 70% e1RM. Primary compound first.", "targetSets": 2, "targetReps": "10-12", "targetWeight": "85kg", "restSeconds": 120}, {"exerciseName": "Barbell Row", "reasoning": "Deload: 2 sets, back compound second.", "targetSets": 2, "targetReps": "10-12", "targetWeight": "70kg", "restSeconds": 120}]}
+Coach Response: {"scratchpad": "1. VOLUME: Not relevant this week — deload triggered. 2. E1RM: Not pushing intensity. 3. FATIGUE: shouldDeload=true, 4 weeks of increasing volume (28→33→38→44 sets). 4. RECOVERY: All muscles need systemic rest. 5. WEIGHTS: Normal hypertrophy = 75% e1RM. Deload = 75% - 12pp = 63% ≈ 65%. Bench e1RM 120kg → deload target = 65% = 78 → round to 77.5kg. Row e1RM ~100kg → 65% = 65kg. 6. PLAN: 2 sets per compound only, no isolation.", "coachMessage": "Four weeks of climbing volume — your body is telling you to back off. This is a planned deload, not a setback. Drop the weight about 15% and cut to 2 sets per exercise. You'll come back noticeably stronger next week.", "recommendedWorkout": [{"exerciseName": "Bench Press", "reasoning": "Deload: 2 sets at 65% e1RM (normal 75% − 10pp). Primary compound first.", "targetSets": 2, "targetReps": "10-12", "targetWeight": "77.5kg", "restSeconds": 120}, {"exerciseName": "Barbell Row", "reasoning": "Deload: 2 sets at 65% e1RM. Back compound second.", "targetSets": 2, "targetReps": "10-12", "targetWeight": "65kg", "restSeconds": 120}]}
 
 EXAMPLE 4 (New User — No History):
 User Data: exerciseLogs=[], isFirstMessage=true, fitnessLevel="beginner"
@@ -339,7 +347,9 @@ function compactLogs(logs: ExerciseLog[]): string {
       if (reps.length > 0) {
         const minReps = Math.min(...reps);
         const maxReps = Math.max(...reps);
-        summaryParts.push(minReps === maxReps ? `${maxReps} reps` : `${minReps}-${maxReps} reps`);
+        // Show individual set reps (not a collapsed min-max range) so the AI can determine
+        // whether all sets reached the top of the rep range — required for double-progression.
+        summaryParts.push(minReps === maxReps ? `${maxReps} reps` : `reps: ${reps.join(",")}`);
       }
 
       if (weights.length > 0) {
@@ -499,7 +509,9 @@ export async function askAi(
       // Mid-workout: only send new sets since last AI response
       const assistantMsgs = previousMessages.filter((m) => m.role === "assistant");
       const lastAssistant = assistantMsgs[assistantMsgs.length - 1];
-      const cutoff = lastAssistant ? new Date(`${lastAssistant.sessionDate}`).getTime() : 0;
+      // Use ISO timestamp from the last assistant message for accurate cutoff.
+      // sessionDate is a locale string (e.g. "24.4.2026") that does NOT parse reliably with new Date().
+      const cutoff = lastAssistant?.timestamp ? new Date(lastAssistant.timestamp).getTime() : 0;
       const newLogs = todayLogs.filter((l) => l.loggedAt.getTime() > cutoff);
       sections.push(
         `New sets since last update:\n${compactLogs(newLogs.length > 0 ? newLogs : todayLogs)}`,
@@ -509,8 +521,9 @@ export async function askAi(
       sections.push(`${logLabel}:\n${compactLogs(logsToInclude)}`);
     }
 
-    // Training science insights: only on first message or when not mid-workout
-    if (isFirstMessage || !isMidWorkout) {
+    // Training science insights: always send when not mid-workout (includes planning messages 2, 3, etc.)
+    // Sending only on isFirstMessage would drop volume/fatigue context for follow-up planning questions.
+    if (!isMidWorkout) {
       const learnedMap = getLearnedMuscleMap();
       const insights = calculateTrainingInsights(exerciseLogs, new Date(), learnedMap);
       sections.push(`Training Insights:\n${JSON.stringify(insights)}`);

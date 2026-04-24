@@ -130,6 +130,7 @@ export const useAiStore = defineStore("ai", () => {
         role: msg.role,
         content: msg.content,
         sessionDate: msg.sessionDate,
+        timestamp: msg.timestamp.toISOString(),
         logsCount: msg.logsCount,
       }));
 
