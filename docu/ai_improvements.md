@@ -346,7 +346,7 @@ Add to system prompt section 2:
 
 ---
 
-### [🟠] #11 — Plateau → exercise variation directive
+### ✅ #11 — Plateau → exercise variation directive
 
 **File:** `src/services/ai.ts` — system prompt
 
