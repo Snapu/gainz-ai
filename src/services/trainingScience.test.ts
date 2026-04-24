@@ -497,6 +497,73 @@ describe("calculateTrainingInsights", () => {
   });
 });
 
+// --- Mesocycle Week ---
+
+describe("mesocycleWeek in calculateTrainingInsights", () => {
+  it("should return 1 when there are no logs", () => {
+    const insights = calculateTrainingInsights([]);
+    expect(insights.mesocycleWeek).toBe(1);
+  });
+
+  it("should count weeks from the first active week when no deload is detected", () => {
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    const logs: ExerciseLog[] = [];
+
+    // 3 active weeks of training (weeks 3, 2, 1 ago)
+    for (let w = 1; w <= 3; w++) {
+      const date = new Date(targetDate);
+      date.setDate(date.getDate() - w * 7 + 1);
+      logs.push(createLog("Squat", date, 80, 5));
+    }
+
+    const insights = calculateTrainingInsights(logs, targetDate);
+    // First active week was 3 weeks ago → mesocycleWeek = 3
+    expect(insights.mesocycleWeek).toBe(3);
+  });
+
+  it("should reset week count after a detected deload week", () => {
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    const logs: ExerciseLog[] = [];
+
+    // Helper: create a date safely inside week W ago's bucket
+    // Bucket for W weeks ago = (targetDate - W*7 - 7, targetDate - W*7]
+    // Placing at -W*7 - 3 days lands in the middle of the bucket
+    const midWeek = (w: number) => {
+      const d = new Date(targetDate);
+      d.setDate(d.getDate() - w * 7 - 3);
+      return d;
+    };
+
+    // Weeks 7–4 ago: normal load (10 sets/week)
+    for (let w = 4; w <= 7; w++) {
+      for (let s = 0; s < 10; s++) {
+        logs.push(createLog("Bench Press", midWeek(w), 80, 8));
+      }
+    }
+
+    // Week 3 ago: deload (only 1 set — well below 50% of 10-set baseline)
+    logs.push(createLog("Bench Press", midWeek(3), 60, 8));
+
+    // Weeks 2 and 1 ago: normal training resumed (10 sets/week)
+    for (let w = 1; w <= 2; w++) {
+      for (let s = 0; s < 10; s++) {
+        logs.push(createLog("Bench Press", midWeek(w), 80, 8));
+      }
+    }
+
+    const insights = calculateTrainingInsights(logs, targetDate);
+    // Deload was 3 weeks ago → week after deload = 2 weeks ago = week 1 of new block,
+    // last week = week 2, current (empty) week = week 3
+    expect(insights.mesocycleWeek).toBe(3);
+  });
+
+  it("should be included in calculateTrainingInsights result", () => {
+    const insights = calculateTrainingInsights([]);
+    expect(insights).toHaveProperty("mesocycleWeek");
+    expect(typeof insights.mesocycleWeek).toBe("number");
+  });
+});
+
 // --- Systemic Phase Detection ---
 
 describe("computeSystemicPhase", () => {

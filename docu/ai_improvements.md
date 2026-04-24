@@ -320,7 +320,7 @@ if (volumeIncreasing && volumeSpike) { ... }
 
 ---
 
-### [🟠] #6 — Add mesocycle week counter
+### ✅ #6 — Add mesocycle week counter
 
 **File:** `src/services/trainingScience.ts` + `TrainingInsights`
 

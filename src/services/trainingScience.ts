@@ -60,6 +60,7 @@ export interface TrainingInsights {
   fatigue: FatigueInsight;
   phase: SystemicPhase;
   acwr: number | null; // Acute:Chronic Workload Ratio (7-day load / avg weekly 28-day load)
+  mesocycleWeek: number; // Weeks since last deload (or since first log if no deload detected)
 }
 
 // --- Exercise → Muscle Activation Mapping ---
@@ -545,6 +546,45 @@ function computeACWR(logs: ExerciseLog[], targetDate: Date): number | null {
   return Math.round((acuteLoad / chronicWeekly) * 100) / 100;
 }
 
+/**
+ * Compute which week of the current mesocycle the athlete is in.
+ *
+ * Scans back up to 24 weeks and identifies the most recent "deload week" —
+ * defined as a week where total sets were ≤ 50% of the preceding 3-week average.
+ * Returns weeks elapsed since that deload (week after deload = week 1).
+ * Falls back to counting from the first active week if no deload is found.
+ */
+function computeMesocycleWeek(logs: ExerciseLog[], targetDate: Date): number {
+  const msPerWeek = 7 * 86_400_000;
+  const maxWeeks = 24;
+
+  // Bucket logs into weekly set counts: index 0 = 24 weeks ago, index 23 = current week
+  const weeklySets: number[] = [];
+  for (let w = maxWeeks - 1; w >= 0; w--) {
+    const weekEnd = new Date(targetDate.getTime() - w * msPerWeek);
+    const weekStart = new Date(weekEnd.getTime() - msPerWeek);
+    const count = logs.filter(
+      (l) => l.loggedAt > weekStart && l.loggedAt <= weekEnd && l.reps != null,
+    ).length;
+    weeklySets.push(count);
+  }
+
+  // Search for the most recent deload week (skip current week, need 3 prior weeks for baseline)
+  for (let i = maxWeeks - 2; i >= 3; i--) {
+    const priorAvg =
+      ((weeklySets[i - 1] ?? 0) + (weeklySets[i - 2] ?? 0) + (weeklySets[i - 3] ?? 0)) / 3;
+    if (priorAvg > 0 && (weeklySets[i] ?? 0) <= priorAvg * 0.5) {
+      // mesocycleWeek = current index (maxWeeks-1) minus deload index
+      return maxWeeks - 1 - i;
+    }
+  }
+
+  // No deload found: count from first active week (that week = week 1)
+  const firstActiveIndex = weeklySets.findIndex((s) => s > 0);
+  if (firstActiveIndex === -1) return 1;
+  return maxWeeks - 1 - (firstActiveIndex - 1);
+}
+
 export function calculateTrainingInsights(
   logs: ExerciseLog[],
   targetDate: Date = new Date(),
@@ -555,6 +595,7 @@ export function calculateTrainingInsights(
   const fatigue = calculateFatigueInsight(logs, e1rm, targetDate);
   const phase = computeSystemicPhase(fatigue);
   const acwr = computeACWR(logs, targetDate);
+  const mesocycleWeek = computeMesocycleWeek(logs, targetDate);
 
-  return { muscleGroups, e1rm, fatigue, phase, acwr };
+  return { muscleGroups, e1rm, fatigue, phase, acwr, mesocycleWeek };
 }
