@@ -51,6 +51,7 @@ export interface FatigueInsight {
   shouldDeload: boolean;
   reason?: string;
   weeklyTotalSets: number[];
+  weeklyTonnage: number[]; // sum of weight × reps per set, per week
 }
 
 export interface TrainingInsights {
@@ -427,8 +428,9 @@ export function calculateFatigueInsight(
   e1rmData: Record<string, ExerciseE1RM>,
   targetDate: Date = new Date(),
 ): FatigueInsight {
-  // Weekly total sets for last 4 weeks
+  // Weekly total sets and tonnage for last 4 weeks
   const weeklyTotalSets: number[] = [];
+  const weeklyTonnage: number[] = [];
   for (let w = 3; w >= 0; w--) {
     const weekEnd = new Date(targetDate);
     weekEnd.setDate(weekEnd.getDate() - w * 7);
@@ -439,6 +441,7 @@ export function calculateFatigueInsight(
       (l) => l.loggedAt > weekStart && l.loggedAt <= weekEnd && l.reps != null,
     );
     weeklyTotalSets.push(weekLogs.length);
+    weeklyTonnage.push(weekLogs.reduce((sum, l) => sum + (l.weight ?? 0) * (l.reps ?? 0), 0));
   }
 
   // Check 1: Volume increasing for 4+ consecutive weeks
@@ -476,7 +479,7 @@ export function calculateFatigueInsight(
     reason = `Performance declining in ${decliningExercises} exercises simultaneously. Fatigue is accumulating.`;
   }
 
-  return { shouldDeload, reason, weeklyTotalSets };
+  return { shouldDeload, reason, weeklyTotalSets, weeklyTonnage };
 }
 
 // --- Systemic Phase Detection ---

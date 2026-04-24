@@ -216,7 +216,7 @@ export const aiConfig: GenerateContentConfig = {
 
 ## `trainingScience.ts` Calculation Improvements
 
-### [🔴] #3 — Add `weeklyTonnage` to fatigue tracking
+### ✅ #3 — Add `weeklyTonnage` to fatigue tracking
 
 **File:** `src/services/trainingScience.ts` — `calculateFatigueInsight()` and `FatigueInsight`
 

@@ -371,6 +371,32 @@ describe("calculateFatigueInsight", () => {
     const fatigue = calculateFatigueInsight([], {}, targetDate);
     expect(fatigue.weeklyTotalSets).toHaveLength(4);
   });
+
+  it("should compute weeklyTonnage as weight × reps per week", () => {
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    const logs: ExerciseLog[] = [];
+
+    // Week 4 (most recent): 3 sets of 10 reps @ 100kg = 3000
+    for (let s = 0; s < 3; s++) {
+      const d = new Date(targetDate);
+      d.setDate(d.getDate() - 1); // 1 day ago = week 4
+      logs.push(createLog("Bench Press", d, 100, 10));
+    }
+    // Week 3: 2 sets of 8 reps @ 80kg = 1280
+    for (let s = 0; s < 2; s++) {
+      const d = new Date(targetDate);
+      d.setDate(d.getDate() - 8); // 8 days ago = week 3
+      logs.push(createLog("Bench Press", d, 80, 8));
+    }
+
+    const e1rm = calculateE1RMInsights(logs);
+    const fatigue = calculateFatigueInsight(logs, e1rm, targetDate);
+
+    expect(fatigue.weeklyTonnage).toHaveLength(4);
+    expect(fatigue.weeklyTonnage[3]).toBe(3000); // week 4: 3 × 100 × 10
+    expect(fatigue.weeklyTonnage[2]).toBe(1280); // week 3: 2 × 80 × 8
+    expect(fatigue.weeklyTonnage[0]).toBe(0); // week 1: no logs
+  });
 });
 
 // --- Integration ---
@@ -428,6 +454,7 @@ describe("computeSystemicPhase", () => {
     return {
       shouldDeload: false,
       weeklyTotalSets: [],
+      weeklyTonnage: [],
       ...overrides,
     };
   }
