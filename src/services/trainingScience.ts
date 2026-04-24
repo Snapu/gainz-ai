@@ -212,7 +212,9 @@ export function calculateE1RM(weight: number, reps: number, rpe?: number): numbe
   if (reps > 30) return 0; // formula unreliable above 30 reps
 
   // RPE adjustment: if RPE 8, it's effectively 2 more reps left in the tank.
-  const effectiveReps = reps + (10 - (rpe ?? 10));
+  // Clamp effectiveReps to 36 max: Brzycki denominator (37 - reps) must stay positive.
+  // Without this, reps=30 + RPE adjustment (e.g. rpe=3 → +7) → effectiveReps=37 → division by zero.
+  const effectiveReps = Math.min(reps + (10 - (rpe ?? 10)), 36);
   if (effectiveReps === 1) return weight;
 
   // Ensemble: Epley (accurate at low reps) + Brzycki (accurate at high reps)
@@ -465,13 +467,16 @@ export function calculateFatigueInsight(
     weeklyTotalSets.length >= 4 &&
     weeklyTotalSets.every((sets, i) => i === 0 || sets > (weeklyTotalSets[i - 1] ?? 0));
 
-  // Check 2: Multiple exercises showing e1RM decline (top e1RM < trend average)
+  // Check 2: Multiple exercises showing e1RM decline over 2+ consecutive sessions.
+  // Comparing to a 2-session average (not just the previous session) avoids false positives
+  // from a single bad day (poor sleep, dehydration, mid-taper).
   let decliningExercises = 0;
   for (const data of Object.values(e1rmData)) {
-    if (data.trend.length >= 2) {
+    if (data.trend.length >= 3) {
       const current = data.trend[data.trend.length - 1] ?? 0;
-      const prev = data.trend[data.trend.length - 2] ?? 0;
-      if (prev > 0 && current < prev * 0.95) decliningExercises++;
+      const prior2Avg =
+        ((data.trend[data.trend.length - 2] ?? 0) + (data.trend[data.trend.length - 3] ?? 0)) / 2;
+      if (prior2Avg > 0 && current < prior2Avg * 0.95) decliningExercises++;
     }
   }
   const performanceDecline = decliningExercises >= 2;
@@ -479,13 +484,16 @@ export function calculateFatigueInsight(
   let shouldDeload = false;
   let reason: string | undefined;
 
-  // Relative threshold: trigger deload if current week exceeds prior 3-week average by 25%+
-  // (adapts to the athlete's baseline; replaces hardcoded >40 absolute threshold)
+  // Relative threshold: trigger deload if current week exceeds prior 3-week average by 25%+.
+  // Floor of 12 sets/week (~2 exercises × 6 sets): prevents false positives for beginners
+  // whose normal progression looks like a "spike" relative to their small starting volume.
   const priorAvg =
     weeklyTotalSets.length >= 4
       ? (weeklyTotalSets[0]! + weeklyTotalSets[1]! + weeklyTotalSets[2]!) / 3
       : 0;
-  const volumeSpike = priorAvg > 0 && weeklyTotalSets[3]! > priorAvg * 1.25;
+  const VOLUME_SPIKE_MIN_BASELINE = 12;
+  const volumeSpike =
+    priorAvg >= VOLUME_SPIKE_MIN_BASELINE && weeklyTotalSets[3]! > priorAvg * 1.25;
 
   if (volumeSpike) {
     shouldDeload = true;
@@ -496,8 +504,10 @@ export function calculateFatigueInsight(
     shouldDeload = true;
     reason = `Performance declining in ${decliningExercises} exercises simultaneously. Fatigue is accumulating.`;
   } else {
-    // Check 3: Standalone tonnage spike — set count stable but load jumped 50%+ in a single week
+    // Check 3: Standalone tonnage spike — set count stable but load jumped 50%+ in a single week.
     // Catches athletes who keep set count constant but drastically increase weight per set.
+    // No set-count floor: this check targets intensity spikes independent of volume.
+    // The beginner protection floor (VOLUME_SPIKE_MIN_BASELINE) only applies to Check 1.
     const priorTonnageAvg =
       weeklyTonnage.length >= 4
         ? (weeklyTonnage[0]! + weeklyTonnage[1]! + weeklyTonnage[2]!) / 3
@@ -584,15 +594,26 @@ function computeACWR(logs: ExerciseLog[], targetDate: Date): number | null {
 
   if (preAcuteLoad === 0) return null;
 
-  // Full 28-day chronic load (including acute week) averaged over 4 weeks
-  const chronicLoad = logs
-    .filter((l) => now - l.loggedAt.getTime() <= 28 * msPerDay)
-    .reduce((s, l) => {
-      const rpeMultiplier = (l.rpe ?? 10) / 10;
-      return s + (l.weight ?? 0) * (l.reps ?? 0) * rpeMultiplier;
-    }, 0);
+  // Full 28-day chronic load (including acute week), divided by the number of weeks
+  // that actually have data. Dividing by a fixed 4 inflates the ratio for athletes in
+  // weeks 2–4 of training (only 1–3 weeks of history → artificially low chronic average).
+  const allWindowLogs = logs.filter((l) => now - l.loggedAt.getTime() <= 28 * msPerDay);
+  const chronicLoad = allWindowLogs.reduce((s, l) => {
+    const rpeMultiplier = (l.rpe ?? 10) / 10;
+    return s + (l.weight ?? 0) * (l.reps ?? 0) * rpeMultiplier;
+  }, 0);
 
-  const chronicWeekly = chronicLoad / 4;
+  // Count active weeks = how many complete 7-day buckets are covered by training history.
+  // Use oldest-log age rounded up to nearest week (max 4).
+  // This correctly handles partial history (e.g. week-2 athlete has 2 active weeks, not 4)
+  // and avoids boundary-date edge cases in per-bucket scanning.
+  const oldestLogAge =
+    allWindowLogs.length > 0
+      ? Math.max(...allWindowLogs.map((l) => now - l.loggedAt.getTime()))
+      : 0;
+  const activeWeeks = Math.min(Math.ceil(oldestLogAge / (7 * msPerDay)), 4);
+
+  const chronicWeekly = chronicLoad / Math.max(activeWeeks, 1);
 
   return Math.round((acuteLoad / chronicWeekly) * 100) / 100;
 }
@@ -633,10 +654,7 @@ function computeMesocycleWeek(logs: ExerciseLog[], targetDate: Date): number {
     const thisWeekSets = weeklySets[i] ?? 0;
     // Only count as a deload if the athlete had meaningful training before this week,
     // and the week itself was a genuine reduced-load week (not simply inactive)
-    if (
-      priorAvg >= MIN_ACTIVE_SETS_FOR_DELOAD &&
-      thisWeekSets <= priorAvg * 0.5
-    ) {
+    if (priorAvg >= MIN_ACTIVE_SETS_FOR_DELOAD && thisWeekSets <= priorAvg * 0.5) {
       // mesocycleWeek = current index (maxWeeks-1) minus deload index
       return maxWeeks - 1 - i;
     }

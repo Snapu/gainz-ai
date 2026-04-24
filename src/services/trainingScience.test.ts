@@ -62,6 +62,14 @@ describe("calculateE1RM", () => {
     // 100x10 @ RPE 8 -> effective reps = 12 -> ensemble: epley=140, brzycki=144, t=0.6 → 142.4
     expect(calculateE1RM(100, 10, 8)).toBe(142.4);
   });
+
+  it("should clamp effectiveReps to 36 to avoid Brzycki division by zero", () => {
+    // reps=30, rpe=3 → effectiveReps would be 30 + (10-3) = 37 → 37 - 37 = 0 → Infinity
+    // Clamp to 36 → finite, positive result
+    const result = calculateE1RM(100, 30, 3);
+    expect(Number.isFinite(result)).toBe(true);
+    expect(result).toBeGreaterThan(0);
+  });
 });
 
 // --- getMuscleGroup ---
@@ -467,6 +475,27 @@ describe("calculateFatigueInsight", () => {
     expect(fatigue.shouldDeload).toBe(true);
     expect(fatigue.reason).toContain("spiked");
   });
+
+  it("should NOT trigger deload for normal beginner volume progression (no spike in either sets or tonnage)", () => {
+    // Pattern: [4, 4, 4, 5] — small absolute increase, well below the 12-set floor for set spike
+    // and well below 50% tonnage threshold for tonnage spike.
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    const logs: ExerciseLog[] = [];
+    const weekSets = [4, 4, 4, 5]; // week 1=oldest, week 4=current
+
+    for (let w = 0; w < 4; w++) {
+      const weeksAgo = 3 - w; // w=0 → 3 weeks ago, w=3 → current
+      const d = new Date(targetDate);
+      d.setDate(d.getDate() - weeksAgo * 7 - 3);
+      for (let s = 0; s < (weekSets[w] ?? 0); s++) {
+        logs.push(createLog("Bench Press", d, 60, 10));
+      }
+    }
+
+    const e1rm = calculateE1RMInsights(logs);
+    const fatigue = calculateFatigueInsight(logs, e1rm, targetDate);
+    expect(fatigue.shouldDeload).toBe(false);
+  });
 });
 
 // --- Integration ---
@@ -577,6 +606,32 @@ describe("calculateTrainingInsights", () => {
     const insights = calculateTrainingInsights(logs, targetDate);
     expect(insights.acwr).not.toBeNull();
     expect(insights.acwr!).toBeGreaterThan(1.3);
+  });
+
+  it("should return ~1.0 acwr for a week-2 athlete with consistent load (not 2.0 from fixed /4)", () => {
+    // Bug: old code always divided chronicLoad by 4.
+    // A week-2 athlete only has 2 weeks of history → old code gave chronic = totalLoad/4
+    // instead of totalLoad/2, making ACWR look like 2.0 for consistent training.
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    const logs: ExerciseLog[] = [];
+
+    // Week 1 (days 8–14): same load as week 2
+    for (let d = 8; d <= 14; d++) {
+      const date = new Date(targetDate);
+      date.setDate(date.getDate() - d);
+      logs.push(createLog("Bench Press", date, 50, 10));
+    }
+    // Week 2 / current (days 1–7): same load
+    for (let d = 1; d <= 7; d++) {
+      const date = new Date(targetDate);
+      date.setDate(date.getDate() - d);
+      logs.push(createLog("Bench Press", date, 50, 10));
+    }
+
+    const insights = calculateTrainingInsights(logs, targetDate);
+    // Both weeks have identical load → ACWR should be 1.0, not 2.0
+    expect(insights.acwr).not.toBeNull();
+    expect(insights.acwr!).toBeCloseTo(1.0, 1);
   });
 });
 
@@ -917,11 +972,32 @@ describe("calculateFatigueInsight edge cases", () => {
   it("should require >5% decline for e1RM performance trigger", () => {
     // 3% decline should NOT trigger
     const e1rm = {
-      "Bench Press": { e1rm: 97, trend: [100, 97], plateau: false },
-      Squat: { e1rm: 97, trend: [100, 97], plateau: false },
+      "Bench Press": { e1rm: 97, trend: [100, 100, 97], plateau: false },
+      Squat: { e1rm: 97, trend: [100, 100, 97], plateau: false },
     };
     const fatigue = calculateFatigueInsight([], e1rm);
     expect(fatigue.shouldDeload).toBe(false);
+  });
+
+  it("should require 3+ sessions in trend to detect performance decline (no single-day false positives)", () => {
+    // 2-point trend: current 90 vs prev 100 = 10% decline, but only 2 sessions → ignored
+    const e1rm = {
+      "Bench Press": { e1rm: 90, trend: [100, 90], plateau: false },
+      Squat: { e1rm: 90, trend: [100, 90], plateau: false },
+    };
+    const fatigue = calculateFatigueInsight([], e1rm);
+    expect(fatigue.shouldDeload).toBe(false);
+  });
+
+  it("should trigger deload when >5% decline is sustained over 3+ sessions in 2+ exercises", () => {
+    // 3-point trend: [100, 100, 90] → prior2Avg=100, current=90, decline=10% → triggers
+    const e1rm = {
+      "Bench Press": { e1rm: 90, trend: [100, 100, 90], plateau: false },
+      Squat: { e1rm: 90, trend: [100, 100, 90], plateau: false },
+    };
+    const fatigue = calculateFatigueInsight([], e1rm);
+    expect(fatigue.shouldDeload).toBe(true);
+    expect(fatigue.reason).toContain("declining");
   });
 
   it("should filter out logs without reps from weekly set count", () => {
