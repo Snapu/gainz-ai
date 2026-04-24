@@ -450,7 +450,14 @@ export function calculateFatigueInsight(
       (l) => l.loggedAt > weekStart && l.loggedAt <= weekEnd && l.reps != null,
     );
     weeklyTotalSets.push(weekLogs.length);
-    weeklyTonnage.push(weekLogs.reduce((sum, l) => sum + (l.weight ?? 0) * (l.reps ?? 0), 0));
+    // RPE-adjusted tonnage: sets at lower RPE carry proportionally less systemic fatigue.
+    // Default to RPE 10 (full effort) when not recorded.
+    weeklyTonnage.push(
+      weekLogs.reduce((sum, l) => {
+        const rpeMultiplier = (l.rpe ?? 10) / 10;
+        return sum + (l.weight ?? 0) * (l.reps ?? 0) * rpeMultiplier;
+      }, 0),
+    );
   }
 
   // Check 1: Volume increasing for 4+ consecutive weeks
@@ -486,6 +493,17 @@ export function calculateFatigueInsight(
   } else if (performanceDecline) {
     shouldDeload = true;
     reason = `Performance declining in ${decliningExercises} exercises simultaneously. Fatigue is accumulating.`;
+  } else {
+    // Check 3: Standalone tonnage spike — set count stable but load jumped 50%+ in a single week
+    // Catches athletes who keep set count constant but drastically increase weight per set.
+    const priorTonnageAvg =
+      weeklyTonnage.length >= 4
+        ? (weeklyTonnage[0]! + weeklyTonnage[1]! + weeklyTonnage[2]!) / 3
+        : 0;
+    if (priorTonnageAvg > 0 && weeklyTonnage[3]! > priorTonnageAvg * 1.5) {
+      shouldDeload = true;
+      reason = `Training load (tonnage) spiked this week — 50%+ above the prior 3-week average. Risk of overreaching.`;
+    }
   }
 
   return { shouldDeload, reason, weeklyTotalSets, weeklyTonnage };
@@ -545,7 +563,10 @@ function computeACWR(logs: ExerciseLog[], targetDate: Date): number | null {
 
   const acuteLoad = logs
     .filter((l) => now - l.loggedAt.getTime() <= 7 * msPerDay)
-    .reduce((s, l) => s + (l.weight ?? 0) * (l.reps ?? 0), 0);
+    .reduce((s, l) => {
+      const rpeMultiplier = (l.rpe ?? 10) / 10;
+      return s + (l.weight ?? 0) * (l.reps ?? 0) * rpeMultiplier;
+    }, 0);
 
   // Chronic baseline = load from days 8–28 (older than the acute window)
   // If there is no pre-acute history, the ratio is meaningless — return null
@@ -554,14 +575,20 @@ function computeACWR(logs: ExerciseLog[], targetDate: Date): number | null {
       const age = now - l.loggedAt.getTime();
       return age > 7 * msPerDay && age <= 28 * msPerDay;
     })
-    .reduce((s, l) => s + (l.weight ?? 0) * (l.reps ?? 0), 0);
+    .reduce((s, l) => {
+      const rpeMultiplier = (l.rpe ?? 10) / 10;
+      return s + (l.weight ?? 0) * (l.reps ?? 0) * rpeMultiplier;
+    }, 0);
 
   if (preAcuteLoad === 0) return null;
 
   // Full 28-day chronic load (including acute week) averaged over 4 weeks
   const chronicLoad = logs
     .filter((l) => now - l.loggedAt.getTime() <= 28 * msPerDay)
-    .reduce((s, l) => s + (l.weight ?? 0) * (l.reps ?? 0), 0);
+    .reduce((s, l) => {
+      const rpeMultiplier = (l.rpe ?? 10) / 10;
+      return s + (l.weight ?? 0) * (l.reps ?? 0) * rpeMultiplier;
+    }, 0);
 
   const chronicWeekly = chronicLoad / 4;
 

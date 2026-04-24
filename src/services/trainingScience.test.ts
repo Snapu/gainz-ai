@@ -393,9 +393,54 @@ describe("calculateFatigueInsight", () => {
     const fatigue = calculateFatigueInsight(logs, e1rm, targetDate);
 
     expect(fatigue.weeklyTonnage).toHaveLength(4);
-    expect(fatigue.weeklyTonnage[3]).toBe(3000); // week 4: 3 × 100 × 10
-    expect(fatigue.weeklyTonnage[2]).toBe(1280); // week 3: 2 × 80 × 8
+    expect(fatigue.weeklyTonnage[3]).toBe(3000); // week 4: 3 × 100 × 10 × (10/10)
+    expect(fatigue.weeklyTonnage[2]).toBe(1280); // week 3: 2 × 80 × 8 × (10/10)
     expect(fatigue.weeklyTonnage[0]).toBe(0); // week 1: no logs
+  });
+
+  it("should scale tonnage by RPE multiplier when rpe is provided", () => {
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    const d = new Date(targetDate);
+    d.setDate(d.getDate() - 1);
+    // 100kg × 10 reps @ RPE 8 → multiplier 0.8 → tonnage = 800
+    const log: ExerciseLog = {
+      id: crypto.randomUUID(),
+      exerciseName: "Bench Press",
+      loggedAt: d,
+      weight: 100,
+      reps: 10,
+      rpe: 8,
+      distance: undefined,
+      duration: undefined,
+    };
+    const e1rm = calculateE1RMInsights([log]);
+    const fatigue = calculateFatigueInsight([log], e1rm, targetDate);
+    expect(fatigue.weeklyTonnage[3]).toBeCloseTo(800);
+  });
+
+  it("should trigger deload on standalone tonnage spike (set count stable, load jumps 50%+)", () => {
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    const logs: ExerciseLog[] = [];
+
+    // Weeks 1–3 ago: stable 3 sets at 60kg × 10 = 1800 tonnage/week
+    for (let w = 1; w <= 3; w++) {
+      const d = new Date(targetDate);
+      d.setDate(d.getDate() - w * 7 - 3);
+      for (let s = 0; s < 3; s++) {
+        logs.push(createLog("Bench Press", d, 60, 10));
+      }
+    }
+    // Current week: same 3 sets but at 150kg × 10 = 4500 tonnage (150% above prior avg 1800)
+    const thisWeek = new Date(targetDate);
+    thisWeek.setDate(thisWeek.getDate() - 1);
+    for (let s = 0; s < 3; s++) {
+      logs.push(createLog("Bench Press", thisWeek, 150, 10));
+    }
+
+    const e1rm = calculateE1RMInsights(logs);
+    const fatigue = calculateFatigueInsight(logs, e1rm, targetDate);
+    expect(fatigue.shouldDeload).toBe(true);
+    expect(fatigue.reason).toContain("tonnage");
   });
 });
 

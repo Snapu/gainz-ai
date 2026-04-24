@@ -113,7 +113,7 @@ export const aiResponseSchema: Schema = {
           restSeconds: {
             type: Type.NUMBER,
             description:
-              "Recommended rest between sets in seconds. 180–300 for strength (1–5 reps), 60–90 for hypertrophy (6–12 reps), 30–60 for fat loss/endurance (12–20 reps).",
+              "Recommended rest between sets in seconds. 180–300 for strength (1–5 reps), 90–180 for hypertrophy (6–12 reps), 30–60 for fat loss/endurance (12–20 reps).",
           },
         },
       },
@@ -138,7 +138,7 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
 - Infer from logs whether the user is planning, mid-workout, or finished, and adapt tone.
 - Factor in health/schedule events (e.g., ease back after sickness/injury, respect fasting/rest days).
 - Adapt programming to the user's fitness goal(s):
-  build_muscle      → 6–12 rep range, 60–90s rest, progressive overload focus
+  build_muscle      → 6–12 rep range, 90–180s rest, progressive overload focus
   lose_fat          → 12–20 rep range, 30–60s rest, supersets preferred, avoid heavy 1–5 rep work
   improve_endurance → 15–25 rep range, circuit format, include cardio machine exercises from equipment list
   increase_mobility → add 1 mobility/stretching movement per session; avoid maximal loading
@@ -151,7 +151,8 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
   - MAV = Maximum Adaptive Volume (optimal growth zone — 10-18 sets/week)
   - MRV = Maximum Recoverable Volume (too much — risk of overtraining)
 - 'e1rm': Estimated 1-Rep Max per exercise with a 4-session trend and plateau detection. Use this to set precise targetWeight values.
-  - If plateau=true AND the exercise appears in the last 4 session logs, SWITCH to a mechanical variant for that movement pattern instead of repeating the same exercise:
+  - If plateau=true AND the exercise appears in the last 4 session logs, SWITCH to a mechanical variant for that movement pattern instead of repeating the same exercise.
+    IMPORTANT: Only suggest variants using equipment listed in the user's equipmentAccess profile. Skip any variant that requires unavailable equipment.
     Bench Press      → Incline Dumbbell Press or Cable Flyes
     Squat            → Bulgarian Split Squat or Leg Press
     Pull-Ups         → Lat Pulldown or Chest-Supported Row
@@ -183,9 +184,9 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
   Step 2 — otherwise, keep the same weight and push reps higher within the range.
   Never increase weight and reps simultaneously.
 - Rest Periods (MANDATORY): Prescribe restSeconds for every exercise based on rep range:
-  1–5 reps (strength)          → 180–300s
-  6–12 reps (hypertrophy)      → 60–90s
-  12–20 reps (fat loss/endurance) → 30–60s
+  1–5 reps (strength)              → 180–300s
+  6–12 reps (hypertrophy)           → 90–180s  ← longer rest yields greater mechanical tension and hypertrophy
+  12–20 reps (fat loss / endurance) → 30–60s
 - Exercise Order (MANDATORY): Always order recommendedWorkout with compound multi-joint movements first (e.g. Squat, Bench Press, Deadlift, Row, OHP), isolation movements last (e.g. Curls, Flyes, Lateral Raises). Within each category, order by the session's priority muscle group.
 - Notes: NEVER use trivial cliches in the 'notes' field (e.g. "controlled execution", "deep squat"). Only provide advanced tempo/anatomical cues (e.g. "3s eccentric") or OMIT the field entirely.
 - LANGUAGE RULE: Only 'coachMessage' is shown to the user — write it in the user's locale. ALL other fields ('scratchpad', 'reasoning', 'muscleGroup', 'supersetId', 'targetWeight', 'notes') MUST be in English. This saves tokens and ensures reliable parsing.
