@@ -279,6 +279,21 @@ export function calculateE1RMInsights(
 
     const currentE1RM = trend[trend.length - 1] ?? 0;
 
+    // Track RPE of the set that produced the best e1RM in the latest session.
+    // Tells the AI whether the e1RM estimate is conservative (low RPE) or maximal (RPE 10).
+    const latestSessionLogs = sortedSessions[sortedSessions.length - 1]?.[1] ?? [];
+    let bestRPE: number | undefined;
+    let bestForRPECheck = 0;
+    for (const log of latestSessionLogs) {
+      if (log.weight != null && log.reps != null) {
+        const e1rm = calculateE1RM(log.weight, log.reps, log.rpe);
+        if (e1rm > bestForRPECheck) {
+          bestForRPECheck = e1rm;
+          bestRPE = log.rpe ?? undefined;
+        }
+      }
+    }
+
     // Plateau: last 3+ e1RM values within ±2% of each other
     let plateau = false;
     if (trend.length >= 3) {
@@ -287,7 +302,7 @@ export function calculateE1RMInsights(
       plateau = last3.every((v) => Math.abs(v - avg) / avg <= 0.02);
     }
 
-    result[exerciseName] = { e1rm: currentE1RM, trend, plateau };
+    result[exerciseName] = { e1rm: currentE1RM, trend, plateau, bestRPE };
   }
 
   return result;
@@ -544,6 +559,11 @@ export function computeSystemicPhase(fatigue: FatigueInsight): SystemicPhase {
   // If sum is < 24 sets over 14 days, systemic tension is fundamentally lost.
   if (last + previous < 24) return "Inactive";
 
+  // Returning athlete: prior week was dead, this week just resumed.
+  // Classifying as "Build" would push volume hard for someone whose connective tissue
+  // hasn't been trained in weeks and whose ACWR is already elevated.
+  if (previous === 0 && last > 0) return "Maintain";
+
   // Active progression
   if (trend.length >= 2 && last > previous && last >= 10) return "Build";
 
@@ -553,11 +573,6 @@ export function computeSystemicPhase(fatigue: FatigueInsight): SystemicPhase {
 
 // --- Main Entry Point ---
 
-/**
- * Calculate all training science insights from exercise logs.
- * The overrideMap parameter allows injecting a dynamic exercise→muscle mapping
- * (e.g. from localStorage or spreadsheet) to extend the hard-coded defaults.
- */
 /**
  * Compute the Acute:Chronic Workload Ratio.
  * Acute load  = total tonnage (weight × reps) in the last 7 days.
@@ -666,6 +681,11 @@ function computeMesocycleWeek(logs: ExerciseLog[], targetDate: Date): number {
   return maxWeeks - 1 - (firstActiveIndex - 1);
 }
 
+/**
+ * Calculate all training science insights from exercise logs.
+ * The overrideMap parameter allows injecting a dynamic exercise→muscle mapping
+ * (e.g. from localStorage or spreadsheet) to extend the hard-coded defaults.
+ */
 export function calculateTrainingInsights(
   logs: ExerciseLog[],
   targetDate: Date = new Date(),
