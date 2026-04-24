@@ -215,7 +215,14 @@ export function calculateE1RM(weight: number, reps: number, rpe?: number): numbe
   const effectiveReps = reps + (10 - (rpe ?? 10));
   if (effectiveReps === 1) return weight;
 
-  return Math.round(weight * (1 + effectiveReps / 30) * 10) / 10;
+  // Ensemble: Epley (accurate at low reps) + Brzycki (accurate at high reps)
+  // Linearly blend from Epley (t=0) to Brzycki (t=1) as reps increase toward 20.
+  const epley = weight * (1 + effectiveReps / 30);
+  const brzycki = weight * (36 / (37 - effectiveReps));
+  const t = Math.min(effectiveReps / 20, 1);
+  const blended = epley * (1 - t) + brzycki * t;
+
+  return Math.round(blended * 10) / 10;
 }
 
 /**

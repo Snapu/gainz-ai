@@ -12,12 +12,15 @@ function createMockInsights(overrides?: Partial<TrainingInsights>): TrainingInsi
   const fatigue = overrides?.fatigue ?? {
     shouldDeload: false,
     weeklyTotalSets: [],
+    weeklyTonnage: [],
   };
   return {
     muscleGroups: {},
     e1rm: {},
     fatigue,
     phase: computeSystemicPhase(fatigue),
+    acwr: null,
+    mesocycleWeek: 1,
     ...overrides,
   };
 }
@@ -31,6 +34,7 @@ describe("useUserProgression composable", () => {
         fatigue: {
           shouldDeload: true,
           weeklyTotalSets: [100, 110],
+          weeklyTonnage: [],
         },
       });
       expect(insights.phase).toBe("Deload");
@@ -41,6 +45,7 @@ describe("useUserProgression composable", () => {
         fatigue: {
           shouldDeload: false,
           weeklyTotalSets: [14, 16],
+          weeklyTonnage: [],
         },
       });
       expect(insights.phase).toBe("Build");
@@ -51,6 +56,7 @@ describe("useUserProgression composable", () => {
         fatigue: {
           shouldDeload: false,
           weeklyTotalSets: [14, 14],
+          weeklyTonnage: [],
         },
       });
       expect(insights.phase).toBe("Maintain");
@@ -61,6 +67,7 @@ describe("useUserProgression composable", () => {
         fatigue: {
           shouldDeload: false,
           weeklyTotalSets: [5, 5],
+          weeklyTonnage: [],
         },
       });
       expect(insights.phase).toBe("Inactive");
@@ -71,6 +78,7 @@ describe("useUserProgression composable", () => {
         fatigue: {
           shouldDeload: false,
           weeklyTotalSets: [],
+          weeklyTonnage: [],
         },
       });
       expect(insights.phase).toBe("Inactive");
@@ -110,13 +118,13 @@ describe("useUserProgression composable", () => {
     it("shows proper phase transitions", () => {
       const phases = [
         createMockInsights({
-          fatigue: { shouldDeload: false, weeklyTotalSets: [5, 5] },
+          fatigue: { shouldDeload: false, weeklyTotalSets: [5, 5], weeklyTonnage: [] },
         }).phase,
         createMockInsights({
-          fatigue: { shouldDeload: false, weeklyTotalSets: [14, 16] },
+          fatigue: { shouldDeload: false, weeklyTotalSets: [14, 16], weeklyTonnage: [] },
         }).phase,
         createMockInsights({
-          fatigue: { shouldDeload: true, weeklyTotalSets: [14, 16] },
+          fatigue: { shouldDeload: true, weeklyTotalSets: [14, 16], weeklyTonnage: [] },
         }).phase,
       ];
       expect(phases[0]).toBe("Inactive");

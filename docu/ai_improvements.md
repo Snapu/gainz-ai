@@ -403,7 +403,7 @@ result[group] = { ..., recoveryReady };
 
 ---
 
-### [🟡] #1 — Ensemble e1RM formula
+### ✅ #1 — Ensemble e1RM formula
 
 **File:** `src/services/trainingScience.ts` — `calculateE1RM()`
 

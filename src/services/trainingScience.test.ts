@@ -51,16 +51,16 @@ describe("calculateE1RM", () => {
   });
 
   it("should handle decimal weights", () => {
-    // 52.5 × (1 + 12/30) = 52.5 × 1.4 = 73.5
-    expect(calculateE1RM(52.5, 12)).toBe(73.5);
+    // ensemble(52.5, 12): epley=73.5, brzycki=75.6, t=0.6 → 74.8
+    expect(calculateE1RM(52.5, 12)).toBe(74.8);
   });
 
   it("should adjust e1RM based on RPE", () => {
     // 100x10 @ RPE 10 -> effective reps = 10 -> e1RM = 133.3
     expect(calculateE1RM(100, 10, 10)).toBe(133.3);
 
-    // 100x10 @ RPE 8 -> effective reps = 12 -> e1RM = 100 * (1 + 12/30) = 140
-    expect(calculateE1RM(100, 10, 8)).toBe(140);
+    // 100x10 @ RPE 8 -> effective reps = 12 -> ensemble: epley=140, brzycki=144, t=0.6 → 142.4
+    expect(calculateE1RM(100, 10, 8)).toBe(142.4);
   });
 });
 
@@ -747,9 +747,9 @@ describe("volume landmark edge cases", () => {
 
 describe("calculateE1RM RPE edge cases", () => {
   it("should handle RPE 6 correctly (4 reps in reserve)", () => {
-    // 100x5 @ RPE 6 → effective reps = 5 + 4 = 9
-    // e1RM = 100 * (1 + 9/30) = 130
-    expect(calculateE1RM(100, 5, 6)).toBe(130);
+    // 100x5 @ RPE 6 → effective reps = 9
+    // ensemble: epley=130, brzycki=128.6, t=0.45 → 129.4
+    expect(calculateE1RM(100, 5, 6)).toBe(129.4);
   });
 
   it("should treat undefined RPE as RPE 10", () => {
@@ -762,9 +762,9 @@ describe("calculateE1RM RPE edge cases", () => {
   });
 
   it("should handle 1 rep at RPE 8 (2 reps in reserve)", () => {
-    // effectiveReps = 1 + 2 = 3
-    // e1RM = 100 * (1 + 3/30) = 110
-    expect(calculateE1RM(100, 1, 8)).toBe(110);
+    // effectiveReps = 3
+    // ensemble: epley=110, brzycki=105.9, t=0.15 → 109.4
+    expect(calculateE1RM(100, 1, 8)).toBe(109.4);
   });
 });
 
