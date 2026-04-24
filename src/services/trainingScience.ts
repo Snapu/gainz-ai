@@ -265,11 +265,13 @@ export function calculateE1RMInsights(
       .sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
       .slice(-4);
 
-    // Best e1RM per session
+    // Best e1RM per session. Only consider sets with ≤12 reps to prevent warm-up / high-rep
+    // light sets from inflating the estimate: Brzycki gives unreliable values for reps ≥13
+    // (e.g. 40kg × 25 reps → e1RM ≈ 120kg), which falsely elevates the plateau threshold.
     const trend = sortedSessions.map(([, sessionLogs]) => {
       let best = 0;
       for (const log of sessionLogs) {
-        if (log.weight != null && log.reps != null) {
+        if (log.weight != null && log.reps != null && log.reps <= 12) {
           const e1rm = calculateE1RM(log.weight, log.reps, log.rpe);
           if (e1rm > best) best = e1rm;
         }
@@ -285,7 +287,7 @@ export function calculateE1RMInsights(
     let bestRPE: number | undefined;
     let bestForRPECheck = 0;
     for (const log of latestSessionLogs) {
-      if (log.weight != null && log.reps != null) {
+      if (log.weight != null && log.reps != null && log.reps <= 12) {
         const e1rm = calculateE1RM(log.weight, log.reps, log.rpe);
         if (e1rm > bestForRPECheck) {
           bestForRPECheck = e1rm;
@@ -697,7 +699,9 @@ export function calculateTrainingInsights(
   const fatigue = calculateFatigueInsight(logs, e1rm, targetDate);
   const phase = computeSystemicPhase(fatigue);
   const acwr = computeACWR(logs, targetDate);
-  const mesocycleWeek = computeMesocycleWeek(logs, targetDate);
+  // mesocycleWeek=0 signals an active deload week — prevents the AI from also warning
+  // "deload overdue" when shouldDeload is already true and the deload is in progress.
+  const mesocycleWeek = fatigue.shouldDeload ? 0 : computeMesocycleWeek(logs, targetDate);
 
   return { muscleGroups, e1rm, fatigue, phase, acwr, mesocycleWeek };
 }

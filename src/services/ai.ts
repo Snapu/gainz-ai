@@ -115,7 +115,7 @@ export const aiResponseSchema: Schema = {
           restSeconds: {
             type: Type.NUMBER,
             description:
-              "Recommended rest between sets in seconds. 180–300 for strength (1–5 reps), 90–180 for hypertrophy (6–12 reps), 30–60 for fat loss/endurance (12–20 reps).",
+              "Recommended rest between sets in seconds. 180–300 for strength (1–5 reps), 90–180 for hypertrophy (6–12 reps), 30–60 for fat loss/endurance (12–20 reps), 15–30 for endurance/circuit (20–25 reps).",
           },
         },
       },
@@ -152,10 +152,12 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
   - MEV = Minimum Effective Volume (need more volume to grow)
   - MAV = Maximum Adaptive Volume (optimal growth zone — 10-18 sets/week)
   - MRV = Maximum Recoverable Volume (too much — risk of overtraining)
+  - Note: 'sets' reflects a rolling 7-day window, NOT the current calendar week. Early in the week, the count includes sessions from the previous 7 days — interpret landmarks accordingly and do not assume this week's work alone caused a high set count.
   - BINDING: If any muscle shows landmark 'above_MRV', reduce its programmed sets to mavHigh equivalent this session, even if shouldDeload is false.
   - BINDING: If any muscle shows landmark 'approaching_MRV', cap new primary sets for that muscle to ≤2 this session to prevent crossing into overtraining.
   - BINDING: Never prescribe primary sets for a muscle where recoveryReady=false, unless no other muscle group needs work — in that case halve the set count and note the early re-stimulation in reasoning.
 - 'e1rm': Estimated 1-Rep Max per exercise with a 4-session trend and plateau detection. Use this to set precise targetWeight values.
+  - The optional 'bestRPE' field is the effort rating (1–10) of the set that produced the e1RM estimate. If 'bestRPE' ≤ 7, the athlete still had reps in reserve and the estimate is conservative — increase the e1RM by 5% before applying the weight formula (e.g. reported e1RM 100kg + 5% = 105kg baseline).
   - If plateau=true AND the exercise appears in the last 4 session logs, SWITCH to a mechanical variant for that movement pattern instead of repeating the same exercise.
     IMPORTANT: Only suggest variants using equipment listed in the user's equipmentAccess profile. Skip any variant that requires unavailable equipment.
     Bench Press        → Incline Dumbbell Press or Cable Flyes
@@ -169,11 +171,11 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
     Lateral Raises     → Cable Lateral Raise or Machine Lateral Raise
 - 'fatigue': Deload recommendation with reasoning. If shouldDeload is true, you MUST program a deload week (50-60% of normal volume). Reduce intensity by 10–15 percentage points on the e1RM scale (e.g., normally prescribing 75% e1RM → deload at 60–65% e1RM, NOT just -10% of the kg weight).
   - 'fatigue.weeklyTonnage': Total kg lifted per week (RPE-adjusted weight × reps per set). Use alongside weeklyTotalSets for load-aware fatigue assessment. A 50%+ week-over-week tonnage spike is a red flag even if set count is stable (this matches the deload trigger threshold in the code).
-- 'acwr': Acute:Chronic Workload Ratio (7-day tonnage ÷ avg weekly 28-day tonnage). Safe zone: 0.8–1.3. If > 1.3, reduce today’s volume by 15–20%. If > 1.5, strongly recommend rest or deload. If < 0.8, the athlete is undertraining — increase today's volume by 15–20% to rebuild the training stimulus. If null, insufficient history — proceed conservatively.- 'mesocycleWeek': Weeks into the current training block since the last deload (or since first session if no deload detected). Typical mesocycle = 4 weeks. Week 1: conservative volume at MEV. Weeks 2–3: progressive increase toward MAV. Week 4: peak volume approaching MRV. Week 5+: deload is overdue — flag this to the athlete.- Your 'scratchpad' MUST follow this exact structure BEFORE writing coachMessage:
+- 'acwr': Acute:Chronic Workload Ratio (7-day tonnage ÷ avg weekly 28-day tonnage). Safe zone: 0.8–1.3. If > 1.3, reduce today’s volume by 15–20%. If > 1.5, strongly recommend rest or deload. If < 0.8, the athlete is undertraining — increase today's volume by 15–20% to rebuild the training stimulus. If null, insufficient history — proceed conservatively.- 'mesocycleWeek': Weeks into the current training block since the last deload (or since first session if no deload detected). Typical mesocycle = 4 weeks. Week 1: conservative volume at MEV. Weeks 2–3: progressive increase toward MAV. Week 4: peak volume approaching MRV. Week 5+: deload is overdue — flag this to the athlete. mesocycleWeek=0 means the current week is an active deload (shouldDeload=true) — do NOT additionally warn 'overdue'; just program the deload.- Your 'scratchpad' MUST follow this exact structure BEFORE writing coachMessage:
   1. VOLUME: List each muscle group — current sets vs. MEV/MAV/MRV landmark (e.g. "Chest: 6 sets → below_MEV, needs 8+").
   2. E1RM: Trend direction per key exercise — increasing / plateau / declining (e.g. "Bench: 110→112→112→112 = plateau").
   3. FATIGUE: shouldDeload flag + reason. Note any volume spikes.
-  4. RECOVERY: Which muscles are ready to train (>48h general, >72h for Quads/Back/Hamstrings).
+  4. RECOVERY: Which muscles are ready to train (>48h general, >72h for Quads/Back/Hamstrings, >48h for Glutes, >24h for Calves).
   5. WEIGHTS: Explicit calculation for each recommended exercise (e.g. "Bench e1RM 120kg → 75% = 90 → round to 90kg").
   6. PLAN: Final proposed exercise order with one-line rationale per exercise.
 
@@ -189,6 +191,7 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
   Rep range 12–20 → 50–65% of e1RM (metabolic/endurance)
   Always round to the nearest 2.5kg increment. Always give a single concrete number (e.g. "82.5kg"), never a range.
   If e1RM is unavailable for a newly introduced exercise (no history), estimate starting weight as 60–70% of the primary compound e1RM for the same muscle group, rounded to 2.5kg. Flag in 'reasoning' that this is an estimated first-session weight.
+  For 'increase_mobility' goal or any stretching/mobility movement (e.g. hip flexor stretch, dead hang, cat-cow): set targetWeight = 'bodyweight' and restSeconds = 30–60. Do not apply e1RM percentage rules to stretches or static holds.
 - Progressive Overload Protocol (MANDATORY): Follow double-progression.
   Step 1 — if the user hit the TOP of the rep range on ALL sets in the previous session, increase targetWeight by the increment below and reset targetReps to the BOTTOM of the range:
     Isolation / small-muscle (Curls, Lateral Raises, Flyes, Cable work) → +1.25kg (or nearest available increment, min 2.5kg if fractional plates unavailable)
@@ -213,7 +216,7 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
 - Your ONLY job mid-workout is to give a quick 1-2 sentence reaction to their latest set and smoothly present the next exercises. Be highly fluent and conversational, acting like a trainer standing right next to them in the gym.
 
 5. POST-WORKOUT BEHAVIOR:
-- If the phase is 'post-workout' (last log was >45 min ago today): (1) give a 1–2 sentence session recap noting any PRs or volume milestones; (2) briefly mention the recovery window for the primary muscles trained (e.g. "48h for Chest, 72h for Back"); (3) if mesocycleWeek ≥ 4, note that a deload is due next session. Keep the total message to 2–3 sentences — the athlete is done for the day. Do NOT prescribe a new workout.
+- If the phase is 'post-workout' (last log was >45 min ago today): (1) give a 1–2 sentence session recap noting any PRs or volume milestones; (2) briefly mention the recovery window for the primary muscles trained (e.g. "48h for Chest, 72h for Back"); (3) if mesocycleWeek ≥ 4, note that a deload is due next session. Keep the total message to 2–3 sentences — the athlete is done for the day. Do NOT prescribe a new workout. Output recommendedWorkout as an empty array [].
 
 You may receive:
 - Your previous feedback from this session (if any)
@@ -259,12 +262,14 @@ function getWorkoutStatus(exerciseLogs: ExerciseLog[]): string {
 }
 
 function getWorkoutPhase(exerciseLogs: ExerciseLog[]): "planning" | "mid-workout" | "post-workout" {
-  const startOfToday = new Date().setHours(0, 0, 0, 0);
+  const now = Date.now();
+  const startOfToday = new Date(now).setHours(0, 0, 0, 0);
   const todayLogs = exerciseLogs.filter((log) => log.loggedAt.getTime() > startOfToday);
   if (todayLogs.length === 0) return "planning";
 
-  const lastLogTime = Math.max(...todayLogs.map((l) => l.loggedAt.getTime()));
-  const minutesSinceLastLog = (Date.now() - lastLogTime) / 60000;
+  // Use reduce instead of Math.max(...spread) to avoid stack overflow on large log arrays.
+  const lastLogTime = todayLogs.reduce((max, l) => Math.max(max, l.loggedAt.getTime()), 0);
+  const minutesSinceLastLog = (now - lastLogTime) / 60000;
   // If >45 min since last set, treat as post-workout
   return minutesSinceLastLog > 45 ? "post-workout" : "mid-workout";
 }
@@ -274,7 +279,9 @@ function getDaysSinceLastWorkout(exerciseLogs: ExerciseLog[]): number | null {
   const pastLogs = exerciseLogs.filter((log) => log.loggedAt.getTime() < startOfToday);
   if (pastLogs.length === 0) return null;
 
-  const lastLogDate = new Date(Math.max(...pastLogs.map((l) => l.loggedAt.getTime())));
+  // Use reduce instead of Math.max(...spread) to avoid stack overflow on large log arrays.
+  const lastLogTime = pastLogs.reduce((max, l) => Math.max(max, l.loggedAt.getTime()), 0);
+  const lastLogDate = new Date(lastLogTime);
   const diffMs = startOfToday - lastLogDate.setHours(0, 0, 0, 0);
   return Math.round(diffMs / 86400000);
 }
@@ -422,7 +429,10 @@ function buildConversationContents(params: {
     const strippedContent = (() => {
       try {
         const parsed = JSON.parse(msg.content);
-        const { scratchpad: _s, ...rest } = parsed;
+        // Strip all locale text and reasoning fields from history — coachMessage is in the
+        // user's locale language (e.g. German) which would push the model out of English for
+        // internal fields (scratchpad, reasoning). Only keep structured workout data.
+        const { scratchpad: _s, coachMessage: _c, ...rest } = parsed;
         if (Array.isArray(rest.recommendedWorkout)) {
           rest.recommendedWorkout = rest.recommendedWorkout.map(
             ({ reasoning: _r, ...exercise }: { reasoning?: string; [key: string]: unknown }) =>
