@@ -304,7 +304,7 @@ const VOLUME_LANDMARKS: Record<
   Shoulders: { mev: 6, mavLow: 12, mavHigh: 20, mrv: 24 }, // MAV Low raised (pressing already covers front delt MEV)
   Biceps: { mev: 4, mavLow: 8, mavHigh: 18, mrv: 24 }, // Pulling compounds inflate effective sets fast
   Triceps: { mev: 4, mavLow: 8, mavHigh: 16, mrv: 20 }, // Pressing compounds inflate; MRV capped by elbow stress
-  Abs: { mev: 0, mavLow: 8, mavHigh: 16, mrv: 22 }, // Compounds = stability only, not hypertrophy
+  Abs: { mev: 2, mavLow: 8, mavHigh: 16, mrv: 22 }, // MEV=2: compounds give stability but negligible direct hypertrophy
   Calves: { mev: 6, mavLow: 10, mavHigh: 18, mrv: 22 }, // Slow-twitch dominant, very fatigue-resistant
   Glutes: { mev: 6, mavLow: 8, mavHigh: 16, mrv: 20 }, // Gets large secondary volume from squats/hinges/lunges
 };
@@ -487,9 +487,11 @@ export function calculateFatigueInsight(
       : 0;
   const volumeSpike = priorAvg > 0 && weeklyTotalSets[3]! > priorAvg * 1.25;
 
-  if (volumeIncreasing && volumeSpike) {
+  if (volumeSpike) {
     shouldDeload = true;
-    reason = "Volume has increased for 4 consecutive weeks. Schedule a deload to allow recovery.";
+    reason = volumeIncreasing
+      ? "Volume has increased for 4 consecutive weeks. Schedule a deload to allow recovery."
+      : "Weekly set volume spiked this week — 25%+ above the prior 3-week average. Risk of overreaching.";
   } else if (performanceDecline) {
     shouldDeload = true;
     reason = `Performance declining in ${decliningExercises} exercises simultaneously. Fatigue is accumulating.`;

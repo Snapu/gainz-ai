@@ -442,6 +442,31 @@ describe("calculateFatigueInsight", () => {
     expect(fatigue.shouldDeload).toBe(true);
     expect(fatigue.reason).toContain("tonnage");
   });
+
+  it("should trigger deload on standalone set-count spike without progressive increase (e.g. [15,15,15,40])", () => {
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    const logs: ExerciseLog[] = [];
+
+    // 3 prior weeks: stable 15 sets/week
+    for (let w = 1; w <= 3; w++) {
+      const d = new Date(targetDate);
+      d.setDate(d.getDate() - w * 7 - 3);
+      for (let s = 0; s < 15; s++) {
+        logs.push(createLog("Squat", d, 80, 8));
+      }
+    }
+    // Current week: sudden jump to 40 sets (167% above prior avg 15)
+    const thisWeek = new Date(targetDate);
+    thisWeek.setDate(thisWeek.getDate() - 1);
+    for (let s = 0; s < 40; s++) {
+      logs.push(createLog("Squat", thisWeek, 80, 8));
+    }
+
+    const e1rm = calculateE1RMInsights(logs);
+    const fatigue = calculateFatigueInsight(logs, e1rm, targetDate);
+    expect(fatigue.shouldDeload).toBe(true);
+    expect(fatigue.reason).toContain("spiked");
+  });
 });
 
 // --- Integration ---
@@ -768,12 +793,19 @@ describe("computeSystemicPhase", () => {
 // --- Volume Landmark Edge Cases ---
 
 describe("volume landmark edge cases", () => {
-  it("should classify Abs with 0 sets as below_MEV (mev=0 edge case)", () => {
+  it("should not include Abs in results when no ab exercises are logged", () => {
     const targetDate = new Date("2026-03-25T12:00:00Z");
     // No ab exercises → Abs should not appear in results at all
     const logs = [createLog("Bench Press", new Date("2026-03-23T12:00:00Z"), 60, 10)];
     const insights = calculateMuscleGroupInsights(logs, targetDate);
     expect(insights.Abs).toBeUndefined();
+  });
+
+  it("should classify Abs with 1 set as below_MEV (mev raised to 2)", () => {
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    const logs = [createLog("Crunches", new Date("2026-03-23T12:00:00Z"), 0, 15)];
+    const insights = calculateMuscleGroupInsights(logs, targetDate);
+    expect(insights.Abs!.landmark).toBe("below_MEV");
   });
 
   it("should classify Chest at exact MEV boundary (8 sets)", () => {
