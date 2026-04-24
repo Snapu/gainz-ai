@@ -532,7 +532,11 @@ export function computeSystemicPhase(fatigue: FatigueInsight): SystemicPhase {
  * Compute the Acute:Chronic Workload Ratio.
  * Acute load  = total tonnage (weight × reps) in the last 7 days.
  * Chronic load = average weekly tonnage over the last 28 days.
- * Returns null when there is no chronic load baseline (new user).
+ *
+ * Returns null when the chronic baseline is insufficient:
+ *   - No logs at all, OR
+ *   - All logs fall within the acute window (< 7 days old) — returning athlete
+ *     with a gap would otherwise produce a wildly inflated ratio.
  * Safe zone: 0.8–1.3. Above 1.5 = high injury risk.
  */
 function computeACWR(logs: ExerciseLog[], targetDate: Date): number | null {
@@ -543,12 +547,23 @@ function computeACWR(logs: ExerciseLog[], targetDate: Date): number | null {
     .filter((l) => now - l.loggedAt.getTime() <= 7 * msPerDay)
     .reduce((s, l) => s + (l.weight ?? 0) * (l.reps ?? 0), 0);
 
+  // Chronic baseline = load from days 8–28 (older than the acute window)
+  // If there is no pre-acute history, the ratio is meaningless — return null
+  const preAcuteLoad = logs
+    .filter((l) => {
+      const age = now - l.loggedAt.getTime();
+      return age > 7 * msPerDay && age <= 28 * msPerDay;
+    })
+    .reduce((s, l) => s + (l.weight ?? 0) * (l.reps ?? 0), 0);
+
+  if (preAcuteLoad === 0) return null;
+
+  // Full 28-day chronic load (including acute week) averaged over 4 weeks
   const chronicLoad = logs
     .filter((l) => now - l.loggedAt.getTime() <= 28 * msPerDay)
     .reduce((s, l) => s + (l.weight ?? 0) * (l.reps ?? 0), 0);
 
   const chronicWeekly = chronicLoad / 4;
-  if (chronicWeekly === 0) return null;
 
   return Math.round((acuteLoad / chronicWeekly) * 100) / 100;
 }
@@ -557,7 +572,9 @@ function computeACWR(logs: ExerciseLog[], targetDate: Date): number | null {
  * Compute which week of the current mesocycle the athlete is in.
  *
  * Scans back up to 24 weeks and identifies the most recent "deload week" —
- * defined as a week where total sets were ≤ 50% of the preceding 3-week average.
+ * defined as a week where total sets were ≤ 50% of the preceding 3-week average,
+ * AND the athlete was actively training before (priorAvg ≥ 4 sets/week).
+ * This prevents a vacation/illness absence from being misclassified as a deload.
  * Returns weeks elapsed since that deload (week after deload = week 1).
  * Falls back to counting from the first active week if no deload is found.
  */
@@ -576,11 +593,21 @@ function computeMesocycleWeek(logs: ExerciseLog[], targetDate: Date): number {
     weeklySets.push(count);
   }
 
+  // Minimum sets/week required in the prior baseline to qualify as a deload detection.
+  // Below this threshold the athlete wasn't actively training — don't treat the gap as a deload.
+  const MIN_ACTIVE_SETS_FOR_DELOAD = 4;
+
   // Search for the most recent deload week (skip current week, need 3 prior weeks for baseline)
   for (let i = maxWeeks - 2; i >= 3; i--) {
     const priorAvg =
       ((weeklySets[i - 1] ?? 0) + (weeklySets[i - 2] ?? 0) + (weeklySets[i - 3] ?? 0)) / 3;
-    if (priorAvg > 0 && (weeklySets[i] ?? 0) <= priorAvg * 0.5) {
+    const thisWeekSets = weeklySets[i] ?? 0;
+    // Only count as a deload if the athlete had meaningful training before this week,
+    // and the week itself was a genuine reduced-load week (not simply inactive)
+    if (
+      priorAvg >= MIN_ACTIVE_SETS_FOR_DELOAD &&
+      thisWeekSets <= priorAvg * 0.5
+    ) {
       // mesocycleWeek = current index (maxWeeks-1) minus deload index
       return maxWeeks - 1 - i;
     }

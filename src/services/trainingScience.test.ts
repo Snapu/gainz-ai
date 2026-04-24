@@ -451,6 +451,19 @@ describe("calculateTrainingInsights", () => {
     expect(insights.acwr).toBeNull();
   });
 
+  it("should return null acwr when all logs are within the last 7 days (no chronic baseline)", () => {
+    // Returning athlete after a 3-week gap — only trained this week
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    const logs: ExerciseLog[] = [];
+    for (let d = 1; d <= 5; d++) {
+      const date = new Date(targetDate);
+      date.setDate(date.getDate() - d);
+      logs.push(createLog("Bench Press", date, 100, 10));
+    }
+    const insights = calculateTrainingInsights(logs, targetDate);
+    expect(insights.acwr).toBeNull();
+  });
+
   it("should return 1.0 acwr when load is perfectly consistent across 4 weeks", () => {
     const targetDate = new Date("2026-03-25T12:00:00Z");
     const logs: ExerciseLog[] = [];
@@ -561,6 +574,32 @@ describe("mesocycleWeek in calculateTrainingInsights", () => {
     const insights = calculateTrainingInsights([]);
     expect(insights).toHaveProperty("mesocycleWeek");
     expect(typeof insights.mesocycleWeek).toBe("number");
+  });
+
+  it("should NOT count a vacation (zero-set week with low prior baseline) as a deload", () => {
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    const logs: ExerciseLog[] = [];
+
+    const midWeek = (w: number) => {
+      const d = new Date(targetDate);
+      d.setDate(d.getDate() - w * 7 - 3);
+      return d;
+    };
+
+    // Only 1–2 sets/week before the gap — below MIN_ACTIVE_SETS_FOR_DELOAD (4)
+    for (let w = 5; w <= 7; w++) {
+      logs.push(createLog("Bench Press", midWeek(w), 80, 8));
+    }
+    // Week 3 ago: 0 sets (vacation)
+    // Weeks 2 and 1 ago: back to 1 set/week
+    for (let w = 1; w <= 2; w++) {
+      logs.push(createLog("Bench Press", midWeek(w), 80, 8));
+    }
+
+    const insights = calculateTrainingInsights(logs, targetDate);
+    // The zero-set vacation week should NOT reset the counter — prior avg was ~1 set/week < 4
+    // mesocycleWeek should count from first active week, not from the vacation gap
+    expect(insights.mesocycleWeek).toBeGreaterThan(2);
   });
 });
 
