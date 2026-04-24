@@ -171,7 +171,7 @@ restSeconds: {
 
 ## Architecture Changes (`src/services/ai.ts`)
 
-### [🟠] #18 — Strip scratchpad from conversation history
+### ✅ #18 — Strip scratchpad from conversation history
 
 **Problem:** `buildConversationContents()` stores full assistant JSON responses as history,
 including verbose `scratchpad` content. This wastes ~30-50% of context window tokens
@@ -195,7 +195,7 @@ const strippedContent = (() => {
 
 ---
 
-### [🟠] #20 — Set explicit temperature for structured output
+### ✅ #20 — Set explicit temperature for structured output
 
 **Problem:** `aiConfig` sets no `temperature` or `topP`. The model defaults to its own
 sampling parameters, which may be too high for a task requiring precise numerical reasoning.
@@ -460,7 +460,7 @@ Glutes: { mev: 4, mavLow: 6, mavHigh: 12, mrv: 16 },
 1. ✅ **Quick wins (system prompt only, zero test impact):** *(all done)*
    #2 (Glutes MEV), #7 (double progression), #8 (exercise order), #17 (weight formula), #15 (scratchpad template), #16 (few-shot examples)
 
-2. **Low-risk architecture:**
+2. ✅ **Low-risk architecture:** *(all done)*
    #18 (strip scratchpad from history), #20 (set temperature)
 
 3. **Medium complexity (new fields + prompt updates):**

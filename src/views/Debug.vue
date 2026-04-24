@@ -23,9 +23,10 @@ const learnedEntries = computed(() =>
     .map(([exercise, activation]) => ({
       exercise,
       primaryMuscle: activation.primaryMuscle,
-      secondaryLabel: activation.secondaryMuscles.length > 0
-        ? activation.secondaryMuscles.map((s) => `${s.muscleGroup} ×${s.contribution}`).join(", ")
-        : null,
+      secondaryLabel:
+        activation.secondaryMuscles.length > 0
+          ? activation.secondaryMuscles.map((s) => `${s.muscleGroup} ×${s.contribution}`).join(", ")
+          : null,
     })),
 );
 

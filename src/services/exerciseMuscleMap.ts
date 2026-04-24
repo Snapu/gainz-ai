@@ -151,9 +151,8 @@ export function learnFromAiResponse(
     const secondaryMuscles: SecondaryMuscleActivation[] = [];
     for (const sec of ex.secondaryMuscles ?? []) {
       if (!isValidMuscleGroup(sec.muscleGroup)) continue;
-      const contribution = typeof sec.contribution === "number"
-        ? Math.min(1, Math.max(0, sec.contribution))
-        : 0.5; // default contribution when AI omits it
+      const contribution =
+        typeof sec.contribution === "number" ? Math.min(1, Math.max(0, sec.contribution)) : 0.5; // default contribution when AI omits it
       secondaryMuscles.push({ muscleGroup: sec.muscleGroup, contribution });
     }
 

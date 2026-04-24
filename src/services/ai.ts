@@ -98,11 +98,13 @@ export const aiResponseSchema: Schema = {
               properties: {
                 muscleGroup: {
                   type: Type.STRING,
-                  description: "Must be one of: Chest, Back, Quads, Hamstrings, Shoulders, Biceps, Triceps, Abs, Calves, Glutes.",
+                  description:
+                    "Must be one of: Chest, Back, Quads, Hamstrings, Shoulders, Biceps, Triceps, Abs, Calves, Glutes.",
                 },
                 contribution: {
                   type: Type.NUMBER,
-                  description: "Fraction of a set credited to this muscle (0.0–1.0). Omit to default to 0.5.",
+                  description:
+                    "Fraction of a set credited to this muscle (0.0–1.0). Omit to default to 0.5.",
                 },
               },
             },
@@ -117,6 +119,9 @@ export const aiResponseSchema: Schema = {
 export const aiConfig: GenerateContentConfig = {
   responseMimeType: "application/json",
   responseSchema: aiResponseSchema,
+  // Low temperature: reduces hallucination for numeric targets (weights, sets, reps)
+  temperature: 0.4,
+  topP: 0.85,
   systemInstruction: `
 You are an elite AI personal trainer providing data-driven feedback and workout planning.
 
@@ -285,9 +290,7 @@ function compactLogs(logs: ExerciseLog[]): string {
     const parts: string[] = [];
     for (const [name, sets] of byExercise) {
       const reps = sets.map((s) => s.reps).filter((v): v is number => typeof v === "number");
-      const weights = sets
-        .map((s) => s.weight)
-        .filter((v): v is number => typeof v === "number");
+      const weights = sets.map((s) => s.weight).filter((v): v is number => typeof v === "number");
       const rpes = sets.map((s) => s.rpe).filter((v): v is number => typeof v === "number");
       const durations = sets
         .map((s) => s.duration)
@@ -370,7 +373,23 @@ function buildConversationContents(params: {
     .slice(-MAX_ASSISTANT_HISTORY_MESSAGES);
 
   for (const msg of recentAssistantMessages) {
-    contents.push({ role: "model", parts: [{ text: msg.content }] });
+    // Strip internal reasoning fields before storing in history — saves 30-50% context tokens
+    const strippedContent = (() => {
+      try {
+        const parsed = JSON.parse(msg.content);
+        const { scratchpad: _s, ...rest } = parsed;
+        if (Array.isArray(rest.recommendedWorkout)) {
+          rest.recommendedWorkout = rest.recommendedWorkout.map(
+            ({ reasoning: _r, ...exercise }: { reasoning?: string; [key: string]: unknown }) =>
+              exercise,
+          );
+        }
+        return JSON.stringify(rest);
+      } catch {
+        return msg.content;
+      }
+    })();
+    contents.push({ role: "model", parts: [{ text: strippedContent }] });
   }
 
   contents.push({ role: "user", parts: [{ text: params.currentUserInput }] });

@@ -1,8 +1,8 @@
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { err, ok, type Result } from "neverthrow";
 import { z } from "zod";
-import { parseData } from "./utils/parseData";
 import { isAuthError } from "./utils/isAuthError";
+import { parseData } from "./utils/parseData";
 
 const clean = (s: string) => s.trim().replace(/\s+/g, " ");
 

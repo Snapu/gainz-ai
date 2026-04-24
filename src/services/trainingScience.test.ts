@@ -84,12 +84,16 @@ describe("getMuscleGroup", () => {
   });
 
   it("should prefer override map over default", () => {
-    const override = { "Custom Exercise": { primaryMuscle: "Glutes" as const, secondaryMuscles: [] } };
+    const override = {
+      "Custom Exercise": { primaryMuscle: "Glutes" as const, secondaryMuscles: [] },
+    };
     expect(getMuscleGroup("Custom Exercise", override)).toBe("Glutes");
   });
 
   it("should fall back to default if not in override", () => {
-    const override = { "Custom Exercise": { primaryMuscle: "Glutes" as const, secondaryMuscles: [] } };
+    const override = {
+      "Custom Exercise": { primaryMuscle: "Glutes" as const, secondaryMuscles: [] },
+    };
     expect(getMuscleGroup("Bench Press", override)).toBe("Chest");
   });
 });
@@ -393,7 +397,9 @@ describe("calculateTrainingInsights", () => {
     const targetDate = new Date("2026-03-25T12:00:00Z");
     const logs = [createLog("My Custom Press", new Date("2026-03-22T12:00:00Z"), 40, 10)];
 
-    const override = { "My Custom Press": { primaryMuscle: "Shoulders" as const, secondaryMuscles: [] } };
+    const override = {
+      "My Custom Press": { primaryMuscle: "Shoulders" as const, secondaryMuscles: [] },
+    };
     const insights = calculateTrainingInsights(logs, targetDate, override);
 
     expect(insights.muscleGroups.Shoulders).toBeDefined();

@@ -62,13 +62,13 @@ export interface TrainingInsights {
 // --- Exercise → Muscle Activation Mapping ---
 
 /** Helper to build a MuscleActivation entry concisely. */
-function act(
-  primary: MuscleGroup,
-  ...secondaries: [MuscleGroup, number][]
-): MuscleActivation {
+function act(primary: MuscleGroup, ...secondaries: [MuscleGroup, number][]): MuscleActivation {
   return {
     primaryMuscle: primary,
-    secondaryMuscles: secondaries.map(([muscleGroup, contribution]) => ({ muscleGroup, contribution })),
+    secondaryMuscles: secondaries.map(([muscleGroup, contribution]) => ({
+      muscleGroup,
+      contribution,
+    })),
   };
 }
 
@@ -174,7 +174,8 @@ export function getMuscleActivation(
   if (overrideMap?.[exerciseName]) return overrideMap[exerciseName];
 
   // Check default (exact match)
-  if (DEFAULT_EXERCISE_ACTIVATION_MAP[exerciseName]) return DEFAULT_EXERCISE_ACTIVATION_MAP[exerciseName];
+  if (DEFAULT_EXERCISE_ACTIVATION_MAP[exerciseName])
+    return DEFAULT_EXERCISE_ACTIVATION_MAP[exerciseName];
 
   // Case-insensitive fallback
   const lower = exerciseName.toLowerCase();
@@ -285,16 +286,16 @@ const VOLUME_LANDMARKS: Record<
   MuscleGroup,
   { mev: number; mavLow: number; mavHigh: number; mrv: number }
 > = {
-  Chest:      { mev: 8, mavLow: 12, mavHigh: 18, mrv: 22 },
-  Back:       { mev: 8, mavLow: 14, mavHigh: 20, mrv: 25 },
-  Quads:      { mev: 6, mavLow: 12, mavHigh: 18, mrv: 20 },
+  Chest: { mev: 8, mavLow: 12, mavHigh: 18, mrv: 22 },
+  Back: { mev: 8, mavLow: 14, mavHigh: 20, mrv: 25 },
+  Quads: { mev: 6, mavLow: 12, mavHigh: 18, mrv: 20 },
   Hamstrings: { mev: 6, mavLow: 10, mavHigh: 16, mrv: 20 }, // MEV raised (compounds provide little dynamic stimulus)
-  Shoulders:  { mev: 6, mavLow: 12, mavHigh: 20, mrv: 24 }, // MAV Low raised (pressing already covers front delt MEV)
-  Biceps:     { mev: 4, mavLow: 8,  mavHigh: 18, mrv: 24 }, // Pulling compounds inflate effective sets fast
-  Triceps:    { mev: 4, mavLow: 8,  mavHigh: 16, mrv: 20 }, // Pressing compounds inflate; MRV capped by elbow stress
-  Abs:        { mev: 0, mavLow: 8,  mavHigh: 16, mrv: 22 }, // Compounds = stability only, not hypertrophy
-  Calves:     { mev: 6, mavLow: 10, mavHigh: 18, mrv: 22 }, // Slow-twitch dominant, very fatigue-resistant
-  Glutes:     { mev: 6, mavLow: 8,  mavHigh: 16, mrv: 20 }, // Gets large secondary volume from squats/hinges/lunges
+  Shoulders: { mev: 6, mavLow: 12, mavHigh: 20, mrv: 24 }, // MAV Low raised (pressing already covers front delt MEV)
+  Biceps: { mev: 4, mavLow: 8, mavHigh: 18, mrv: 24 }, // Pulling compounds inflate effective sets fast
+  Triceps: { mev: 4, mavLow: 8, mavHigh: 16, mrv: 20 }, // Pressing compounds inflate; MRV capped by elbow stress
+  Abs: { mev: 0, mavLow: 8, mavHigh: 16, mrv: 22 }, // Compounds = stability only, not hypertrophy
+  Calves: { mev: 6, mavLow: 10, mavHigh: 18, mrv: 22 }, // Slow-twitch dominant, very fatigue-resistant
+  Glutes: { mev: 6, mavLow: 8, mavHigh: 16, mrv: 20 }, // Gets large secondary volume from squats/hinges/lunges
 };
 
 function getVolumeLandmark(sets: number, group: MuscleGroup): VolumeLandmark {
