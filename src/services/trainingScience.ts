@@ -59,6 +59,7 @@ export interface TrainingInsights {
   e1rm: Record<string, ExerciseE1RM>;
   fatigue: FatigueInsight;
   phase: SystemicPhase;
+  acwr: number | null; // Acute:Chronic Workload Ratio (7-day load / avg weekly 28-day load)
 }
 
 // --- Exercise → Muscle Activation Mapping ---
@@ -519,6 +520,31 @@ export function computeSystemicPhase(fatigue: FatigueInsight): SystemicPhase {
  * The overrideMap parameter allows injecting a dynamic exercise→muscle mapping
  * (e.g. from localStorage or spreadsheet) to extend the hard-coded defaults.
  */
+/**
+ * Compute the Acute:Chronic Workload Ratio.
+ * Acute load  = total tonnage (weight × reps) in the last 7 days.
+ * Chronic load = average weekly tonnage over the last 28 days.
+ * Returns null when there is no chronic load baseline (new user).
+ * Safe zone: 0.8–1.3. Above 1.5 = high injury risk.
+ */
+function computeACWR(logs: ExerciseLog[], targetDate: Date): number | null {
+  const msPerDay = 86_400_000;
+  const now = targetDate.getTime();
+
+  const acuteLoad = logs
+    .filter((l) => now - l.loggedAt.getTime() <= 7 * msPerDay)
+    .reduce((s, l) => s + (l.weight ?? 0) * (l.reps ?? 0), 0);
+
+  const chronicLoad = logs
+    .filter((l) => now - l.loggedAt.getTime() <= 28 * msPerDay)
+    .reduce((s, l) => s + (l.weight ?? 0) * (l.reps ?? 0), 0);
+
+  const chronicWeekly = chronicLoad / 4;
+  if (chronicWeekly === 0) return null;
+
+  return Math.round((acuteLoad / chronicWeekly) * 100) / 100;
+}
+
 export function calculateTrainingInsights(
   logs: ExerciseLog[],
   targetDate: Date = new Date(),
@@ -528,6 +554,7 @@ export function calculateTrainingInsights(
   const muscleGroups = calculateMuscleGroupInsights(logs, targetDate, overrideMap);
   const fatigue = calculateFatigueInsight(logs, e1rm, targetDate);
   const phase = computeSystemicPhase(fatigue);
+  const acwr = computeACWR(logs, targetDate);
 
-  return { muscleGroups, e1rm, fatigue, phase };
+  return { muscleGroups, e1rm, fatigue, phase, acwr };
 }

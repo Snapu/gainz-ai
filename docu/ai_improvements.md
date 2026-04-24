@@ -252,7 +252,7 @@ Update the system prompt to reference tonnage when available:
 
 ---
 
-### [🔴] #4 — Add Acute:Chronic Workload Ratio (ACWR)
+### ✅ #4 — Add Acute:Chronic Workload Ratio (ACWR)
 
 **File:** `src/services/trainingScience.ts` — new export function + `TrainingInsights`
 

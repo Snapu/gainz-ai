@@ -445,6 +445,56 @@ describe("calculateTrainingInsights", () => {
     const insights = calculateTrainingInsights([]);
     expect(insights.phase).toBe("Inactive");
   });
+
+  it("should return null acwr when there is no training history", () => {
+    const insights = calculateTrainingInsights([]);
+    expect(insights.acwr).toBeNull();
+  });
+
+  it("should return 1.0 acwr when load is perfectly consistent across 4 weeks", () => {
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    const logs: ExerciseLog[] = [];
+
+    // Same load every day for 28 days: 4 sets × 10 reps × 50kg = 2000/day
+    for (let d = 1; d <= 28; d++) {
+      const date = new Date(targetDate);
+      date.setDate(date.getDate() - d);
+      logs.push(createLog("Bench Press", date, 50, 10));
+      logs.push(createLog("Bench Press", date, 50, 10));
+      logs.push(createLog("Bench Press", date, 50, 10));
+      logs.push(createLog("Bench Press", date, 50, 10));
+    }
+
+    const insights = calculateTrainingInsights(logs, targetDate);
+    // acuteLoad = 7 days × 4 sets × 50 × 10 = 14000
+    // chronicWeekly = (28 days × 4 × 50 × 10) / 4 = 14000
+    // ACWR = 14000 / 14000 = 1.0
+    expect(insights.acwr).toBe(1);
+  });
+
+  it("should return acwr > 1 when acute load spikes above chronic baseline", () => {
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    const logs: ExerciseLog[] = [];
+
+    // Weeks 2–4 ago: 1 set/day at 50kg × 10 (low baseline)
+    for (let d = 8; d <= 28; d++) {
+      const date = new Date(targetDate);
+      date.setDate(date.getDate() - d);
+      logs.push(createLog("Bench Press", date, 50, 10));
+    }
+    // Last 7 days: 5 sets/day at 100kg × 10 (spike)
+    for (let d = 1; d <= 7; d++) {
+      const date = new Date(targetDate);
+      date.setDate(date.getDate() - d);
+      for (let s = 0; s < 5; s++) {
+        logs.push(createLog("Bench Press", date, 100, 10));
+      }
+    }
+
+    const insights = calculateTrainingInsights(logs, targetDate);
+    expect(insights.acwr).not.toBeNull();
+    expect(insights.acwr!).toBeGreaterThan(1.3);
+  });
 });
 
 // --- Systemic Phase Detection ---
