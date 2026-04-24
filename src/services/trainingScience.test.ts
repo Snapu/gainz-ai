@@ -8,6 +8,7 @@ import {
   calculateTrainingInsights,
   computeSystemicPhase,
   type FatigueInsight,
+  getMuscleActivation,
   getMuscleGroup,
 } from "./trainingScience";
 
@@ -83,13 +84,57 @@ describe("getMuscleGroup", () => {
   });
 
   it("should prefer override map over default", () => {
-    const override = { "Custom Exercise": "Glutes" as const };
+    const override = { "Custom Exercise": { primaryMuscle: "Glutes" as const, secondaryMuscles: [] } };
     expect(getMuscleGroup("Custom Exercise", override)).toBe("Glutes");
   });
 
   it("should fall back to default if not in override", () => {
-    const override = { "Custom Exercise": "Glutes" as const };
+    const override = { "Custom Exercise": { primaryMuscle: "Glutes" as const, secondaryMuscles: [] } };
     expect(getMuscleGroup("Bench Press", override)).toBe("Chest");
+  });
+});
+
+// --- getMuscleActivation ---
+
+describe("getMuscleActivation", () => {
+  it("should return primary muscle for isolation exercises", () => {
+    const result = getMuscleActivation("Bicep Curl");
+    expect(result).not.toBeNull();
+    expect(result!.primaryMuscle).toBe("Biceps");
+    expect(result!.secondaryMuscles).toHaveLength(0);
+  });
+
+  it("should return secondary muscles for compound exercises", () => {
+    const result = getMuscleActivation("Bench Press");
+    expect(result).not.toBeNull();
+    expect(result!.primaryMuscle).toBe("Chest");
+    expect(result!.secondaryMuscles.some((s) => s.muscleGroup === "Triceps")).toBe(true);
+    expect(result!.secondaryMuscles.some((s) => s.muscleGroup === "Shoulders")).toBe(true);
+  });
+
+  it("should return null for unknown exercises", () => {
+    expect(getMuscleActivation("Underwater Basket Weaving")).toBeNull();
+  });
+
+  it("should prefer override map activation over default", () => {
+    const override = {
+      "My Press": {
+        primaryMuscle: "Shoulders" as const,
+        secondaryMuscles: [{ muscleGroup: "Triceps" as const, contribution: 0.4 }],
+      },
+    };
+    const result = getMuscleActivation("My Press", override);
+    expect(result!.primaryMuscle).toBe("Shoulders");
+    expect(result!.secondaryMuscles[0]!.muscleGroup).toBe("Triceps");
+  });
+
+  it("should include secondary contributions for Deadlift", () => {
+    const result = getMuscleActivation("Deadlift");
+    expect(result!.primaryMuscle).toBe("Back");
+    const hamstrings = result!.secondaryMuscles.find((s) => s.muscleGroup === "Hamstrings");
+    const glutes = result!.secondaryMuscles.find((s) => s.muscleGroup === "Glutes");
+    expect(hamstrings).toBeDefined();
+    expect(glutes).toBeDefined();
   });
 });
 
@@ -232,6 +277,34 @@ describe("calculateMuscleGroupInsights", () => {
     const insights = calculateMuscleGroupInsights(logs, targetDate);
     expect(insights.Chest!.sets).toBe(3);
   });
+
+  it("should credit secondary muscles with fractional sets", () => {
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    // 4 sets of Bench Press — Triceps contribution is 0.5, Shoulders is 0.3
+    const logs: ExerciseLog[] = [];
+    for (let i = 0; i < 4; i++) {
+      logs.push(createLog("Bench Press", new Date("2026-03-23T12:00:00Z"), 60, 10));
+    }
+
+    const insights = calculateMuscleGroupInsights(logs, targetDate);
+    expect(insights.Chest!.sets).toBe(4);
+    expect(insights.Triceps!.sets).toBe(2); // 4 × 0.5
+    expect(insights.Shoulders!.sets).toBe(1.2); // 4 × 0.3
+  });
+
+  it("should count secondary muscle days in frequency", () => {
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    // Deadlift on 2 days — should credit Back AND Hamstrings AND Glutes frequency
+    const logs = [
+      createLog("Deadlift", new Date("2026-03-12T12:00:00Z"), 100, 5),
+      createLog("Deadlift", new Date("2026-03-19T12:00:00Z"), 100, 5),
+    ];
+
+    const insights = calculateMuscleGroupInsights(logs, targetDate);
+    expect(insights.Back!.frequencyPerWeek).toBe(1); // 2 days / 2 = 1x/wk
+    expect(insights.Hamstrings!.frequencyPerWeek).toBe(1);
+    expect(insights.Glutes!.frequencyPerWeek).toBe(1);
+  });
 });
 
 // --- Deload Detection ---
@@ -320,7 +393,7 @@ describe("calculateTrainingInsights", () => {
     const targetDate = new Date("2026-03-25T12:00:00Z");
     const logs = [createLog("My Custom Press", new Date("2026-03-22T12:00:00Z"), 40, 10)];
 
-    const override = { "My Custom Press": "Shoulders" as const };
+    const override = { "My Custom Press": { primaryMuscle: "Shoulders" as const, secondaryMuscles: [] } };
     const insights = calculateTrainingInsights(logs, targetDate, override);
 
     expect(insights.muscleGroups.Shoulders).toBeDefined();

@@ -20,7 +20,13 @@ const learnedMap = computed(() => {
 const learnedEntries = computed(() =>
   Object.entries(learnedMap.value)
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([exercise, group]) => ({ exercise, group })),
+    .map(([exercise, activation]) => ({
+      exercise,
+      primaryMuscle: activation.primaryMuscle,
+      secondaryLabel: activation.secondaryMuscles.length > 0
+        ? activation.secondaryMuscles.map((s) => `${s.muscleGroup} ×${s.contribution}`).join(", ")
+        : null,
+    })),
 );
 
 const insights = computed(() => {
@@ -180,7 +186,10 @@ function landmarkColor(landmark: string): string {
             class="flex items-center justify-between px-4 py-2.5"
           >
             <span class="text-sm text-foreground/80">{{ entry.exercise }}</span>
-            <span class="text-xs font-bold text-primary">{{ entry.group }}</span>
+            <div class="flex flex-col items-end gap-0.5">
+              <span class="text-xs font-bold text-primary">{{ entry.primaryMuscle }}</span>
+              <span v-if="entry.secondaryLabel" class="text-[10px] text-muted-foreground/60">{{ entry.secondaryLabel }}</span>
+            </div>
           </div>
         </UiCard>
         <p v-else class="text-sm text-muted-foreground/50 ml-1">No learned mappings yet — the AI will populate this after its first response.</p>

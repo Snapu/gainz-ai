@@ -15,6 +15,19 @@ export type MuscleGroup =
   | "Calves"
   | "Glutes";
 
+/** A secondary muscle contribution: the muscle group and a fractional credit (0–1). */
+export interface SecondaryMuscleActivation {
+  muscleGroup: MuscleGroup;
+  /** Fraction of a set credited to this muscle (0.0–1.0). E.g. 0.5 means half a set. */
+  contribution: number;
+}
+
+/** Full activation profile for an exercise: one primary muscle (full credit) + optional secondaries. */
+export interface MuscleActivation {
+  primaryMuscle: MuscleGroup;
+  secondaryMuscles: SecondaryMuscleActivation[];
+}
+
 export type VolumeLandmark = "below_MEV" | "at_MEV" | "at_MAV" | "approaching_MRV" | "above_MRV";
 
 export type SystemicPhase = "Inactive" | "Maintain" | "Build" | "Deload";
@@ -46,119 +59,142 @@ export interface TrainingInsights {
   phase: SystemicPhase;
 }
 
-// --- Exercise → Muscle Group Mapping ---
+// --- Exercise → Muscle Activation Mapping ---
 
-/** Default mapping. Designed to be overridden with a dynamic map later. */
-const DEFAULT_EXERCISE_MAP: Record<string, MuscleGroup> = {
-  // Chest
-  "Bench Press": "Chest",
-  Bankdrücken: "Chest",
-  "Incline Bench Press": "Chest",
-  Schrägbankdrücken: "Chest",
-  "Dumbbell Flyes": "Chest",
-  "Incline Dumbbell Flyes": "Chest",
-  "Cable Flyes": "Chest",
-  "Chest Press": "Chest",
-  "Push-Ups": "Chest",
-  Liegestütze: "Chest",
+/** Helper to build a MuscleActivation entry concisely. */
+function act(
+  primary: MuscleGroup,
+  ...secondaries: [MuscleGroup, number][]
+): MuscleActivation {
+  return {
+    primaryMuscle: primary,
+    secondaryMuscles: secondaries.map(([muscleGroup, contribution]) => ({ muscleGroup, contribution })),
+  };
+}
 
-  // Back
-  "Pull-Ups": "Back",
-  Klimmzüge: "Back",
-  "Barbell Row": "Back",
-  Langhantelrudern: "Back",
-  "Dumbbell Row": "Back",
-  Kurzhantelrudern: "Back",
-  "Lat Pulldown": "Back",
-  Latzug: "Back",
-  "Cable Row": "Back",
-  "Seated Row": "Back",
-  Deadlift: "Back",
-  Kreuzheben: "Back",
+/** Default activation mapping. Designed to be overridden with a dynamic map later. */
+const DEFAULT_EXERCISE_ACTIVATION_MAP: Record<string, MuscleActivation> = {
+  // Chest (compound presses credit Triceps + Shoulders as secondaries)
+  "Bench Press": act("Chest", ["Triceps", 0.5], ["Shoulders", 0.3]),
+  Bankdrücken: act("Chest", ["Triceps", 0.5], ["Shoulders", 0.3]),
+  "Incline Bench Press": act("Chest", ["Triceps", 0.5], ["Shoulders", 0.4]),
+  Schrägbankdrücken: act("Chest", ["Triceps", 0.5], ["Shoulders", 0.4]),
+  "Dumbbell Flyes": act("Chest"),
+  "Incline Dumbbell Flyes": act("Chest"),
+  "Cable Flyes": act("Chest"),
+  "Chest Press": act("Chest", ["Triceps", 0.4], ["Shoulders", 0.3]),
+  "Push-Ups": act("Chest", ["Triceps", 0.5], ["Shoulders", 0.3]),
+  Liegestütze: act("Chest", ["Triceps", 0.5], ["Shoulders", 0.3]),
+
+  // Back (compound pulls credit Biceps as secondary)
+  "Pull-Ups": act("Back", ["Biceps", 0.5]),
+  Klimmzüge: act("Back", ["Biceps", 0.5]),
+  "Barbell Row": act("Back", ["Biceps", 0.4]),
+  Langhantelrudern: act("Back", ["Biceps", 0.4]),
+  "Dumbbell Row": act("Back", ["Biceps", 0.4]),
+  Kurzhantelrudern: act("Back", ["Biceps", 0.4]),
+  "Lat Pulldown": act("Back", ["Biceps", 0.5]),
+  Latzug: act("Back", ["Biceps", 0.5]),
+  "Cable Row": act("Back", ["Biceps", 0.4]),
+  "Seated Row": act("Back", ["Biceps", 0.4]),
+  // Deadlift is a full-body posterior chain movement
+  Deadlift: act("Back", ["Hamstrings", 0.7], ["Glutes", 0.6], ["Quads", 0.3]),
+  Kreuzheben: act("Back", ["Hamstrings", 0.7], ["Glutes", 0.6], ["Quads", 0.3]),
 
   // Shoulders
-  "Overhead Press": "Shoulders",
-  "Shoulder Press": "Shoulders",
-  Schulterdrücken: "Shoulders",
-  "Langhantel Schulterdrücken": "Shoulders",
-  "Lateral Raises": "Shoulders",
-  Seitheben: "Shoulders",
-  "Seitheben (Kurzhantel)": "Shoulders",
-  "Front Raises": "Shoulders",
-  "Face Pulls": "Shoulders",
-  "Reverse Flyes": "Shoulders",
+  "Overhead Press": act("Shoulders", ["Triceps", 0.5]),
+  "Shoulder Press": act("Shoulders", ["Triceps", 0.5]),
+  Schulterdrücken: act("Shoulders", ["Triceps", 0.5]),
+  "Langhantel Schulterdrücken": act("Shoulders", ["Triceps", 0.5]),
+  "Lateral Raises": act("Shoulders"),
+  Seitheben: act("Shoulders"),
+  "Seitheben (Kurzhantel)": act("Shoulders"),
+  "Front Raises": act("Shoulders"),
+  "Face Pulls": act("Shoulders"),
+  "Reverse Flyes": act("Shoulders"),
 
-  // Quads
-  Squat: "Quads",
-  Kniebeuge: "Quads",
-  "Front Squat": "Quads",
-  "Leg Press": "Quads",
-  Beinpresse: "Quads",
-  "Leg Extension": "Quads",
-  Lunges: "Quads",
-  Ausfallschritte: "Quads",
-  "Bulgarian Split Squat": "Quads",
+  // Quads (compound leg movements credit Glutes + Hamstrings)
+  Squat: act("Quads", ["Glutes", 0.6], ["Hamstrings", 0.3]),
+  Kniebeuge: act("Quads", ["Glutes", 0.6], ["Hamstrings", 0.3]),
+  "Front Squat": act("Quads", ["Glutes", 0.4]),
+  "Leg Press": act("Quads", ["Glutes", 0.4], ["Hamstrings", 0.2]),
+  Beinpresse: act("Quads", ["Glutes", 0.4], ["Hamstrings", 0.2]),
+  "Leg Extension": act("Quads"),
+  Lunges: act("Quads", ["Glutes", 0.6], ["Hamstrings", 0.3]),
+  Ausfallschritte: act("Quads", ["Glutes", 0.6], ["Hamstrings", 0.3]),
+  "Bulgarian Split Squat": act("Quads", ["Glutes", 0.7], ["Hamstrings", 0.3]),
 
   // Hamstrings
-  "Romanian Deadlift": "Hamstrings",
-  "Rumänisches Kreuzheben": "Hamstrings",
-  "Leg Curl": "Hamstrings",
-  "Nordic Curl": "Hamstrings",
-  "Good Mornings": "Hamstrings",
+  "Romanian Deadlift": act("Hamstrings", ["Glutes", 0.7], ["Back", 0.4]),
+  "Rumänisches Kreuzheben": act("Hamstrings", ["Glutes", 0.7], ["Back", 0.4]),
+  "Leg Curl": act("Hamstrings"),
+  "Nordic Curl": act("Hamstrings"),
+  "Good Mornings": act("Hamstrings", ["Back", 0.5]),
 
   // Biceps
-  "Bicep Curl": "Biceps",
-  Bizepscurls: "Biceps",
-  "Hammer Curl": "Biceps",
-  "Preacher Curl": "Biceps",
+  "Bicep Curl": act("Biceps"),
+  Bizepscurls: act("Biceps"),
+  "Hammer Curl": act("Biceps"),
+  "Preacher Curl": act("Biceps"),
 
   // Triceps
-  "Tricep Extension": "Triceps",
-  "Tricep Pushdown": "Triceps",
-  "Skull Crushers": "Triceps",
-  Dips: "Triceps",
-  "Dips an den Ringen": "Triceps",
+  "Tricep Extension": act("Triceps"),
+  "Tricep Pushdown": act("Triceps"),
+  "Skull Crushers": act("Triceps"),
+  Dips: act("Triceps", ["Chest", 0.5], ["Shoulders", 0.2]),
+  "Dips an den Ringen": act("Triceps", ["Chest", 0.5], ["Shoulders", 0.2]),
 
   // Glutes
-  "Hip Thrust": "Glutes",
-  "Glute Bridge": "Glutes",
-  "Cable Kickback": "Glutes",
+  "Hip Thrust": act("Glutes", ["Hamstrings", 0.5]),
+  "Glute Bridge": act("Glutes", ["Hamstrings", 0.4]),
+  "Cable Kickback": act("Glutes"),
 
   // Abs
-  Crunches: "Abs",
-  Planks: "Abs",
-  "Hanging Leg Raise": "Abs",
-  "Cable Crunch": "Abs",
+  Crunches: act("Abs"),
+  Planks: act("Abs"),
+  "Hanging Leg Raise": act("Abs"),
+  "Cable Crunch": act("Abs"),
 
   // Calves
-  "Calf Raise": "Calves",
-  Wadenheben: "Calves",
+  "Calf Raise": act("Calves"),
+  Wadenheben: act("Calves"),
 };
 
 /**
- * Look up the muscle group for an exercise name.
+ * Look up the full muscle activation profile for an exercise name.
  * Uses case-insensitive matching with an optional override map.
  */
-export function getMuscleGroup(
+export function getMuscleActivation(
   exerciseName: string,
-  overrideMap?: Record<string, MuscleGroup>,
-): MuscleGroup | null {
+  overrideMap?: Record<string, MuscleActivation>,
+): MuscleActivation | null {
   // Check override first (exact match)
   if (overrideMap?.[exerciseName]) return overrideMap[exerciseName];
 
   // Check default (exact match)
-  if (DEFAULT_EXERCISE_MAP[exerciseName]) return DEFAULT_EXERCISE_MAP[exerciseName];
+  if (DEFAULT_EXERCISE_ACTIVATION_MAP[exerciseName]) return DEFAULT_EXERCISE_ACTIVATION_MAP[exerciseName];
 
   // Case-insensitive fallback
   const lower = exerciseName.toLowerCase();
-  for (const [key, group] of Object.entries(overrideMap ?? {})) {
-    if (key.toLowerCase() === lower) return group;
+  for (const [key, activation] of Object.entries(overrideMap ?? {})) {
+    if (key.toLowerCase() === lower) return activation;
   }
-  for (const [key, group] of Object.entries(DEFAULT_EXERCISE_MAP)) {
-    if (key.toLowerCase() === lower) return group;
+  for (const [key, activation] of Object.entries(DEFAULT_EXERCISE_ACTIVATION_MAP)) {
+    if (key.toLowerCase() === lower) return activation;
   }
 
   return null;
+}
+
+/**
+ * Look up the primary muscle group for an exercise name.
+ * Convenience wrapper around getMuscleActivation — use that for full activation data.
+ */
+export function getMuscleGroup(
+  exerciseName: string,
+  overrideMap?: Record<string, MuscleActivation>,
+): MuscleGroup | null {
+  return getMuscleActivation(exerciseName, overrideMap)?.primaryMuscle ?? null;
 }
 
 // --- e1RM Calculation ---
@@ -181,7 +217,7 @@ export function calculateE1RM(weight: number, reps: number, rpe?: number): numbe
  */
 export function calculateE1RMInsights(
   logs: ExerciseLog[],
-  overrideMap?: Record<string, MuscleGroup>,
+  overrideMap?: Record<string, MuscleActivation>,
 ): Record<string, ExerciseE1RM> {
   // Group logs by exercise, then by session date
   const byExercise = new Map<string, Map<string, ExerciseLog[]>>();
@@ -270,44 +306,69 @@ function getVolumeLandmark(sets: number, group: MuscleGroup): VolumeLandmark {
 
 /**
  * Calculate per-muscle-group volume landmarks, frequency, and recovery status.
+ * Primary muscles receive full set credit (1.0); secondary muscles receive fractional credit.
  */
 export function calculateMuscleGroupInsights(
   logs: ExerciseLog[],
   targetDate: Date = new Date(),
-  overrideMap?: Record<string, MuscleGroup>,
+  overrideMap?: Record<string, MuscleActivation>,
 ): Partial<Record<MuscleGroup, MuscleGroupInsight>> {
   const weeklyVolume = calculateWeeklyVolume(logs, targetDate);
 
-  // Aggregate sets by muscle group
+  // Aggregate sets by muscle group — primary gets full credit, secondaries get fractional credit
   const groupSets = new Map<MuscleGroup, number>();
   for (const vol of weeklyVolume) {
-    const group = getMuscleGroup(vol.exerciseName, overrideMap);
-    if (!group) continue;
-    groupSets.set(group, (groupSets.get(group) ?? 0) + vol.sets);
+    const activation = getMuscleActivation(vol.exerciseName, overrideMap);
+    if (!activation) continue;
+
+    const currentPrimary = groupSets.get(activation.primaryMuscle) ?? 0;
+    groupSets.set(activation.primaryMuscle, currentPrimary + vol.sets);
+
+    for (const secondary of activation.secondaryMuscles) {
+      const current = groupSets.get(secondary.muscleGroup) ?? 0;
+      groupSets.set(secondary.muscleGroup, current + vol.sets * secondary.contribution);
+    }
   }
 
-  // Calculate frequency (unique days per muscle group in last 14 days)
+  // Calculate frequency: unique training days per muscle group in last 14 days
+  // A day counts for a muscle group if the exercise targets it as primary OR secondary
   const fourteenDaysAgo = new Date(targetDate);
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
   const recentLogs = logs.filter((l) => l.loggedAt > fourteenDaysAgo && l.loggedAt <= targetDate);
 
   const groupDays = new Map<MuscleGroup, Set<string>>();
   for (const log of recentLogs) {
-    const group = getMuscleGroup(log.exerciseName, overrideMap);
-    if (!group) continue;
-    const daySet = groupDays.get(group) ?? new Set();
-    daySet.add(log.loggedAt.toDateString());
-    groupDays.set(group, daySet);
+    const activation = getMuscleActivation(log.exerciseName, overrideMap);
+    if (!activation) continue;
+    const dayStr = log.loggedAt.toDateString();
+
+    const primaryDays = groupDays.get(activation.primaryMuscle) ?? new Set();
+    primaryDays.add(dayStr);
+    groupDays.set(activation.primaryMuscle, primaryDays);
+
+    for (const secondary of activation.secondaryMuscles) {
+      const secDays = groupDays.get(secondary.muscleGroup) ?? new Set();
+      secDays.add(dayStr);
+      groupDays.set(secondary.muscleGroup, secDays);
+    }
   }
 
-  // Hours since last trained per group
+  // Hours since last trained per group — includes secondary muscle contributions
   const groupLastTrained = new Map<MuscleGroup, Date>();
   for (const log of logs) {
-    const group = getMuscleGroup(log.exerciseName, overrideMap);
-    if (!group) continue;
-    const existing = groupLastTrained.get(group);
-    if (!existing || log.loggedAt > existing) {
-      groupLastTrained.set(group, log.loggedAt);
+    const activation = getMuscleActivation(log.exerciseName, overrideMap);
+    if (!activation) continue;
+
+    const updateIfNewer = (group: MuscleGroup) => {
+      const existing = groupLastTrained.get(group);
+      if (!existing || log.loggedAt > existing) {
+        groupLastTrained.set(group, log.loggedAt);
+      }
+    };
+
+    updateIfNewer(activation.primaryMuscle);
+    for (const secondary of activation.secondaryMuscles) {
+      updateIfNewer(secondary.muscleGroup);
     }
   }
 
@@ -324,7 +385,7 @@ export function calculateMuscleGroupInsights(
       : null;
 
     result[group] = {
-      sets,
+      sets: Math.round(sets * 10) / 10, // round to 1 decimal for fractional secondary sets
       landmark: getVolumeLandmark(sets, group),
       frequencyPerWeek: Math.round((days / 2) * 10) / 10, // sessions per week over 14 days
       hoursSinceLastTrained: hoursSince,
@@ -428,7 +489,7 @@ export function computeSystemicPhase(fatigue: FatigueInsight): SystemicPhase {
 export function calculateTrainingInsights(
   logs: ExerciseLog[],
   targetDate: Date = new Date(),
-  overrideMap?: Record<string, MuscleGroup>,
+  overrideMap?: Record<string, MuscleActivation>,
 ): TrainingInsights {
   const e1rm = calculateE1RMInsights(logs, overrideMap);
   const muscleGroups = calculateMuscleGroupInsights(logs, targetDate, overrideMap);

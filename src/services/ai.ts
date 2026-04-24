@@ -29,6 +29,8 @@ export interface AiResponseData {
     targetWeight?: string;
     notes?: string;
     supersetId?: string;
+    primaryMuscle?: string;
+    secondaryMuscles?: Array<{ muscleGroup: string; contribution?: number }>;
   }[];
 }
 
@@ -75,10 +77,29 @@ export const aiResponseSchema: Schema = {
             description:
               "Optional. Assign the same identifier (e.g. 'A', 'B') to exercises that should be performed together as a superset.",
           },
-          muscleGroup: {
+          primaryMuscle: {
             type: Type.STRING,
             description:
               "Primary muscle group this exercise targets. Must be one of: Chest, Back, Quads, Hamstrings, Shoulders, Biceps, Triceps, Abs, Calves, Glutes.",
+          },
+          secondaryMuscles: {
+            type: Type.ARRAY,
+            description:
+              "Optional secondary muscle groups this exercise also activates, with their fractional contribution (0.0–1.0). E.g. Bench Press also activates Triceps (0.5) and Shoulders (0.3).",
+            items: {
+              type: Type.OBJECT,
+              required: ["muscleGroup"],
+              properties: {
+                muscleGroup: {
+                  type: Type.STRING,
+                  description: "Must be one of: Chest, Back, Quads, Hamstrings, Shoulders, Biceps, Triceps, Abs, Calves, Glutes.",
+                },
+                contribution: {
+                  type: Type.NUMBER,
+                  description: "Fraction of a set credited to this muscle (0.0–1.0). Omit to default to 0.5.",
+                },
+              },
+            },
           },
         },
       },

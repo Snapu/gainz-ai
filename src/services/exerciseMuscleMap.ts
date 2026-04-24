@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/vue";
-import type { MuscleGroup } from "./trainingScience";
+import type { MuscleActivation, MuscleGroup, SecondaryMuscleActivation } from "./trainingScience";
 
 const STORAGE_KEY = "exerciseMuscleMap";
 const MAX_ENTRIES = 200;
@@ -19,8 +19,15 @@ const VALID_MUSCLE_GROUPS: ReadonlySet<string> = new Set<MuscleGroup>([
 ]);
 
 interface StoredEntry {
-  muscleGroup: MuscleGroup;
+  primaryMuscle: MuscleGroup;
+  secondaryMuscles: SecondaryMuscleActivation[];
   updatedAt: number; // epoch ms, used for eviction
+}
+
+/** Legacy format before multi-muscle support was added. */
+interface LegacyStoredEntry {
+  muscleGroup: MuscleGroup;
+  updatedAt: number;
 }
 
 type StoredMap = Record<string, StoredEntry>;
@@ -34,14 +41,35 @@ function isValidMuscleGroup(value: string): value is MuscleGroup {
   return VALID_MUSCLE_GROUPS.has(value);
 }
 
-/** Load the learned map from localStorage. */
+/** Load the learned map from localStorage, migrating legacy entries on the fly. */
 function loadMap(): StoredMap {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null) return {};
-    return parsed as StoredMap;
+
+    // Migrate legacy entries that have the old { muscleGroup, updatedAt } shape
+    const result: StoredMap = {};
+    for (const [key, entry] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!entry || typeof entry !== "object") continue;
+      const e = entry as Record<string, unknown>;
+      if ("primaryMuscle" in e) {
+        // Already new format
+        result[key] = e as unknown as StoredEntry;
+      } else if ("muscleGroup" in e) {
+        // Legacy format — migrate gracefully
+        const legacy = e as unknown as LegacyStoredEntry;
+        if (isValidMuscleGroup(legacy.muscleGroup)) {
+          result[key] = {
+            primaryMuscle: legacy.muscleGroup,
+            secondaryMuscles: [],
+            updatedAt: legacy.updatedAt,
+          };
+        }
+      }
+    }
+    return result;
   } catch {
     return {};
   }
@@ -80,13 +108,20 @@ function evictIfNeeded(map: StoredMap): StoredMap {
 }
 
 /**
- * Learn exercise→muscleGroup mappings from an AI response.
- * Call this after each successful AI response.
+ * Learn exercise→muscle activation mappings from an AI response.
+ * Accepts both the new schema ({ primaryMuscle, secondaryMuscles }) and the legacy
+ * single-muscle schema ({ muscleGroup }) for backwards compatibility.
  *
- * @param exercises - Array of { exerciseName, muscleGroup? } from the AI response
+ * Call this after each successful AI response.
  */
 export function learnFromAiResponse(
-  exercises: Array<{ exerciseName: string; muscleGroup?: string }>,
+  exercises: Array<{
+    exerciseName: string;
+    primaryMuscle?: string;
+    secondaryMuscles?: Array<{ muscleGroup: string; contribution?: number }>;
+    /** @deprecated Legacy field — use primaryMuscle instead. */
+    muscleGroup?: string;
+  }>,
 ): void {
   if (exercises.length === 0) return;
 
@@ -96,21 +131,36 @@ export function learnFromAiResponse(
   let skippedCount = 0;
 
   for (const ex of exercises) {
-    if (!ex.muscleGroup || !ex.exerciseName) continue;
-    if (!isValidMuscleGroup(ex.muscleGroup)) {
+    if (!ex.exerciseName) continue;
+
+    // Resolve primary muscle: prefer new field, fall back to legacy muscleGroup
+    const rawPrimary = ex.primaryMuscle ?? ex.muscleGroup;
+    if (!rawPrimary) continue;
+
+    if (!isValidMuscleGroup(rawPrimary)) {
       skippedCount++;
       Sentry.addBreadcrumb({
         category: "muscle-map",
-        message: `Rejected invalid muscleGroup "${ex.muscleGroup}" for "${ex.exerciseName}"`,
+        message: `Rejected invalid primaryMuscle "${rawPrimary}" for "${ex.exerciseName}"`,
         level: "warning",
       });
       continue;
     }
 
+    // Validate and resolve secondary muscles (silently drop invalid entries)
+    const secondaryMuscles: SecondaryMuscleActivation[] = [];
+    for (const sec of ex.secondaryMuscles ?? []) {
+      if (!isValidMuscleGroup(sec.muscleGroup)) continue;
+      const contribution = typeof sec.contribution === "number"
+        ? Math.min(1, Math.max(0, sec.contribution))
+        : 0.5; // default contribution when AI omits it
+      secondaryMuscles.push({ muscleGroup: sec.muscleGroup, contribution });
+    }
+
     const key = normalizeKey(ex.exerciseName);
     if (!key) continue;
 
-    map[key] = { muscleGroup: ex.muscleGroup, updatedAt: now };
+    map[key] = { primaryMuscle: rawPrimary, secondaryMuscles, updatedAt: now };
     learnedCount++;
   }
 
@@ -130,18 +180,21 @@ export function learnFromAiResponse(
 }
 
 /**
- * Get the learned exercise→muscleGroup map, formatted for use as
+ * Get the learned exercise→activation map, formatted for use as
  * the `overrideMap` parameter in `calculateTrainingInsights()`.
  *
  * Returns the map keyed by normalized (lowercase) exercise name.
  */
-export function getLearnedMuscleMap(): Record<string, MuscleGroup> {
+export function getLearnedMuscleMap(): Record<string, MuscleActivation> {
   const stored = loadMap();
-  const result: Record<string, MuscleGroup> = {};
+  const result: Record<string, MuscleActivation> = {};
 
   for (const [key, entry] of Object.entries(stored)) {
-    if (entry?.muscleGroup && isValidMuscleGroup(entry.muscleGroup)) {
-      result[key] = entry.muscleGroup;
+    if (entry?.primaryMuscle && isValidMuscleGroup(entry.primaryMuscle)) {
+      result[key] = {
+        primaryMuscle: entry.primaryMuscle,
+        secondaryMuscles: entry.secondaryMuscles ?? [],
+      };
     }
   }
 
