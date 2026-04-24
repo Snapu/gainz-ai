@@ -1,5 +1,6 @@
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import { err, ok, type Result } from "neverthrow";
+import { isAuthError } from "./utils/isAuthError";
 
 export const SPREADSHEET_NAME = "Gainz AI App Database";
 
@@ -57,15 +58,7 @@ export async function loadSpreadsheet(
     return ok(doc);
   } catch (error) {
     console.error(`Failed to load spreadsheet with id ${id}. Error:`, error);
-    if (
-      error &&
-      typeof error === "object" &&
-      "response" in error &&
-      error.response &&
-      typeof error.response === "object" &&
-      "status" in error.response &&
-      (error.response.status === 401 || error.response.status === 403)
-    ) {
+    if (isAuthError(error)) {
       return err("auth-failed");
     }
     return err("load-spreadsheet-failed");
@@ -86,15 +79,7 @@ export async function createSpreadsheet(
     return ok(doc);
   } catch (error) {
     console.warn(`Failed to create new spreadsheet with name ${name}. Error:`, error);
-    if (
-      error &&
-      typeof error === "object" &&
-      "response" in error &&
-      error.response &&
-      typeof error.response === "object" &&
-      "status" in error.response &&
-      (error.response.status === 401 || error.response.status === 403)
-    ) {
+    if (isAuthError(error)) {
       return err("auth-failed");
     }
     return err("create-spreadsheet-failed");

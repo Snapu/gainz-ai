@@ -2,6 +2,7 @@ import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { err, ok, type Result } from "neverthrow";
 import { ZodError, z } from "zod";
 import { ExerciseNameSchema } from "./exercises";
+import { isAuthError } from "./utils/isAuthError";
 import { parseData } from "./utils/parseData";
 
 const optionalNumberSchema = z.preprocess((val) => {
@@ -99,20 +100,9 @@ export async function loadExerciseLogs(
       rows.map((row) => row.toObject()),
     );
   } catch (error) {
-    // Check for auth errors from google-spreadsheet
-    if (
-      error &&
-      typeof error === "object" &&
-      "response" in error &&
-      error.response &&
-      typeof error.response === "object" &&
-      "status" in error.response
-    ) {
-      const status = error.response.status;
-      if (status === 401 || status === 403) {
-        console.error("Auth failed during loadExerciseLogs. Error:", error);
-        return err("auth-failed");
-      }
+    if (isAuthError(error)) {
+      console.error("Auth failed during loadExerciseLogs. Error:", error);
+      return err("auth-failed");
     }
     console.error("Failed to load exercise logs. Error:", error);
     return err("load-failed");
@@ -135,20 +125,9 @@ export async function addExerciseLog(
     await sheet.addRow(ExerciseLogSchema.parse(logWithId));
     return ok();
   } catch (error) {
-    // Check for auth errors
-    if (
-      error &&
-      typeof error === "object" &&
-      "response" in error &&
-      error.response &&
-      typeof error.response === "object" &&
-      "status" in error.response
-    ) {
-      const status = error.response.status;
-      if (status === 401 || status === 403) {
-        console.error("Auth failed during addExerciseLog. Error:", error);
-        return err("auth-failed");
-      }
+    if (isAuthError(error)) {
+      console.error("Auth failed during addExerciseLog. Error:", error);
+      return err("auth-failed");
     }
     console.error("failed to add exercise log. Error:", error);
     if (error instanceof ZodError) console.error(z.prettifyError(error));
@@ -172,20 +151,9 @@ export async function deleteExerciseLog(
     await rowToDelete?.delete();
     return ok();
   } catch (error) {
-    // Check for auth errors
-    if (
-      error &&
-      typeof error === "object" &&
-      "response" in error &&
-      error.response &&
-      typeof error.response === "object" &&
-      "status" in error.response
-    ) {
-      const status = error.response.status;
-      if (status === 401 || status === 403) {
-        console.error("Auth failed during deleteExerciseLog. Error:", error);
-        return err("auth-failed");
-      }
+    if (isAuthError(error)) {
+      console.error("Auth failed during deleteExerciseLog. Error:", error);
+      return err("auth-failed");
     }
     console.error("Failed to delete exercise log. Error:", error);
     return err("delete-failed");

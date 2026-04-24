@@ -20,7 +20,7 @@ export const useExercisesStore = defineStore("exercises", () => {
     add,
     remove,
     refresh,
-  } = useOfflineSyncedStore<Exercise>({
+  } = useOfflineSyncedStore({
     getId: (exercise) => exercise.name,
     fetchRemote: () => loadExercises(spreadsheetStore.doc as GoogleSpreadsheet),
     addRemote: (item) => addExercise_(item, spreadsheetStore.doc as GoogleSpreadsheet),
@@ -47,7 +47,6 @@ export const useExercisesStore = defineStore("exercises", () => {
     const result = await add(exercise);
     if (result.isErr() && result.error === "auth-failed") {
       handleAuthError("exercise-add");
-      return result;
     }
     return result;
   };

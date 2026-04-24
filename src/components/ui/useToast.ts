@@ -15,10 +15,11 @@ export interface ToastOptions {
     seconds: number;
     onComplete: () => void;
   };
-  countdownIntervalId?: number; // For cleanup
 }
 
 const toasts = ref<ToastOptions[]>([]);
+// Internal map: toast id → active countdown interval
+const countdownIntervals = new Map<string, ReturnType<typeof setInterval>>();
 
 export function useToast() {
   function toast(options: ToastOptions) {
@@ -44,6 +45,7 @@ export function useToast() {
         // When countdown reaches 0, call onComplete and dismiss
         if (remainingSeconds <= 0) {
           clearInterval(countdownInterval);
+          countdownIntervals.delete(id);
           if (options.countdown) {
             options.countdown.onComplete();
           }
@@ -51,8 +53,7 @@ export function useToast() {
         }
       }, 1000);
 
-      // Store interval ID for cleanup
-      toastData.countdownIntervalId = countdownInterval as unknown as number;
+      countdownIntervals.set(id, countdownInterval);
     }
 
     // Only auto-dismiss if not persistent and no countdown
@@ -66,9 +67,10 @@ export function useToast() {
   }
 
   function dismiss(id: string) {
-    const toast = toasts.value.find((t) => t.id === id);
-    if (toast && toast.countdownIntervalId) {
-      clearInterval(toast.countdownIntervalId);
+    const interval = countdownIntervals.get(id);
+    if (interval) {
+      clearInterval(interval);
+      countdownIntervals.delete(id);
     }
     toasts.value = toasts.value.filter((t) => t.id !== id);
   }

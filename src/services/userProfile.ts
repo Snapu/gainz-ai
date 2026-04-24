@@ -1,6 +1,7 @@
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { err, ok, type Result } from "neverthrow";
 import { z } from "zod";
+import { isAuthError } from "./utils/isAuthError";
 import { parseData } from "./utils/parseData";
 
 export const FitnessGoalSchema = z.enum([
@@ -119,20 +120,9 @@ export async function loadUserProfile(
     const result = await parseData(UserProfileSchema, rows[0]?.toObject());
     return result.isOk() ? ok(result.value) : err(result.error);
   } catch (error) {
-    // Check for auth errors from google-spreadsheet
-    if (
-      error &&
-      typeof error === "object" &&
-      "response" in error &&
-      error.response &&
-      typeof error.response === "object" &&
-      "status" in error.response
-    ) {
-      const status = error.response.status;
-      if (status === 401 || status === 403) {
-        console.error("Auth failed during loadUserProfile. Error:", error);
-        return err("auth-failed");
-      }
+    if (isAuthError(error)) {
+      console.error("Auth failed during loadUserProfile. Error:", error);
+      return err("auth-failed");
     }
     console.error("Failed to load user profile. Error:", error);
     return err("load-failed");
@@ -157,20 +147,9 @@ export async function saveUserProfile(
     }
     return ok();
   } catch (error) {
-    // Check for auth errors from google-spreadsheet
-    if (
-      error &&
-      typeof error === "object" &&
-      "response" in error &&
-      error.response &&
-      typeof error.response === "object" &&
-      "status" in error.response
-    ) {
-      const status = error.response.status;
-      if (status === 401 || status === 403) {
-        console.error("Auth failed during saveUserProfile. Error:", error);
-        return err("auth-failed");
-      }
+    if (isAuthError(error)) {
+      console.error("Auth failed during saveUserProfile. Error:", error);
+      return err("auth-failed");
     }
     console.error("Failed to save user profile. Error:", error);
     return err("save-failed");

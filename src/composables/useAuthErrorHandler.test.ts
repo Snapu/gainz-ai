@@ -1,30 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
-import { useRouter } from "vue-router";
 import { useToast } from "@/components/ui/useToast";
 import { useAuthStore } from "@/stores/auth";
 import { useAuthErrorHandler } from "./useAuthErrorHandler";
 
-vi.mock("vue-router");
 vi.mock("@/stores/auth");
 vi.mock("@/components/ui/useToast");
 
 describe("useAuthErrorHandler", () => {
   const mockLogout = vi.fn();
   const mockToast = vi.fn();
-  const mockPush = vi.fn();
-  const mockCurrentRoute = {
-    path: "/workouts",
-  };
 
   beforeEach(() => {
     vi.clearAllMocks();
 
     vi.mocked(useAuthStore).mockReturnValue({
       logout: mockLogout,
-      accessToken: null,
-      expiresAt: null,
-      isLoggedIn: false,
+      accessToken: "token",
+      expiresAt: Date.now() + 3600000,
+      isLoggedIn: true,
       login: vi.fn(),
     } as unknown as ReturnType<typeof useAuthStore>);
 
@@ -33,13 +27,6 @@ describe("useAuthErrorHandler", () => {
       dismiss: vi.fn(),
       toasts: ref([]),
     });
-
-    vi.mocked(useRouter).mockReturnValue({
-      push: mockPush,
-      currentRoute: {
-        value: mockCurrentRoute,
-      },
-    } as unknown as ReturnType<typeof useRouter>);
   });
 
   it("should call logout from auth store", () => {
@@ -63,33 +50,20 @@ describe("useAuthErrorHandler", () => {
     });
   });
 
-  it("should redirect to login with returnUrl query param", () => {
-    const { handleAuthError } = useAuthErrorHandler();
-
-    handleAuthError();
-
-    expect(mockPush).toHaveBeenCalledOnce();
-    expect(mockPush).toHaveBeenCalledWith({
-      path: "/login",
-      query: { returnUrl: "/workouts" },
-    });
-  });
-
-  it("should handle case when there is no current route", () => {
-    vi.mocked(useRouter).mockReturnValue({
-      push: mockPush,
-      currentRoute: {
-        value: { path: "/" },
-      },
-    } as unknown as ReturnType<typeof useRouter>);
+  it("should do nothing if already logged out (deduplication guard)", () => {
+    vi.mocked(useAuthStore).mockReturnValue({
+      logout: mockLogout,
+      accessToken: null,
+      expiresAt: null,
+      isLoggedIn: false,
+      login: vi.fn(),
+    } as unknown as ReturnType<typeof useAuthStore>);
 
     const { handleAuthError } = useAuthErrorHandler();
 
     handleAuthError();
 
-    expect(mockPush).toHaveBeenCalledWith({
-      path: "/login",
-      query: { returnUrl: "/" },
-    });
+    expect(mockLogout).not.toHaveBeenCalled();
+    expect(mockToast).not.toHaveBeenCalled();
   });
 });

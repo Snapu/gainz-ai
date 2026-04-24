@@ -33,17 +33,19 @@ export function useAuthExpirationWatcher() {
 
     // Trigger warning at 5-minute threshold
     if (timeRemaining > 0 && timeRemaining < WARNING_THRESHOLD && !warningActive.value) {
-      showExpirationWarning();
+      showExpirationWarning(timeRemaining);
     }
   }
 
-  function showExpirationWarning() {
+  function showExpirationWarning(timeRemaining: number) {
     warningActive.value = true;
 
     Sentry.captureMessage("Token expiring - showing warning to user", {
       level: "info",
       tags: { category: "auth-expiration" },
     });
+
+    const seconds = Math.floor(timeRemaining / 1000);
 
     toast({
       title: "Session Expiring Soon",
@@ -55,7 +57,7 @@ export function useAuthExpirationWatcher() {
         onClick: handleLogout,
       },
       countdown: {
-        seconds: 30,
+        seconds,
         onComplete: handleLogout,
       },
     });
@@ -80,6 +82,4 @@ export function useAuthExpirationWatcher() {
 
   // Cleanup on unmount
   onUnmounted(cleanup);
-
-  return { checkExpiration };
 }

@@ -2,6 +2,7 @@ import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { err, ok, type Result } from "neverthrow";
 import { z } from "zod";
 import { parseData } from "./utils/parseData";
+import { isAuthError } from "./utils/isAuthError";
 
 const clean = (s: string) => s.trim().replace(/\s+/g, " ");
 
@@ -27,20 +28,9 @@ export async function loadExercises(
       rows.map((row) => row.toObject()),
     );
   } catch (error) {
-    // Check for auth errors from google-spreadsheet
-    if (
-      error &&
-      typeof error === "object" &&
-      "response" in error &&
-      error.response &&
-      typeof error.response === "object" &&
-      "status" in error.response
-    ) {
-      const status = error.response.status;
-      if (status === 401 || status === 403) {
-        console.error("Auth failed during loadExercises. Error:", error);
-        return err("auth-failed");
-      }
+    if (isAuthError(error)) {
+      console.error("Auth failed during loadExercises. Error:", error);
+      return err("auth-failed");
     }
     console.error("Failed to load exercises. Error:", error);
     return err("load-failed");
@@ -56,20 +46,9 @@ export async function addExercise(
     await sheet.addRow(ExerciseSchema.parse(exercise));
     return ok();
   } catch (error) {
-    // Check for auth errors
-    if (
-      error &&
-      typeof error === "object" &&
-      "response" in error &&
-      error.response &&
-      typeof error.response === "object" &&
-      "status" in error.response
-    ) {
-      const status = error.response.status;
-      if (status === 401 || status === 403) {
-        console.error("Auth failed during addExercise. Error:", error);
-        return err("auth-failed");
-      }
+    if (isAuthError(error)) {
+      console.error("Auth failed during addExercise. Error:", error);
+      return err("auth-failed");
     }
     console.error("failed to add exercise. Error:", error);
     return err("add-failed");
@@ -90,20 +69,9 @@ export async function deleteExercise(
     await rows.find((row) => row.get("name") === exercise.name)?.delete();
     return ok();
   } catch (error) {
-    // Check for auth errors
-    if (
-      error &&
-      typeof error === "object" &&
-      "response" in error &&
-      error.response &&
-      typeof error.response === "object" &&
-      "status" in error.response
-    ) {
-      const status = error.response.status;
-      if (status === 401 || status === 403) {
-        console.error("Auth failed during deleteExercise. Error:", error);
-        return err("auth-failed");
-      }
+    if (isAuthError(error)) {
+      console.error("Auth failed during deleteExercise. Error:", error);
+      return err("auth-failed");
     }
     console.error("Failed to delete exercise. Error:", error);
     return err("delete-failed");

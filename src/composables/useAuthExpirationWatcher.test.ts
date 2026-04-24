@@ -49,6 +49,9 @@ describe("useAuthExpirationWatcher", () => {
       expect.objectContaining({
         title: expect.stringContaining("Expiring"),
         persistent: true,
+        countdown: expect.objectContaining({
+          seconds: 4 * 60, // 4 minutes remaining → 240 seconds
+        }),
       }),
     );
   });
