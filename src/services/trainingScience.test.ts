@@ -648,8 +648,18 @@ describe("calculateTrainingInsights", () => {
         loggedAt: new Date(targetDate.getTime() - d * 86_400_000),
       }));
     }
-    const lightInsights = calculateTrainingInsights(makeBodyweightLogs(), targetDate, undefined, 50);
-    const heavyInsights = calculateTrainingInsights(makeBodyweightLogs(), targetDate, undefined, 100);
+    const lightInsights = calculateTrainingInsights(
+      makeBodyweightLogs(),
+      targetDate,
+      undefined,
+      50,
+    );
+    const heavyInsights = calculateTrainingInsights(
+      makeBodyweightLogs(),
+      targetDate,
+      undefined,
+      100,
+    );
     expect(lightInsights.acwr).not.toBeNull();
     expect(heavyInsights.acwr).not.toBeNull();
     // Same ACWR ratio but derived from different absolute loads — both should equal ~1.0

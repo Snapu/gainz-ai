@@ -482,7 +482,7 @@ export function calculateFatigueInsight(
     weeklyTonnage.push(
       weekLogs.reduce((sum, l) => {
         const rpeMultiplier = (l.rpe ?? 10) / 10;
-        return sum + (l.weight ?? (bodyweightKg ?? 70)) * (l.reps ?? 0) * rpeMultiplier;
+        return sum + (l.weight ?? bodyweightKg ?? 70) * (l.reps ?? 0) * rpeMultiplier;
       }, 0),
     );
   }
@@ -604,7 +604,7 @@ function computeACWR(logs: ExerciseLog[], targetDate: Date, bodyweightKg?: numbe
       const rpeMultiplier = (l.rpe ?? 10) / 10;
       // Use bodyweightKg (or 70kg fallback) as a proxy for exercises logged without weight (e.g. Pull-Ups, Push-Ups).
       // Without this, bodyweight athletes always produce acuteLoad=0 → ACWR=null → wrong advice.
-      return s + (l.weight ?? (bodyweightKg ?? 70)) * (l.reps ?? 0) * rpeMultiplier;
+      return s + (l.weight ?? bodyweightKg ?? 70) * (l.reps ?? 0) * rpeMultiplier;
     }, 0);
 
   // Chronic baseline = load from days 8–28 (older than the acute window)
@@ -616,7 +616,7 @@ function computeACWR(logs: ExerciseLog[], targetDate: Date, bodyweightKg?: numbe
     })
     .reduce((s, l) => {
       const rpeMultiplier = (l.rpe ?? 10) / 10;
-      return s + (l.weight ?? (bodyweightKg ?? 70)) * (l.reps ?? 0) * rpeMultiplier;
+      return s + (l.weight ?? bodyweightKg ?? 70) * (l.reps ?? 0) * rpeMultiplier;
     }, 0);
 
   if (preAcuteLoad === 0) return null;
@@ -627,7 +627,7 @@ function computeACWR(logs: ExerciseLog[], targetDate: Date, bodyweightKg?: numbe
   const allWindowLogs = logs.filter((l) => now - l.loggedAt.getTime() <= 28 * msPerDay);
   const chronicLoad = allWindowLogs.reduce((s, l) => {
     const rpeMultiplier = (l.rpe ?? 10) / 10;
-    return s + (l.weight ?? (bodyweightKg ?? 70)) * (l.reps ?? 0) * rpeMultiplier;
+    return s + (l.weight ?? bodyweightKg ?? 70) * (l.reps ?? 0) * rpeMultiplier;
   }, 0);
 
   // Count active weeks = how many complete 7-day buckets are covered by training history.
