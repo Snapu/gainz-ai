@@ -61,7 +61,7 @@ export const aiResponseSchema: Schema = {
       description: "Optional recommended exercises to add to today's workout.",
       items: {
         type: Type.OBJECT,
-        required: ["exerciseName", "targetSets", "targetReps"],
+        required: ["exerciseName", "targetSets", "targetReps", "restSeconds"],
         properties: {
           exerciseName: { type: Type.STRING },
           reasoning: {
@@ -193,7 +193,9 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
 - Weight Calculation (MANDATORY): Use e1RM data to set targetWeight according to rep range:
   Rep range 1–5   → 85–95% of e1RM (strength)
   Rep range 6–12  → 65–80% of e1RM (hypertrophy)
+  Rep range 13–15 → 55–70% of e1RM (general fitness bridge zone)
   Rep range 12–20 → 50–65% of e1RM (metabolic/endurance)
+  If ranges overlap, prefer the narrower goal-specific band: for general_fitness use the 13–15 bridge zone above.
   Always round to the nearest 2.5kg increment. Always give a single concrete number (e.g. "82.5kg"), never a range.
   If e1RM is unavailable for a newly introduced exercise (no history), estimate starting weight as 60–70% of the primary compound e1RM for the same muscle group, rounded to 2.5kg. Flag in 'reasoning' that this is an estimated first-session weight.
   For 'increase_mobility' goal or any stretching/mobility movement (e.g. hip flexor stretch, dead hang, cat-cow): set targetWeight = 'bodyweight' and restSeconds = 30–60. Do not apply e1RM percentage rules to stretches or static holds.
@@ -483,12 +485,12 @@ export async function askAi(
     const todayLogs = exerciseLogs.filter((log) => log.loggedAt.getTime() > startOfToday);
 
     const isFirstMessage = previousMessages.length === 0;
-    const isMidWorkout = todayLogs.length > 0;
+    const phase = getWorkoutPhase(exerciseLogs);
+    const isMidWorkout = phase === "mid-workout";
 
     const initialWindow = getInitialLogsWindow(exerciseLogs);
     const logsToInclude = isFirstMessage ? initialWindow.logs : todayLogs;
     const workoutStatus = getWorkoutStatus(exerciseLogs);
-    const phase = getWorkoutPhase(exerciseLogs);
     const now = new Date();
     const currentTime = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
 
@@ -544,9 +546,14 @@ export async function askAi(
 
     // Training science insights: always send when not mid-workout (includes planning messages 2, 3, etc.)
     // Sending only on isFirstMessage would drop volume/fatigue context for follow-up planning questions.
-    if (!isMidWorkout) {
+    if (phase !== "mid-workout") {
       const learnedMap = getLearnedMuscleMap();
-      const insights = calculateTrainingInsights(exerciseLogs, new Date(), learnedMap);
+      const insights = calculateTrainingInsights(
+        exerciseLogs,
+        new Date(),
+        learnedMap,
+        userProfile.weightKg,
+      );
       sections.push(`Training Insights:\n${JSON.stringify(insights)}`);
     }
 

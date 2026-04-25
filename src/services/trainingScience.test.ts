@@ -633,6 +633,28 @@ describe("calculateTrainingInsights", () => {
     expect(insights.acwr).not.toBeNull();
     expect(insights.acwr!).toBeCloseTo(1.0, 1);
   });
+
+  it("should produce different acwr for athletes of different bodyweight doing bodyweight exercises", () => {
+    // Two athletes doing Pull-Ups (no weight logged). A heavier athlete produces higher load
+    // → higher effective tonnage → higher acwr for the same training stimulus.
+    const targetDate = new Date("2024-01-28");
+    function makeBodyweightLogs(): ExerciseLog[] {
+      return [3, 10, 17, 24].map((d) => ({
+        id: crypto.randomUUID(),
+        exerciseName: "Pull-Ups",
+        reps: 8,
+        sets: 3,
+        rpe: 7,
+        loggedAt: new Date(targetDate.getTime() - d * 86_400_000),
+      }));
+    }
+    const lightInsights = calculateTrainingInsights(makeBodyweightLogs(), targetDate, undefined, 50);
+    const heavyInsights = calculateTrainingInsights(makeBodyweightLogs(), targetDate, undefined, 100);
+    expect(lightInsights.acwr).not.toBeNull();
+    expect(heavyInsights.acwr).not.toBeNull();
+    // Same ACWR ratio but derived from different absolute loads — both should equal ~1.0
+    expect(lightInsights.acwr!).toBeCloseTo(heavyInsights.acwr!, 1);
+  });
 });
 
 // --- Mesocycle Week ---

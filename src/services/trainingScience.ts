@@ -462,6 +462,7 @@ export function calculateFatigueInsight(
   logs: ExerciseLog[],
   e1rmData: Record<string, ExerciseE1RM>,
   targetDate: Date = new Date(),
+  bodyweightKg?: number,
 ): FatigueInsight {
   // Weekly total sets and tonnage for last 4 weeks
   const weeklyTotalSets: number[] = [];
@@ -481,7 +482,7 @@ export function calculateFatigueInsight(
     weeklyTonnage.push(
       weekLogs.reduce((sum, l) => {
         const rpeMultiplier = (l.rpe ?? 10) / 10;
-        return sum + (l.weight ?? 70) * (l.reps ?? 0) * rpeMultiplier;
+        return sum + (l.weight ?? (bodyweightKg ?? 70)) * (l.reps ?? 0) * rpeMultiplier;
       }, 0),
     );
   }
@@ -593,7 +594,7 @@ export function computeSystemicPhase(fatigue: FatigueInsight): SystemicPhase {
  *     with a gap would otherwise produce a wildly inflated ratio.
  * Safe zone: 0.8–1.3. Above 1.5 = high injury risk.
  */
-function computeACWR(logs: ExerciseLog[], targetDate: Date): number | null {
+function computeACWR(logs: ExerciseLog[], targetDate: Date, bodyweightKg?: number): number | null {
   const msPerDay = 86_400_000;
   const now = targetDate.getTime();
 
@@ -601,9 +602,9 @@ function computeACWR(logs: ExerciseLog[], targetDate: Date): number | null {
     .filter((l) => now - l.loggedAt.getTime() <= 7 * msPerDay)
     .reduce((s, l) => {
       const rpeMultiplier = (l.rpe ?? 10) / 10;
-      // Use 70kg as a bodyweight proxy for exercises logged without weight (e.g. Pull-Ups, Push-Ups).
+      // Use bodyweightKg (or 70kg fallback) as a proxy for exercises logged without weight (e.g. Pull-Ups, Push-Ups).
       // Without this, bodyweight athletes always produce acuteLoad=0 → ACWR=null → wrong advice.
-      return s + (l.weight ?? 70) * (l.reps ?? 0) * rpeMultiplier;
+      return s + (l.weight ?? (bodyweightKg ?? 70)) * (l.reps ?? 0) * rpeMultiplier;
     }, 0);
 
   // Chronic baseline = load from days 8–28 (older than the acute window)
@@ -615,7 +616,7 @@ function computeACWR(logs: ExerciseLog[], targetDate: Date): number | null {
     })
     .reduce((s, l) => {
       const rpeMultiplier = (l.rpe ?? 10) / 10;
-      return s + (l.weight ?? 70) * (l.reps ?? 0) * rpeMultiplier;
+      return s + (l.weight ?? (bodyweightKg ?? 70)) * (l.reps ?? 0) * rpeMultiplier;
     }, 0);
 
   if (preAcuteLoad === 0) return null;
@@ -626,7 +627,7 @@ function computeACWR(logs: ExerciseLog[], targetDate: Date): number | null {
   const allWindowLogs = logs.filter((l) => now - l.loggedAt.getTime() <= 28 * msPerDay);
   const chronicLoad = allWindowLogs.reduce((s, l) => {
     const rpeMultiplier = (l.rpe ?? 10) / 10;
-    return s + (l.weight ?? 70) * (l.reps ?? 0) * rpeMultiplier;
+    return s + (l.weight ?? (bodyweightKg ?? 70)) * (l.reps ?? 0) * rpeMultiplier;
   }, 0);
 
   // Count active weeks = how many complete 7-day buckets are covered by training history.
@@ -702,12 +703,13 @@ export function calculateTrainingInsights(
   logs: ExerciseLog[],
   targetDate: Date = new Date(),
   overrideMap?: Record<string, MuscleActivation>,
+  bodyweightKg?: number,
 ): TrainingInsights {
   const e1rm = calculateE1RMInsights(logs, overrideMap);
   const muscleGroups = calculateMuscleGroupInsights(logs, targetDate, overrideMap);
-  const fatigue = calculateFatigueInsight(logs, e1rm, targetDate);
+  const fatigue = calculateFatigueInsight(logs, e1rm, targetDate, bodyweightKg);
   const phase = computeSystemicPhase(fatigue);
-  const acwr = computeACWR(logs, targetDate);
+  const acwr = computeACWR(logs, targetDate, bodyweightKg);
   // mesocycleWeek=0 signals an active deload week — prevents the AI from also warning
   // "deload overdue" when shouldDeload is already true and the deload is in progress.
   const mesocycleWeek = fatigue.shouldDeload ? 0 : computeMesocycleWeek(logs, targetDate);
