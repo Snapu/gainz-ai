@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import { BarChart2, CalendarDays, CheckCircle2, Hourglass, Timer } from "lucide-vue-next";
 import { computed, ref } from "vue";
 import type { MuscleGroup, MuscleGroupInsight, VolumeLandmark } from "@/services/trainingScience";
 import { RECOVERY_HOURS, VOLUME_LANDMARKS } from "@/services/trainingScience";
+import BottomSheet from "./BottomSheet.vue";
+import UiSegmentedControl from "./UiSegmentedControl.vue";
 
 const props = defineProps<{
   muscleGroups: Partial<Record<MuscleGroup, MuscleGroupInsight>>;
@@ -69,19 +72,19 @@ interface MuscleNode {
 // X coordinates mapped mathematically for 200% width cropped halves
 
 const MUSCLE_MAP_FRONT: Partial<Record<MuscleGroup, MuscleNode>> = {
-  Chest: { dot: { x: 48, y: 31 }, textAnchor: { x: 6, y: 22 }, align: "left" },
-  Biceps: { dot: { x: 28, y: 39 }, textAnchor: { x: 6, y: 39 }, align: "left" },
-  Abs: { dot: { x: 46, y: 44 }, textAnchor: { x: 6, y: 48 }, align: "left" },
-  Quads: { dot: { x: 40, y: 64 }, textAnchor: { x: 6, y: 64 }, align: "left" },
-  Shoulders: { dot: { x: 64, y: 26 }, textAnchor: { x: 94, y: 15 }, align: "right" },
+  Chest: { dot: { x: 48, y: 29 }, textAnchor: { x: 0, y: 22 }, align: "left" },
+  Biceps: { dot: { x: 28, y: 35 }, textAnchor: { x: 0, y: 35 }, align: "left" },
+  Abs: { dot: { x: 46, y: 44 }, textAnchor: { x: 0, y: 48 }, align: "left" },
+  Quads: { dot: { x: 40, y: 64 }, textAnchor: { x: 0, y: 64 }, align: "left" },
+  Shoulders: { dot: { x: 64, y: 24 }, textAnchor: { x: 100, y: 15 }, align: "right" },
 };
 
 const MUSCLE_MAP_BACK: Partial<Record<MuscleGroup, MuscleNode>> = {
-  Back: { dot: { x: 52, y: 33 }, textAnchor: { x: 6, y: 25 }, align: "left" },
-  Triceps: { dot: { x: 74, y: 39 }, textAnchor: { x: 94, y: 39 }, align: "right" },
-  Glutes: { dot: { x: 54, y: 49 }, textAnchor: { x: 94, y: 49 }, align: "right" },
-  Hamstrings: { dot: { x: 66, y: 65 }, textAnchor: { x: 94, y: 65 }, align: "right" },
-  Calves: { dot: { x: 66, y: 82 }, textAnchor: { x: 94, y: 82 }, align: "right" },
+  Back: { dot: { x: 52, y: 33 }, textAnchor: { x: 0, y: 25 }, align: "left" },
+  Triceps: { dot: { x: 75, y: 35 }, textAnchor: { x: 100, y: 32 }, align: "right" },
+  Glutes: { dot: { x: 54, y: 49 }, textAnchor: { x: 100, y: 49 }, align: "right" },
+  Hamstrings: { dot: { x: 66, y: 65 }, textAnchor: { x: 100, y: 65 }, align: "right" },
+  Calves: { dot: { x: 64, y: 80 }, textAnchor: { x: 100, y: 82 }, align: "right" },
 };
 
 const views = computed(() => {
@@ -113,7 +116,19 @@ const views = computed(() => {
 });
 
 const currentViewIndex = ref(0);
+const viewOptions = [
+  { id: 0, label: "Anterior" },
+  { id: 1, label: "Posterior" },
+] as const;
+
 const currentView = computed(() => views.value[currentViewIndex.value]!);
+
+const isDetailOpen = computed({
+  get: () => selectedMuscle.value !== null,
+  set: (val) => {
+    if (!val) selectedMuscle.value = null;
+  },
+});
 
 function getAnchorStyle(node: MuscleNode) {
   if (node.align === "right") {
@@ -195,30 +210,22 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
   <div class="flex flex-col w-full max-w-[400px] mx-auto select-none overflow-visible">
     
     <!-- Toggle -->
-    <div class="flex justify-center mb-2 z-40 relative">
-      <div class="inline-flex bg-muted/50 p-1 rounded-full items-center w-[240px]">
-        <button 
-          @click="currentViewIndex = 0" 
-          :class="['flex-1 py-2 rounded-full text-[10px] uppercase tracking-widest font-black transition-colors', currentViewIndex === 0 ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground']"
-        >
-          Anterior
-        </button>
-        <button 
-          @click="currentViewIndex = 1" 
-          :class="['flex-1 py-2 rounded-full text-[10px] uppercase tracking-widest font-black transition-colors', currentViewIndex === 1 ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground']"
-        >
-          Posterior
-        </button>
+    <div class="flex justify-center mb-2 z-40 relative px-4">
+      <div class="w-full max-w-[240px]">
+        <UiSegmentedControl
+          :options="viewOptions"
+          v-model="currentViewIndex"
+        />
       </div>
     </div>
 
     <!-- Tap hint -->
-    <p v-if="!selectedMuscle" class="text-center text-[9px] text-muted-foreground/40 mb-1 tracking-wider uppercase">Tap a muscle for details</p>
+    <p :class="['text-center text-[9px] text-muted-foreground/40 mb-1 tracking-wider uppercase animate-pulse duration-2000', selectedMuscle ? 'invisible' : '']">Tap a muscle for details</p>
 
     <div class="relative w-full h-[72vh] overflow-hidden rounded-xl">
 
-      <!-- Scrollable map viewport. Keep bottom padding so content is not hidden behind detail panel. -->
-      <div class="absolute inset-0 overflow-y-auto overflow-x-hidden overscroll-contain pb-[260px]">
+      <!-- Scrollable map viewport -->
+      <div class="absolute inset-0 overflow-y-auto overflow-x-hidden overscroll-contain pb-12">
         <div class="relative w-full aspect-[1/2] min-h-full">
 
           <!-- IMAGE LAYER (Screen blended on the stacking context root to drop the black background) -->
@@ -303,59 +310,52 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
         </div>
       </div>
 
-      <!-- ─── Detail Overlay (slides up from bottom of map) ──────────────── -->
-      <Transition
-        enter-active-class="transition-all duration-300 ease-out"
-        enter-from-class="opacity-0 translate-y-4"
-        enter-to-class="opacity-100 translate-y-0"
-        leave-active-class="transition-all duration-200 ease-in"
-        leave-from-class="opacity-100 translate-y-0"
-        leave-to-class="opacity-0 translate-y-4"
-      >
-        <div
-          v-if="selectedDetail"
-          class="absolute inset-x-0 bottom-[max(env(safe-area-inset-bottom),0px)] z-50 rounded-xl bg-black/85 backdrop-blur-md border-t border-white/15 overflow-y-auto overscroll-contain max-h-[84%] pb-[max(env(safe-area-inset-bottom),1rem)]"
-        >
-
-          <!-- Header: name + landmark badge + close -->
-          <div class="flex items-center gap-2 px-3 pt-3 pb-2.5 border-b border-white/10">
-            <span class="text-sm font-black uppercase tracking-widest flex-1">{{ selectedDetail.name }}</span>
-            <span :class="['text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full', getLandmarkBadge(selectedDetail.landmark)]">
+      <!-- ─── Detail Overlay (BottomSheet) ──────────────── -->
+      <BottomSheet v-model:open="isDetailOpen" :hide-overlay="true" :modal="false" contentClass="p-0 gap-0">
+        <template #header>
+          <!-- Header: name + landmark badge -->
+          <div v-if="selectedDetail" class="flex items-center gap-2 px-5 pt-6 pb-4 border-b border-white/10">
+            <span class="text-base font-black uppercase tracking-widest flex-1">{{ selectedDetail.name }}</span>
+            <span :class="['text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full', getLandmarkBadge(selectedDetail.landmark)]">
               {{ getJargon(selectedDetail.landmark) }}
             </span>
-            <button @click="selectedMuscle = null" class="text-muted-foreground/40 hover:text-muted-foreground text-xs leading-none ml-1" aria-label="Close">✕</button>
           </div>
+        </template>
 
+        <div v-if="selectedDetail" class="flex flex-col pb-safe">
           <!-- Volume Section -->
-          <div class="px-3 pt-2.5 pb-2 border-b border-white/10 space-y-1.5">
-            <div class="flex items-center justify-between">
-              <span class="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/60">📊 Volume</span>
+          <div class="px-5 pt-4 pb-4 border-b border-white/10 space-y-2">
+            <div class="flex items-center justify-between mb-1">
+              <div class="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/60">
+                <BarChart2 class="w-3.5 h-3.5" />
+                <span>Volume</span>
+              </div>
               <span class="text-xs font-bold font-mono" :style="{ color: getLineColor(selectedDetail.landmark) }">
                 {{ selectedDetail.sets.toFixed(1) }} sets/wk
               </span>
             </div>
 
             <!-- Segmented Volume Bar -->
-            <div class="relative h-2.5 rounded-full overflow-hidden flex">
+            <div class="relative h-2.5 rounded-full overflow-hidden flex bg-white/5 border border-white/5">
               <!-- Zone: below MEV -->
               <div class="h-full bg-white/10" :style="{ width: selectedDetail.bar.mevPct + '%' }"></div>
               <!-- Zone: MEV → mavLow -->
-              <div class="h-full bg-yellow-500/35" :style="{ width: (selectedDetail.bar.mavLowPct - selectedDetail.bar.mevPct) + '%' }"></div>
+              <div class="h-full bg-emerald-500/30 shadow-[inset_0_0_8px_rgba(16,185,129,0.4)] border-r border-emerald-500/20" :style="{ width: (selectedDetail.bar.mavLowPct - selectedDetail.bar.mevPct) + '%' }"></div>
               <!-- Zone: MAV range (optimal) -->
-              <div class="h-full bg-cyan-400/45" :style="{ width: (selectedDetail.bar.mavHighPct - selectedDetail.bar.mavLowPct) + '%' }"></div>
+              <div class="h-full bg-cyan-400/30 shadow-[inset_0_0_8px_rgba(34,211,238,0.4)] border-r border-cyan-400/20" :style="{ width: (selectedDetail.bar.mavHighPct - selectedDetail.bar.mavLowPct) + '%' }"></div>
               <!-- Zone: approaching MRV -->
-              <div class="h-full bg-orange-400/35" :style="{ width: (selectedDetail.bar.mrvPct - selectedDetail.bar.mavHighPct) + '%' }"></div>
+              <div class="h-full bg-orange-400/30 shadow-[inset_0_0_8px_rgba(251,146,60,0.4)] border-r border-orange-400/20" :style="{ width: (selectedDetail.bar.mrvPct - selectedDetail.bar.mavHighPct) + '%' }"></div>
               <!-- Zone: above MRV -->
-              <div class="h-full bg-red-500/35" :style="{ width: (100 - selectedDetail.bar.mrvPct) + '%' }"></div>
+              <div class="h-full bg-red-500/30 shadow-[inset_0_0_8px_rgba(239,68,68,0.4)]" :style="{ width: (100 - selectedDetail.bar.mrvPct) + '%' }"></div>
               <!-- Current position needle -->
               <div
-                class="absolute top-0 h-full w-[2px] bg-white shadow-[0_0_5px_rgba(255,255,255,0.9)] transition-all duration-500"
+                class="absolute top-0 h-full w-[2px] bg-white shadow-[0_0_5px_rgba(255,255,255,0.9)] transition-all duration-500 z-10"
                 :style="{ left: selectedDetail.bar.currentPct + '%' }"
               ></div>
             </div>
 
             <!-- Bar axis labels -->
-            <div class="relative h-3.5 text-[8px] text-muted-foreground/50 font-mono select-none">
+            <div class="relative h-3.5 text-[8px] text-muted-foreground/50 font-mono select-none mt-1">
               <span class="absolute -translate-x-1/2" :style="{ left: selectedDetail.bar.mevPct + '%' }">MEV {{ selectedDetail.targets.mev }}</span>
               <span class="absolute -translate-x-1/2" :style="{ left: ((selectedDetail.bar.mavLowPct + selectedDetail.bar.mavHighPct) / 2) + '%' }">MAV {{ selectedDetail.targets.mavLow }}–{{ selectedDetail.targets.mavHigh }}</span>
               <span class="absolute -translate-x-1/2" :style="{ left: selectedDetail.bar.mrvPct + '%' }">MRV {{ selectedDetail.targets.mrv }}</span>
@@ -363,12 +363,17 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
           </div>
 
           <!-- Recovery Section -->
-          <div class="px-3 pt-2.5 pb-2.5 border-b border-white/10 space-y-1.5">
-            <div class="flex items-center justify-between">
-              <span class="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/60">⏱️ Recovery</span>
-              <span :class="['text-[10px] font-bold', selectedDetail.recoveryReady ? 'text-green-400' : 'text-yellow-400']">
-                {{ selectedDetail.recoveryReady ? '✅ Ready to train' : '⏳ Still recovering' }}
-              </span>
+          <div class="px-5 pt-4 pb-4 border-b border-white/10 space-y-2">
+            <div class="flex items-center justify-between mb-1">
+              <div class="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/60">
+                <Timer class="w-3.5 h-3.5" />
+                <span>Recovery</span>
+              </div>
+              <div class="flex items-center gap-1 text-[10px] font-bold" :class="selectedDetail.recoveryReady ? 'text-green-400' : 'text-yellow-400'">
+                <CheckCircle2 v-if="selectedDetail.recoveryReady" class="w-3.5 h-3.5" />
+                <Hourglass v-else class="w-3.5 h-3.5" />
+                <span>{{ selectedDetail.recoveryReady ? 'Ready to train' : 'Still recovering' }}</span>
+              </div>
             </div>
             <template v-if="selectedDetail.hoursSinceLastTrained !== null">
               <div class="h-1.5 bg-white/10 rounded-full overflow-hidden">
@@ -378,7 +383,7 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
                   :style="{ width: Math.min(100, (selectedDetail.hoursSinceLastTrained / selectedDetail.recoveryHours) * 100) + '%' }"
                 ></div>
               </div>
-              <div class="flex justify-between text-[8.5px] text-muted-foreground/50 font-mono">
+              <div class="flex justify-between text-[8.5px] text-muted-foreground/50 font-mono mt-1">
                 <span>{{ selectedDetail.hoursSinceLastTrained }}h elapsed</span>
                 <span>{{ selectedDetail.recoveryHours }}h needed</span>
               </div>
@@ -387,15 +392,18 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
           </div>
 
           <!-- Frequency Row -->
-          <div class="flex items-center justify-between px-3 py-2.5 pb-6">
-            <span class="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/60">📆 Frequency</span>
+          <div class="flex items-center justify-between px-5 py-4 pb-8">
+            <div class="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/60">
+              <CalendarDays class="w-3.5 h-3.5" />
+              <span>Frequency</span>
+            </div>
             <span class="text-xs font-bold font-mono text-foreground/80">
               {{ selectedDetail.frequencyPerWeek > 0 ? selectedDetail.frequencyPerWeek + 'x / week' : 'Not yet trained' }}
             </span>
           </div>
 
         </div>
-      </Transition>
+      </BottomSheet>
 
     </div>
 

@@ -15,7 +15,9 @@ import { computed, nextTick, watch } from "vue";
 import { useKeyboardHeight } from "@/composables/useKeyboardHeight";
 import { cn } from "@/lib/utils";
 
-const props = defineProps<DialogRootProps & { title?: string; contentClass?: any }>();
+const props = defineProps<
+  DialogRootProps & { title?: string; contentClass?: any; hideOverlay?: boolean }
+>();
 const emits = defineEmits<DialogRootEmits>();
 
 const forwarded = useForwardPropsEmits(props, emits);
@@ -51,13 +53,15 @@ watch(
   <DialogRoot v-bind="forwarded" @update:open="handleOpenChange">
     <slot name="trigger" />
     <DialogPortal>
-      <DialogOverlay class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out" />
+      <DialogOverlay v-if="!hideOverlay" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out" />
       <DialogContent 
         :class="cn(
           'fixed left-0 right-0 z-50 flex flex-col gap-4 rounded-t-[2.5rem] border-t border-white/5 bg-background/95 backdrop-blur-xl p-8 pb-safe shadow-2xl data-[state=open]:animate-slide-in-from-bottom data-[state=closed]:animate-slide-out-to-bottom outline-none overflow-y-auto no-scrollbar transition-[bottom,max-height] duration-200',
           props.contentClass
         )"
         :style="dialogStyle"
+        @open-auto-focus="(e: Event) => e.preventDefault()"
+        @close-auto-focus="(e: Event) => e.preventDefault()"
       >
         
         <slot name="header">

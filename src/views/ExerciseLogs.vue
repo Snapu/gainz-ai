@@ -6,7 +6,6 @@ import { computed, ref, watch } from "vue";
 import AICoachingPanel from "@/components/AICoachingPanel.vue";
 import RestTimerToast from "@/components/RestTimerToast.vue";
 import SessionLogGroup from "@/components/SessionLogGroup.vue";
-import TrainingPhaseOverlay from "@/components/TrainingPhaseOverlay.vue";
 import UserProgressCard from "@/components/UserProgressCard.vue";
 import AppHeader from "@/components/ui/AppHeader.vue";
 import BottomSheet from "@/components/ui/BottomSheet.vue";
@@ -47,7 +46,6 @@ const { userProfile } = storeToRefs(profileStore);
 const { exerciseLogs } = storeToRefs(logsStore);
 
 const isAIPanelOpen = ref(false);
-const isTrainingPhaseOverlayOpen = ref(false);
 
 // --- Leveling ---
 const userProgress = computed(() => {
@@ -353,7 +351,7 @@ async function saveLog() {
     <UserProgressCard 
       :progress="userProgress" 
       :insights="trainingInsights" 
-      @click="isTrainingPhaseOverlayOpen = true" 
+      @click="$router.push('/training-insights')" 
     />
 
     <!-- Logs List -->
@@ -469,7 +467,6 @@ async function saveLog() {
     </BottomSheet>
 
     <AICoachingPanel v-model:open="isAIPanelOpen" @log-exercise="prefillFromAi" />
-    <TrainingPhaseOverlay v-model:open="isTrainingPhaseOverlayOpen" :insights="trainingInsights" />
   </div>
 </template>
 
