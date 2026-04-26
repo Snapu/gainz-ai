@@ -319,7 +319,7 @@ export function calculateE1RMInsights(
 
 // --- Volume Landmarks ---
 
-const VOLUME_LANDMARKS: Record<
+export const VOLUME_LANDMARKS: Record<
   MuscleGroup,
   { mev: number; mavLow: number; mavHigh: number; mrv: number }
 > = {
@@ -345,7 +345,7 @@ function getVolumeLandmark(sets: number, group: MuscleGroup): VolumeLandmark {
 }
 
 // Minimum recovery window per muscle group before the next training stimulus
-const RECOVERY_HOURS: Record<MuscleGroup, number> = {
+export const RECOVERY_HOURS: Record<MuscleGroup, number> = {
   Chest: 48,
   Back: 72,
   Quads: 72,
