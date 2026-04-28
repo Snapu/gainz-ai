@@ -76,8 +76,21 @@ function act(primary: MuscleGroup, ...secondaries: [MuscleGroup, number][]): Mus
   };
 }
 
+/**
+ * Normalize an exercise name to a stable canonical key.
+ * Used everywhere names are compared, grouped, or stored.
+ */
+export function normalizeExerciseName(name: string): string {
+  return name.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/** Returns all exercise names known in the default activation map. */
+export function getDefaultExerciseNames(): string[] {
+  return Object.keys(DEFAULT_EXERCISE_ACTIVATION_MAP);
+}
+
 /** Default activation mapping. Designed to be overridden with a dynamic map later. */
-const DEFAULT_EXERCISE_ACTIVATION_MAP: Record<string, MuscleActivation> = {
+export const DEFAULT_EXERCISE_ACTIVATION_MAP: Record<string, MuscleActivation> = {
   // Chest (compound presses credit Triceps + Shoulders as secondaries)
   "Bench Press": act("Chest", ["Triceps", 0.5], ["Shoulders", 0.3]),
   Bankdrücken: act("Chest", ["Triceps", 0.5], ["Shoulders", 0.3]),
@@ -174,20 +187,26 @@ export function getMuscleActivation(
   exerciseName: string,
   overrideMap?: Record<string, MuscleActivation>,
 ): MuscleActivation | null {
-  // Check override first (exact match)
-  if (overrideMap?.[exerciseName]) return overrideMap[exerciseName];
+  const normalized = normalizeExerciseName(exerciseName);
 
-  // Check default (exact match)
+  // Check override map: first by exact key (callers may pass original-casing keys),
+  // then by normalized key (learned map stores normalized keys).
+  if (overrideMap) {
+    if (overrideMap[exerciseName]) return overrideMap[exerciseName];
+    if (overrideMap[normalized]) return overrideMap[normalized];
+    // Case-insensitive fallback for override map
+    for (const [key, activation] of Object.entries(overrideMap)) {
+      if (normalizeExerciseName(key) === normalized) return activation;
+    }
+  }
+
+  // Check default map by exact key first (preserves original casing from the map)
   if (DEFAULT_EXERCISE_ACTIVATION_MAP[exerciseName])
     return DEFAULT_EXERCISE_ACTIVATION_MAP[exerciseName];
 
-  // Case-insensitive fallback
-  const lower = exerciseName.toLowerCase();
-  for (const [key, activation] of Object.entries(overrideMap ?? {})) {
-    if (key.toLowerCase() === lower) return activation;
-  }
+  // Check default map by normalized key (case-insensitive fallback)
   for (const [key, activation] of Object.entries(DEFAULT_EXERCISE_ACTIVATION_MAP)) {
-    if (key.toLowerCase() === lower) return activation;
+    if (normalizeExerciseName(key) === normalized) return activation;
   }
 
   return null;
@@ -235,18 +254,23 @@ export function calculateE1RMInsights(
   logs: ExerciseLog[],
   overrideMap?: Record<string, MuscleActivation>,
 ): Record<string, ExerciseE1RM> {
-  // Group logs by exercise, then by session date
+  // Group logs by canonical (normalized) key, tracking first-seen display name per key.
+  // This ensures "Bench Press" and "bench press" combine into one trend line.
   const byExercise = new Map<string, Map<string, ExerciseLog[]>>();
+  const displayNames = new Map<string, string>(); // canonical key → first-seen original name
 
   for (const log of logs) {
     if (log.weight == null || log.reps == null) continue;
     if (log.reps > 30) continue;
 
+    const canonical = normalizeExerciseName(log.exerciseName);
+    if (!displayNames.has(canonical)) displayNames.set(canonical, log.exerciseName);
+
     const dateKey = log.loggedAt.toDateString();
-    let exerciseMap = byExercise.get(log.exerciseName);
+    let exerciseMap = byExercise.get(canonical);
     if (!exerciseMap) {
       exerciseMap = new Map();
-      byExercise.set(log.exerciseName, exerciseMap);
+      byExercise.set(canonical, exerciseMap);
     }
     const sessionLogs = exerciseMap.get(dateKey) ?? [];
     sessionLogs.push(log);
@@ -255,10 +279,10 @@ export function calculateE1RMInsights(
 
   const result: Record<string, ExerciseE1RM> = {};
 
-  for (const [exerciseName, sessions] of byExercise) {
-    // Only include exercises we can map to a muscle group (skip unknowns for now)
-    const group = getMuscleGroup(exerciseName, overrideMap);
-    if (!group) continue;
+  for (const [canonical, sessions] of byExercise) {
+    // Use the first-seen original display name as the result key so the AI and UI
+    // see a human-readable name, not a lowercase canonical key.
+    const exerciseName = displayNames.get(canonical) ?? canonical;
 
     // Sort sessions chronologically and take last 4
     const sortedSessions = [...sessions.entries()]

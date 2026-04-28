@@ -2,10 +2,11 @@ import { err, ok, type Result } from "neverthrow";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 
-import { askAi as askAiService, getTodayLogsCount } from "@/services/ai.ts";
+import { askAi as askAiService, getTodayLogsCount } from "@/services/ai";
 import { localeDateString } from "@/services/utils/date";
 import { useEventsStore } from "@/stores/events";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
+import { useExerciseMuscleMapStore } from "@/stores/exerciseMuscleMap";
 import { useTrainingSummaryStore } from "@/stores/trainingSummary";
 import { useUserProfileStore } from "@/stores/userProfile";
 
@@ -79,6 +80,7 @@ export const useAiStore = defineStore("ai", () => {
   const exerciseLogsStore = useExerciseLogsStore();
   const trainingSummaryStore = useTrainingSummaryStore();
   const eventsStore = useEventsStore();
+  const exerciseMuscleMapStore = useExerciseMuscleMapStore();
 
   const todaySessionDate = computed(() => localeDateString(new Date()));
 
@@ -123,6 +125,9 @@ export const useAiStore = defineStore("ai", () => {
 
     isLoading.value = true;
 
+    // Hoist so the catch block can clean up the pending user message if the request throws.
+    let userMessageId = "";
+
     try {
       type PreviousMessagesParam = Parameters<typeof askAiService>[4];
 
@@ -134,7 +139,7 @@ export const useAiStore = defineStore("ai", () => {
         logsCount: msg.logsCount,
       }));
 
-      const userMessageId = `${Date.now()}-user`;
+      userMessageId = `${Date.now()}-user`;
       const userMessage: AiMessage = {
         id: userMessageId,
         role: "user",
@@ -164,9 +169,14 @@ export const useAiStore = defineStore("ai", () => {
           case "missing-api-key":
             return err("missing-api-key");
           case "generate-content-stream-failed":
+          case "ai-request-failed":
             return err("ai-failed");
         }
       }
+
+      // learnFromAiResponse fires inside askAiService's finally block — refresh the
+      // reactive map so any component using the store sees the new entries immediately.
+      exerciseMuscleMapStore.refresh();
 
       // Save assistant message
       const assistantMessageId = `${Date.now()}-assistant`;
@@ -179,9 +189,15 @@ export const useAiStore = defineStore("ai", () => {
         logsCount: todayLogsCount,
       };
       messages.value.push(assistantMessage);
+      saveMessagesToStorage(today, messages.value);
       return ok(undefined);
     } catch (error) {
       console.error("AI request failed:", error);
+      // Clean up the pending user message so the user can retry without a ghost message
+      if (userMessageId) {
+        messages.value = messages.value.filter((m) => m.id !== userMessageId);
+        saveMessagesToStorage(today, messages.value);
+      }
       return err("ai-failed");
     } finally {
       isLoading.value = false;

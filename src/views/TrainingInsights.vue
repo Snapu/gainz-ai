@@ -1,33 +1,78 @@
 <script setup lang="ts">
 import { ArrowLeft, HelpCircle, Moon, Scale, TrendingDown, TrendingUp } from "lucide-vue-next";
 import { storeToRefs } from "pinia";
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import AppHeader from "@/components/ui/AppHeader.vue";
 import Button from "@/components/ui/Button.vue";
 import MuscleActivationMap from "@/components/ui/MuscleActivationMap.vue";
 import UiCard from "@/components/ui/UiCard.vue";
 import UiSegmentedControl from "@/components/ui/UiSegmentedControl.vue";
-import { getLearnedMuscleMap } from "@/services/exerciseMuscleMap";
+import { classifyExercises } from "@/services/ai";
 import {
   calculateTrainingInsights,
   getMuscleActivation,
   type MuscleGroupInsight,
-  type TrainingInsights,
+  normalizeExerciseName,
 } from "@/services/trainingScience";
 import { summaryToExerciseLogs } from "@/services/trainingSummary";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
+import { useExerciseMuscleMapStore } from "@/stores/exerciseMuscleMap";
 import { useTrainingSummaryStore } from "@/stores/trainingSummary";
+import { useUserProfileStore } from "@/stores/userProfile";
 
 const logsStore = useExerciseLogsStore();
 const summaryStore = useTrainingSummaryStore();
+const profileStore = useUserProfileStore();
+const muscleMapStore = useExerciseMuscleMapStore();
 const { exerciseLogs } = storeToRefs(logsStore);
+const { apiKey } = storeToRefs(profileStore);
+const { learnedMap } = storeToRefs(muscleMapStore);
 
 const insights = computed(() => {
   const historicalLogs = summaryToExerciseLogs(summaryStore.summaries);
   const currentLogs = exerciseLogs.value;
   const allLogs = [...historicalLogs, ...currentLogs];
-  const learnedMap = getLearnedMuscleMap();
-  return calculateTrainingInsights(allLogs, new Date(), learnedMap);
+  return calculateTrainingInsights(allLogs, new Date(), learnedMap.value);
+});
+
+// --- Automatic Exercise Cleanup ---
+
+/**
+ * Find exercise names in current-year logs that have no muscle group mapping.
+ * These are candidates for AI classification.
+ */
+function findUnclassifiedExercises(): string[] {
+  const seen = new Set<string>();
+  const unclassified: string[] = [];
+
+  for (const log of exerciseLogs.value) {
+    const canonical = normalizeExerciseName(log.exerciseName);
+    if (seen.has(canonical)) continue;
+    seen.add(canonical);
+    if (!getMuscleActivation(log.exerciseName, learnedMap.value)) {
+      unclassified.push(log.exerciseName);
+    }
+  }
+  return unclassified;
+}
+
+/**
+ * Run AI classification for any unclassified exercises.
+ * Fires automatically on mount when unclassified data is present.
+ * Results are persisted to localStorage so subsequent opens skip re-classification.
+ */
+async function runExerciseCleanupIfNeeded(): Promise<void> {
+  const unclassified = findUnclassifiedExercises();
+  if (unclassified.length === 0) return;
+
+  const result = await classifyExercises(unclassified, apiKey.value ?? undefined);
+  if (result.isErr()) return;
+
+  muscleMapStore.applyCleanupResults(result.value);
+}
+
+onMounted(() => {
+  runExerciseCleanupIfNeeded();
 });
 
 type Tab = "map" | "phase" | "exercises";

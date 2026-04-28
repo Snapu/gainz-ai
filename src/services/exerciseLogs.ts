@@ -1,9 +1,10 @@
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { err, ok, type Result } from "neverthrow";
 import { ZodError, z } from "zod";
-import { ExerciseNameSchema } from "./exercises";
 import { isAuthError } from "./utils/isAuthError";
 import { parseData } from "./utils/parseData";
+
+const ExerciseNameSchema = z.string().overwrite((s) => s.trim().replace(/\s+/g, " "));
 
 const optionalNumberSchema = z.preprocess((val) => {
   if (val === "" || val === null || val === undefined) return undefined;

@@ -1,12 +1,19 @@
 import * as Sentry from "@sentry/vue";
 import type { MuscleActivation, MuscleGroup, SecondaryMuscleActivation } from "./trainingScience";
-import { getMuscleActivation } from "./trainingScience";
+import { getMuscleActivation, normalizeExerciseName } from "./trainingScience";
 
 const STORAGE_KEY = "exerciseMuscleMap";
-const MAX_ENTRIES = 200;
+const ALIAS_STORAGE_KEY = "exerciseMuscleAliases";
+
+/** Minimum AI confidence to accept a muscle-group classification into the learned map. */
+const MIN_CLASSIFICATION_CONFIDENCE = 0.8;
+/** Minimum AI confidence to accept an exercise alias (higher bar — aliases redirect all lookups). */
+const MIN_ALIAS_CONFIDENCE = 0.9;
+/** Fractional set credit applied to a secondary muscle when the AI omits the contribution field. */
+const DEFAULT_SECONDARY_CONTRIBUTION = 0.5;
 
 /** All valid muscle groups for validation. */
-const VALID_MUSCLE_GROUPS: ReadonlySet<string> = new Set<MuscleGroup>([
+export const VALID_MUSCLE_GROUPS: ReadonlySet<string> = new Set<MuscleGroup>([
   "Chest",
   "Back",
   "Quads",
@@ -33,10 +40,12 @@ interface LegacyStoredEntry {
 
 type StoredMap = Record<string, StoredEntry>;
 
-/** Normalize exercise names for consistent lookup (lowercase + trim). */
-function normalizeKey(name: string): string {
-  return name.trim().toLowerCase();
-}
+/**
+ * Alias map: maps normalized alias keys to normalized canonical keys.
+ * e.g. { "bankdrücken": "bench press" }
+ * Applied during getLearnedMuscleMap() expansion so all callers benefit transparently.
+ */
+type AliasMap = Record<string, string>;
 
 function isValidMuscleGroup(value: string): value is MuscleGroup {
   return VALID_MUSCLE_GROUPS.has(value);
@@ -85,27 +94,26 @@ function saveMap(map: StoredMap): void {
   }
 }
 
-/** Evict oldest entries if map exceeds MAX_ENTRIES. */
-function evictIfNeeded(map: StoredMap): StoredMap {
-  const keys = Object.keys(map);
-  if (keys.length <= MAX_ENTRIES) return map;
-
-  // Sort by updatedAt ascending (oldest first)
-  const sorted = keys.sort((a, b) => (map[a]?.updatedAt ?? 0) - (map[b]?.updatedAt ?? 0));
-
-  // Remove oldest until we're at the limit
-  const toRemove = sorted.slice(0, keys.length - MAX_ENTRIES);
-  for (const key of toRemove) {
-    delete map[key];
+/** Load the alias map from localStorage. */
+function loadAliasMap(): AliasMap {
+  try {
+    const raw = localStorage.getItem(ALIAS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return {};
+    return parsed as AliasMap;
+  } catch {
+    return {};
   }
+}
 
-  Sentry.addBreadcrumb({
-    category: "muscle-map",
-    message: `Evicted ${toRemove.length} oldest entries (cap: ${MAX_ENTRIES})`,
-    level: "info",
-  });
-
-  return map;
+/** Save the alias map to localStorage. */
+function saveAliasMap(aliases: AliasMap): void {
+  try {
+    localStorage.setItem(ALIAS_STORAGE_KEY, JSON.stringify(aliases));
+  } catch {
+    // Storage full or unavailable — degrade gracefully
+  }
 }
 
 /**
@@ -153,11 +161,13 @@ export function learnFromAiResponse(
     for (const sec of ex.secondaryMuscles ?? []) {
       if (!isValidMuscleGroup(sec.muscleGroup)) continue;
       const contribution =
-        typeof sec.contribution === "number" ? Math.min(1, Math.max(0, sec.contribution)) : 0.5; // default contribution when AI omits it
+        typeof sec.contribution === "number"
+          ? Math.min(1, Math.max(0, sec.contribution))
+          : DEFAULT_SECONDARY_CONTRIBUTION;
       secondaryMuscles.push({ muscleGroup: sec.muscleGroup, contribution });
     }
 
-    const key = normalizeKey(ex.exerciseName);
+    const key = normalizeExerciseName(ex.exerciseName);
     if (!key) continue;
 
     // Never overwrite entries that exist in the default activation map.
@@ -173,7 +183,7 @@ export function learnFromAiResponse(
   }
 
   if (learnedCount > 0) {
-    saveMap(evictIfNeeded(map));
+    saveMap(map);
     Sentry.addBreadcrumb({
       category: "muscle-map",
       message: `Learned ${learnedCount} mappings, skipped ${skippedCount}, total: ${Object.keys(map).length}`,
@@ -192,9 +202,11 @@ export function learnFromAiResponse(
  * the `overrideMap` parameter in `calculateTrainingInsights()`.
  *
  * Returns the map keyed by normalized (lowercase) exercise name.
+ * Aliases are transparently expanded so callers don't need to know about them.
  */
 export function getLearnedMuscleMap(): Record<string, MuscleActivation> {
   const stored = loadMap();
+  const aliases = loadAliasMap();
   const result: Record<string, MuscleActivation> = {};
 
   for (const [key, entry] of Object.entries(stored)) {
@@ -204,6 +216,14 @@ export function getLearnedMuscleMap(): Record<string, MuscleActivation> {
         secondaryMuscles: entry.secondaryMuscles ?? [],
       };
     }
+  }
+
+  // Expand aliases: for each alias, copy the canonical activation to the alias key.
+  // This allows lookup by any known alias without the caller needing to resolve it.
+  for (const [aliasKey, canonicalKey] of Object.entries(aliases)) {
+    if (result[aliasKey]) continue; // already has its own entry
+    const canonical = result[canonicalKey] ?? getMuscleActivation(canonicalKey);
+    if (canonical) result[aliasKey] = canonical;
   }
 
   return result;
@@ -221,4 +241,88 @@ export function getLearnedMapSize(): number {
  */
 export function clearLearnedMap(): void {
   localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(ALIAS_STORAGE_KEY);
+}
+
+/**
+ * Apply the results of an AI exercise cleanup run.
+ *
+ * - Classifications add new entries to the learned map (confidence ≥ 0.8).
+ * - Aliases register equivalences between exercise names (confidence ≥ 0.9).
+ *   Aliases redirect lookups to the canonical name's activation without touching logs.
+ *
+ * Already-known exercises (in the default map) are skipped for classifications
+ * but still recorded as aliases if provided.
+ */
+export function applyAiCleanupResults(
+  classifications: Array<{
+    exerciseName: string;
+    primaryMuscle: string;
+    secondaryMuscles?: Array<{ muscleGroup: string; contribution?: number }>;
+    confidence: number;
+  }>,
+  aliases: Array<{
+    exerciseName: string;
+    canonicalName: string;
+    confidence: number;
+  }>,
+): void {
+  const map = loadMap();
+  const aliasMap = loadAliasMap();
+  const now = Date.now();
+  let classifiedCount = 0;
+  let aliasCount = 0;
+
+  for (const item of classifications) {
+    if (item.confidence < MIN_CLASSIFICATION_CONFIDENCE) continue;
+    if (!item.exerciseName) continue;
+    if (!isValidMuscleGroup(item.primaryMuscle)) continue;
+
+    const key = normalizeExerciseName(item.exerciseName);
+    if (!key) continue;
+
+    // Skip if the exercise already has a well-known default mapping
+    if (getMuscleActivation(item.exerciseName)) continue;
+
+    const secondaryMuscles: SecondaryMuscleActivation[] = [];
+    for (const sec of item.secondaryMuscles ?? []) {
+      if (!isValidMuscleGroup(sec.muscleGroup)) continue;
+      const contribution =
+        typeof sec.contribution === "number"
+          ? Math.min(1, Math.max(0, sec.contribution))
+          : DEFAULT_SECONDARY_CONTRIBUTION;
+      secondaryMuscles.push({ muscleGroup: sec.muscleGroup, contribution });
+    }
+
+    map[key] = {
+      primaryMuscle: item.primaryMuscle as MuscleGroup,
+      secondaryMuscles,
+      updatedAt: now,
+    };
+    classifiedCount++;
+  }
+
+  for (const item of aliases) {
+    if (item.confidence < MIN_ALIAS_CONFIDENCE) continue;
+    if (!item.exerciseName || !item.canonicalName) continue;
+
+    const aliasKey = normalizeExerciseName(item.exerciseName);
+    const canonicalKey = normalizeExerciseName(item.canonicalName);
+    if (!aliasKey || !canonicalKey || aliasKey === canonicalKey) continue;
+
+    aliasMap[aliasKey] = canonicalKey;
+    aliasCount++;
+  }
+
+  if (classifiedCount > 0) saveMap(map);
+  if (aliasCount > 0) saveAliasMap(aliasMap);
+
+  if (classifiedCount > 0 || aliasCount > 0) {
+    Sentry.addBreadcrumb({
+      category: "muscle-map",
+      message: `AI cleanup: ${classifiedCount} classified, ${aliasCount} aliases added`,
+      level: "info",
+      data: { classifiedCount, aliasCount },
+    });
+  }
 }

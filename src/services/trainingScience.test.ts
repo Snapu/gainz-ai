@@ -181,10 +181,12 @@ describe("calculateE1RMInsights", () => {
     expect(insights["Bench Press"]!.plateau).toBe(true);
   });
 
-  it("should ignore exercises with no muscle group mapping", () => {
+  it("should include exercises with no muscle group mapping in e1RM results", () => {
     const logs = [createLog("Underwater Basket Weaving", new Date("2026-03-01"), 10, 10)];
     const insights = calculateE1RMInsights(logs);
-    expect(Object.keys(insights)).toHaveLength(0);
+    // Unknown exercises are now included in e1RM (classified under Unclassified in insights)
+    expect(Object.keys(insights)).toHaveLength(1);
+    expect(insights["Underwater Basket Weaving"]).toBeDefined();
   });
 
   it("should handle multiple sets per session (pick best e1RM)", () => {

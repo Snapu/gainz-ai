@@ -4,10 +4,10 @@ import { err, ok, type Result } from "neverthrow";
 
 import type { ExerciseLog } from "@/services/exerciseLogs";
 import type { TrainingSummary } from "@/services/trainingSummary";
+import type { UserProfile } from "@/services/userProfile";
 import { localeDateString } from "@/services/utils/date";
-import type { UserProfile } from "@/stores/userProfile";
 import type { Event } from "@/types/event";
-import { getLearnedMuscleMap, learnFromAiResponse } from "./exerciseMuscleMap";
+import { getLearnedMuscleMap, learnFromAiResponse, VALID_MUSCLE_GROUPS } from "./exerciseMuscleMap";
 import { calculateTrainingInsights } from "./trainingScience";
 
 const INITIAL_LOG_WINDOW_DAYS = 14;
@@ -15,6 +15,10 @@ const EXTENDED_LOG_WINDOW_DAYS = 28;
 const MIN_INITIAL_LOG_ENTRIES = 12;
 const MAX_SUMMARIES_IN_PROMPT = 6;
 const MAX_ASSISTANT_HISTORY_MESSAGES = 3;
+/** Temperature for exercise classification requests — low to reduce hallucination on factual lookups. */
+const CLASSIFICATION_TEMPERATURE = 0.1;
+/** Comma-separated list of valid muscle groups for use in AI prompt descriptions. */
+const MUSCLE_GROUPS_PROMPT_LIST = [...VALID_MUSCLE_GROUPS].join(", ");
 
 export type PreviousAiMessage = {
   role: "user" | "assistant";
@@ -25,7 +29,21 @@ export type PreviousAiMessage = {
   logsCount: number;
 };
 
-export type AskAiError = "missing-api-key" | "generate-content-stream-failed";
+export type AskAiError = "missing-api-key" | "generate-content-stream-failed" | "ai-request-failed";
+
+export interface ExerciseCleanupResult {
+  classifications: Array<{
+    exerciseName: string;
+    primaryMuscle: string;
+    secondaryMuscles?: Array<{ muscleGroup: string; contribution?: number }>;
+    confidence: number;
+  }>;
+  aliases: Array<{
+    exerciseName: string;
+    canonicalName: string;
+    confidence: number;
+  }>;
+}
 
 export interface AiResponseData {
   scratchpad?: string;
@@ -88,8 +106,7 @@ export const aiResponseSchema: Schema = {
           },
           primaryMuscle: {
             type: Type.STRING,
-            description:
-              "Primary muscle group this exercise targets. Must be one of: Chest, Back, Quads, Hamstrings, Shoulders, Biceps, Triceps, Abs, Calves, Glutes.",
+            description: `Primary muscle group this exercise targets. Must be one of: ${MUSCLE_GROUPS_PROMPT_LIST}.`,
           },
           secondaryMuscles: {
             type: Type.ARRAY,
@@ -101,8 +118,7 @@ export const aiResponseSchema: Schema = {
               properties: {
                 muscleGroup: {
                   type: Type.STRING,
-                  description:
-                    "Must be one of: Chest, Back, Quads, Hamstrings, Shoulders, Biceps, Triceps, Abs, Calves, Glutes.",
+                  description: `Must be one of: ${MUSCLE_GROUPS_PROMPT_LIST}.`,
                 },
                 contribution: {
                   type: Type.NUMBER,
@@ -625,5 +641,122 @@ export async function askAi(
     } catch {
       // Silently ignore parse errors — learning is best-effort
     }
+  }
+}
+
+// --- Exercise Cleanup ---
+
+const exerciseCleanupSchema: Schema = {
+  type: Type.OBJECT,
+  required: ["classifications", "aliases"],
+  properties: {
+    classifications: {
+      type: Type.ARRAY,
+      description: "Muscle group assignments for unknown exercises.",
+      items: {
+        type: Type.OBJECT,
+        required: ["exerciseName", "primaryMuscle", "confidence"],
+        properties: {
+          exerciseName: { type: Type.STRING },
+          primaryMuscle: {
+            type: Type.STRING,
+            description: `Primary muscle group. Must be one of: ${MUSCLE_GROUPS_PROMPT_LIST}.`,
+          },
+          secondaryMuscles: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              required: ["muscleGroup"],
+              properties: {
+                muscleGroup: { type: Type.STRING },
+                contribution: { type: Type.NUMBER },
+              },
+            },
+          },
+          confidence: {
+            type: Type.NUMBER,
+            description: "Confidence score 0.0–1.0. Use < 0.8 only when genuinely ambiguous.",
+          },
+        },
+      },
+    },
+    aliases: {
+      type: Type.ARRAY,
+      description:
+        "Exercises that are different names for the same movement (e.g. locale variants, abbreviations).",
+      items: {
+        type: Type.OBJECT,
+        required: ["exerciseName", "canonicalName", "confidence"],
+        properties: {
+          exerciseName: {
+            type: Type.STRING,
+            description: "The alias (the input name to remap).",
+          },
+          canonicalName: {
+            type: Type.STRING,
+            description:
+              "The canonical name this exercise is equivalent to. Must be a well-known exercise name (e.g. 'Bench Press', 'Squat', 'Romanian Deadlift').",
+          },
+          confidence: {
+            type: Type.NUMBER,
+            description:
+              "Confidence score 0.0–1.0. Only include when you are highly certain (>= 0.9).",
+          },
+        },
+      },
+    },
+  },
+};
+
+/**
+ * Ask AI to classify unknown exercise names and detect aliases among them
+ * and against well-known exercises. Used for automatic Insights cleanup.
+ *
+ * Returns structured proposals that should be passed to `applyAiCleanupResults()`.
+ */
+export async function classifyExercises(
+  exerciseNames: string[],
+  apiKey: string | undefined,
+): Promise<Result<ExerciseCleanupResult, AskAiError>> {
+  if (!apiKey) return err("missing-api-key");
+  if (exerciseNames.length === 0) return ok({ classifications: [], aliases: [] });
+
+  const ai = new GoogleGenAI({ apiKey });
+
+  const prompt = `You are a fitness data expert. For each exercise name in the list below, do TWO things:
+
+1. CLASSIFY: Assign the primary muscle group and any significant secondary muscles. Use only: ${MUSCLE_GROUPS_PROMPT_LIST}.
+
+2. ALIAS: If any exercise is simply a different name or locale variant for a well-known exercise (e.g. "Bankdrücken" = "Bench Press", "RDL" = "Romanian Deadlift"), declare it as an alias instead of classifying it separately. Only declare an alias when you are highly certain (confidence >= 0.9).
+
+Exercise names to process:
+${exerciseNames.map((n, i) => `${i + 1}. ${n}`).join("\n")}
+
+Important rules:
+- Classify ALL exercises that are not aliases.
+- Never output duplicate entries.
+- Muscle group values must exactly match the allowed list.
+- Set confidence < 0.8 only when genuinely ambiguous (e.g. "Press" with no context).`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: exerciseCleanupSchema,
+        temperature: CLASSIFICATION_TEMPERATURE,
+      },
+    });
+
+    const text = response.text ?? "";
+    const parsed = JSON.parse(text) as ExerciseCleanupResult;
+    if (!Array.isArray(parsed?.classifications) || !Array.isArray(parsed?.aliases)) {
+      return err("ai-request-failed");
+    }
+    return ok(parsed);
+  } catch (error) {
+    console.error("Exercise classification failed:", error);
+    return err("ai-request-failed");
   }
 }

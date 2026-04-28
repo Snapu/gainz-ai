@@ -19,13 +19,12 @@ import Sparkline from "@/components/ui/Sparkline.vue";
 import { useToast } from "@/components/ui/useToast";
 import { WIZARD_STEPS } from "@/constants/wizard";
 import type { ExerciseLog } from "@/services/exerciseLogs";
-import { getLearnedMuscleMap } from "@/services/exerciseMuscleMap";
 import { calculateUserProgress } from "@/services/leveling";
 import { calculateTrainingInsights } from "@/services/trainingScience";
 import { summaryToExerciseLogs, summaryToWorkoutDates } from "@/services/trainingSummary";
 import { localeDateString } from "@/services/utils/date";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
-import { useExercisesStore } from "@/stores/exercises";
+import { useExerciseMuscleMapStore } from "@/stores/exerciseMuscleMap";
 import { useRestTimerStore } from "@/stores/restTimer";
 import { useSpreadsheetStore } from "@/stores/spreadsheet";
 import { useTrainingSummaryStore } from "@/stores/trainingSummary";
@@ -33,7 +32,7 @@ import { useUserProfileStore } from "@/stores/userProfile";
 
 const profileStore = useUserProfileStore();
 const logsStore = useExerciseLogsStore();
-const exercisesStore = useExercisesStore();
+const muscleMapStore = useExerciseMuscleMapStore();
 const summaryStore = useTrainingSummaryStore();
 const spreadsheetStore = useSpreadsheetStore();
 const restTimerStore = useRestTimerStore();
@@ -44,8 +43,18 @@ const { isResting, formattedTime: formattedRestTime } = storeToRefs(restTimerSto
 
 const { userProfile } = storeToRefs(profileStore);
 const { exerciseLogs } = storeToRefs(logsStore);
+const { learnedMap } = storeToRefs(muscleMapStore);
 
 const isAIPanelOpen = ref(false);
+
+// --- Exercise Options ---
+// Derived from: (A) default exercise names, (B) current-year log names.
+// Learned map keys are normalized lowercase and not suitable for display — all learned
+// exercises originated from logs, so they already appear via logNames.
+const exerciseOptions = computed(() => {
+  const logNames = exerciseLogs.value.map((l) => l.exerciseName);
+  return [...new Set(logNames)].sort();
+});
 
 // --- Leveling ---
 const userProgress = computed(() => {
@@ -61,9 +70,7 @@ const trainingInsights = computed(() => {
   const historicalLogs = summaryToExerciseLogs(summaryStore.summaries);
   const currentLogs = exerciseLogs.value;
   const allLogs = [...historicalLogs, ...currentLogs];
-  const learnedMap = getLearnedMuscleMap();
-
-  return calculateTrainingInsights(allLogs, new Date(), learnedMap);
+  return calculateTrainingInsights(allLogs, new Date(), learnedMap.value);
 });
 
 // --- Group Logs ---
@@ -143,12 +150,6 @@ watch(
 
 function toggleSession(date: string) {
   collapsedSessions.value[date] = !collapsedSessions.value[date];
-}
-
-// --- Delete Exercise Catalog ---
-async function deleteExercise(name: string) {
-  await exercisesStore.removeExerciseByName(name);
-  toast({ title: "Exercise removed from catalog", duration: 2000 });
 }
 
 // --- Bottom Sheet Log Form State ---
@@ -275,9 +276,6 @@ async function saveLog() {
 
   await logsStore.addExerciseLog(log);
 
-  // Also add to exercises store if new
-  await exercisesStore.addExercise({ name: log.exerciseName });
-
   // Auto-start rest timer
   restTimerStore.reset();
   restTimerStore.start();
@@ -402,10 +400,9 @@ async function saveLog() {
         <!-- Optimized Exercise Selection -->
         <ExerciseSelector
           v-model="formExerciseName"
-          :options="exercisesStore.exercises.map(e => e.name)"
+          :options="exerciseOptions"
           placeholder="Select or Search Exercise..."
           class="bg-card"
-          @delete="deleteExercise"
         />
 
         <!-- Exercise Stats -->
