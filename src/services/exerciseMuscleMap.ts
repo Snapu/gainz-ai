@@ -356,10 +356,33 @@ export function applyAiCleanupResults(
     if (!item.exerciseName || !item.canonicalName) continue;
 
     const aliasKey = normalizeExerciseName(item.exerciseName);
-    const canonicalKey = normalizeExerciseName(item.canonicalName);
-    if (!aliasKey || !canonicalKey || aliasKey === canonicalKey) continue;
+    if (!aliasKey) continue;
 
-    aliasMap[aliasKey] = canonicalKey;
+    // Collapse alias chains: if the requested canonical is itself already an alias,
+    // follow it to its final target so we never create multi-hop chains (A→B→C
+    // becomes A→C directly, which resolves reliably with a single lookup).
+    let resolvedCanonical = normalizeExerciseName(item.canonicalName);
+    if (!resolvedCanonical) continue;
+
+    // Pre-populate visited with aliasKey so a chain that loops back to the alias
+    // itself (e.g. "foo" → "bar" → "foo") is detected as a cycle.
+    const visited = new Set<string>([aliasKey]);
+    while (!visited.has(resolvedCanonical) && aliasMap[resolvedCanonical]) {
+      visited.add(resolvedCanonical);
+      resolvedCanonical = aliasMap[resolvedCanonical];
+    }
+
+    // Skip self-aliases after chain collapse (can happen when the chain is cyclic).
+    if (aliasKey === resolvedCanonical) continue;
+
+    // Only persist if the resolved canonical actually maps to a known activation.
+    // Dead aliases (pointing at an exercise with no activation) waste storage and
+    // will never improve any lookup result.
+    const hasActivation =
+      !!getMuscleActivation(resolvedCanonical) || !!map[resolvedCanonical];
+    if (!hasActivation) continue;
+
+    aliasMap[aliasKey] = resolvedCanonical;
     aliasCount++;
   }
 
