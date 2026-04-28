@@ -2,7 +2,8 @@ import { err, ok, type Result } from "neverthrow";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 
-import { askAi as askAiService, getTodayLogsCount } from "@/services/ai";
+import { askAi as askAiService, classifyExercises, getTodayLogsCount } from "@/services/ai";
+import { getMuscleActivation, normalizeExerciseName } from "@/services/trainingScience";
 import { localeDateString } from "@/services/utils/date";
 import { useEventsStore } from "@/stores/events";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
@@ -123,6 +124,10 @@ export const useAiStore = defineStore("ai", () => {
       return ok(undefined);
     }
 
+    // Classify any unclassified exercises so the muscle map is complete before
+    // building the training insights context that gets sent in the prompt.
+    await classifyUnclassifiedIfNeeded();
+
     isLoading.value = true;
 
     // Hoist so the catch block can clean up the pending user message if the request throws.
@@ -202,6 +207,27 @@ export const useAiStore = defineStore("ai", () => {
     } finally {
       isLoading.value = false;
     }
+  }
+
+  async function classifyUnclassifiedIfNeeded(): Promise<void> {
+    const apiKey = userProfileStore.apiKey;
+    if (!apiKey) return;
+
+    const seen = new Set<string>();
+    const unclassified: string[] = [];
+    for (const log of exerciseLogsStore.exerciseLogs) {
+      const canonical = normalizeExerciseName(log.exerciseName);
+      if (seen.has(canonical)) continue;
+      seen.add(canonical);
+      if (!getMuscleActivation(log.exerciseName, exerciseMuscleMapStore.learnedMap)) {
+        unclassified.push(log.exerciseName);
+      }
+    }
+    if (unclassified.length === 0) return;
+
+    const result = await classifyExercises(unclassified, apiKey);
+    if (result.isErr()) return;
+    exerciseMuscleMapStore.applyCleanupResults(result.value);
   }
 
   return { askAi, isLoading, messages };
