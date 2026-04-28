@@ -9,7 +9,6 @@ import { useToast } from "@/components/ui/useToast";
 import { useAuthExpirationWatcher } from "@/composables/useAuthExpirationWatcher";
 import { useAuthStore } from "@/stores/auth";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
-import { useExercisesStore } from "@/stores/exercises";
 import { useSpreadsheetStore } from "@/stores/spreadsheet";
 import { useUserProfileStore } from "@/stores/userProfile";
 
@@ -69,9 +68,7 @@ onMounted(() => {
       if (event.data && event.data.type === "BACKGROUND_SYNC_SUCCESS") {
         console.log("Background sync completed, refreshing all stores...");
         const exerciseLogsStore = useExerciseLogsStore();
-        const exercisesStore = useExercisesStore();
         exerciseLogsStore.refresh();
-        exercisesStore.refresh();
       }
     });
   }

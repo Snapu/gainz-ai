@@ -1,29 +1,26 @@
 <script setup lang="ts">
 import { ArrowLeft, Minus, RotateCcw, Trash2, TrendingDown, TrendingUp } from "lucide-vue-next";
+import { storeToRefs } from "pinia";
 import { computed, ref } from "vue";
 import AppHeader from "@/components/ui/AppHeader.vue";
 import Button from "@/components/ui/Button.vue";
 import UiCard from "@/components/ui/UiCard.vue";
-import { clearLearnedMap, getLearnedMuscleMap } from "@/services/exerciseMuscleMap";
 import type { MuscleGroup, TrainingInsights } from "@/services/trainingScience";
 import { calculateTrainingInsights } from "@/services/trainingScience";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
+import { useExerciseMuscleMapStore } from "@/stores/exerciseMuscleMap";
 import { useUserProfileStore } from "@/stores/userProfile";
 
 const logsStore = useExerciseLogsStore();
 const profileStore = useUserProfileStore();
-const refreshKey = ref(0);
+const muscleMapStore = useExerciseMuscleMapStore();
+const { learnedMap } = storeToRefs(muscleMapStore);
 
 // Phase 4: Expandable section state
 const expandedSections = ref<Record<string, boolean>>({
   volumeLandmarks: false,
   recoveryWindows: false,
   improvements: false,
-});
-
-const learnedMap = computed(() => {
-  refreshKey.value; // reactivity trigger
-  return getLearnedMuscleMap();
 });
 
 const learnedEntries = computed(() =>
@@ -40,7 +37,6 @@ const learnedEntries = computed(() =>
 );
 
 const insights = computed(() => {
-  refreshKey.value;
   return calculateTrainingInsights(logsStore.exerciseLogs, new Date(), learnedMap.value);
 });
 
@@ -58,13 +54,12 @@ const e1rmEntries = computed(() =>
 
 function handleClear() {
   if (confirm("Clear all learned muscle group mappings?")) {
-    clearLearnedMap();
-    refreshKey.value++;
+    muscleMapStore.clearMap();
   }
 }
 
 function handleRefresh() {
-  refreshKey.value++;
+  muscleMapStore.refresh();
 }
 
 function landmarkColor(landmark: string): string {

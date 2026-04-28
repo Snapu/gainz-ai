@@ -4,7 +4,6 @@ import { DialogClose, DialogTitle } from "reka-ui";
 import { computed, ref, watch } from "vue";
 import { cn } from "@/lib/utils";
 import BottomSheet from "./BottomSheet.vue";
-import SwipeToDeleteItem from "./SwipeToDeleteItem.vue";
 
 interface Props {
   options: string[];
@@ -19,7 +18,6 @@ const props = withDefaults(defineProps<Props>(), {
 const modelValue = defineModel<string>();
 const emit = defineEmits<{
   (e: "select-option", value: string): void;
-  (e: "delete", value: string): void;
 }>();
 
 const isOpen = ref(false);
@@ -126,26 +124,17 @@ watch(isOpen, (val) => {
       </div>
 
       <!-- List Items -->
-      <div class="flex flex-col gap-2">
-        <SwipeToDeleteItem
-          v-for="option in filteredOptions"
+      <div class="rounded-lg border border-white/10 bg-white/[0.03] overflow-hidden">
+        <button
+          v-for="(option, index) in filteredOptions"
           :key="option"
-          @delete="emit('delete', option)"
+          type="button"
+          class="flex w-full items-center px-3 py-3 text-left text-sm font-medium text-foreground transition-all hover:bg-white/[0.04] active:scale-[0.98] select-none"
+          :class="index > 0 ? 'border-t border-white/5' : ''"
+          @click="handleSelect(option)"
         >
-          <div
-            class="flex w-full items-center justify-between bg-transparent active:scale-[0.99] transition-all cursor-pointer"
-            @click="handleSelect(option)"
-          >
-            <div class="flex-1 min-w-0 pr-4 text-left">
-              <span class="font-bold text-sm text-foreground tracking-tight truncate block">{{ option }}</span>
-            </div>
-            
-            <!-- Actions (Delete, etc.) -->
-            <div @click.stop class="flex items-center">
-              <slot name="item-action" :option="option" />
-            </div>
-          </div>
-        </SwipeToDeleteItem>
+          {{ option }}
+        </button>
       </div>
     </div>
   </BottomSheet>
