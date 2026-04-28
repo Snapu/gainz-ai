@@ -38,11 +38,6 @@ export interface ExerciseCleanupResult {
     secondaryMuscles?: Array<{ muscleGroup: string; contribution?: number }>;
     confidence: number;
   }>;
-  aliases: Array<{
-    exerciseName: string;
-    canonicalName: string;
-    confidence: number;
-  }>;
 }
 
 export interface AiResponseData {
@@ -231,6 +226,7 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
   12–20 reps (fat loss / endurance) → 30–60s
   20–25 reps (endurance/circuit)    → 15–30s between exercises, or 0s in true circuit (move directly to next station)
 - Exercise Order (MANDATORY): Always order recommendedWorkout with compound multi-joint movements first (e.g. Squat, Bench Press, Deadlift, Row, OHP), isolation movements last (e.g. Curls, Flyes, Lateral Raises). Within each category, order by the session's priority muscle group.
+- Exercise Names (MANDATORY): When recommending an exercise the user has previously logged, use the EXACT exerciseName string as it appears in their exercise logs — do NOT translate, anglicise, or normalise it. E.g. if logs show "Bankdrücken", use "Bankdrücken" not "Bench Press".
 - Notes: NEVER use trivial cliches in the 'notes' field (e.g. "controlled execution", "deep squat"). Only provide advanced tempo/anatomical cues (e.g. "3s eccentric") or OMIT the field entirely.
 - LANGUAGE RULE: Only 'coachMessage' is shown to the user — write it in the user's locale. ALL other fields ('scratchpad', 'reasoning', 'muscleGroup', 'supersetId', 'targetWeight', 'notes') MUST be in English. This saves tokens and ensures reliable parsing.
 
@@ -648,7 +644,7 @@ export async function askAi(
 
 const exerciseCleanupSchema: Schema = {
   type: Type.OBJECT,
-  required: ["classifications", "aliases"],
+  required: ["classifications"],
   properties: {
     classifications: {
       type: Type.ARRAY,
@@ -680,31 +676,6 @@ const exerciseCleanupSchema: Schema = {
         },
       },
     },
-    aliases: {
-      type: Type.ARRAY,
-      description:
-        "Exercises that are different names for the same movement (e.g. locale variants, abbreviations).",
-      items: {
-        type: Type.OBJECT,
-        required: ["exerciseName", "canonicalName", "confidence"],
-        properties: {
-          exerciseName: {
-            type: Type.STRING,
-            description: "The alias (the input name to remap).",
-          },
-          canonicalName: {
-            type: Type.STRING,
-            description:
-              "The canonical name this exercise is equivalent to. Must be a well-known exercise name (e.g. 'Bench Press', 'Squat', 'Romanian Deadlift').",
-          },
-          confidence: {
-            type: Type.NUMBER,
-            description:
-              "Confidence score 0.0–1.0. Only include when you are highly certain (>= 0.9).",
-          },
-        },
-      },
-    },
   },
 };
 
@@ -719,21 +690,19 @@ export async function classifyExercises(
   apiKey: string | undefined,
 ): Promise<Result<ExerciseCleanupResult, AskAiError>> {
   if (!apiKey) return err("missing-api-key");
-  if (exerciseNames.length === 0) return ok({ classifications: [], aliases: [] });
+  if (exerciseNames.length === 0) return ok({ classifications: [] });
 
   const ai = new GoogleGenAI({ apiKey });
 
-  const prompt = `You are a fitness data expert. For each exercise name in the list below, do TWO things:
+  const prompt = `You are a fitness data expert. For each exercise name in the list below, classify it:
 
-1. CLASSIFY: Assign the primary muscle group and any significant secondary muscles. Use only: ${MUSCLE_GROUPS_PROMPT_LIST}.
-
-2. ALIAS: If any exercise is simply a different name or locale variant for a well-known exercise (e.g. "Bankdrücken" = "Bench Press", "RDL" = "Romanian Deadlift"), declare it as an alias instead of classifying it separately. Only declare an alias when you are highly certain (confidence >= 0.9).
+Assign the primary muscle group and any significant secondary muscles. Use only: ${MUSCLE_GROUPS_PROMPT_LIST}.
 
 Exercise names to process:
 ${exerciseNames.map((n, i) => `${i + 1}. ${n}`).join("\n")}
 
 Important rules:
-- Classify ALL exercises that are not aliases.
+- Classify ALL exercises in the list, including locale variants (e.g. "Bankdrücken", "RDL") — assign their muscles directly, do not redirect to a canonical name.
 - Never output duplicate entries.
 - Muscle group values must exactly match the allowed list.
 - Set confidence < 0.8 only when genuinely ambiguous (e.g. "Press" with no context).`;
@@ -751,7 +720,7 @@ Important rules:
 
     const text = response.text ?? "";
     const parsed = JSON.parse(text) as ExerciseCleanupResult;
-    if (!Array.isArray(parsed?.classifications) || !Array.isArray(parsed?.aliases)) {
+    if (!Array.isArray(parsed?.classifications)) {
       return err("ai-request-failed");
     }
     return ok(parsed);

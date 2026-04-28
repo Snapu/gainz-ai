@@ -3,17 +3,12 @@ import type { MuscleActivation, MuscleGroup, SecondaryMuscleActivation } from ".
 import { getMuscleActivation, normalizeExerciseName } from "./trainingScience";
 
 const STORAGE_KEY = "exerciseMuscleMap";
-const ALIAS_STORAGE_KEY = "exerciseMuscleAliases";
 
 /** Maximum number of learned exercise→muscle entries kept in localStorage. */
 const MAX_MAP_ENTRIES = 200;
-/** Maximum number of alias entries kept in localStorage. */
-const MAX_ALIAS_ENTRIES = 500;
 
 /** Minimum AI confidence to accept a muscle-group classification into the learned map. */
 const MIN_CLASSIFICATION_CONFIDENCE = 0.8;
-/** Minimum AI confidence to accept an exercise alias (higher bar — aliases redirect all lookups). */
-const MIN_ALIAS_CONFIDENCE = 0.9;
 /** Fractional set credit applied to a secondary muscle when the AI omits the contribution field. */
 const DEFAULT_SECONDARY_CONTRIBUTION = 0.5;
 
@@ -44,13 +39,6 @@ interface LegacyStoredEntry {
 }
 
 type StoredMap = Record<string, StoredEntry>;
-
-/**
- * Alias map: maps normalized alias keys to normalized canonical keys.
- * e.g. { "bankdrücken": "bench press" }
- * Applied during getLearnedMuscleMap() expansion so all callers benefit transparently.
- */
-type AliasMap = Record<string, string>;
 
 function isValidMuscleGroup(value: string): value is MuscleGroup {
   return VALID_MUSCLE_GROUPS.has(value);
@@ -99,28 +87,6 @@ function saveMap(map: StoredMap): void {
   }
 }
 
-/** Load the alias map from localStorage. */
-function loadAliasMap(): AliasMap {
-  try {
-    const raw = localStorage.getItem(ALIAS_STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    if (typeof parsed !== "object" || parsed === null) return {};
-    return parsed as AliasMap;
-  } catch {
-    return {};
-  }
-}
-
-/** Save the alias map to localStorage. */
-function saveAliasMap(aliases: AliasMap): void {
-  try {
-    localStorage.setItem(ALIAS_STORAGE_KEY, JSON.stringify(aliases));
-  } catch {
-    // Storage full or unavailable — degrade gracefully
-  }
-}
-
 /** Evict oldest entries from the learned map if it exceeds MAX_MAP_ENTRIES. */
 function evictMapIfNeeded(map: StoredMap): StoredMap {
   const keys = Object.keys(map);
@@ -141,28 +107,6 @@ function evictMapIfNeeded(map: StoredMap): StoredMap {
   });
 
   return map;
-}
-
-/** Evict oldest entries from the alias map if it exceeds MAX_ALIAS_ENTRIES. */
-function evictAliasIfNeeded(aliases: AliasMap): AliasMap {
-  const keys = Object.keys(aliases);
-  if (keys.length <= MAX_ALIAS_ENTRIES) return aliases;
-
-  // String-keyed objects maintain insertion order per the ES2015+ spec, so slicing
-  // the front of the key list removes the oldest-inserted entries first.
-  const excessCount = keys.length - MAX_ALIAS_ENTRIES;
-  const toRemove = keys.slice(0, excessCount);
-  for (const key of toRemove) {
-    delete aliases[key];
-  }
-
-  Sentry.addBreadcrumb({
-    category: "muscle-map",
-    message: `Evicted ${toRemove.length} oldest alias entries (cap: ${MAX_ALIAS_ENTRIES})`,
-    level: "info",
-  });
-
-  return aliases;
 }
 
 /**
@@ -255,7 +199,6 @@ export function learnFromAiResponse(
  */
 export function getLearnedMuscleMap(): Record<string, MuscleActivation> {
   const stored = loadMap();
-  const aliases = loadAliasMap();
   const result: Record<string, MuscleActivation> = {};
 
   for (const [key, entry] of Object.entries(stored)) {
@@ -265,14 +208,6 @@ export function getLearnedMuscleMap(): Record<string, MuscleActivation> {
         secondaryMuscles: entry.secondaryMuscles ?? [],
       };
     }
-  }
-
-  // Expand aliases: for each alias, copy the canonical activation to the alias key.
-  // This allows lookup by any known alias without the caller needing to resolve it.
-  for (const [aliasKey, canonicalKey] of Object.entries(aliases)) {
-    if (result[aliasKey]) continue; // already has its own entry
-    const canonical = result[canonicalKey] ?? getMuscleActivation(canonicalKey);
-    if (canonical) result[aliasKey] = canonical;
   }
 
   return result;
@@ -290,7 +225,6 @@ export function getLearnedMapSize(): number {
  */
 export function clearLearnedMap(): void {
   localStorage.removeItem(STORAGE_KEY);
-  localStorage.removeItem(ALIAS_STORAGE_KEY);
 }
 
 /**
@@ -310,17 +244,10 @@ export function applyAiCleanupResults(
     secondaryMuscles?: Array<{ muscleGroup: string; contribution?: number }>;
     confidence: number;
   }>,
-  aliases: Array<{
-    exerciseName: string;
-    canonicalName: string;
-    confidence: number;
-  }>,
 ): void {
   const map = loadMap();
-  const aliasMap = loadAliasMap();
   const now = Date.now();
   let classifiedCount = 0;
-  let aliasCount = 0;
 
   for (const item of classifications) {
     if (item.confidence < MIN_CLASSIFICATION_CONFIDENCE) continue;
@@ -351,50 +278,13 @@ export function applyAiCleanupResults(
     classifiedCount++;
   }
 
-  for (const item of aliases) {
-    if (item.confidence < MIN_ALIAS_CONFIDENCE) continue;
-    if (!item.exerciseName || !item.canonicalName) continue;
-
-    const aliasKey = normalizeExerciseName(item.exerciseName);
-    if (!aliasKey) continue;
-
-    // Collapse alias chains: if the requested canonical is itself already an alias,
-    // follow it to its final target so we never create multi-hop chains (A→B→C
-    // becomes A→C directly, which resolves reliably with a single lookup).
-    let resolvedCanonical = normalizeExerciseName(item.canonicalName);
-    if (!resolvedCanonical) continue;
-
-    // Pre-populate visited with aliasKey so a chain that loops back to the alias
-    // itself (e.g. "foo" → "bar" → "foo") is detected as a cycle.
-    const visited = new Set<string>([aliasKey]);
-    while (!visited.has(resolvedCanonical) && aliasMap[resolvedCanonical]) {
-      visited.add(resolvedCanonical);
-      resolvedCanonical = aliasMap[resolvedCanonical];
-    }
-
-    // Skip self-aliases after chain collapse (can happen when the chain is cyclic).
-    if (aliasKey === resolvedCanonical) continue;
-
-    // Only persist if the resolved canonical actually maps to a known activation.
-    // Dead aliases (pointing at an exercise with no activation) waste storage and
-    // will never improve any lookup result.
-    const hasActivation =
-      !!getMuscleActivation(resolvedCanonical) || !!map[resolvedCanonical];
-    if (!hasActivation) continue;
-
-    aliasMap[aliasKey] = resolvedCanonical;
-    aliasCount++;
-  }
-
-  if (classifiedCount > 0) saveMap(evictMapIfNeeded(map));
-  if (aliasCount > 0) saveAliasMap(evictAliasIfNeeded(aliasMap));
-
-  if (classifiedCount > 0 || aliasCount > 0) {
+  if (classifiedCount > 0) {
+    saveMap(evictMapIfNeeded(map));
     Sentry.addBreadcrumb({
       category: "muscle-map",
-      message: `AI cleanup: ${classifiedCount} classified, ${aliasCount} aliases added`,
+      message: `AI cleanup: ${classifiedCount} classified`,
       level: "info",
-      data: { classifiedCount, aliasCount },
+      data: { classifiedCount },
     });
   }
 }

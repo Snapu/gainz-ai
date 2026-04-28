@@ -18,7 +18,7 @@ export const useExerciseMuscleMapStore = defineStore("exerciseMuscleMap", () => 
 
   /** Apply AI cleanup results and refresh the reactive map. */
   function applyCleanupResults(input: ExerciseCleanupResult): void {
-    applyAiCleanupResults(input.classifications, input.aliases);
+    applyAiCleanupResults(input.classifications);
     refresh();
   }
 
