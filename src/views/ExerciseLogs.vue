@@ -48,9 +48,9 @@ const { learnedMap } = storeToRefs(muscleMapStore);
 const isAIPanelOpen = ref(false);
 
 // --- Exercise Options ---
-// Derived from: (A) default exercise names, (B) current-year log names.
-// Learned map keys are normalized lowercase and not suitable for display — all learned
-// exercises originated from logs, so they already appear via logNames.
+// Derived from current exercise log names only.
+// Learned map keys are normalized lowercase and not suitable for display, so the
+// selector uses the exercise names as entered in the logs.
 const exerciseOptions = computed(() => {
   const logNames = exerciseLogs.value.map((l) => l.exerciseName);
   return [...new Set(logNames)].sort();
