@@ -20,11 +20,13 @@ const spreadsheetStore = useSpreadsheetStore();
 // Start watching for auth expiration
 useAuthExpirationWatcher();
 
+let swUpdateInterval: ReturnType<typeof setInterval> | undefined;
+
 const { needRefresh, updateServiceWorker } = useRegisterSW({
   onRegisteredSW(_swUrl, registration) {
     if (registration) {
       // Check for updates every hour
-      const interval = setInterval(
+      swUpdateInterval = setInterval(
         () => {
           registration.update();
         },
@@ -37,12 +39,12 @@ const { needRefresh, updateServiceWorker } = useRegisterSW({
           registration.update();
         }
       });
-
-      onUnmounted(() => {
-        clearInterval(interval);
-      });
     }
   },
+});
+
+onUnmounted(() => {
+  clearInterval(swUpdateInterval);
 });
 
 const { toast } = useToast();

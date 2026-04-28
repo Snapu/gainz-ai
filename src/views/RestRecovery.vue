@@ -13,6 +13,7 @@ import Input from "@/components/ui/Input.vue";
 import RangeCalendar from "@/components/ui/RangeCalendar.vue";
 import ToggleGroup from "@/components/ui/ToggleGroup.vue";
 import ToggleGroupItem from "@/components/ui/ToggleGroupItem.vue";
+import UiCard from "@/components/ui/UiCard.vue";
 import { useEventsStore } from "@/stores/events";
 import type { Event as AppEvent } from "@/types/event";
 
@@ -94,14 +95,17 @@ function remove(id: string) {
         description="Tap + to record a rest day, sickness, or injury."
       />
 
-      <div class="flex flex-col gap-4">
+      <UiCard
+        v-if="sortedEvents.length > 0"
+        variant="list"
+      >
         <RestRecoveryItem 
           v-for="ev in sortedEvents" 
           :key="ev.id"
           :event="ev"
           @delete="remove"
         />
-      </div>
+      </UiCard>
     </main>
 
     <!-- Log Recovery Bottom Sheet -->

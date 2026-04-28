@@ -4,6 +4,8 @@ import { cn } from "@/lib/utils";
 interface Props {
   as?: string;
   class?: any;
+  /** 'list' — preset for grouped list containers (bg-card/40, divide-y, overflow-hidden) */
+  variant?: "list";
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -16,6 +18,7 @@ const props = withDefaults(defineProps<Props>(), {
     :is="as"
     :class="cn(
       'group relative overflow-hidden rounded-2xl border border-white/5 shadow-sm transition-all duration-300 isolate',
+      props.variant === 'list' && 'flex flex-col bg-card/40 border-white/5 divide-y divide-white/5',
       props.class
     )"
   >

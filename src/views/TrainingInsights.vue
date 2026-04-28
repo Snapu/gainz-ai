@@ -644,46 +644,48 @@ const triggerRows = computed((): TriggerRow[] => {
         </div>
         <div
           v-if="hasPhaseEvidence"
-          class="mt-3 rounded-lg border border-white/10 bg-white/[0.03]"
+          class="mt-3"
         >
-          <div
-            v-for="(row, index) in triggerRows"
-            :key="row.id"
-            class="px-3 py-2 text-xs transition-colors hover:bg-white/[0.02]"
-            :class="(index > 0 && row.group === triggerRows[index - 1]?.group) ? 'border-t border-white/5' : ''"
-          >
+          <UiCard variant="list">
             <div
-              v-if="index === 0 || row.group !== triggerRows[index - 1]?.group"
-              class="mb-1.5 text-[10px] uppercase tracking-widest font-bold text-foreground/50"
-              :class="index > 0 ? 'mt-3 pt-3 border-t border-white/10' : ''"
+              v-for="(row, index) in triggerRows"
+              :key="row.id"
+              class="px-3 py-2 text-xs transition-colors hover:bg-white/[0.04]"
+              :class="(index > 0 && row.group === triggerRows[index - 1]?.group) ? 'border-t border-white/5' : 'border-0'"
             >
-              {{ row.group }}
-            </div>
-            <div class="flex items-center justify-between gap-3">
-              <div class="flex items-center gap-2 min-w-0">
-                <span
-                  class="h-2.5 w-2.5 rounded-full shrink-0 transition-all duration-500"
-                  :class="row.active ? 'bg-orange-400 shadow-[0_0_10px_rgba(251,146,60,0.8)]' : 'bg-emerald-400/50 shadow-[0_0_6px_rgba(16,185,129,0.2)]'"
-                ></span>
-                <div class="min-w-0">
-                  <div class="text-foreground opacity-80 truncate">{{ row.metric }}</div>
-                  <div class="text-[10px] text-foreground opacity-50 truncate">{{ row.reference }}</div>
+              <div
+                v-if="index === 0 || row.group !== triggerRows[index - 1]?.group"
+                class="mb-1.5 text-[10px] uppercase tracking-widest font-bold text-foreground/50"
+                :class="index > 0 ? 'mt-3 pt-3 border-t border-white/10' : ''"
+              >
+                {{ row.group }}
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2 min-w-0">
+                  <span
+                    class="h-2.5 w-2.5 rounded-full shrink-0 transition-all duration-500"
+                    :class="row.active ? 'bg-orange-400 shadow-[0_0_10px_rgba(251,146,60,0.8)]' : 'bg-emerald-400/50 shadow-[0_0_6px_rgba(16,185,129,0.2)]'"
+                  ></span>
+                  <div class="min-w-0">
+                    <div class="text-foreground opacity-80 truncate">{{ row.metric }}</div>
+                    <div class="text-[10px] text-foreground opacity-50 truncate">{{ row.reference }}</div>
+                  </div>
+                </div>
+                <div class="shrink-0 w-[112px]">
+                  <div class="text-right font-semibold" :class="row.active ? 'text-orange-300' : 'text-foreground opacity-85'">
+                    {{ row.value }}
+                  </div>
+                  <div v-if="row.gaugePct !== null" class="mt-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                    <div
+                      class="h-full rounded-full transition-all duration-500"
+                      :class="row.active ? 'bg-orange-400' : 'bg-emerald-400/80'"
+                      :style="{ width: row.gaugePct + '%' }"
+                    ></div>
+                  </div>
                 </div>
               </div>
-              <div class="shrink-0 w-[112px]">
-                <div class="text-right font-semibold" :class="row.active ? 'text-orange-300' : 'text-foreground opacity-85'">
-                  {{ row.value }}
-                </div>
-                <div v-if="row.gaugePct !== null" class="mt-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
-                  <div
-                    class="h-full rounded-full transition-all duration-500"
-                    :class="row.active ? 'bg-orange-400' : 'bg-emerald-400/80'"
-                    :style="{ width: row.gaugePct + '%' }"
-                  ></div>
-                </div>
-              </div>
             </div>
-          </div>
+          </UiCard>
         </div>
         <div
           v-else
@@ -729,16 +731,12 @@ const triggerRows = computed((): TriggerRow[] => {
           </div>
         </UiCard>
 
-        <UiCard class="p-0 overflow-hidden">
-          <div
-            v-if="exerciseMetrics.length > 0"
-            class="rounded-lg border border-white/10 bg-white/[0.03]"
-          >
+        <UiCard variant="list">
+          <template v-if="exerciseMetrics.length > 0">
             <div
-              v-for="(metric, index) in exerciseMetrics"
+              v-for="metric in exerciseMetrics"
               :key="metric.name"
-              class="px-3 py-2.5 transition-all duration-200 hover:bg-white/[0.02] active:scale-[0.98] select-none"
-              :class="index > 0 ? 'border-t border-white/5' : ''"
+              class="px-3 py-2.5 transition-all duration-200 hover:bg-white/[0.04] active:bg-white/[0.06] select-none"
             >
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
@@ -804,7 +802,7 @@ const triggerRows = computed((): TriggerRow[] => {
                 </div>
               </div>
             </div>
-          </div>
+          </template>
           <div
             v-else
             class="px-4 py-8 text-center text-xs text-foreground/55"

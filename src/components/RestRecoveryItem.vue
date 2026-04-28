@@ -34,7 +34,7 @@ function formatEventDate(dates: string[]) {
 </script>
 
 <template>
-  <SwipeToDeleteItem @delete="emit('delete', props.event.id)">
+  <SwipeToDeleteItem variant="inset" @delete="emit('delete', props.event.id)">
     <div class="flex justify-between items-center">
       <h3 class="font-bold text-sm text-foreground tracking-tight">{{ event.type }}</h3>
       <p class="text-[10px] text-primary font-bold tracking-wider uppercase">{{ formatEventDate(event.dates) }}</p>

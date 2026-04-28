@@ -4,14 +4,15 @@ import type { ExerciseLog } from "@/services/exerciseLogs";
 
 const props = defineProps<{
   log: ExerciseLog;
+  variant?: "card" | "inset";
 }>();
 
 const emit = defineEmits<(e: "delete", log: ExerciseLog) => void>();
 </script>
 
 <template>
-  <SwipeToDeleteItem @delete="emit('delete', props.log)">
-    <div class="flex justify-between items-center py-1">
+  <SwipeToDeleteItem :variant="props.variant ?? 'card'" @delete="emit('delete', props.log)">
+    <div class="flex justify-between items-center">
       <h3 class="font-semibold text-sm text-foreground tracking-tight leading-none">{{ log.exerciseName }}</h3>
       <div class="flex gap-4 items-center">
         <div v-if="log.weight" class="flex items-baseline gap-0.5">

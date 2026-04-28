@@ -4,6 +4,7 @@ import DOMPurify from "dompurify";
 import { Loader2, Sparkles } from "lucide-vue-next";
 import { computed, watch } from "vue";
 import BottomSheet from "@/components/ui/BottomSheet.vue";
+import ClickableList, { type ClickableListItem } from "@/components/ui/ClickableList.vue";
 import UiCard from "@/components/ui/UiCard.vue";
 import { useToast } from "@/components/ui/useToast";
 import type { AiResponseData } from "@/services/ai";
@@ -75,6 +76,10 @@ interface DisplayWorkoutGroup {
   id: string;
   isSuperset: boolean;
   exercises: DisplayExercise[];
+}
+
+interface WorkoutListItem extends ClickableListItem {
+  exercise: DisplayExercise;
 }
 
 function groupWorkout(workout: DisplayExercise[] | undefined): DisplayWorkoutGroup[] | null {
@@ -164,6 +169,21 @@ function handleLogExercise(exercise: DisplayExercise) {
   });
   emit("update:open", false);
 }
+
+function toWorkoutListItems(exercises: DisplayExercise[]): WorkoutListItem[] {
+  return exercises.map((exercise) => ({
+    id: exercise.exerciseName,
+    title: exercise.exerciseName,
+    description: exercise.notes,
+    meta: [
+      ...(exercise.targetWeight
+        ? [{ label: exercise.targetWeight, tone: "primary" as const }]
+        : []),
+      { label: `${exercise.targetSets}×${exercise.targetReps} reps` },
+    ],
+    exercise,
+  }));
+}
 </script>
 
 <template>
@@ -216,25 +236,11 @@ function handleLogExercise(exercise: DisplayExercise) {
                   </div>
 
                   <!-- Exercise Items (Tappable for one-tap logging) -->
-                  <button
-                    v-for="exercise in group.exercises"
-                    :key="exercise.exerciseName"
-                    class="flex flex-col px-4 py-3 hover:bg-white/[0.04] active:bg-white/[0.06] transition-colors text-left w-full cursor-pointer"
-                    @click="handleLogExercise(exercise)"
-                  >
-                    <div class="flex justify-between items-center w-full">
-                      <h3 class="font-bold text-sm text-foreground tracking-tight truncate pr-4">{{ exercise.exerciseName }}</h3>
-                      
-                      <div class="flex gap-3 text-xs text-muted-foreground font-semibold shrink-0">
-                        <span v-if="exercise.targetWeight" class="text-primary">{{ exercise.targetWeight }}</span>
-                        <span>{{ exercise.targetSets }}<span class="text-[10px] opacity-70 mx-0.5">&times;</span>{{ exercise.targetReps }}<span class="text-[10px] opacity-70 ml-0.5">reps</span></span>
-                      </div>
-                    </div>
-                    
-                    <div v-if="exercise.notes" class="text-[11px] text-muted-foreground/60 italic text-left mt-1.5">
-                      {{ exercise.notes }}
-                    </div>
-                  </button>
+                  <ClickableList
+                    :items="toWorkoutListItems(group.exercises)"
+                    :as-card="false"
+                    @select="handleLogExercise(($event as WorkoutListItem).exercise)"
+                  />
                 </div>
               </UiCard>
             </div>

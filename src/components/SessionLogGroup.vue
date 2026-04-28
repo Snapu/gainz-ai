@@ -75,16 +75,18 @@ defineEmits<{
     </UiCard>
 
     <!-- Session Content -->
-    <div 
+    <UiCard
       v-show="!isCollapsed"
-      class="flex flex-col gap-2 animate-in fade-in slide-in-from-top-2 duration-300"
+      variant="list"
+      class="animate-in fade-in slide-in-from-top-2 duration-300"
     >
       <ExerciseLogItem 
         v-for="log in logs" 
         :key="log.id" 
         :log="log"
+        variant="inset"
         @delete="$emit('deleteLog', $event)"
       />
-    </div>
+    </UiCard>
   </div>
 </template>

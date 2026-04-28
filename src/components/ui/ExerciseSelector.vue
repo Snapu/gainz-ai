@@ -4,9 +4,19 @@ import { DialogClose, DialogTitle } from "reka-ui";
 import { computed, ref, watch } from "vue";
 import { cn } from "@/lib/utils";
 import BottomSheet from "./BottomSheet.vue";
+import ClickableList, {
+  type ClickableListItem,
+  type ClickableListItemMeta,
+} from "./ClickableList.vue";
+
+export interface ExerciseSelectorOptionDetails {
+  description?: string;
+  meta?: ClickableListItemMeta[];
+}
 
 interface Props {
   options: string[];
+  optionDetails?: Record<string, ExerciseSelectorOptionDetails>;
   placeholder?: string;
   class?: any;
 }
@@ -16,9 +26,7 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const modelValue = defineModel<string>();
-const emit = defineEmits<{
-  (e: "select-option", value: string): void;
-}>();
+const emit = defineEmits<(e: "select-option", value: string) => void>();
 
 const isOpen = ref(false);
 const searchQuery = ref("");
@@ -28,6 +36,15 @@ const filteredOptions = computed(() => {
   return props.options.filter((option) =>
     option.toLowerCase().includes(searchQuery.value.toLowerCase()),
   );
+});
+
+const listItems = computed<ClickableListItem[]>(() => {
+  return filteredOptions.value.map((option) => ({
+    id: option,
+    title: option,
+    description: props.optionDetails?.[option]?.description,
+    meta: props.optionDetails?.[option]?.meta,
+  }));
 });
 
 const showCreateOption = computed(() => {
@@ -124,18 +141,12 @@ watch(isOpen, (val) => {
       </div>
 
       <!-- List Items -->
-      <div class="rounded-lg border border-white/10 bg-white/[0.03] overflow-hidden">
-        <button
-          v-for="(option, index) in filteredOptions"
-          :key="option"
-          type="button"
-          class="flex w-full items-center px-3 py-3 text-left text-sm font-medium text-foreground transition-all hover:bg-white/[0.04] active:scale-[0.98] select-none"
-          :class="index > 0 ? 'border-t border-white/5' : ''"
-          @click="handleSelect(option)"
-        >
-          {{ option }}
-        </button>
-      </div>
+      <ClickableList
+        v-if="listItems.length > 0"
+        :items="listItems"
+        item-class="select-none active:scale-[0.98]"
+        @select="handleSelect($event.title)"
+      />
     </div>
   </BottomSheet>
 </template>

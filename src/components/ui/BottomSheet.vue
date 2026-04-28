@@ -3,6 +3,7 @@ import { X } from "lucide-vue-next";
 import {
   DialogClose,
   DialogContent,
+  DialogDescription,
   DialogOverlay,
   DialogPortal,
   DialogRoot,
@@ -60,10 +61,11 @@ watch(
           props.contentClass
         )"
         :style="dialogStyle"
-        @open-auto-focus="(e: Event) => e.preventDefault()"
         @close-auto-focus="(e: Event) => e.preventDefault()"
       >
         
+        <DialogDescription class="sr-only">{{ title ?? 'Dialog' }}</DialogDescription>
+
         <slot name="header">
           <div class="flex items-center justify-between mb-2">
             <DialogTitle v-if="title" class="text-2xl font-bold tracking-tight">

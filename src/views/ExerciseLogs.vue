@@ -13,6 +13,7 @@ import Button from "@/components/ui/Button.vue";
 import DropdownMenu from "@/components/ui/DropdownMenu.vue";
 import DropdownMenuItem from "@/components/ui/DropdownMenuItem.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
+import type { ExerciseSelectorOptionDetails } from "@/components/ui/ExerciseSelector.vue";
 import ExerciseSelector from "@/components/ui/ExerciseSelector.vue";
 import NumberField from "@/components/ui/NumberField.vue";
 import Sparkline from "@/components/ui/Sparkline.vue";
@@ -48,12 +49,87 @@ const { learnedMap } = storeToRefs(muscleMapStore);
 const isAIPanelOpen = ref(false);
 
 // --- Exercise Options ---
-// Derived from current exercise log names only.
-// Learned map keys are normalized lowercase and not suitable for display, so the
-// selector uses the exercise names as entered in the logs.
+// Derived from exercise log names. Learned map keys are normalized lowercase
+// and not suitable for display, so the selector uses names as entered in the logs.
+const latestExerciseLogs = computed(() => {
+  const latestByExercise = new Map<string, ExerciseLog>();
+
+  for (const log of [...exerciseLogs.value].sort(
+    (a, b) => b.loggedAt.getTime() - a.loggedAt.getTime(),
+  )) {
+    if (!latestByExercise.has(log.exerciseName)) {
+      latestByExercise.set(log.exerciseName, log);
+    }
+  }
+
+  return latestByExercise;
+});
 const exerciseOptions = computed(() => {
-  const logNames = exerciseLogs.value.map((l) => l.exerciseName);
-  return [...new Set(logNames)].sort();
+  return [...latestExerciseLogs.value.entries()]
+    .sort((left, right) => {
+      const loggedAtDiff = right[1].loggedAt.getTime() - left[1].loggedAt.getTime();
+      return loggedAtDiff !== 0 ? loggedAtDiff : left[0].localeCompare(right[0]);
+    })
+    .map(([exerciseName]) => exerciseName);
+});
+
+function formatMetric(value: number | undefined, suffix: string): string | null {
+  if (typeof value !== "number") return null;
+  return `${value}${suffix}`;
+}
+
+function formatLastUsed(loggedAt: Date): string {
+  const today = new Date();
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const startOfLoggedDay = new Date(
+    loggedAt.getFullYear(),
+    loggedAt.getMonth(),
+    loggedAt.getDate(),
+  );
+  const dayDiff = Math.round(
+    (startOfToday.getTime() - startOfLoggedDay.getTime()) / (1000 * 60 * 60 * 24),
+  );
+
+  if (dayDiff <= 0) return "Today";
+  if (dayDiff === 1) return "Yesterday";
+  if (dayDiff < 7) return `${dayDiff}d ago`;
+
+  const weekDiff = Math.round(dayDiff / 7);
+  if (weekDiff < 5) return `${weekDiff}w ago`;
+
+  const monthDiff =
+    (today.getFullYear() - loggedAt.getFullYear()) * 12 + today.getMonth() - loggedAt.getMonth();
+  if (monthDiff < 12) return `${monthDiff}mo ago`;
+
+  const yearDiff = today.getFullYear() - loggedAt.getFullYear();
+  return `${yearDiff}y ago`;
+}
+
+const exerciseOptionDetails = computed<Record<string, ExerciseSelectorOptionDetails>>(() => {
+  return Object.fromEntries(
+    exerciseOptions.value.map((exerciseName) => {
+      const lastLog = latestExerciseLogs.value.get(exerciseName);
+      const meta = [
+        formatMetric(lastLog?.weight, "kg"),
+        formatMetric(lastLog?.reps, " reps"),
+        formatMetric(lastLog?.distance, "m"),
+        formatMetric(lastLog?.duration, " min"),
+      ]
+        .filter((label): label is string => Boolean(label))
+        .map((label, index) => ({
+          label,
+          tone: index === 0 && lastLog?.weight ? ("primary" as const) : ("default" as const),
+        }));
+
+      return [
+        exerciseName,
+        {
+          description: lastLog ? formatLastUsed(lastLog.loggedAt) : undefined,
+          meta,
+        },
+      ];
+    }),
+  );
 });
 
 // --- Leveling ---
@@ -333,14 +409,6 @@ async function saveLog() {
             <span>Open Spreadsheet</span>
             <ExternalLink class="w-4 h-4 ml-auto opacity-40 group-hover:text-primary transition-colors" />
           </DropdownMenuItem>
-
-          <DropdownMenuItem 
-            @select="$router.push('/debug')"
-            class="group"
-          >
-            <span>Debug: Training Science</span>
-            <ChevronRight class="w-4 h-4 ml-auto opacity-0 group-focus:opacity-20 transition-opacity" />
-          </DropdownMenuItem>
         </DropdownMenu>
       </div>
     </AppHeader>
@@ -401,6 +469,7 @@ async function saveLog() {
         <ExerciseSelector
           v-model="formExerciseName"
           :options="exerciseOptions"
+          :option-details="exerciseOptionDetails"
           placeholder="Select or Search Exercise..."
           class="bg-card"
         />

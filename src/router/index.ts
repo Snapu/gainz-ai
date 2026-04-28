@@ -42,11 +42,6 @@ const router = createRouter({
       component: () => import("../views/Impressum.vue"),
     },
     {
-      path: "/debug",
-      name: "debug",
-      component: () => import("../views/Debug.vue"),
-    },
-    {
       path: "/training-insights",
       name: "training-insights",
       component: () => import("../views/TrainingInsights.vue"),
