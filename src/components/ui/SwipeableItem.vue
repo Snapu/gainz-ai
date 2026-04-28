@@ -77,8 +77,6 @@ const isHorizontalSwipe = computed(
   () => !isSnappingBack.value && isSwiping.value && Math.abs(distanceX.value) > SWIPE_INTENT_PX,
 );
 const isSwipeVisualActive = computed(() => visualOffset.value > 0);
-const isStrongSwipeVisual = computed(() => isSwipeVisualActive.value && isThresholdReached.value);
-const isSoftSwipeVisual = computed(() => isSwipeVisualActive.value && !isThresholdReached.value);
 const isBackgroundActionVisible = computed(() => visualOffset.value > ACTION_ICON_SHOW_PX);
 
 // Cancel swipe when vertical movement dominates
@@ -152,40 +150,32 @@ onBeforeUnmount(() => {
 <template>
   <div
     ref="containerRef"
-    class="relative w-full overflow-hidden rounded-2xl transition-colors duration-200"
-    :class="[
-      isStrongSwipeVisual
-        ? 'bg-destructive/30'
-        : isSoftSwipeVisual
-        ? 'bg-destructive/10'
-        : 'bg-transparent'
-    ]"
+    class="relative w-full overflow-hidden transition-colors duration-200"
+    :class="props.variant === 'card' && 'rounded-2xl'"
     @pointercancel="snapBack(false)"
   >
     <!-- Background action -->
     <div
-      class="absolute inset-y-0 right-0 flex items-center justify-end px-6 text-destructive transition-all duration-200"
-      :class="{
-        'opacity-100 scale-110': isStrongSwipeVisual,
-        'opacity-60 scale-100': isBackgroundActionVisible && !isStrongSwipeVisual,
-        'opacity-0': !isBackgroundActionVisible
-      }"
+      class="absolute inset-y-0 right-0 flex items-center justify-end text-destructive overflow-hidden"
+      :class="[isThresholdReached ? 'bg-destructive/30' : 'bg-destructive/10', isSwipeVisualActive ? 'px-6' : 'px-0']"
+      :style="{ width: `${visualOffset}px`, transition: 'background-color 150ms' }"
     >
-      <slot name="background" />
+      <div :class="{ 'scale-110 opacity-100': isThresholdReached, 'opacity-0': !isBackgroundActionVisible }" class="transition-all duration-200">
+        <slot name="background" />
+      </div>
     </div>
 
     <!-- Foreground content -->
     <div
       ref="itemRef"
-      class="group relative w-full select-none transition-colors duration-300 isolate"
+      class="group/item relative w-full select-none transition-colors duration-300 isolate"
       :class="[
         props.variant === 'card'
-          ? 'p-4 rounded-2xl border border-white/5 bg-background shadow-sm'
+          ? 'px-4 py-3 rounded-2xl border border-white/5 bg-background shadow-sm'
           : 'px-4 py-3',
         {
           'transition-transform duration-200 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]': !isSwiping || cancelledByScroll || isSnappingBack || visualOffset < SWIPE_INTENT_PX
         },
-        !isSwiping && props.variant === 'card' && 'hover:border-primary/20',
         !isSwiping && props.variant === 'inset' && 'hover:bg-white/[0.04] active:bg-white/[0.06]',
       ]"
       :style="{
@@ -197,13 +187,13 @@ onBeforeUnmount(() => {
       <div 
         v-if="props.variant === 'card'"
         class="absolute inset-0 bg-linear-to-r from-card/60 to-card/20 rounded-2xl pointer-events-none -z-10 transition-colors duration-300"
-        :class="{ 'group-hover:from-card/80': !isSwiping }"
+        :class="{ 'group-hover/item:from-card/80': !isSwiping }"
       ></div>
 
       <!-- Subtle Glow effect on hover -->
       <div 
-        class="absolute inset-0 bg-primary/5 opacity-0 transition-opacity rounded-2xl pointer-events-none -z-10"
-        :class="{ 'group-hover:opacity-100': !isSwiping }"
+        class="absolute inset-0 bg-primary/5 opacity-0 transition-opacity pointer-events-none -z-10"
+        :class="[props.variant === 'card' && 'rounded-2xl', { 'group-hover/item:opacity-100': !isSwiping }]"
       ></div>
       
       <div class="relative z-10 w-full">
