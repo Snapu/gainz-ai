@@ -250,10 +250,7 @@ export function calculateE1RM(weight: number, reps: number, rpe?: number): numbe
  * Calculate e1RM trend for each exercise over distinct sessions (by date).
  * Returns the last 4 session e1RM values + plateau detection.
  */
-export function calculateE1RMInsights(
-  logs: ExerciseLog[],
-  overrideMap?: Record<string, MuscleActivation>,
-): Record<string, ExerciseE1RM> {
+export function calculateE1RMInsights(logs: ExerciseLog[]): Record<string, ExerciseE1RM> {
   // Group logs by canonical (normalized) key, tracking first-seen display name per key.
   // This ensures "Bench Press" and "bench press" combine into one trend line.
   const byExercise = new Map<string, Map<string, ExerciseLog[]>>();
@@ -729,7 +726,7 @@ export function calculateTrainingInsights(
   overrideMap?: Record<string, MuscleActivation>,
   bodyweightKg?: number,
 ): TrainingInsights {
-  const e1rm = calculateE1RMInsights(logs, overrideMap);
+  const e1rm = calculateE1RMInsights(logs);
   const muscleGroups = calculateMuscleGroupInsights(logs, targetDate, overrideMap);
   const fatigue = calculateFatigueInsight(logs, e1rm, targetDate, bodyweightKg);
   const phase = computeSystemicPhase(fatigue);

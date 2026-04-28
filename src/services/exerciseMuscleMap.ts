@@ -5,6 +5,11 @@ import { getMuscleActivation, normalizeExerciseName } from "./trainingScience";
 const STORAGE_KEY = "exerciseMuscleMap";
 const ALIAS_STORAGE_KEY = "exerciseMuscleAliases";
 
+/** Maximum number of learned exercise→muscle entries kept in localStorage. */
+const MAX_MAP_ENTRIES = 200;
+/** Maximum number of alias entries kept in localStorage. */
+const MAX_ALIAS_ENTRIES = 500;
+
 /** Minimum AI confidence to accept a muscle-group classification into the learned map. */
 const MIN_CLASSIFICATION_CONFIDENCE = 0.8;
 /** Minimum AI confidence to accept an exercise alias (higher bar — aliases redirect all lookups). */
@@ -116,6 +121,50 @@ function saveAliasMap(aliases: AliasMap): void {
   }
 }
 
+/** Evict oldest entries from the learned map if it exceeds MAX_MAP_ENTRIES. */
+function evictMapIfNeeded(map: StoredMap): StoredMap {
+  const keys = Object.keys(map);
+  if (keys.length <= MAX_MAP_ENTRIES) return map;
+
+  const sorted = keys.sort((a, b) => (map[a]?.updatedAt ?? 0) - (map[b]?.updatedAt ?? 0));
+  // Remove exactly the excess entries (oldest first) to bring the map back to the cap.
+  const excessCount = keys.length - MAX_MAP_ENTRIES;
+  const toRemove = sorted.slice(0, excessCount);
+  for (const key of toRemove) {
+    delete map[key];
+  }
+
+  Sentry.addBreadcrumb({
+    category: "muscle-map",
+    message: `Evicted ${toRemove.length} oldest learned entries (cap: ${MAX_MAP_ENTRIES})`,
+    level: "info",
+  });
+
+  return map;
+}
+
+/** Evict oldest entries from the alias map if it exceeds MAX_ALIAS_ENTRIES. */
+function evictAliasIfNeeded(aliases: AliasMap): AliasMap {
+  const keys = Object.keys(aliases);
+  if (keys.length <= MAX_ALIAS_ENTRIES) return aliases;
+
+  // String-keyed objects maintain insertion order per the ES2015+ spec, so slicing
+  // the front of the key list removes the oldest-inserted entries first.
+  const excessCount = keys.length - MAX_ALIAS_ENTRIES;
+  const toRemove = keys.slice(0, excessCount);
+  for (const key of toRemove) {
+    delete aliases[key];
+  }
+
+  Sentry.addBreadcrumb({
+    category: "muscle-map",
+    message: `Evicted ${toRemove.length} oldest alias entries (cap: ${MAX_ALIAS_ENTRIES})`,
+    level: "info",
+  });
+
+  return aliases;
+}
+
 /**
  * Learn exercise→muscle activation mappings from an AI response.
  * Accepts both the new schema ({ primaryMuscle, secondaryMuscles }) and the legacy
@@ -183,7 +232,7 @@ export function learnFromAiResponse(
   }
 
   if (learnedCount > 0) {
-    saveMap(map);
+    saveMap(evictMapIfNeeded(map));
     Sentry.addBreadcrumb({
       category: "muscle-map",
       message: `Learned ${learnedCount} mappings, skipped ${skippedCount}, total: ${Object.keys(map).length}`,
@@ -314,8 +363,8 @@ export function applyAiCleanupResults(
     aliasCount++;
   }
 
-  if (classifiedCount > 0) saveMap(map);
-  if (aliasCount > 0) saveAliasMap(aliasMap);
+  if (classifiedCount > 0) saveMap(evictMapIfNeeded(map));
+  if (aliasCount > 0) saveAliasMap(evictAliasIfNeeded(aliasMap));
 
   if (classifiedCount > 0 || aliasCount > 0) {
     Sentry.addBreadcrumb({
