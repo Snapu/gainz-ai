@@ -1083,9 +1083,7 @@ describe("detectDeloadWeekRanges", () => {
     expect(ranges.length).toBeGreaterThanOrEqual(1);
     // The deload range should cover 3 weeks ago
     const deloadDate = midWeek(3);
-    const matchingRange = ranges.find(
-      (r) => deloadDate > r.start && deloadDate <= r.end,
-    );
+    const matchingRange = ranges.find((r) => deloadDate > r.start && deloadDate <= r.end);
     expect(matchingRange).toBeDefined();
   });
 

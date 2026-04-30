@@ -269,9 +269,7 @@ export function calculateE1RMInsights(
     excludeRanges && excludeRanges.length > 0
       ? logs.filter(
           (log) =>
-            !excludeRanges.some(
-              (range) => log.loggedAt > range.start && log.loggedAt <= range.end,
-            ),
+            !excludeRanges.some((range) => log.loggedAt > range.start && log.loggedAt <= range.end),
         )
       : logs;
 
@@ -605,8 +603,7 @@ export function calculateFatigueInsight(
       if (data.trend.length >= 3) {
         const current = data.trend[data.trend.length - 1] ?? 0;
         const prior2Avg =
-          ((data.trend[data.trend.length - 2] ?? 0) + (data.trend[data.trend.length - 3] ?? 0)) /
-          2;
+          ((data.trend[data.trend.length - 2] ?? 0) + (data.trend[data.trend.length - 3] ?? 0)) / 2;
         if (prior2Avg > 0 && current < prior2Avg * 0.95) decliningExercises++;
       }
     }
@@ -775,9 +772,7 @@ function computeMesocycleWeek(
   if (pastDeloads.length > 0) {
     // Most recent deload (ranges are chronologically ordered from detectDeloadWeekRanges)
     const lastDeload = pastDeloads[pastDeloads.length - 1]!;
-    const weeksAgo = Math.round(
-      (targetDate.getTime() - lastDeload.end.getTime()) / msPerWeek,
-    );
+    const weeksAgo = Math.round((targetDate.getTime() - lastDeload.end.getTime()) / msPerWeek);
     return weeksAgo;
   }
 

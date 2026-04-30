@@ -29,19 +29,22 @@ export type ExerciseLog = z.infer<typeof ExerciseLogSchema>;
 const LOGS_SHEET_PREFIX = "Logs";
 const SHEET_NAME = `${LOGS_SHEET_PREFIX}${new Date().getFullYear()}`;
 const getSheet = (doc: GoogleSpreadsheet) => doc.sheetsByTitle[SHEET_NAME];
+/** The canonical header list that every log sheet must have. */
+const CANONICAL_HEADERS = [
+  "id",
+  "exerciseName",
+  "reps",
+  "weight",
+  "distance",
+  "duration",
+  "rpe",
+  "loggedAt",
+];
+
 const addSheet = (doc: GoogleSpreadsheet) =>
   doc.addSheet({
     title: SHEET_NAME,
-    headerValues: [
-      "id",
-      "exerciseName",
-      "reps",
-      "weight",
-      "distance",
-      "duration",
-      "rpe",
-      "loggedAt",
-    ],
+    headerValues: CANONICAL_HEADERS,
   });
 
 async function migrateExistingLogs(doc: GoogleSpreadsheet): Promise<void> {
@@ -52,36 +55,47 @@ async function migrateExistingLogs(doc: GoogleSpreadsheet): Promise<void> {
   await sheet.loadHeaderRow();
   const headers = sheet.headerValues;
 
-  // Check if migration already done
-  if (headers.includes("id")) return;
+  // Check if id migration already done
+  if (!headers.includes("id")) {
+    console.log("Migrating exercise logs - adding UUIDs to existing data...");
 
-  console.log("Migrating exercise logs - adding UUIDs to existing data...");
+    try {
+      // Get all row data before changing headers
+      const rows = await sheet.getRows();
+      const rowData = rows.map((row) => row.toObject());
 
-  try {
-    // Get all row data before changing headers
-    const rows = await sheet.getRows();
-    const rowData = rows.map((row) => row.toObject());
+      // Add id column as first column
+      await sheet.setHeaderRow(["id", ...headers]);
 
-    // Add id column as first column
-    await sheet.setHeaderRow(["id", ...headers]);
+      // Reload sheet to get updated structure
+      await sheet.loadHeaderRow();
 
-    // Reload sheet to get updated structure
-    await sheet.loadHeaderRow();
+      // Clear and re-add all rows with UUIDs
+      await sheet.clearRows();
 
-    // Clear and re-add all rows with UUIDs
-    await sheet.clearRows();
+      const rowsWithIds = rowData.map((row) => ({
+        id: crypto.randomUUID(),
+        ...row,
+      }));
 
-    const rowsWithIds = rowData.map((row) => ({
-      id: crypto.randomUUID(),
-      ...row,
-    }));
+      await sheet.addRows(rowsWithIds);
 
-    await sheet.addRows(rowsWithIds);
+      console.log(`Migration complete - added UUIDs to ${rowsWithIds.length} existing logs`);
+    } catch (error) {
+      console.error("Migration failed:", error);
+      throw error;
+    }
+  }
 
-    console.log(`Migration complete - added UUIDs to ${rowsWithIds.length} existing logs`);
-  } catch (error) {
-    console.error("Migration failed:", error);
-    throw error;
+  // Ensure all canonical columns exist (e.g. 'rpe' added after initial sheet creation).
+  // Only appends missing headers — no data rewrite needed since existing rows will
+  // have empty cells for the new columns, which the Zod schema parses as undefined.
+  await sheet.loadHeaderRow();
+  const currentHeaders = sheet.headerValues;
+  const missingHeaders = CANONICAL_HEADERS.filter((h) => !currentHeaders.includes(h));
+  if (missingHeaders.length > 0) {
+    console.log("Adding missing columns to exercise logs sheet:", missingHeaders);
+    await sheet.setHeaderRow([...currentHeaders, ...missingHeaders]);
   }
 }
 
