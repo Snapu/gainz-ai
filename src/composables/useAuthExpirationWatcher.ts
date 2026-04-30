@@ -2,7 +2,7 @@
 
 import * as Sentry from "@sentry/vue";
 import { onUnmounted, ref } from "vue";
-import { useToast } from "@/components/ui/useToast";
+import { useToast } from "@/composables/useToast";
 import { useAuthStore } from "@/stores/auth";
 
 const WARNING_THRESHOLD = 5 * 60 * 1000; // 5 minutes in milliseconds

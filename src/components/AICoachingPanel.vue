@@ -3,10 +3,10 @@ import { useDebounceFn, useTimeAgo } from "@vueuse/core";
 import DOMPurify from "dompurify";
 import { Loader2, Sparkles } from "lucide-vue-next";
 import { computed, watch } from "vue";
-import BottomSheet from "@/components/ui/BottomSheet.vue";
-import ClickableList, { type ClickableListItem } from "@/components/ui/ClickableList.vue";
+import ClickableList, { type ClickableListItem } from "@/components/ClickableList.vue";
+import UiBottomSheet from "@/components/ui/UiBottomSheet.vue";
 import UiCard from "@/components/ui/UiCard.vue";
-import { useToast } from "@/components/ui/useToast";
+import { useToast } from "@/composables/useToast";
 import type { AiResponseData } from "@/services/ai";
 import { useAiStore } from "@/stores/ai";
 
@@ -187,7 +187,7 @@ function toWorkoutListItems(exercises: DisplayExercise[]): WorkoutListItem[] {
 </script>
 
 <template>
-  <BottomSheet v-model:open="internalOpen" title="AI Coach">
+  <UiBottomSheet v-model:open="internalOpen" title="AI Coach">
     <div class="flex flex-col gap-4 w-full max-h-[70vh] overflow-y-auto">
 
       <!-- Loading State -->
@@ -267,5 +267,5 @@ function toWorkoutListItems(exercises: DisplayExercise[]): WorkoutListItem[] {
       </div>
 
     </div>
-  </BottomSheet>
+  </UiBottomSheet>
 </template>

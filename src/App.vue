@@ -4,9 +4,9 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { ConfigProvider } from "reka-ui";
 import { onMounted, onUnmounted, watch } from "vue";
 import { useRouter } from "vue-router";
-import Toaster from "@/components/ui/Toaster.vue";
-import { useToast } from "@/components/ui/useToast";
+import UiToaster from "@/components/ui/UiToaster.vue";
 import { useAuthExpirationWatcher } from "@/composables/useAuthExpirationWatcher";
+import { useToast } from "@/composables/useToast";
 import { useAuthStore } from "@/stores/auth";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
 import { useSpreadsheetStore } from "@/stores/spreadsheet";
@@ -120,6 +120,6 @@ watch(
 <template>
   <ConfigProvider locale="en" :scroll-body="false">
     <RouterView />
-    <Toaster />
+    <UiToaster />
   </ConfigProvider>
 </template>

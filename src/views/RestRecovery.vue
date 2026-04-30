@@ -4,16 +4,16 @@ import { haptic } from "ios-haptics";
 import { ArrowLeft, Moon, Plus, X } from "lucide-vue-next";
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
+import AppHeader from "@/components/AppHeader.vue";
+import EmptyState from "@/components/EmptyState.vue";
 import RestRecoveryItem from "@/components/RestRecoveryItem.vue";
-import AppHeader from "@/components/ui/AppHeader.vue";
-import BottomSheet from "@/components/ui/BottomSheet.vue";
-import Button from "@/components/ui/Button.vue";
-import EmptyState from "@/components/ui/EmptyState.vue";
-import Input from "@/components/ui/Input.vue";
-import RangeCalendar from "@/components/ui/RangeCalendar.vue";
-import ToggleGroup from "@/components/ui/ToggleGroup.vue";
-import ToggleGroupItem from "@/components/ui/ToggleGroupItem.vue";
+import UiBottomSheet from "@/components/ui/UiBottomSheet.vue";
+import UiButton from "@/components/ui/UiButton.vue";
 import UiCard from "@/components/ui/UiCard.vue";
+import UiInput from "@/components/ui/UiInput.vue";
+import UiRangeCalendar from "@/components/ui/UiRangeCalendar.vue";
+import UiToggleGroup from "@/components/ui/UiToggleGroup.vue";
+import UiToggleGroupItem from "@/components/ui/UiToggleGroupItem.vue";
 import { useEventsStore } from "@/stores/events";
 import type { Event as AppEvent } from "@/types/event";
 
@@ -75,13 +75,13 @@ function remove(id: string) {
   <div class="min-h-screen bg-background flex flex-col pt-safe">
     <!-- Header -->
     <AppHeader>
-      <Button variant="ghost" size="icon" @click="router.back()" class="mr-4 -ml-2">
+      <UiButton variant="ghost" size="icon" @click="router.back()" class="mr-4 -ml-2">
         <ArrowLeft class="w-6 h-6" />
-      </Button>
+      </UiButton>
       <h1 class="text-xl font-black tracking-tight flex-1">Rest & Recovery</h1>
-      <Button variant="ghost" size="icon" @click="isAddOpen = true">
+      <UiButton variant="ghost" size="icon" @click="isAddOpen = true">
         <Plus class="w-6 h-6" />
-      </Button>
+      </UiButton>
     </AppHeader>
 
     <p class="px-6 pt-4 text-sm text-muted-foreground">Track rest days, illness, injuries, and other off days so your AI coach can account for them.</p>
@@ -109,7 +109,7 @@ function remove(id: string) {
     </main>
 
     <!-- Log Recovery Bottom Sheet -->
-    <BottomSheet v-model:open="isAddOpen" content-class="p-0 gap-0">
+    <UiBottomSheet v-model:open="isAddOpen" content-class="p-0 gap-0">
       <template #header>
         <div class="flex items-center justify-between p-6 pb-2 shrink-0">
           <h2 class="text-2xl font-bold tracking-tight">Log Recovery</h2>
@@ -124,31 +124,31 @@ function remove(id: string) {
       <div class="flex flex-col gap-6 overflow-y-auto px-6 py-4 no-scrollbar">
         <div>
           <label class="text-xs font-semibold text-muted-foreground mb-3 block ml-1 uppercase tracking-wider">Type</label>
-          <ToggleGroup type="single" v-model="formType" class="grid grid-cols-2 gap-2">
-            <ToggleGroupItem v-for="t in PRESET_TYPES" :key="t" :value="t" variant="ghost" size="sm">
+          <UiToggleGroup type="single" v-model="formType" class="grid grid-cols-2 gap-2">
+            <UiToggleGroupItem v-for="t in PRESET_TYPES" :key="t" :value="t" variant="ghost" size="sm">
               {{ t }}
-            </ToggleGroupItem>
-          </ToggleGroup>
+            </UiToggleGroupItem>
+          </UiToggleGroup>
         </div>
 
         <div v-if="formType === 'Other'" class="animate-in slide-in-from-top-2 fade-in">
           <label class="text-xs font-semibold text-muted-foreground mb-2 block ml-1 uppercase tracking-wider">Custom Type</label>
-          <Input v-model="formCustomType" placeholder="e.g. Travel" class="h-12" />
+          <UiInput v-model="formCustomType" placeholder="e.g. Travel" class="h-12" />
         </div>
 
         <div>
           <label class="text-xs font-semibold text-muted-foreground mb-3 block ml-1 uppercase tracking-wider">Dates</label>
-          <RangeCalendar v-model="dateRange" />
+          <UiRangeCalendar v-model="dateRange" />
         </div>
       </div>
 
       <!-- Docked Footer Action -->
       <div class="px-6 pb-safe pt-4 shrink-0 bg-background/95 backdrop-blur z-10 border-t border-white/5">
-        <Button class="w-full h-14 rounded-2xl text-base font-black mb-6 shadow-lg shadow-primary/20 transition-all active:scale-[0.98]" @click="saveEvent">
+        <UiButton class="w-full h-14 rounded-2xl text-base font-black mb-6 shadow-lg shadow-primary/20 transition-all active:scale-[0.98]" @click="saveEvent">
           Save Entry
-        </Button>
+        </UiButton>
       </div>
-    </BottomSheet>
+    </UiBottomSheet>
   </div>
 </template>
 

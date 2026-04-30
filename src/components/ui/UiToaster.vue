@@ -9,7 +9,7 @@ import {
   ToastTitle,
   ToastViewport,
 } from "reka-ui";
-import { useToast } from "./useToast";
+import { useToast } from "@/composables/useToast";
 
 const { toasts, dismiss } = useToast();
 </script>

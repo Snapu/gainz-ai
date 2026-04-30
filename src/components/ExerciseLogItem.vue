@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import SwipeToDeleteItem from "@/components/ui/SwipeToDeleteItem.vue";
+import UiSwipeToDeleteItem from "@/components/ui/UiSwipeToDeleteItem.vue";
 import type { ExerciseLog } from "@/services/exerciseLogs";
 
 const props = defineProps<{
@@ -11,7 +11,7 @@ const emit = defineEmits<(e: "delete", log: ExerciseLog) => void>();
 </script>
 
 <template>
-  <SwipeToDeleteItem :variant="props.variant ?? 'card'" @delete="emit('delete', props.log)">
+  <UiSwipeToDeleteItem :variant="props.variant ?? 'card'" @delete="emit('delete', props.log)">
     <div class="flex justify-between items-center">
       <h3 class="font-semibold text-sm text-foreground tracking-tight leading-none">{{ log.exerciseName }}</h3>
       <div class="flex gap-4 items-center">
@@ -33,5 +33,5 @@ const emit = defineEmits<(e: "delete", log: ExerciseLog) => void>();
         </div>
       </div>
     </div>
-  </SwipeToDeleteItem>
+  </UiSwipeToDeleteItem>
 </template>

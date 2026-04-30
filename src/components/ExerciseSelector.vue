@@ -2,12 +2,13 @@
 import { Plus, Search, X } from "lucide-vue-next";
 import { DialogClose, DialogTitle } from "reka-ui";
 import { computed, ref, watch } from "vue";
+import { uiFieldClass, uiPressClass } from "@/components/ui/styles";
 import { cn } from "@/lib/utils";
-import BottomSheet from "./BottomSheet.vue";
 import ClickableList, {
   type ClickableListItem,
   type ClickableListItemMeta,
 } from "./ClickableList.vue";
+import UiBottomSheet from "./ui/UiBottomSheet.vue";
 
 export interface ExerciseSelectorOptionDetails {
   description?: string;
@@ -74,14 +75,16 @@ watch(isOpen, (val) => {
 </script>
 
 <template>
-  <BottomSheet v-model:open="isOpen" content-class="p-0 gap-0">
+  <UiBottomSheet v-model:open="isOpen" content-class="p-0 gap-0">
     <!-- Trigger -->
     <template #trigger>
       <button
         type="button"
         @click="isOpen = true"
         :class="cn(
-          'flex h-14 w-full items-center justify-between rounded-2xl border border-input/50 backdrop-blur-md bg-card/60 px-4 py-3 text-base font-medium ring-offset-background transition-all shadow-inner text-left active:scale-[0.98]',
+          uiFieldClass,
+          uiPressClass,
+          'h-14 items-center justify-between bg-card/60 text-left',
           !modelValue && 'text-muted-foreground',
           props.class
         )"
@@ -97,7 +100,12 @@ watch(isOpen, (val) => {
         <DialogTitle class="text-2xl font-black italic tracking-tight">
           Choose <span class="text-primary">Exercise</span>
         </DialogTitle>
-        <DialogClose class="rounded-full p-2 bg-white/5 hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-primary active:scale-95">
+        <DialogClose
+          :class="cn(
+            'rounded-full p-2 bg-white/5 hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-primary',
+            uiPressClass
+          )"
+        >
           <X class="w-5 h-5 text-muted-foreground hover:text-foreground" />
           <span class="sr-only">Close</span>
         </DialogClose>
@@ -112,7 +120,11 @@ watch(isOpen, (val) => {
           ref="searchInputRef"
           v-model="searchQuery"
           placeholder="Search or add new..."
-          class="flex h-14 w-full rounded-2xl border border-white/5 bg-white/5 pl-12 pr-4 py-3 text-base font-medium placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all shadow-inner"
+          :class="cn(
+            uiFieldClass,
+            uiPressClass,
+            'h-14 pl-12 pr-4 placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary'
+          )"
         />
       </div>
     </div>
@@ -123,7 +135,10 @@ watch(isOpen, (val) => {
       <button
         v-if="showCreateOption"
         @click="handleCreate"
-        class="flex w-full items-center gap-4 p-4 rounded-2xl bg-primary/10 border border-primary/20 text-primary animate-in fade-in slide-in-from-top-2"
+        :class="cn(
+          'flex w-full items-center gap-4 rounded-2xl border border-primary/20 bg-primary/10 p-4 text-primary animate-in fade-in slide-in-from-top-2',
+          uiPressClass
+        )"
       >
         <div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
           <Plus class="w-6 h-6" />
@@ -144,9 +159,9 @@ watch(isOpen, (val) => {
       <ClickableList
         v-if="listItems.length > 0"
         :items="listItems"
-        item-class="select-none active:scale-[0.98]"
+        item-class="select-none"
         @select="handleSelect($event.title)"
       />
     </div>
-  </BottomSheet>
+  </UiBottomSheet>
 </template>

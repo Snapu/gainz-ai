@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { uiFieldClass, uiFieldErrorClass } from "@/components/ui/styles";
 import { cn } from "@/lib/utils";
 
 defineOptions({ inheritAttrs: false });
@@ -17,8 +18,9 @@ const modelValue = defineModel<string | number>();
       v-bind="$attrs"
       v-model="modelValue"
       :class="cn(
-        'flex min-h-[120px] w-full rounded-2xl border border-input/50 backdrop-blur-md bg-white/5 px-4 py-3 text-base font-medium ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary disabled:cursor-not-allowed disabled:opacity-50 transition-all shadow-inner resize-none',
-        error && 'border-destructive focus-visible:ring-destructive',
+        uiFieldClass,
+        'min-h-[120px] resize-none',
+        error && uiFieldErrorClass,
         props.class
       )"
     ></textarea>

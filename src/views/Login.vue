@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import Button from "@/components/ui/Button.vue";
-import { useToast } from "@/components/ui/useToast";
+import UiButton from "@/components/ui/UiButton.vue";
+import { useToast } from "@/composables/useToast";
 import { useAuthStore } from "@/stores/auth";
 
 const authStore = useAuthStore();
@@ -47,13 +47,13 @@ async function handleLogin() {
         <p class="text-lg text-muted-foreground font-medium">Your intelligent training companion</p>
       </div>
       
-      <Button 
+      <UiButton 
         class="w-full text-lg h-16 rounded-2xl" 
         @click="handleLogin" 
         :disabled="isLoggingIn"
       >
         {{ isLoggingIn ? 'Signing in...' : 'Sign in with Google' }}
-      </Button>
+      </UiButton>
     </div>
     
     <div class="pb-8 pt-4 flex gap-6 text-sm text-muted-foreground/60 font-medium">

@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/vue";
-import { useToast } from "@/components/ui/useToast";
+import { useToast } from "@/composables/useToast";
 import { useAuthStore } from "@/stores/auth";
 
 /**

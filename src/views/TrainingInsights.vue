@@ -2,9 +2,9 @@
 import { ArrowLeft, HelpCircle, Moon, Scale, TrendingDown, TrendingUp } from "lucide-vue-next";
 import { storeToRefs } from "pinia";
 import { computed, onMounted, ref } from "vue";
-import AppHeader from "@/components/ui/AppHeader.vue";
-import Button from "@/components/ui/Button.vue";
-import MuscleActivationMap from "@/components/ui/MuscleActivationMap.vue";
+import AppHeader from "@/components/AppHeader.vue";
+import MuscleActivationMap from "@/components/MuscleActivationMap.vue";
+import UiButton from "@/components/ui/UiButton.vue";
 import UiCard from "@/components/ui/UiCard.vue";
 import UiSegmentedControl from "@/components/ui/UiSegmentedControl.vue";
 import { classifyExercises } from "@/services/ai";
@@ -510,9 +510,9 @@ const triggerRows = computed((): TriggerRow[] => {
 <template>
   <div class="min-h-screen bg-background flex flex-col pt-safe">
     <AppHeader>
-      <Button variant="ghost" size="icon" @click="$router.back()">
+      <UiButton variant="ghost" size="icon" @click="$router.back()">
         <ArrowLeft class="w-5 h-5" />
-      </Button>
+      </UiButton>
       <div class="flex-1 max-w-[300px] ml-2">
         <UiSegmentedControl
           :options="tabOptions"

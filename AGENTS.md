@@ -126,10 +126,12 @@ src/
 ├── router/index.ts      # Route definitions
 ├── views/               # Top-level pages
 │   └── wizard/          # Wizard step components
-├── components/          # Reusable components
-│   └── ui/              # Shared UI patterns (UiCombobox, etc.)
+├── components/          # Layout + composite + domain components (AppHeader, ExerciseSelector, etc.)
+│   └── ui/              # Base primitives only — all prefixed Ui* (UiButton, UiInput, etc.)
+├── composables/         # All composables including useToast, useAuthErrorHandler, etc.
 ├── stores/              # Pinia stores (auth, userProfile, exercises, etc.)
 ├── services/            # Domain services (spreadsheets, exercises, etc.)
+├── theme/               # CSS variables + interaction tokens (variables.css)
 └── assets/              # Static assets
 ```
 
@@ -163,9 +165,36 @@ function selectItem(item: string) {
 }
 ```
 
+## Component Placement Rules
+
+These rules enforce architecture boundaries. **Do not deviate** — the type-checker and tests validate placement.
+
+### `src/components/ui/` — Base primitives only
+- **Allowed**: Stateless or near-stateless wrappers around HTML/reka-ui primitives (inputs, buttons, badges, overlays, layout containers)
+- **Naming**: All files **must** use the `Ui*` prefix (e.g., `UiButton.vue`, `UiInput.vue`)
+- **Forbidden**: Domain-specific render logic, exercise/workout/user data, business state
+- **Style rule**: Use shared style contracts from `styles.ts` (CVA variants, `uiFieldClass`, `uiSelectableItemClass`)
+
+### `src/components/` — Composite & layout components
+- **Allowed**: Components that compose `ui/` primitives with domain logic (e.g., `ExerciseSelector`, `AppHeader`, `SessionLogGroup`)
+- **No Ui prefix** — these are domain/composite components
+- **AppHeader** lives here (it's a layout component, not a primitive)
+
+### `src/composables/` — All composables
+- **All** `useXxx` functions live here, including `useToast`
+- **Never** put composable `.ts` files inside `src/components/ui/`
+
+### Adding a new component — checklist
+1. Is it a pure primitive (wraps one HTML element or reka-ui primitive, no domain data)? → `src/components/ui/UiMyComponent.vue`
+2. Is it a composite or layout component? → `src/components/MyComponent.vue`
+3. Does it contain domain logic (exercises, workouts, AI)? → `src/components/` or a domain subfolder
+4. Is it a composable (`useXxx`)? → `src/composables/useXxx.ts`
+
 ## References
 
-- UI patterns: `src/components/ui/UiCombobox.vue`
+- UI primitives: `src/components/ui/UiButton.vue`, `src/components/ui/UiInput.vue`
+- Style contracts: `src/components/ui/styles.ts` (uiFieldClass, uiSelectableItemClass, badgeVariants, dropdownMenuItemVariants)
+- Composite components: `src/components/ExerciseSelector.vue`, `src/components/ClickableList.vue`
 - Store pattern: `src/stores/auth.ts`
 - Test example: `src/services/trainingSummary.test.ts`
 - Services: `src/services/spreadsheets.ts`

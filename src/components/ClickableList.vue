@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { uiSelectableItemClass } from "@/components/ui/styles";
 import { cn } from "@/lib/utils";
-import UiCard from "./UiCard.vue";
+import UiCard from "./ui/UiCard.vue";
 
 export interface ClickableListItemMeta {
   label: string;
@@ -39,10 +40,7 @@ const emit = defineEmits<(e: "select", item: ClickableListItem) => void>();
       v-for="item in props.items"
       :key="item.id"
       type="button"
-      :class="cn(
-        'flex w-full cursor-pointer flex-col px-4 py-3 text-left transition-colors hover:bg-white/[0.04] active:bg-white/[0.06]',
-        props.itemClass
-      )"
+      :class="cn(uiSelectableItemClass, props.itemClass)"
       @click="emit('select', item)"
     >
       <div class="flex w-full items-center justify-between gap-3">

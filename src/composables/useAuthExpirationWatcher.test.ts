@@ -2,11 +2,11 @@
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
-import { useToast } from "@/components/ui/useToast";
+import { useToast } from "@/composables/useToast";
 import { useAuthStore } from "@/stores/auth";
 import { useAuthExpirationWatcher } from "./useAuthExpirationWatcher";
 
-vi.mock("@/components/ui/useToast");
+vi.mock("@/composables/useToast");
 vi.mock("@/stores/auth");
 
 describe("useAuthExpirationWatcher", () => {

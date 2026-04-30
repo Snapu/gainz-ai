@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
-import { useToast } from "@/components/ui/useToast";
+import { useToast } from "@/composables/useToast";
 import { useAuthStore } from "@/stores/auth";
 import { useAuthErrorHandler } from "./useAuthErrorHandler";
 
 vi.mock("@/stores/auth");
-vi.mock("@/components/ui/useToast");
+vi.mock("@/composables/useToast");
 
 describe("useAuthErrorHandler", () => {
   const mockLogout = vi.fn();

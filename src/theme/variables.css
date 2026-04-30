@@ -38,6 +38,22 @@
   --radius-2xl: 1.5rem;
   --radius-3xl: 2rem;
 
+  /* Interaction tokens */
+  --ui-transition-fast: 150ms;
+  --ui-transition-base: 200ms;
+  --ui-transition-slow: 300ms;
+  --ui-easing: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --ui-hover-overlay: oklch(100% 0 0 / 5%);
+  --ui-active-overlay: oklch(100% 0 0 / 8%);
+  --ui-focus-ring: oklch(89% 0.2 135);
+  --ui-press-scale: scale(0.96);
+
+  --ui-field-bg: oklch(100% 0 0 / 5%);
+  --ui-field-border: oklch(25% 0.02 264 / 50%);
+  --ui-field-border-hover: oklch(89% 0.2 135 / 50%);
+  --ui-field-border-focus: oklch(89% 0.2 135);
+
   /* Reka UI and general animations */
   --animate-in: animate-in 0.2s ease-out;
   --animate-out: animate-out 0.2s ease-in;

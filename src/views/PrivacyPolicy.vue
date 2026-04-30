@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ArrowLeft } from "lucide-vue-next";
 import { useRouter } from "vue-router";
-import Button from "@/components/ui/Button.vue";
+import UiButton from "@/components/ui/UiButton.vue";
 
 const router = useRouter();
 </script>
@@ -9,9 +9,9 @@ const router = useRouter();
 <template>
   <div class="min-h-screen bg-background flex flex-col">
     <header class="flex items-center p-4 border-b border-white/5 bg-background/80 backdrop-blur-md sticky top-0 z-10">
-      <Button variant="ghost" size="icon" @click="router.back()" class="shrink-0 -ml-2 mr-2">
+      <UiButton variant="ghost" size="icon" @click="router.back()" class="shrink-0 -ml-2 mr-2">
         <ArrowLeft class="w-6 h-6" />
-      </Button>
+      </UiButton>
       <h1 class="text-xl font-bold truncate">Privacy Policy</h1>
     </header>
     

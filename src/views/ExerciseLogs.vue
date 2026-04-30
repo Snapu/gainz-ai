@@ -4,20 +4,20 @@ import { ChevronRight, ExternalLink, Menu, Moon, Plus, Sparkles } from "lucide-v
 import { storeToRefs } from "pinia";
 import { computed, ref, watch } from "vue";
 import AICoachingPanel from "@/components/AICoachingPanel.vue";
+import AppHeader from "@/components/AppHeader.vue";
+import EmptyState from "@/components/EmptyState.vue";
+import type { ExerciseSelectorOptionDetails } from "@/components/ExerciseSelector.vue";
+import ExerciseSelector from "@/components/ExerciseSelector.vue";
 import RestTimerToast from "@/components/RestTimerToast.vue";
 import SessionLogGroup from "@/components/SessionLogGroup.vue";
 import UserProgressCard from "@/components/UserProgressCard.vue";
-import AppHeader from "@/components/ui/AppHeader.vue";
-import BottomSheet from "@/components/ui/BottomSheet.vue";
-import Button from "@/components/ui/Button.vue";
-import DropdownMenu from "@/components/ui/DropdownMenu.vue";
-import DropdownMenuItem from "@/components/ui/DropdownMenuItem.vue";
-import EmptyState from "@/components/ui/EmptyState.vue";
-import type { ExerciseSelectorOptionDetails } from "@/components/ui/ExerciseSelector.vue";
-import ExerciseSelector from "@/components/ui/ExerciseSelector.vue";
-import NumberField from "@/components/ui/NumberField.vue";
-import Sparkline from "@/components/ui/Sparkline.vue";
-import { useToast } from "@/components/ui/useToast";
+import UiBottomSheet from "@/components/ui/UiBottomSheet.vue";
+import UiButton from "@/components/ui/UiButton.vue";
+import UiDropdownMenu from "@/components/ui/UiDropdownMenu.vue";
+import UiDropdownMenuItem from "@/components/ui/UiDropdownMenuItem.vue";
+import UiNumberField from "@/components/ui/UiNumberField.vue";
+import UiSparkline from "@/components/ui/UiSparkline.vue";
+import { useToast } from "@/composables/useToast";
 import { WIZARD_STEPS } from "@/constants/wizard";
 import type { ExerciseLog } from "@/services/exerciseLogs";
 import { calculateUserProgress } from "@/services/leveling";
@@ -369,24 +369,24 @@ async function saveLog() {
         <h1 class="text-2xl font-black italic tracking-tighter">Gainz<span class="text-primary">AI</span></h1>
       </div>
       <div class="flex gap-2">
-        <Button variant="ghost" size="icon" @click="isAIPanelOpen = true">
+        <UiButton variant="ghost" size="icon" @click="isAIPanelOpen = true">
           <Sparkles class="w-5 h-5 text-primary" />
-        </Button>
-        <Button variant="ghost" size="icon" @click="$router.push('/rest-recovery')">
+        </UiButton>
+        <UiButton variant="ghost" size="icon" @click="$router.push('/rest-recovery')">
           <Moon class="w-5 h-5 text-muted-foreground" />
-        </Button>
-        <DropdownMenu>
+        </UiButton>
+        <UiDropdownMenu>
           <template #trigger>
-            <Button variant="ghost" size="icon">
+            <UiButton variant="ghost" size="icon">
               <Menu class="w-5 h-5" />
-            </Button>
+            </UiButton>
           </template>
           
           <div class="px-3 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">
             Quick Edit
           </div>
           
-          <DropdownMenuItem 
+          <UiDropdownMenuItem 
             v-for="step in WIZARD_STEPS" 
             :key="step.id"
             @select="$router.push(`/wizard/${step.id}?mode=edit`)"
@@ -394,7 +394,7 @@ async function saveLog() {
           >
             <span>{{ step.title }}</span>
             <ChevronRight class="w-4 h-4 ml-auto opacity-0 group-focus:opacity-20 transition-opacity" />
-          </DropdownMenuItem>
+          </UiDropdownMenuItem>
 
           <div class="h-px bg-white/5 my-1 mx-3"></div>
           
@@ -402,14 +402,14 @@ async function saveLog() {
             Data
           </div>
 
-          <DropdownMenuItem 
+          <UiDropdownMenuItem 
             @select="spreadsheetStore.openInBrowser()"
             class="group"
           >
             <span>Open Spreadsheet</span>
             <ExternalLink class="w-4 h-4 ml-auto opacity-40 group-hover:text-primary transition-colors" />
-          </DropdownMenuItem>
-        </DropdownMenu>
+          </UiDropdownMenuItem>
+        </UiDropdownMenu>
       </div>
     </AppHeader>
 
@@ -453,17 +453,17 @@ async function saveLog() {
 
     <!-- Primary FAB -->
     <div class="fixed bottom-10 right-10 z-30 pb-safe pointer-events-auto">
-      <Button 
+      <UiButton 
         class="relative w-16 h-16 rounded-full shadow-2xl active:scale-95 transition-all z-10" 
         size="icon" 
         @click="handleFabClick"
       >
         <Plus class="w-8 h-8" />
-      </Button>
+      </UiButton>
     </div>
 
     <!-- Bottom Sheet Form -->
-    <BottomSheet v-model:open="isLogFormOpen" title="Log Exercise">
+    <UiBottomSheet v-model:open="isLogFormOpen" title="Log Exercise">
       <div class="flex flex-col gap-6 w-full">
         <!-- Optimized Exercise Selection -->
         <ExerciseSelector
@@ -479,7 +479,7 @@ async function saveLog() {
           v-if="exerciseStats && (exerciseStats.weightHistory.length >= 2 || exerciseStats.repsHistory.length >= 2)"
           class="flex gap-3 p-3 rounded-2xl bg-card/40 border border-white/5 backdrop-blur-sm"
         >
-          <Sparkline
+          <UiSparkline
             v-if="exerciseStats.weightHistory.length >= 2"
             :values="exerciseStats.weightHistory"
             :max-value="exerciseStats.max.weight"
@@ -488,7 +488,7 @@ async function saveLog() {
             :height="48"
             class="flex-1"
           />
-          <Sparkline
+          <UiSparkline
             v-if="exerciseStats.repsHistory.length >= 2"
             :values="exerciseStats.repsHistory"
             :max-value="exerciseStats.max.reps"
@@ -503,10 +503,10 @@ async function saveLog() {
         
         <!-- Metrics -->
         <div class="grid grid-cols-2 gap-4">
-          <NumberField v-model="formReps" label="Reps" :min="0" :step="1" />
-          <NumberField v-model="formWeight" label="Weight (kg)" :min="0" :step="0.5" />
-          <NumberField v-model="formDistance" label="Distance (m)" :min="0" :step="10" />
-          <NumberField v-model="formDuration" label="Duration (min)" :min="0" :step="0.5" />
+          <UiNumberField v-model="formReps" label="Reps" :min="0" :step="1" />
+          <UiNumberField v-model="formWeight" label="Weight (kg)" :min="0" :step="0.5" />
+          <UiNumberField v-model="formDistance" label="Distance (m)" :min="0" :step="10" />
+          <UiNumberField v-model="formDuration" label="Duration (min)" :min="0" :step="0.5" />
         </div>
 
         <!-- Stopwatch -->
@@ -526,11 +526,11 @@ async function saveLog() {
           />
         </div>
 
-        <Button class="w-full h-16 rounded-2xl text-lg mt-4" @click="saveLog">
+        <UiButton class="w-full h-16 rounded-2xl text-lg mt-4" @click="saveLog">
           Save Set
-        </Button>
+        </UiButton>
       </div>
-    </BottomSheet>
+    </UiBottomSheet>
 
     <AICoachingPanel v-model:open="isAIPanelOpen" @log-exercise="prefillFromAi" />
   </div>

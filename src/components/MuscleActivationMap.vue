@@ -3,8 +3,8 @@ import { BarChart2, CalendarDays, CheckCircle2, Hourglass, Timer } from "lucide-
 import { computed, ref } from "vue";
 import type { MuscleGroup, MuscleGroupInsight, VolumeLandmark } from "@/services/trainingScience";
 import { RECOVERY_HOURS, VOLUME_LANDMARKS } from "@/services/trainingScience";
-import BottomSheet from "./BottomSheet.vue";
-import UiSegmentedControl from "./UiSegmentedControl.vue";
+import UiBottomSheet from "./ui/UiBottomSheet.vue";
+import UiSegmentedControl from "./ui/UiSegmentedControl.vue";
 
 const props = defineProps<{
   muscleGroups: Partial<Record<MuscleGroup, MuscleGroupInsight>>;
@@ -311,7 +311,7 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
       </div>
 
       <!-- ─── Detail Overlay (BottomSheet) ──────────────── -->
-      <BottomSheet v-model:open="isDetailOpen" :hide-overlay="true" :modal="false" contentClass="p-0 gap-0">
+      <UiBottomSheet v-model:open="isDetailOpen" :hide-overlay="true" :modal="false" contentClass="p-0 gap-0">
         <template #header>
           <!-- Header: name + landmark badge -->
           <div v-if="selectedDetail" class="flex items-center gap-2 px-5 pt-6 pb-4 border-b border-white/10">
@@ -403,7 +403,7 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
           </div>
 
         </div>
-      </BottomSheet>
+      </UiBottomSheet>
 
     </div>
 

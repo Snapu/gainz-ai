@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ChevronRight } from "lucide-vue-next";
 import { computed } from "vue";
-import Badge from "@/components/ui/Badge.vue";
-import RadialProgress from "@/components/ui/RadialProgress.vue";
+import UiBadge from "@/components/ui/UiBadge.vue";
 import UiCard from "@/components/ui/UiCard.vue";
+import UiRadialProgress from "@/components/ui/UiRadialProgress.vue";
 import type { UserProgress } from "@/services/leveling";
 import type { SystemicPhase, TrainingInsights } from "@/services/trainingScience";
 
@@ -44,7 +44,7 @@ const phaseTheme = computed(() => PHASE_THEME[props.insights.phase]);
         
         <!-- Level Progress -->
         <div class="absolute bottom-5 left-5 flex items-center gap-2">
-           <RadialProgress 
+           <UiRadialProgress 
             :progress="progress.progressPercent" 
             :size="40" 
             :stroke-width="4"
@@ -55,7 +55,7 @@ const phaseTheme = computed(() => PHASE_THEME[props.insights.phase]);
               <span class="text-[8px] font-black text-white/70 uppercase leading-none mb-0.5">Lvl</span>
               <span class="text-xs font-bold text-white leading-none">{{ progress.level }}</span>
             </div>
-          </RadialProgress>
+          </UiRadialProgress>
         </div>
       </div>
 
@@ -81,9 +81,9 @@ const phaseTheme = computed(() => PHASE_THEME[props.insights.phase]);
             <div class="flex flex-col gap-1">
                <span class="text-[9px] font-black tracking-widest text-muted-foreground uppercase">Phase</span>
                <div class="flex items-center">
-                 <Badge :class="phaseTheme" class="text-[10px] uppercase tracking-wider px-1.5 py-0">
+                 <UiBadge :class="phaseTheme" class="text-[10px] uppercase tracking-wider px-1.5 py-0">
                    {{ insights.phase }}
-                 </Badge>
+                 </UiBadge>
                </div>
             </div>
             
