@@ -14,7 +14,6 @@ const INITIAL_LOG_WINDOW_DAYS = 14;
 const EXTENDED_LOG_WINDOW_DAYS = 28;
 const MIN_INITIAL_LOG_ENTRIES = 12;
 const MAX_SUMMARIES_IN_PROMPT = 6;
-const MAX_ASSISTANT_HISTORY_MESSAGES = 3;
 /** Temperature for exercise classification requests — low to reduce hallucination on factual lookups. */
 const CLASSIFICATION_TEMPERATURE = 0.1;
 /** Comma-separated list of valid muscle groups for use in AI prompt descriptions. */
@@ -430,49 +429,53 @@ function getInitialLogsWindow(exerciseLogs: ExerciseLog[]): { logs: ExerciseLog[
   };
 }
 
-/** Build conversation history for the API.
- *  Only sends previous assistant responses (not the user payloads which are huge).
- *  The current user input is always appended at the end. */
-function buildConversationContents(params: {
-  previousMessages: PreviousAiMessage[];
-  currentUserInput: string;
-}): Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> {
-  const contents: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [];
+/**
+ * Build a compact summary of the last AI-prescribed plan with completion status.
+ * Replaces full conversation history — saves ~1500-2400 tokens per mid-workout call.
+ *
+ * Output example:
+ *   "Last plan status:\nBench Press: 3/4 sets\nSquat: ✓ done\nLateral Raises: pending"
+ */
+function buildPriorPlanSummary(
+  previousMessages: PreviousAiMessage[],
+  todayLogs: ExerciseLog[],
+): string | null {
+  const lastAssistant = previousMessages.filter((m) => m.role === "assistant").slice(-1)[0];
+  if (!lastAssistant) return null;
 
-  // Only include previous assistant responses to avoid resending giant user payloads
-  const recentAssistantMessages = params.previousMessages
-    .filter((m) => m.role === "assistant")
-    .slice(-MAX_ASSISTANT_HISTORY_MESSAGES);
+  try {
+    const parsed = JSON.parse(lastAssistant.content);
+    if (!Array.isArray(parsed.recommendedWorkout) || parsed.recommendedWorkout.length === 0) {
+      return null;
+    }
 
-  for (const msg of recentAssistantMessages) {
-    // Strip internal reasoning fields before storing in history — saves 30-50% context tokens
-    const strippedContent = (() => {
-      try {
-        const parsed = JSON.parse(msg.content);
-        // Strip all locale text and reasoning fields from history — coachMessage is in the
-        // user's locale language (e.g. German) which would push the model out of English for
-        // internal fields (scratchpad, reasoning). Only keep structured workout data.
-        const { scratchpad: _s, coachMessage: _c, ...rest } = parsed;
-        if (Array.isArray(rest.recommendedWorkout)) {
-          rest.recommendedWorkout = rest.recommendedWorkout.map(
-            ({ reasoning: _r, ...exercise }: { reasoning?: string; [key: string]: unknown }) =>
-              exercise,
-          );
+    // Count today's logged sets per exercise
+    const todayExercises = new Map<string, number>();
+    for (const log of todayLogs) {
+      todayExercises.set(log.exerciseName, (todayExercises.get(log.exerciseName) ?? 0) + 1);
+    }
+
+    const lines = parsed.recommendedWorkout.map(
+      (ex: { exerciseName: string; targetSets: number; targetWeight?: string }) => {
+        const done = todayExercises.get(ex.exerciseName) ?? 0;
+        const target = ex.targetSets ?? 0;
+        let status: string;
+        if (target > 0 && done >= target) {
+          status = "✓ done";
+        } else if (done > 0) {
+          status = `${done}/${target} sets`;
+        } else {
+          status = "pending";
         }
-        return JSON.stringify(rest);
-      } catch {
-        return msg.content;
-      }
-    })();
-    // Gemini requires strictly alternating user/model turns. Wrap each historical workout
-    // in a synthetic user prompt to produce a valid [user, model, user, model, ...] sequence.
-    contents.push({ role: "user", parts: [{ text: "(previous session)" }] });
-    contents.push({ role: "model", parts: [{ text: strippedContent }] });
+        const weight = ex.targetWeight ? ` @${ex.targetWeight}` : "";
+        return `${ex.exerciseName}: ${status}${weight}`;
+      },
+    );
+
+    return `Last plan status:\n${lines.join("\n")}`;
+  } catch {
+    return null;
   }
-
-  contents.push({ role: "user", parts: [{ text: params.currentUserInput }] });
-
-  return contents;
 }
 
 export async function askAi(
@@ -501,7 +504,6 @@ export async function askAi(
     const isMidWorkout = phase === "mid-workout";
 
     const initialWindow = getInitialLogsWindow(exerciseLogs);
-    const logsToInclude = isFirstMessage ? initialWindow.logs : todayLogs;
     const workoutStatus = getWorkoutStatus(exerciseLogs);
     const now = new Date();
     const currentTime = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
@@ -539,33 +541,51 @@ export async function askAi(
       sections.push(`Historical training summary:\n${JSON.stringify(summariesForPrompt)}`);
     }
 
-    // Exercise logs: always send, but in compact format
-    if (isMidWorkout && previousMessages.length > 0) {
-      // Mid-workout: only send new sets since last AI response
-      const assistantMsgs = previousMessages.filter((m) => m.role === "assistant");
-      const lastAssistant = assistantMsgs[assistantMsgs.length - 1];
-      // Use ISO timestamp from the last assistant message for accurate cutoff.
-      // sessionDate is a locale string (e.g. "24.4.2026") that does NOT parse reliably with new Date().
-      const cutoff = lastAssistant?.timestamp ? new Date(lastAssistant.timestamp).getTime() : 0;
-      const newLogs = todayLogs.filter((l) => l.loggedAt.getTime() > cutoff);
-      sections.push(
-        `New sets since last update:\n${compactLogs(newLogs.length > 0 ? newLogs : todayLogs)}`,
-      );
-    } else {
-      const logLabel = isFirstMessage ? initialWindow.label : "Today's logs";
-      sections.push(`${logLabel}:\n${compactLogs(logsToInclude)}`);
+    // Exercise logs: always send today's full session ledger so the AI
+    // has cumulative context (prevents confusion about completed work)
+    if (todayLogs.length > 0) {
+      sections.push(`Today's session so far:\n${compactLogs(todayLogs)}`);
     }
 
-    // Training science insights: always send when not mid-workout (includes planning messages 2, 3, etc.)
-    // Sending only on isFirstMessage would drop volume/fatigue context for follow-up planning questions.
-    if (phase !== "mid-workout") {
-      const learnedMap = getLearnedMuscleMap();
-      const insights = calculateTrainingInsights(
-        exerciseLogs,
-        new Date(),
-        learnedMap,
-        userProfile.weightKg,
-      );
+    if (isMidWorkout && previousMessages.length > 0) {
+      // Mid-workout: highlight new sets since last AI response
+      const assistantMsgs = previousMessages.filter((m) => m.role === "assistant");
+      const lastAssistant = assistantMsgs[assistantMsgs.length - 1];
+      const cutoff = lastAssistant?.timestamp ? new Date(lastAssistant.timestamp).getTime() : 0;
+      const newLogs = todayLogs.filter((l) => l.loggedAt.getTime() > cutoff);
+      if (newLogs.length > 0) {
+        sections.push(`New since last update:\n${compactLogs(newLogs)}`);
+      }
+
+      // Prior plan status: compact summary showing done/pending per exercise
+      const planSummary = buildPriorPlanSummary(previousMessages, todayLogs);
+      if (planSummary) sections.push(planSummary);
+    }
+
+    // First message: also include historical logs for context
+    if (isFirstMessage) {
+      const historicalLogs = initialWindow.logs.filter((l) => l.loggedAt.getTime() < startOfToday);
+      if (historicalLogs.length > 0) {
+        sections.push(`${initialWindow.label}:\n${compactLogs(historicalLogs)}`);
+      }
+    }
+
+    // Training science insights
+    const learnedMap = getLearnedMuscleMap();
+    const insights = calculateTrainingInsights(
+      exerciseLogs,
+      new Date(),
+      learnedMap,
+      userProfile.weightKg,
+    );
+    if (phase === "mid-workout") {
+      // Lightweight e1RM-only line for accurate weight prescription (~50-100 tokens vs ~500+)
+      const e1rmCompact = Object.entries(insights.e1rm)
+        .map(([name, d]) => `${name}: ${d.e1rm}kg${d.plateau ? " (plateau)" : ""}`)
+        .join(", ");
+      if (e1rmCompact) sections.push(`e1RM: ${e1rmCompact}`);
+    } else {
+      // Full insights for planning and post-workout
       sections.push(`Training Insights:\n${JSON.stringify(insights)}`);
     }
 
@@ -585,10 +605,9 @@ export async function askAi(
       console.debug(currentUserInput);
     }
 
-    const conversationContents = buildConversationContents({
-      previousMessages,
-      currentUserInput,
-    });
+    // Single-turn: no conversation history. Prior context is embedded in the prompt
+    // as the session ledger + prior plan summary, saving ~1500-2400 tokens.
+    const conversationContents = [{ role: "user" as const, parts: [{ text: currentUserInput }] }];
 
     const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error("AI request timed out")), AI_TIMEOUT_MS),
