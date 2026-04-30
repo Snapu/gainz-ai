@@ -54,6 +54,12 @@ export interface FatigueInsight {
   weeklyTonnage: number[]; // sum of weight × reps per set, per week
 }
 
+/** A date range representing a detected deload week (exclusive start, inclusive end). */
+export interface DeloadWeekRange {
+  start: Date;
+  end: Date;
+}
+
 export interface TrainingInsights {
   muscleGroups: Partial<Record<MuscleGroup, MuscleGroupInsight>>;
   e1rm: Record<string, ExerciseE1RM>;
@@ -249,14 +255,32 @@ export function calculateE1RM(weight: number, reps: number, rpe?: number): numbe
 /**
  * Calculate e1RM trend for each exercise over distinct sessions (by date).
  * Returns the last 4 session e1RM values + plateau detection.
+ *
+ * When `excludeRanges` is provided, sessions falling inside any deload week
+ * are excluded so that intentionally light deload weights don't contaminate
+ * the trend or trigger false plateau/decline signals.
  */
-export function calculateE1RMInsights(logs: ExerciseLog[]): Record<string, ExerciseE1RM> {
+export function calculateE1RMInsights(
+  logs: ExerciseLog[],
+  excludeRanges?: DeloadWeekRange[],
+): Record<string, ExerciseE1RM> {
+  // Filter out logs that fall within deload week ranges
+  const filteredLogs =
+    excludeRanges && excludeRanges.length > 0
+      ? logs.filter(
+          (log) =>
+            !excludeRanges.some(
+              (range) => log.loggedAt > range.start && log.loggedAt <= range.end,
+            ),
+        )
+      : logs;
+
   // Group logs by canonical (normalized) key, tracking first-seen display name per key.
   // This ensures "Bench Press" and "bench press" combine into one trend line.
   const byExercise = new Map<string, Map<string, ExerciseLog[]>>();
   const displayNames = new Map<string, string>(); // canonical key → first-seen original name
 
-  for (const log of logs) {
+  for (const log of filteredLogs) {
     if (log.weight == null || log.reps == null) continue;
     if (log.reps > 30) continue;
 
@@ -474,16 +498,74 @@ export function calculateMuscleGroupInsights(
   return result;
 }
 
+// --- Deload Week Detection ---
+
+/** Minimum sets/week in the prior baseline to qualify as deload detection.
+ *  Below this threshold the athlete wasn't actively training — don't treat the gap as a deload. */
+const MIN_ACTIVE_SETS_FOR_DELOAD = 4;
+
+/**
+ * Detect deload weeks from volume data (set count only — no e1RM dependency).
+ *
+ * A deload week is one where total sets ≤ 50% of the preceding 3-week average,
+ * AND the athlete was actively training before (priorAvg ≥ MIN_ACTIVE_SETS_FOR_DELOAD).
+ * Returns date ranges for each detected deload week.
+ */
+export function detectDeloadWeekRanges(
+  logs: ExerciseLog[],
+  targetDate: Date,
+  maxWeeks = 24,
+): DeloadWeekRange[] {
+  const msPerWeek = 7 * 86_400_000;
+
+  // Bucket logs into weekly set counts: index 0 = maxWeeks ago, index maxWeeks-1 = current week
+  const weeklySets: number[] = [];
+  const weekBounds: { start: Date; end: Date }[] = [];
+  for (let w = maxWeeks - 1; w >= 0; w--) {
+    const weekEnd = new Date(targetDate.getTime() - w * msPerWeek);
+    const weekStart = new Date(weekEnd.getTime() - msPerWeek);
+    const count = logs.filter(
+      (l) => l.loggedAt > weekStart && l.loggedAt <= weekEnd && l.reps != null,
+    ).length;
+    weeklySets.push(count);
+    weekBounds.push({ start: weekStart, end: weekEnd });
+  }
+
+  const ranges: DeloadWeekRange[] = [];
+
+  // Need at least 3 prior weeks for a baseline, so start scanning from index 3
+  for (let i = 3; i < maxWeeks; i++) {
+    const priorAvg =
+      ((weeklySets[i - 1] ?? 0) + (weeklySets[i - 2] ?? 0) + (weeklySets[i - 3] ?? 0)) / 3;
+    const thisWeekSets = weeklySets[i] ?? 0;
+    if (priorAvg >= MIN_ACTIVE_SETS_FOR_DELOAD && thisWeekSets <= priorAvg * 0.5) {
+      ranges.push(weekBounds[i]!);
+    }
+  }
+
+  return ranges;
+}
+
+/** Check whether a given date falls inside any of the detected deload week ranges. */
+function isInDeloadWeek(date: Date, ranges: DeloadWeekRange[]): boolean {
+  return ranges.some((r) => date > r.start && date <= r.end);
+}
+
 // --- Fatigue & Deload Detection ---
 
 /**
  * Calculate weekly total sets over the last 4 weeks and detect if deload is needed.
+ *
+ * When `isCurrentWeekDeload` is true, the e1RM decline check is skipped because
+ * the athlete is intentionally training lighter — lower e1RM values are expected,
+ * not a sign of accumulated fatigue.
  */
 export function calculateFatigueInsight(
   logs: ExerciseLog[],
   e1rmData: Record<string, ExerciseE1RM>,
   targetDate: Date = new Date(),
   bodyweightKg?: number,
+  isCurrentWeekDeload = false,
 ): FatigueInsight {
   // Weekly total sets and tonnage for last 4 weeks
   const weeklyTotalSets: number[] = [];
@@ -516,13 +598,17 @@ export function calculateFatigueInsight(
   // Check 2: Multiple exercises showing e1RM decline over 2+ consecutive sessions.
   // Comparing to a 2-session average (not just the previous session) avoids false positives
   // from a single bad day (poor sleep, dehydration, mid-taper).
+  // SKIP during an active deload week: lower weights are intentional, not a fatigue signal.
   let decliningExercises = 0;
-  for (const data of Object.values(e1rmData)) {
-    if (data.trend.length >= 3) {
-      const current = data.trend[data.trend.length - 1] ?? 0;
-      const prior2Avg =
-        ((data.trend[data.trend.length - 2] ?? 0) + (data.trend[data.trend.length - 3] ?? 0)) / 2;
-      if (prior2Avg > 0 && current < prior2Avg * 0.95) decliningExercises++;
+  if (!isCurrentWeekDeload) {
+    for (const data of Object.values(e1rmData)) {
+      if (data.trend.length >= 3) {
+        const current = data.trend[data.trend.length - 1] ?? 0;
+        const prior2Avg =
+          ((data.trend[data.trend.length - 2] ?? 0) + (data.trend[data.trend.length - 3] ?? 0)) /
+          2;
+        if (prior2Avg > 0 && current < prior2Avg * 0.95) decliningExercises++;
+      }
     }
   }
   const performanceDecline = decliningExercises >= 2;
@@ -670,18 +756,32 @@ function computeACWR(logs: ExerciseLog[], targetDate: Date, bodyweightKg?: numbe
 /**
  * Compute which week of the current mesocycle the athlete is in.
  *
- * Scans back up to 24 weeks and identifies the most recent "deload week" —
- * defined as a week where total sets were ≤ 50% of the preceding 3-week average,
- * AND the athlete was actively training before (priorAvg ≥ 4 sets/week).
- * This prevents a vacation/illness absence from being misclassified as a deload.
- * Returns weeks elapsed since that deload (week after deload = week 1).
+ * Uses pre-computed deload week ranges to find the most recent deload,
+ * then returns weeks elapsed since that deload (week after deload = week 1).
  * Falls back to counting from the first active week if no deload is found.
  */
-function computeMesocycleWeek(logs: ExerciseLog[], targetDate: Date): number {
+function computeMesocycleWeek(
+  logs: ExerciseLog[],
+  targetDate: Date,
+  deloadRanges: DeloadWeekRange[],
+): number {
   const msPerWeek = 7 * 86_400_000;
   const maxWeeks = 24;
 
-  // Bucket logs into weekly set counts: index 0 = 24 weeks ago, index 23 = current week
+  // Find the most recent deload range that isn't the current week
+  const currentWeekStart = new Date(targetDate.getTime() - msPerWeek);
+  const pastDeloads = deloadRanges.filter((r) => r.end <= targetDate && r.start < currentWeekStart);
+
+  if (pastDeloads.length > 0) {
+    // Most recent deload (ranges are chronologically ordered from detectDeloadWeekRanges)
+    const lastDeload = pastDeloads[pastDeloads.length - 1]!;
+    const weeksAgo = Math.round(
+      (targetDate.getTime() - lastDeload.end.getTime()) / msPerWeek,
+    );
+    return weeksAgo;
+  }
+
+  // No deload found: count from first active week (that week = week 1)
   const weeklySets: number[] = [];
   for (let w = maxWeeks - 1; w >= 0; w--) {
     const weekEnd = new Date(targetDate.getTime() - w * msPerWeek);
@@ -691,25 +791,6 @@ function computeMesocycleWeek(logs: ExerciseLog[], targetDate: Date): number {
     ).length;
     weeklySets.push(count);
   }
-
-  // Minimum sets/week required in the prior baseline to qualify as a deload detection.
-  // Below this threshold the athlete wasn't actively training — don't treat the gap as a deload.
-  const MIN_ACTIVE_SETS_FOR_DELOAD = 4;
-
-  // Search for the most recent deload week (skip current week, need 3 prior weeks for baseline)
-  for (let i = maxWeeks - 2; i >= 3; i--) {
-    const priorAvg =
-      ((weeklySets[i - 1] ?? 0) + (weeklySets[i - 2] ?? 0) + (weeklySets[i - 3] ?? 0)) / 3;
-    const thisWeekSets = weeklySets[i] ?? 0;
-    // Only count as a deload if the athlete had meaningful training before this week,
-    // and the week itself was a genuine reduced-load week (not simply inactive)
-    if (priorAvg >= MIN_ACTIVE_SETS_FOR_DELOAD && thisWeekSets <= priorAvg * 0.5) {
-      // mesocycleWeek = current index (maxWeeks-1) minus deload index
-      return maxWeeks - 1 - i;
-    }
-  }
-
-  // No deload found: count from first active week (that week = week 1)
   const firstActiveIndex = weeklySets.findIndex((s) => s > 0);
   if (firstActiveIndex === -1) return 1;
   return maxWeeks - 1 - (firstActiveIndex - 1);
@@ -719,6 +800,12 @@ function computeMesocycleWeek(logs: ExerciseLog[], targetDate: Date): number {
  * Calculate all training science insights from exercise logs.
  * The overrideMap parameter allows injecting a dynamic exercise→muscle mapping
  * (e.g. from localStorage or spreadsheet) to extend the hard-coded defaults.
+ *
+ * Orchestration order:
+ * 1. Detect deload weeks from volume data (no e1RM dependency — avoids circular dependency)
+ * 2. Compute e1RM trends excluding deload sessions (clean trends)
+ * 3. Compute fatigue with deload awareness (skip e1RM decline during active deload)
+ * 4. Derive phase, ACWR, and mesocycle week
  */
 export function calculateTrainingInsights(
   logs: ExerciseLog[],
@@ -726,14 +813,32 @@ export function calculateTrainingInsights(
   overrideMap?: Record<string, MuscleActivation>,
   bodyweightKg?: number,
 ): TrainingInsights {
-  const e1rm = calculateE1RMInsights(logs);
+  // Step 1: Detect deload weeks from volume (set count) — no e1RM dependency
+  const deloadRanges = detectDeloadWeekRanges(logs, targetDate);
+  const currentWeekIsDeload = isInDeloadWeek(targetDate, deloadRanges);
+
+  // Step 2: e1RM trends with deload sessions filtered out
+  const e1rm = calculateE1RMInsights(logs, deloadRanges);
+
+  // Step 3: Muscle group volume (uses all logs — deload doesn't affect set counting)
   const muscleGroups = calculateMuscleGroupInsights(logs, targetDate, overrideMap);
-  const fatigue = calculateFatigueInsight(logs, e1rm, targetDate, bodyweightKg);
+
+  // Step 4: Fatigue detection — skip e1RM decline check during active deload
+  const fatigue = calculateFatigueInsight(
+    logs,
+    e1rm,
+    targetDate,
+    bodyweightKg,
+    currentWeekIsDeload,
+  );
+
   const phase = computeSystemicPhase(fatigue);
   const acwr = computeACWR(logs, targetDate, bodyweightKg);
   // mesocycleWeek=0 signals an active deload week — prevents the AI from also warning
   // "deload overdue" when shouldDeload is already true and the deload is in progress.
-  const mesocycleWeek = fatigue.shouldDeload ? 0 : computeMesocycleWeek(logs, targetDate);
+  const mesocycleWeek = fatigue.shouldDeload
+    ? 0
+    : computeMesocycleWeek(logs, targetDate, deloadRanges);
 
   return { muscleGroups, e1rm, fatigue, phase, acwr, mesocycleWeek };
 }

@@ -7,6 +7,7 @@ import {
   calculateMuscleGroupInsights,
   calculateTrainingInsights,
   computeSystemicPhase,
+  detectDeloadWeekRanges,
   type FatigueInsight,
   getMuscleActivation,
   getMuscleGroup,
@@ -1045,5 +1046,193 @@ describe("calculateFatigueInsight edge cases", () => {
     const fatigue = calculateFatigueInsight(logs, e1rm, targetDate);
     // Only the Bench Press log should count
     expect(fatigue.weeklyTotalSets[3]).toBe(1);
+  });
+});
+
+// --- Deload-Aware e1RM and Fatigue ---
+
+describe("detectDeloadWeekRanges", () => {
+  it("should detect a deload week when sets drop to ≤50% of prior 3-week average", () => {
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    const logs: ExerciseLog[] = [];
+
+    const midWeek = (w: number) => {
+      const d = new Date(targetDate);
+      d.setDate(d.getDate() - w * 7 - 3);
+      return d;
+    };
+
+    // Weeks 7–4 ago: 10 sets/week (active baseline)
+    for (let w = 4; w <= 7; w++) {
+      for (let s = 0; s < 10; s++) {
+        logs.push(createLog("Bench Press", midWeek(w), 80, 8));
+      }
+    }
+
+    // Week 3 ago: deload (1 set — well below 50% of 10)
+    logs.push(createLog("Bench Press", midWeek(3), 60, 8));
+
+    // Weeks 2–1 ago: normal (10 sets/week)
+    for (let w = 1; w <= 2; w++) {
+      for (let s = 0; s < 10; s++) {
+        logs.push(createLog("Bench Press", midWeek(w), 80, 8));
+      }
+    }
+
+    const ranges = detectDeloadWeekRanges(logs, targetDate);
+    expect(ranges.length).toBeGreaterThanOrEqual(1);
+    // The deload range should cover 3 weeks ago
+    const deloadDate = midWeek(3);
+    const matchingRange = ranges.find(
+      (r) => deloadDate > r.start && deloadDate <= r.end,
+    );
+    expect(matchingRange).toBeDefined();
+  });
+
+  it("should NOT count a vacation (low prior baseline) as a deload", () => {
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    const logs: ExerciseLog[] = [];
+
+    const midWeek = (w: number) => {
+      const d = new Date(targetDate);
+      d.setDate(d.getDate() - w * 7 - 3);
+      return d;
+    };
+
+    // Only 1–2 sets/week before the gap — below MIN_ACTIVE_SETS_FOR_DELOAD (4)
+    for (let w = 5; w <= 7; w++) {
+      logs.push(createLog("Bench Press", midWeek(w), 80, 8));
+    }
+    // Week 3 ago: 0 sets (vacation)
+    // Weeks 2–1 ago: back to 1 set/week
+    for (let w = 1; w <= 2; w++) {
+      logs.push(createLog("Bench Press", midWeek(w), 80, 8));
+    }
+
+    const ranges = detectDeloadWeekRanges(logs, targetDate);
+    // The zero-set week should NOT be detected as a deload
+    expect(ranges.length).toBe(0);
+  });
+});
+
+describe("deload-aware e1RM and fatigue", () => {
+  it("should exclude deload-week sessions from e1RM trend", () => {
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    const logs: ExerciseLog[] = [];
+
+    const midWeek = (w: number) => {
+      const d = new Date(targetDate);
+      d.setDate(d.getDate() - w * 7 - 3);
+      return d;
+    };
+
+    // Weeks 7–4: normal training (10 sets/week at 80kg)
+    for (let w = 4; w <= 7; w++) {
+      for (let s = 0; s < 10; s++) {
+        logs.push(createLog("Bench Press", midWeek(w), 80, 8));
+      }
+    }
+
+    // Week 3: deload (1 set at 50kg — intentionally light)
+    logs.push(createLog("Bench Press", midWeek(3), 50, 8));
+
+    // Weeks 2–1: normal training resumed (10 sets/week at 82.5kg)
+    for (let w = 1; w <= 2; w++) {
+      for (let s = 0; s < 10; s++) {
+        logs.push(createLog("Bench Press", midWeek(w), 82.5, 8));
+      }
+    }
+
+    const deloadRanges = detectDeloadWeekRanges(logs, targetDate);
+    expect(deloadRanges.length).toBeGreaterThanOrEqual(1);
+
+    const e1rm = calculateE1RMInsights(logs, deloadRanges);
+
+    // The deload session (50kg) should NOT appear in the trend
+    const bench = e1rm["Bench Press"];
+    expect(bench).toBeDefined();
+    for (const val of bench!.trend) {
+      // 50kg × 8 reps → e1RM ≈ 63–66, far below normal ~106
+      // All trend values should be from the 80–82.5kg sessions
+      expect(val).toBeGreaterThan(90);
+    }
+  });
+
+  it("should NOT trigger shouldDeload via e1RM decline during active deload week", () => {
+    // Even if we feed declining e1RM data, when isCurrentWeekDeload=true,
+    // the performance decline check is bypassed
+    const e1rm = {
+      "Bench Press": { e1rm: 70, trend: [80, 75, 70], plateau: false },
+      Squat: { e1rm: 90, trend: [100, 95, 90], plateau: false },
+    };
+
+    // Without deload flag → would trigger
+    const fatigueNormal = calculateFatigueInsight([], e1rm, new Date(), undefined, false);
+    expect(fatigueNormal.shouldDeload).toBe(true);
+
+    // With deload flag → should NOT trigger
+    const fatigueDeload = calculateFatigueInsight([], e1rm, new Date(), undefined, true);
+    expect(fatigueDeload.shouldDeload).toBe(false);
+  });
+
+  it("full integration: deload week → resume → no false trigger", () => {
+    const targetDate = new Date("2026-03-25T12:00:00Z");
+    const logs: ExerciseLog[] = [];
+
+    const midWeek = (w: number) => {
+      const d = new Date(targetDate);
+      d.setDate(d.getDate() - w * 7 - 3);
+      return d;
+    };
+
+    // Weeks 7–4: normal training with progression
+    // Bench + Squat, 10 sets each per week
+    for (let w = 4; w <= 7; w++) {
+      for (let s = 0; s < 10; s++) {
+        logs.push(createLog("Bench Press", midWeek(w), 80, 8));
+        logs.push(createLog("Squat", midWeek(w), 100, 8));
+      }
+    }
+
+    // Week 3: deload week (2 sets each at reduced weight)
+    for (let s = 0; s < 2; s++) {
+      logs.push(createLog("Bench Press", midWeek(3), 50, 10));
+      logs.push(createLog("Squat", midWeek(3), 65, 10));
+    }
+
+    // Weeks 2–1: resumed normal training (10 sets each, slightly heavier)
+    for (let w = 1; w <= 2; w++) {
+      for (let s = 0; s < 10; s++) {
+        logs.push(createLog("Bench Press", midWeek(w), 82.5, 8));
+        logs.push(createLog("Squat", midWeek(w), 102.5, 8));
+      }
+    }
+
+    const insights = calculateTrainingInsights(logs, targetDate);
+
+    // Should NOT trigger deload — deload sessions are excluded from e1RM trends
+    expect(insights.fatigue.shouldDeload).toBe(false);
+
+    // e1RM trends should be clean (no deload values)
+    const benchTrend = insights.e1rm["Bench Press"]?.trend ?? [];
+    for (const val of benchTrend) {
+      // Deload e1RM at 50kg×10 ≈ 66.7, normal e1RM at 80kg×8 ≈ 101
+      expect(val).toBeGreaterThan(90);
+    }
+
+    // Phase should NOT be "Deload"
+    expect(insights.phase).not.toBe("Deload");
+  });
+
+  it("should still detect genuine performance decline when NOT in deload", () => {
+    // Sanity check: the e1RM decline detection still works normally
+    const e1rm = {
+      "Bench Press": { e1rm: 70, trend: [80, 75, 70], plateau: false },
+      Squat: { e1rm: 90, trend: [100, 95, 90], plateau: false },
+    };
+
+    const fatigue = calculateFatigueInsight([], e1rm, new Date(), undefined, false);
+    expect(fatigue.shouldDeload).toBe(true);
+    expect(fatigue.reason).toContain("declining");
   });
 });
