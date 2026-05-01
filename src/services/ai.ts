@@ -61,7 +61,7 @@ export const aiResponseSchema: Schema = {
     scratchpad: {
       type: Type.STRING,
       description:
-        "Internal workspace to calculate aggregate muscle group volumes across exercises, evaluate overtraining, and sketch the workout plan BEFORE writing the final message. NOT shown to user.",
+        "Internal workspace for reasoning and calculations. Usage depends on phase — see system instructions. NOT shown to user.",
     },
     coachMessage: {
       type: Type.STRING,
@@ -125,7 +125,7 @@ export const aiResponseSchema: Schema = {
           restSeconds: {
             type: Type.INTEGER,
             description:
-              "Recommended rest between sets in seconds. 180–300 for strength (1–5 reps), 90–180 for hypertrophy (6–12 reps), 30–60 for fat loss/endurance (12–20 reps), 15–30 for endurance/circuit (20–25 reps).",
+              "Recommended rest between sets in seconds. 180–300 for strength (1–5 reps), 120–180 for hypertrophy (6–12 reps), 45–90 for fat loss/endurance (12–20 reps), 15–30 for endurance/circuit (20–25 reps).",
           },
         },
       },
@@ -149,8 +149,10 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
 - Generate a highly personalized workout plan for today based on goals, fitness level, available equipment, and time constraints.
 - The user's current phase (planning / mid-workout / post-workout) is provided explicitly. Adapt tone accordingly.
 - Factor in health/schedule events (e.g., ease back after sickness/injury, respect fasting/rest days).
+- Use 'workoutDaysPerWeek' from the profile to distribute weekly volume across sessions (e.g., 3 days/week → higher volume per session to reach MAV).
+- Respect 'workoutLocation' and 'equipmentAccess' — only prescribe exercises possible with the user's equipment.
 - Adapt programming to the user's fitness goal(s):
-  build_muscle      → 6–12 rep range, 90–180s rest, progressive overload focus
+  build_muscle      → 6–12 rep range, 120–180s rest, progressive overload focus
   lose_fat          → 12–20 rep range, 45–90s rest, supersets preferred, avoid heavy 1–5 rep work
   improve_endurance → 15–25 rep range, circuit format, include cardio machine exercises from equipment list; progression priority: reps → sets → shorter rest → load
   increase_mobility → add 1 mobility/stretching movement per session; avoid maximal loading
@@ -158,7 +160,7 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
 
 2. TRAINING SCIENCE DATA (CRITICAL):
 - You receive a 'trainingInsights' JSON containing pre-calculated scientific data. TRUST these numbers — do NOT recalculate them.
-- 'muscleGroups': Per-muscle weekly sets, volume landmark (below_MEV / at_MEV / at_MAV / above_MRV), training frequency, and hours since last trained.
+- 'muscleGroups': Per-muscle weekly sets, volume landmark (below_MEV / at_MEV / at_MAV / approaching_MRV / above_MRV), training frequency, hours since last trained, and recoveryReady flag.
   - MEV = Minimum Effective Volume (need more volume to grow)
   - MAV = Maximum Adaptive Volume (optimal growth zone — 10-18 sets/week)
   - MRV = Maximum Recoverable Volume (too much — risk of overtraining)
@@ -191,7 +193,7 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
     1. VOLUME: Each muscle group — current sets vs. landmark (e.g. "Chest: 6 sets → below_MEV, needs 8+").
     2. E1RM: Trend per exercise — increasing / plateau / declining.
     3. FATIGUE: shouldDeload flag + reason. Note volume spikes.
-    4. RECOVERY: Which muscles are ready. Base = 48h. Large muscles (Quads, Back, Hamstrings, Chest) = 72h. Calves = 24h. Add 24h if the session's volume was at or above MAV for that muscle.
+    4. RECOVERY: List muscles where recoveryReady=false. Use the recoveryReady flag from trainingInsights — do NOT apply your own recovery time rules.
     5. WEIGHTS: Calculation per exercise (e.g. "Bench e1RM 120kg → 75% = 90 → round to 90kg").
     6. PLAN: Exercise order with one-line rationale each.
   MID-WORKOUT: scratchpad is OPTIONAL. If included, keep it to 1-2 lines (e.g. "Set 3/4 done @80kg RPE 8.5 — on track"). Do NOT run the full 6-step analysis.
@@ -240,7 +242,7 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
 - If the user logged exercises NOT in your last plan, acknowledge them positively and factor them into volume accounting. Adjust remaining recommendations to avoid over-training those muscles.
 
 5. POST-WORKOUT BEHAVIOR:
-- If the phase is 'post-workout' (last log was >45 min ago today): (1) give a 1–2 sentence session recap noting any PRs or volume milestones; (2) briefly mention recovery windows for muscles trained (48h base, 72h for Quads/Back/Hamstrings/Chest); (3) if mesocycleWeek ≥ 4, note that a deload is due next session. Keep the total message to 2–3 sentences. Do NOT include recommendedWorkout.
+- If the phase is 'post-workout' (last log was >45 min ago today): (1) give a 1–2 sentence session recap noting any PRs or volume milestones; (2) briefly mention which muscles need recovery (use recoveryReady from trainingInsights); (3) if mesocycleWeek ≥ 4, note that a deload is due next session. Keep the total message to 2–3 sentences. Do NOT include recommendedWorkout.
 
 You may receive:
 - A 'userProfile' JSON (first message only)
@@ -253,7 +255,7 @@ You may receive:
 - Current date and phase
 
 Here are examples:
-EXAMPLE 1 (Volume): {"scratchpad": "Chest 6 below_MEV needs 8+. Bench plateau 85kg. 85*75%=63.75 round 65kg.", "coachMessage": "Bench stalled, Chest 2 sets short. Adding 4-set block with Flyes gets to 8 sets.", "recommendedWorkout": [{"exerciseName": "Bench Press", "targetSets": 4, "targetReps": "8-12", "targetWeight": "65kg", "restSeconds": 120, "supersetId": "A"}, {"exerciseName": "Incline Flyes", "targetSets": 4, "targetReps": "12-15", "targetWeight": "15kg", "restSeconds": 120, "supersetId": "A"}]}
+EXAMPLE 1 (Volume): {"scratchpad": "Chest 6 below_MEV needs 8+. Bench plateau 85kg. 85*75%=63.75 round 65kg.", "coachMessage": "Bench stalled, Chest 2 sets short. Adding 4-set block with Flyes gets to 8 sets.", "recommendedWorkout": [{"exerciseName": "Bench Press", "reasoning": "Plateau, below_MEV. Push weight to break stall.", "targetSets": 4, "targetReps": "8-12", "targetWeight": "65kg", "restSeconds": 120, "primaryMuscle": "Chest", "supersetId": "A"}, {"exerciseName": "Incline Flyes", "reasoning": "Isolation superset to add chest volume.", "targetSets": 4, "targetReps": "12-15", "targetWeight": "15kg", "restSeconds": 120, "primaryMuscle": "Chest", "supersetId": "A"}]}
 EXAMPLE 2 (Deload): {"scratchpad": "Deload triggered. 75%-12pp=63%. Bench 120*65%=78 round 77.5.", "coachMessage": "Four weeks climbing volume. Drop weight ~15%, cut to 2 sets. Come back stronger.", "recommendedWorkout": [{"exerciseName": "Bench Press", "targetSets": 2, "targetReps": "10-12", "targetWeight": "77.5kg", "restSeconds": 120}, {"exerciseName": "Barbell Row", "targetSets": 2, "targetReps": "10-12", "targetWeight": "65kg", "restSeconds": 120}]}
 `,
 };
@@ -386,8 +388,8 @@ function compactLogs(logs: ExerciseLog[]): string {
       }
 
       if (rpes.length > 0) {
-        const lastRpe = rpes[rpes.length - 1];
-        summaryParts.push(`last @RPE${lastRpe}`);
+        const allSame = rpes.every((r) => r === rpes[0]);
+        summaryParts.push(allSame ? `@RPE${rpes[0]}` : `RPE: ${rpes.join(",")}`);
       }
 
       parts.push(`${name}: ${summaryParts.join(", ")}`);
@@ -567,8 +569,11 @@ export async function askAi(
       learnedMap,
       userProfile.weightKg,
     );
-    if (phase === "mid-workout") {
-      // Lightweight e1RM-only line for accurate weight prescription (~50-100 tokens vs ~500+)
+    if (phase === "planning" || isFirstMessage) {
+      // Full insights for planning (and first-ever mid-workout call which needs full context)
+      sections.push(`Training Insights:\n${JSON.stringify(insights)}`);
+    } else {
+      // Lightweight e1RM-only line for mid-workout and post-workout (~50-100 tokens vs ~500+)
       const e1rmCompact = Object.entries(insights.e1rm)
         .map(([name, d]) => {
           let s = `${name}: ${d.e1rm}kg`;
@@ -578,9 +583,6 @@ export async function askAi(
         })
         .join(", ");
       if (e1rmCompact) sections.push(`e1RM: ${e1rmCompact}`);
-    } else {
-      // Full insights for planning and post-workout
-      sections.push(`Training Insights:\n${JSON.stringify(insights)}`);
     }
 
     // Events
