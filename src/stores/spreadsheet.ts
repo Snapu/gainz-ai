@@ -41,12 +41,24 @@ export const useSpreadsheetStore = defineStore("spreadsheet", () => {
             return;
           }
           console.error("Error getting spreadsheet ID:", idResult.error);
-          Sentry.captureException(idResult.error);
+          Sentry.captureMessage("Error getting spreadsheet ID", {
+            level: "error",
+            tags: { scope: "spreadsheet-store", feature: "init-get-id" },
+            extra: { reason: idResult.error },
+          });
         }
         if (idResult.isOk() && idResult.value !== null) {
           const loadResult = await loadSpreadsheet(idResult.value, accessToken);
           if (loadResult.isErr() && loadResult.error === "auth-failed") {
             handleAuthError();
+            return;
+          }
+          if (loadResult.isErr()) {
+            Sentry.captureMessage("Spreadsheet load failed", {
+              level: "error",
+              tags: { scope: "spreadsheet-store", feature: "init-load" },
+              extra: { reason: loadResult.error, spreadsheetId: idResult.value },
+            });
             return;
           }
           if (loadResult.isOk()) doc.value = loadResult.value as GoogleSpreadsheet;
@@ -56,10 +68,21 @@ export const useSpreadsheetStore = defineStore("spreadsheet", () => {
             handleAuthError();
             return;
           }
+          if (createResult.isErr()) {
+            Sentry.captureMessage("Spreadsheet creation failed", {
+              level: "error",
+              tags: { scope: "spreadsheet-store", feature: "init-create" },
+              extra: { reason: createResult.error },
+            });
+            return;
+          }
           if (createResult.isOk()) doc.value = createResult.value as GoogleSpreadsheet;
         }
       } catch (error) {
         console.error("Failed to init spreadsheet", error);
+        Sentry.captureException(error, {
+          tags: { scope: "spreadsheet-store", feature: "init" },
+        });
       } finally {
         isLoading.value = false;
       }

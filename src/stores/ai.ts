@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/vue";
 import { err, ok, type Result } from "neverthrow";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
@@ -198,6 +199,10 @@ export const useAiStore = defineStore("ai", () => {
       return ok(undefined);
     } catch (error) {
       console.error("AI request failed:", error);
+      Sentry.captureException(error, {
+        tags: { scope: "ai-store", feature: "ask-ai" },
+        extra: { hasPendingUserMessage: !!userMessageId },
+      });
       // Clean up the pending user message so the user can retry without a ghost message
       if (userMessageId) {
         messages.value = messages.value.filter((m) => m.id !== userMessageId);
@@ -226,7 +231,14 @@ export const useAiStore = defineStore("ai", () => {
     if (unclassified.length === 0) return;
 
     const result = await classifyExercises(unclassified, apiKey);
-    if (result.isErr()) return;
+    if (result.isErr()) {
+      Sentry.captureMessage("AI store exercise pre-classification failed", {
+        level: "warning",
+        tags: { scope: "ai-store", feature: "exercise-preclassification" },
+        extra: { reason: result.error, unclassifiedCount: unclassified.length },
+      });
+      return;
+    }
     exerciseMuscleMapStore.applyCleanupResults(result.value);
   }
 

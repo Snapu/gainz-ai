@@ -1,5 +1,5 @@
 import { type GenerateContentConfig, GoogleGenAI, type Schema, Type } from "@google/genai";
-
+import * as Sentry from "@sentry/vue";
 import { err, ok, type Result } from "neverthrow";
 
 import type { ExerciseLog } from "@/services/exerciseLogs";
@@ -629,15 +629,28 @@ export async function askAi(
     try {
       const parsed = JSON.parse(aiResponseText);
       if (typeof parsed?.coachMessage !== "string" || parsed.coachMessage.trim() === "") {
+        Sentry.captureMessage("AI response missing coachMessage", {
+          level: "warning",
+          tags: { scope: "ai-service", feature: "ask-ai-response-validate" },
+          extra: { responseLength: aiResponseText.length },
+        });
         return err("generate-content-stream-failed");
       }
-    } catch {
+    } catch (error) {
+      Sentry.captureException(error, {
+        tags: { scope: "ai-service", feature: "ask-ai-response-parse" },
+        extra: { responseLength: aiResponseText.length },
+      });
       return err("generate-content-stream-failed");
     }
 
     return ok(aiResponseText);
   } catch (error) {
     console.error("AI request failed:", error);
+    Sentry.captureException(error, {
+      tags: { scope: "ai-service", feature: "ask-ai-request" },
+      extra: { responseLength: aiResponseText.length },
+    });
     return err("generate-content-stream-failed");
   } finally {
     // Learn exercise→muscleGroup mappings from the AI response (fire-and-forget)
@@ -649,8 +662,12 @@ export async function askAi(
           learnFromAiResponse(parsed.recommendedWorkout);
         }
       }
-    } catch {
-      // Silently ignore parse errors — learning is best-effort
+    } catch (error) {
+      Sentry.captureException(error, {
+        tags: { scope: "ai-service", feature: "learn-from-response" },
+        extra: { responseLength: aiResponseText.length },
+      });
+      // Learning is best-effort; never fail the main request from this path.
     }
   }
 }
@@ -736,11 +753,20 @@ Important rules:
     const text = response.text ?? "";
     const parsed = JSON.parse(text) as ExerciseCleanupResult;
     if (!Array.isArray(parsed?.classifications)) {
+      Sentry.captureMessage("Exercise classification returned invalid schema", {
+        level: "warning",
+        tags: { scope: "ai-service", feature: "exercise-classification" },
+        extra: { exerciseCount: exerciseNames.length },
+      });
       return err("ai-request-failed");
     }
     return ok(parsed);
   } catch (error) {
     console.error("Exercise classification failed:", error);
+    Sentry.captureException(error, {
+      tags: { scope: "ai-service", feature: "exercise-classification" },
+      extra: { exerciseCount: exerciseNames.length },
+    });
     return err("ai-request-failed");
   }
 }

@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/vue";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import { err, ok, type Result } from "neverthrow";
 import { isAuthError } from "./utils/isAuthError";
@@ -27,6 +28,11 @@ export async function getSpreadsheetId(
       if (response.status === 401 || response.status === 403) {
         return err("auth-failed");
       }
+      Sentry.captureMessage("Failed to get spreadsheet ID", {
+        level: "warning",
+        tags: { scope: "spreadsheets-service", feature: "get-id" },
+        extra: { status: response.status },
+      });
       return err("get-spreadsheet-id-failed");
     }
     const data = await response.json();
@@ -40,6 +46,9 @@ export async function getSpreadsheetId(
     return ok(data.files[0].id);
   } catch (error) {
     console.debug("Failed to get spreadsheet ID. Error:", error);
+    Sentry.captureException(error, {
+      tags: { scope: "spreadsheets-service", feature: "get-id" },
+    });
     return err("get-spreadsheet-id-failed");
   }
 }
@@ -61,6 +70,10 @@ export async function loadSpreadsheet(
     if (isAuthError(error)) {
       return err("auth-failed");
     }
+    Sentry.captureException(error, {
+      tags: { scope: "spreadsheets-service", feature: "load" },
+      extra: { spreadsheetId: id },
+    });
     return err("load-spreadsheet-failed");
   }
 }
@@ -82,6 +95,10 @@ export async function createSpreadsheet(
     if (isAuthError(error)) {
       return err("auth-failed");
     }
+    Sentry.captureException(error, {
+      tags: { scope: "spreadsheets-service", feature: "create" },
+      extra: { spreadsheetName: name },
+    });
     return err("create-spreadsheet-failed");
   }
 }

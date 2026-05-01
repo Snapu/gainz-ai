@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/vue";
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { err, ok, type Result } from "neverthrow";
 import { z } from "zod";
@@ -125,6 +126,9 @@ export async function loadUserProfile(
       return err("auth-failed");
     }
     console.error("Failed to load user profile. Error:", error);
+    Sentry.captureException(error, {
+      tags: { scope: "user-profile-service", feature: "load" },
+    });
     return err("load-failed");
   }
 }
@@ -152,6 +156,9 @@ export async function saveUserProfile(
       return err("auth-failed");
     }
     console.error("Failed to save user profile. Error:", error);
+    Sentry.captureException(error, {
+      tags: { scope: "user-profile-service", feature: "save" },
+    });
     return err("save-failed");
   }
 }
@@ -195,6 +202,9 @@ export async function migrateFromLocalStorage(
       oldData = JSON.parse(oldDataJson);
     } catch (parseError) {
       console.error("Failed to parse old userProfile localStorage:", parseError);
+      Sentry.captureException(parseError, {
+        tags: { scope: "user-profile-service", feature: "migration-parse" },
+      });
       return err("migration-failed");
     }
 
@@ -210,6 +220,10 @@ export async function migrateFromLocalStorage(
     const saveResult = await saveUserProfile(profileData, doc);
     if (saveResult.isErr()) {
       console.error("Failed to save migrated profile to spreadsheet");
+      Sentry.captureMessage("Failed to save migrated profile", {
+        level: "error",
+        tags: { scope: "user-profile-service", feature: "migration-save" },
+      });
       return err("migration-failed");
     }
 
@@ -220,6 +234,9 @@ export async function migrateFromLocalStorage(
     return ok("migrated");
   } catch (error) {
     console.error("Migration failed:", error);
+    Sentry.captureException(error, {
+      tags: { scope: "user-profile-service", feature: "migration" },
+    });
     return err("migration-failed");
   }
 }

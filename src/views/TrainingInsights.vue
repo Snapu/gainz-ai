@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import * as Sentry from "@sentry/vue";
 import { ArrowLeft, HelpCircle, Moon, Scale, TrendingDown, TrendingUp } from "lucide-vue-next";
 import { storeToRefs } from "pinia";
 import { computed, onMounted, ref } from "vue";
@@ -66,7 +67,17 @@ async function runExerciseCleanupIfNeeded(): Promise<void> {
   if (unclassified.length === 0) return;
 
   const result = await classifyExercises(unclassified, apiKey.value ?? undefined);
-  if (result.isErr()) return;
+  if (result.isErr()) {
+    Sentry.captureMessage("TrainingInsights exercise cleanup failed", {
+      level: "warning",
+      tags: { scope: "training-insights", feature: "exercise-cleanup" },
+      extra: {
+        reason: result.error,
+        unclassifiedCount: unclassified.length,
+      },
+    });
+    return;
+  }
 
   muscleMapStore.applyCleanupResults(result.value);
 }
@@ -370,7 +381,7 @@ const exerciseMetrics = computed((): ExerciseMetric[] => {
       else if (deltaPct !== null && deltaPct >= 2) status = "improving";
       else if (deltaPct !== null && deltaPct <= -2) status = "dropping";
 
-      const activation = getMuscleActivation(name);
+      const activation = getMuscleActivation(name, learnedMap.value);
       const learnedMuscleGroups = activation
         ? [activation.primaryMuscle, ...activation.secondaryMuscles.map((m) => m.muscleGroup)]
         : [];

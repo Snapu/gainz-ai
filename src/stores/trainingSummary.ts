@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/vue";
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { defineStore } from "pinia";
 import { ref, watchEffect } from "vue";
@@ -23,6 +24,11 @@ export const useTrainingSummaryStore = defineStore("trainingSummary", () => {
       const loadResult = await loadTrainingSummary(doc);
       if (loadResult.isErr()) {
         console.error("Failed to load training summary:", loadResult.error);
+        Sentry.captureMessage("Failed to load training summary", {
+          level: "error",
+          tags: { scope: "training-summary-store", feature: "init-load" },
+          extra: { reason: loadResult.error },
+        });
         return;
       }
 
@@ -32,6 +38,9 @@ export const useTrainingSummaryStore = defineStore("trainingSummary", () => {
       isInitialized.value = true;
     } catch (error) {
       console.error("Failed to init training summary:", error);
+      Sentry.captureException(error, {
+        tags: { scope: "training-summary-store", feature: "init" },
+      });
     } finally {
       isLoading.value = false;
     }
