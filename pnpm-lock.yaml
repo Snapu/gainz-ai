@@ -24,8 +24,8 @@ importers:
         specifier: 8.0.0
         version: 8.0.0(@capacitor/core@8.0.1)
       '@google/genai':
-        specifier: ^1.46.0
-        version: 1.46.0
+        specifier: ^1.51.0
+        version: 1.51.0
       '@internationalized/date':
         specifier: ^3.12.0
         version: 3.12.0
@@ -1022,8 +1022,8 @@ packages:
   '@floating-ui/vue@1.1.11':
     resolution: {integrity: sha512-HzHKCNVxnGS35r9fCHBc3+uCnjw9IWIlCPL683cGgM9Kgj2BiAl8x1mS7vtvP6F9S/e/q4O6MApwSHj8hNLGfw==}
 
-  '@google/genai@1.46.0':
-    resolution: {integrity: sha512-ewPMN5JkKfgU5/kdco9ZhXBHDPhVqZpMQqIFQhwsHLf8kyZfx1cNpw1pHo1eV6PGEW7EhIBFi3aYZraFndAXqg==}
+  '@google/genai@1.51.0':
+    resolution: {integrity: sha512-vTZZF3CSimN7cn2zsLpW2p5WF0eZa5Gz69ITMPCNHpPrDlAstOfGifSfi0p/s9Z9400f7xJRkgvkQNrcM7pJ6w==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       '@modelcontextprotocol/sdk': ^1.25.2
@@ -4604,7 +4604,7 @@ snapshots:
       - '@vue/composition-api'
       - vue
 
-  '@google/genai@1.46.0':
+  '@google/genai@1.51.0':
     dependencies:
       google-auth-library: 10.5.0
       p-retry: 4.6.2

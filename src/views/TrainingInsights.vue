@@ -377,9 +377,15 @@ const exerciseMetrics = computed((): ExerciseMetric[] => {
         previous && previous > 0 ? Math.round(((current - previous) / previous) * 100) : null;
 
       let status: ExerciseMetric["status"] = "stable";
-      if (data.plateau) status = "plateau";
-      else if (deltaPct !== null && deltaPct >= 2) status = "improving";
-      else if (deltaPct !== null && deltaPct <= -2) status = "dropping";
+      const isDeloading = insights.value.phase === "Deload";
+
+      if (data.plateau) {
+        status = isDeloading ? "stable" : "plateau";
+      } else if (deltaPct !== null && deltaPct >= 2) {
+        status = "improving";
+      } else if (deltaPct !== null && deltaPct <= -2) {
+        status = isDeloading ? "stable" : "dropping";
+      }
 
       const activation = getMuscleActivation(name, learnedMap.value);
       const learnedMuscleGroups = activation

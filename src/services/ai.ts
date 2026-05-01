@@ -610,7 +610,7 @@ export async function askAi(
     );
     const responseStream = await Promise.race([
       ai.models.generateContentStream({
-        model: "gemini-2.5-flash",
+        model: "gemini-3-flash-preview",
         contents: conversationContents,
         config: aiConfig,
       }),
@@ -741,7 +741,7 @@ Important rules:
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash-lite",
+      model: "gemini-3.1-flash-lite-preview",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         responseMimeType: "application/json",
