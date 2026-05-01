@@ -469,6 +469,15 @@ function buildPriorPlanSummary(
   }
 }
 
+function isServiceUnavailableError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const e = error as Record<string, unknown>;
+  if ((e.error as Record<string, unknown> | undefined)?.code === 503) return true;
+  if (e.status === "UNAVAILABLE") return true;
+  if (typeof e.message === "string" && /high demand|503|unavailable/i.test(e.message)) return true;
+  return false;
+}
+
 export async function askAi(
   apiKey: string | undefined,
   userProfile: UserProfile,
@@ -608,14 +617,34 @@ export async function askAi(
     const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error("AI request timed out")), AI_TIMEOUT_MS),
     );
-    const responseStream = await Promise.race([
-      ai.models.generateContentStream({
-        model: "gemini-3-flash-preview",
-        contents: conversationContents,
-        config: aiConfig,
-      }),
-      timeoutPromise,
-    ]);
+    let responseStream: Awaited<ReturnType<typeof ai.models.generateContentStream>>;
+    try {
+      responseStream = await Promise.race([
+        ai.models.generateContentStream({
+          model: "gemini-3-flash-preview",
+          contents: conversationContents,
+          config: aiConfig,
+        }),
+        timeoutPromise,
+      ]);
+    } catch (streamErr) {
+      if (isServiceUnavailableError(streamErr)) {
+        Sentry.captureMessage("Primary model busy, falling back to gemini-2.5-flash", {
+          level: "info",
+          tags: { scope: "ai-service", feature: "model-fallback" },
+        });
+        responseStream = await Promise.race([
+          ai.models.generateContentStream({
+            model: "gemini-2.5-flash",
+            contents: conversationContents,
+            config: aiConfig,
+          }),
+          timeoutPromise,
+        ]);
+      } else {
+        throw streamErr;
+      }
+    }
 
     aiResponseText = "";
     for await (const chunk of responseStream) {
@@ -739,16 +768,40 @@ Important rules:
 - Muscle group values must exactly match the allowed list.
 - Set confidence < 0.8 only when genuinely ambiguous (e.g. "Press" with no context).`;
 
+  const classifyConfig = {
+    responseMimeType: "application/json",
+    responseSchema: exerciseCleanupSchema,
+    temperature: CLASSIFICATION_TEMPERATURE,
+  };
+  const classifyContents = [{ role: "user" as const, parts: [{ text: prompt }] }];
+
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3.1-flash-lite-preview",
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: exerciseCleanupSchema,
-        temperature: CLASSIFICATION_TEMPERATURE,
-      },
-    });
+    let response: { text?: string };
+    try {
+      response = await ai.models.generateContent({
+        model: "gemini-3.1-flash-lite-preview",
+        contents: classifyContents,
+        config: classifyConfig,
+      });
+    } catch (innerErr) {
+      if (isServiceUnavailableError(innerErr)) {
+        Sentry.captureMessage(
+          "Classification primary model unavailable, falling back to gemini-2.5-flash",
+          {
+            level: "info",
+            tags: { scope: "ai-service", feature: "model-fallback" },
+            extra: { exerciseCount: exerciseNames.length },
+          },
+        );
+        response = await ai.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: classifyContents,
+          config: classifyConfig,
+        });
+      } else {
+        throw innerErr;
+      }
+    }
 
     const text = response.text ?? "";
     const parsed = JSON.parse(text) as ExerciseCleanupResult;
