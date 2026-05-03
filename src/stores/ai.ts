@@ -245,5 +245,10 @@ export const useAiStore = defineStore("ai", () => {
     exerciseMuscleMapStore.applyCleanupResults(result.value);
   }
 
-  return { askAi, isLoading, messages };
+  function clearMessages() {
+    localStorage.removeItem(getStorageKey(todaySessionDate.value));
+    messages.value = [];
+  }
+
+  return { askAi, clearMessages, isLoading, messages };
 });

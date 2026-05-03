@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useDebounceFn, useTimeAgo } from "@vueuse/core";
 import DOMPurify from "dompurify";
-import { Loader2, Sparkles } from "lucide-vue-next";
+import { Loader2, Sparkles, Trash2, X } from "lucide-vue-next";
 import { computed, watch } from "vue";
 import ClickableList, { type ClickableListItem } from "@/components/ClickableList.vue";
 import UiBottomSheet from "@/components/ui/UiBottomSheet.vue";
@@ -170,6 +170,11 @@ function handleLogExercise(exercise: DisplayExercise) {
   emit("update:open", false);
 }
 
+function clearAndReset() {
+  aiStore.clearMessages();
+  debouncedAskAi();
+}
+
 function toWorkoutListItems(exercises: DisplayExercise[]): WorkoutListItem[] {
   return exercises.map((exercise) => ({
     id: exercise.exerciseName,
@@ -188,6 +193,29 @@ function toWorkoutListItems(exercises: DisplayExercise[]): WorkoutListItem[] {
 
 <template>
   <UiBottomSheet v-model:open="internalOpen" title="AI Coach">
+    <template #header>
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-2xl font-bold tracking-tight">AI Coach</span>
+        <div class="flex items-center gap-1">
+          <button
+            v-if="allInsights.length > 0 && !aiStore.isLoading"
+            class="rounded-full p-2.5 bg-white/5 hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-primary active:scale-95"
+            title="Clear chat history"
+            @click="clearAndReset"
+          >
+            <Trash2 class="w-4 h-4 text-muted-foreground hover:text-foreground" />
+            <span class="sr-only">Clear chat history</span>
+          </button>
+          <button
+            class="rounded-full p-2.5 bg-white/5 hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-primary active:scale-95"
+            @click="internalOpen = false"
+          >
+            <X class="w-5 h-5 text-muted-foreground hover:text-foreground" />
+            <span class="sr-only">Close</span>
+          </button>
+        </div>
+      </div>
+    </template>
     <div class="flex flex-col gap-4 w-full max-h-[70vh] overflow-y-auto">
 
       <!-- Loading State -->
