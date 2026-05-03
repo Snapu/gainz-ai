@@ -60,6 +60,7 @@ describe("askAi - Events Integration (RED Phase)", () => {
         askAi(
           mockApiKey,
           mockUserProfile,
+          undefined,
           mockExerciseLogs,
           mockTrainingSummaries,
           mockPreviousMessages,
@@ -74,6 +75,7 @@ describe("askAi - Events Integration (RED Phase)", () => {
         askAi(
           mockApiKey,
           mockUserProfile,
+          undefined,
           mockExerciseLogs,
           mockTrainingSummaries,
           mockPreviousMessages,
@@ -89,6 +91,7 @@ describe("askAi - Events Integration (RED Phase)", () => {
         askAi(
           mockApiKey,
           mockUserProfile,
+          undefined,
           mockExerciseLogs,
           mockTrainingSummaries,
           mockPreviousMessages,
@@ -217,6 +220,7 @@ ${JSON.stringify(events, null, 2)}
       const result = await askAi(
         mockApiKey,
         mockUserProfile,
+        undefined,
         mockExerciseLogs,
         mockTrainingSummaries,
         mockPreviousMessages,
@@ -229,6 +233,7 @@ ${JSON.stringify(events, null, 2)}
       const result = await askAi(
         mockApiKey,
         mockUserProfile,
+        undefined,
         mockExerciseLogs,
         mockTrainingSummaries,
         mockPreviousMessages,

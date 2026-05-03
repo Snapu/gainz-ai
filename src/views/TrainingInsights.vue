@@ -10,8 +10,10 @@ import UiCard from "@/components/ui/UiCard.vue";
 import UiSegmentedControl from "@/components/ui/UiSegmentedControl.vue";
 import { classifyExercises } from "@/services/ai";
 import {
+  calculateFatigueTriggerEvidence,
   calculateTrainingInsights,
   getMuscleActivation,
+  summarizeTrainingInsights,
   type MuscleGroupInsight,
   normalizeExerciseName,
 } from "@/services/trainingScience";
@@ -19,22 +21,38 @@ import { summaryToExerciseLogs } from "@/services/trainingSummary";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
 import { useExerciseMuscleMapStore } from "@/stores/exerciseMuscleMap";
 import { useTrainingSummaryStore } from "@/stores/trainingSummary";
+import { useDeloadLifecycleStore } from "@/stores/deloadLifecycle";
 import { useUserProfileStore } from "@/stores/userProfile";
 
 const logsStore = useExerciseLogsStore();
 const summaryStore = useTrainingSummaryStore();
 const profileStore = useUserProfileStore();
+const deloadLifecycleStore = useDeloadLifecycleStore();
 const muscleMapStore = useExerciseMuscleMapStore();
 const { exerciseLogs } = storeToRefs(logsStore);
 const { apiKey } = storeToRefs(profileStore);
 const { learnedMap } = storeToRefs(muscleMapStore);
 
-const insights = computed(() => {
+const allLogs = computed(() => {
   const historicalLogs = summaryToExerciseLogs(summaryStore.summaries);
   const currentLogs = exerciseLogs.value;
-  const allLogs = [...historicalLogs, ...currentLogs];
-  return calculateTrainingInsights(allLogs, new Date(), learnedMap.value);
+  return [...historicalLogs, ...currentLogs];
 });
+
+const insights = computed(() =>
+  calculateTrainingInsights(
+    allLogs.value,
+    new Date(),
+    learnedMap.value,
+    profileStore.userProfile.weightKg,
+    deloadLifecycleStore.deloadLifecycle,
+  ),
+);
+
+function stopDeloadNow(): void {
+  deloadLifecycleStore.stopDeloadNow();
+}
+
 
 // --- Automatic Exercise Cleanup ---
 
@@ -170,31 +188,7 @@ const acwrDisplay = computed(() => {
   };
 });
 
-// Mesocycle context label (non-redundant with phase)
-const mesocycleContext = computed(() => {
-  const wk = insights.value.mesocycleWeek;
-  if (wk === 0) return { label: "Deload active", sub: "Reduce intensity & volume" };
-  if (wk === 1) return { label: `Week ${wk} of 4`, sub: "Foundation — build base" };
-  if (wk === 2) return { label: `Week ${wk} of 4`, sub: "Progressive — increase load" };
-  if (wk === 3) return { label: `Week ${wk} of 4`, sub: "Peak approach — push hard" };
-  return { label: `Week ${wk} of 4`, sub: "Peak week — deload follows" };
-});
-
-// Phase interpretation
-const phaseInterpretation = computed(() => {
-  switch (insights.value.phase) {
-    case "Deload":
-      return "Focus on recovery and form. Reduce load by 40–50% and volume by 50%.";
-    case "Build":
-      return "Actively increasing volume. Push for progressive overload.";
-    case "Maintain":
-      return "Volume is stable. Preserve current gains while staying healthy.";
-    case "Inactive":
-      return "Below minimum volume. Time to ramp up training.";
-    default:
-      return "";
-  }
-});
+const coachSummary = computed(() => summarizeTrainingInsights(insights.value));
 
 const muscleInsightsList = computed((): MuscleGroupInsight[] =>
   Object.values(insights.value.muscleGroups).filter(
@@ -268,79 +262,21 @@ const hasPhaseEvidence = computed(
     Number.isFinite(notRecoveredCount.value),
 );
 
-const fatigueTriggerEvidence = computed(() => {
-  const weeklySets = insights.value.fatigue.weeklyTotalSets;
-  const weeklyTonnage = insights.value.fatigue.weeklyTonnage;
+const fatigueTriggerEvidence = computed(() =>
+  calculateFatigueTriggerEvidence(insights.value),
+);
 
-  const thisWeekSets = weeklySets[3] ?? 0;
-  const prevWeekSets = weeklySets[2] ?? 0;
-  const priorSetsAvg =
-    weeklySets.length >= 4
-      ? ((weeklySets[0] ?? 0) + (weeklySets[1] ?? 0) + (weeklySets[2] ?? 0)) / 3
-      : 0;
-
-  const thisWeekTonnage = weeklyTonnage[3] ?? 0;
-  const priorTonnageAvg =
-    weeklyTonnage.length >= 4
-      ? ((weeklyTonnage[0] ?? 0) + (weeklyTonnage[1] ?? 0) + (weeklyTonnage[2] ?? 0)) / 3
-      : 0;
-
-  const volumeIncreasing =
-    weeklySets.length >= 4 &&
-    weeklySets.every((sets, i) => i === 0 || sets > (weeklySets[i - 1] ?? 0));
-
-  const volumeSpike = priorSetsAvg >= 12 && thisWeekSets > priorSetsAvg * 1.25;
-
-  let decliningExercises = 0;
-  for (const data of Object.values(insights.value.e1rm)) {
-    if (data.trend.length >= 3) {
-      const current = data.trend[data.trend.length - 1] ?? 0;
-      const prior2Avg =
-        ((data.trend[data.trend.length - 2] ?? 0) + (data.trend[data.trend.length - 3] ?? 0)) / 2;
-      if (prior2Avg > 0 && current < prior2Avg * 0.95) decliningExercises++;
-    }
+const exerciseStatusNote = computed(() => {
+  if (insights.value.plateauPaused) {
+    return "Plateau/drop labels are paused during deload.";
   }
-
-  const performanceDecline = decliningExercises >= 2;
-  const tonnageSpike = priorTonnageAvg > 0 && thisWeekTonnage > priorTonnageAvg * 1.5;
-
-  const inactiveTrigger = thisWeekSets + prevWeekSets < 24;
-  const returningAthlete = prevWeekSets === 0 && thisWeekSets > 0;
-  const buildTrigger = thisWeekSets > prevWeekSets && thisWeekSets >= 10;
-
-  return {
-    volumeIncreasing,
-    volumeSpike,
-    decliningExercises,
-    performanceDecline,
-    tonnageSpike,
-    inactiveTrigger,
-    returningAthlete,
-    buildTrigger,
-  };
-});
-
-// ── Mesocycle stepper ──────────────────────────────────────────────────────
-
-const isDeloadActive = computed(() => insights.value.mesocycleWeek === 0);
-
-type StepState = "done" | "current" | "overdue" | "future";
-
-const mesocycleSteps = computed(() => {
-  const wk = insights.value.mesocycleWeek;
-  function stateFor(n: number): StepState {
-    if (wk === 0) return "future";
-    if (wk > 4 && n === 4) return "overdue";
-    if (n < wk) return "done";
-    if (n === wk) return "current";
-    return "future";
+  if (plateauExerciseCount.value > 0) {
+    return plateauExerciseCount.value + " exercise" + (plateauExerciseCount.value === 1 ? " is" : "s are") + " plateauing. Check recovery before adding work.";
   }
-  return [
-    { week: 1, label: "Found.", state: stateFor(1) },
-    { week: 2, label: "Build", state: stateFor(2) },
-    { week: 3, label: "Push", state: stateFor(3) },
-    { week: 4, label: "Peak", state: stateFor(4) },
-  ];
+  if (droppingExerciseCount.value > 0) {
+    return droppingExerciseCount.value + " exercise" + (droppingExerciseCount.value === 1 ? " is" : "s are") + " trending down. Check fatigue before pushing.";
+  }
+  return "Exercise trends look stable.";
 });
 
 // ── Deload pressure pills (derived after fatigueTriggerEvidence) ───────────
@@ -377,7 +313,7 @@ const exerciseMetrics = computed((): ExerciseMetric[] => {
         previous && previous > 0 ? Math.round(((current - previous) / previous) * 100) : null;
 
       let status: ExerciseMetric["status"] = "stable";
-      const isDeloading = insights.value.phase === "Deload";
+      const isDeloading = insights.value.plateauPaused;
 
       if (data.plateau) {
         status = isDeloading ? "stable" : "plateau";
@@ -412,7 +348,7 @@ const exerciseMetrics = computed((): ExerciseMetric[] => {
 });
 
 const totalExerciseCount = computed(() => exerciseMetrics.value.length);
-const plateauExerciseCount = computed(() => exerciseMetrics.value.filter((m) => m.plateau).length);
+const plateauExerciseCount = computed(() => exerciseMetrics.value.filter((m) => m.status === "plateau").length);
 const improvingExerciseCount = computed(
   () => exerciseMetrics.value.filter((m) => m.status === "improving").length,
 );
@@ -452,16 +388,24 @@ const triggerRows = computed((): TriggerRow[] => {
       id: "deload-volume-spike",
       group: "Deload Triggers",
       metric: "Deload: Set volume spike",
-      value: weeklyDeltaLabel.value,
+      value: e.deloadTriggersPaused
+        ? e.snapshotVolumeDeltaPct !== null
+          ? `Was ${e.snapshotVolumeDeltaPct > 0 ? "+" : ""}${e.snapshotVolumeDeltaPct}%`
+          : "Was triggered"
+        : weeklyDeltaLabel.value,
       reference: "Trigger above +25% (with baseline >= 12 sets)",
       active: e.volumeSpike,
-      gaugePct: clampPct((weeklyDelta / 25) * 100),
+      gaugePct: e.deloadTriggersPaused
+        ? e.snapshotVolumeDeltaPct !== null ? clampPct((e.snapshotVolumeDeltaPct / 25) * 100) : null
+        : clampPct((weeklyDelta / 25) * 100),
     },
     {
       id: "deload-4wk-ramp",
       group: "Deload Triggers",
       metric: "Deload: 4-week set ramp",
-      value: e.volumeIncreasing ? "Increasing" : "Not increasing",
+      value: e.deloadTriggersPaused
+        ? e.volumeIncreasing ? "Was increasing" : "Was not increasing"
+        : e.volumeIncreasing ? "Increasing" : "Not increasing",
       reference: "Trigger: 4 consecutive weekly increases",
       active: e.volumeIncreasing,
       gaugePct: null,
@@ -470,7 +414,9 @@ const triggerRows = computed((): TriggerRow[] => {
       id: "deload-strength-drop",
       group: "Deload Triggers",
       metric: "Deload: Strength decline",
-      value: `${e.decliningExercises} exercises`,
+      value: e.deloadTriggersPaused
+        ? `Was ${e.decliningExercises} exercises`
+        : `${e.decliningExercises} exercises`,
       reference: "Trigger at >= 2 declining exercises",
       active: e.performanceDecline,
       gaugePct: clampPct((e.decliningExercises / 2) * 100),
@@ -479,10 +425,18 @@ const triggerRows = computed((): TriggerRow[] => {
       id: "deload-tonnage-spike",
       group: "Deload Triggers",
       metric: "Deload: Tonnage spike",
-      value: tonnageDelta === null ? "N/A" : `${tonnageDelta > 0 ? "+" : ""}${tonnageDelta}%`,
+      value: e.deloadTriggersPaused
+        ? e.snapshotTonnageDeltaPct !== null
+          ? `Was ${e.snapshotTonnageDeltaPct > 0 ? "+" : ""}${e.snapshotTonnageDeltaPct}%`
+          : "Was triggered"
+        : tonnageDelta === null
+          ? "N/A"
+          : `${tonnageDelta > 0 ? "+" : ""}${tonnageDelta}%`,
       reference: "Trigger above +50%",
       active: e.tonnageSpike,
-      gaugePct: tonnageDelta === null ? null : clampPct((tonnageDelta / 50) * 100),
+      gaugePct: e.deloadTriggersPaused
+        ? e.snapshotTonnageDeltaPct !== null ? clampPct((e.snapshotTonnageDeltaPct / 50) * 100) : null
+        : tonnageDelta === null ? null : clampPct((tonnageDelta / 50) * 100),
     },
     {
       id: "inactive-threshold",
@@ -550,16 +504,12 @@ const triggerRows = computed((): TriggerRow[] => {
 
       <!-- ── TAB: Training Phase ── -->
       <template v-else-if="activeTab === 'phase'">
-
-      <!-- MESOCYCLE CARD — cycle position + deload pressure -->
       <UiCard class="p-4 overflow-visible">
-        <!-- Header -->
-        <div class="flex items-center justify-between gap-2 mb-4">
-          <div>
-            <p class="text-xs font-black uppercase tracking-wide text-foreground/90">Mesocycle</p>
-            <p class="text-[10px] text-foreground/50 mt-0.5">
-              {{ isDeloadActive ? 'Deload active — reset & recover' : mesocycleContext.label + ' · ' + mesocycleContext.sub }}
-            </p>
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <p class="text-xs font-black uppercase tracking-wide text-foreground/90">Current Read</p>
+            <p class="mt-1 text-lg font-semibold text-foreground/95">{{ coachSummary.headline }}</p>
+            <p class="mt-1 text-[11px] text-foreground/65 leading-relaxed">{{ coachSummary.explanation }}</p>
           </div>
           <span :class="phaseDisplay.color + ' text-[10px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full border shrink-0 flex items-center gap-1'">
             <component :is="phaseDisplay.icon" class="w-3 h-3" />
@@ -567,49 +517,30 @@ const triggerRows = computed((): TriggerRow[] => {
           </span>
         </div>
 
-        <!-- Week stepper -->
-        <div class="flex items-start">
-          <template v-for="(step, i) in mesocycleSteps" :key="step.week">
-            <div class="flex flex-col items-center gap-1 w-12">
-              <div
-                class="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold border transition-all duration-300"
-                :class="{
-                  'bg-green-500/15 text-green-400/80 border-green-500/25': step.state === 'done',
-                  'bg-white/15 text-foreground border-white/40 shadow-[0_0_0_3px_rgba(255,255,255,0.10)]': step.state === 'current',
-                  'bg-red-500/15 text-red-400 border-red-500/40 animate-pulse': step.state === 'overdue',
-                  'bg-white/5 text-foreground/25 border-white/8': step.state === 'future',
-                }"
-              >W{{ step.week }}</div>
-              <span class="text-[8px] text-foreground/40 text-center leading-tight">{{ step.label }}</span>
-            </div>
-            <div v-if="i < 3" class="flex-1 h-[2px] mt-4 min-w-2 rounded-full transition-all duration-500"
-              :class="step.state === 'done' ? 'bg-gradient-to-r from-green-500/50 to-green-500/10' : 'bg-white/10'"></div>
-          </template>
-
-          <!-- → arrow -->
-          <span class="text-foreground/25 text-base mx-1 mt-2">→</span>
-
-          <!-- Deload node -->
-          <div class="flex flex-col items-center gap-1 w-14">
-            <div
-              class="w-8 h-8 rounded-full flex items-center justify-center text-sm border transition-all duration-500"
-              :class="isDeloadActive
-                ? 'bg-orange-500/30 text-orange-400 border-orange-500/50 shadow-[0_0_15px_rgba(251,146,60,0.6)] animate-pulse'
-                : 'bg-white/5 text-foreground/25 border-white/8'"
-            >↺</div>
-            <span
-              class="text-[8px] text-center leading-tight font-bold"
-              :class="isDeloadActive ? 'text-orange-400' : 'text-foreground/35'"
-            >Deload</span>
+        <div class="mt-3 grid gap-2 sm:grid-cols-2">
+          <div class="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+            <p class="text-[9px] uppercase tracking-wide text-foreground/45">Next</p>
+            <p class="mt-1 text-[11px] text-foreground/80 leading-relaxed">{{ coachSummary.nextAction }}</p>
+          </div>
+          <div class="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+            <p class="text-[9px] uppercase tracking-wide text-foreground/45">Source</p>
+            <p class="mt-1 text-[11px] text-foreground/80 leading-relaxed">{{ coachSummary.transparency }}</p>
           </div>
         </div>
 
-        <!-- Phase interpretation -->
-        <p v-if="phaseInterpretation" class="mt-3 text-[10px] text-foreground/55 leading-relaxed">
-          {{ phaseInterpretation }}
-        </p>
+        <div v-if="insights.deloadStatus === 'active'" class="mt-3 rounded-lg border border-orange-500/30 bg-orange-500/10 p-3 space-y-2">
+          <div>
+            <p class="text-[9px] uppercase tracking-wider font-bold text-orange-400/70 mb-0.5">Deload reason</p>
+            <p class="text-[11px] text-orange-200 leading-relaxed">{{ insights.fatigue.reason }}</p>
+          </div>
+          <p class="text-[10px] text-orange-300/60 leading-relaxed">
+            Active until {{ new Date(insights.deloadEndsAt ?? "").toLocaleString() }}. The trigger view below is frozen to the start-of-deload snapshot.
+          </p>
+          <div class="flex justify-end">
+            <UiButton size="sm" variant="outline" @click="stopDeloadNow">Stop Deload Now</UiButton>
+          </div>
+        </div>
 
-        <!-- Deload pressure -->
         <div class="mt-4">
           <div class="flex items-center justify-between text-[10px] mb-2">
             <span class="font-semibold uppercase tracking-wide text-foreground/50">Deload pressure</span>
@@ -617,15 +548,12 @@ const triggerRows = computed((): TriggerRow[] => {
               {{ deloadPressureCount }} / 4 triggers
             </span>
           </div>
-          <!-- 4 trigger pills -->
           <div class="grid grid-cols-4 gap-1.5">
             <div
               v-for="t in deloadTriggerPills"
               :key="t.id"
               class="flex flex-col items-center gap-1 py-1.5 px-1 rounded-lg border transition-all duration-300"
-              :class="t.active
-                ? 'bg-orange-500/10 border-orange-500/30'
-                : 'bg-white/[0.03] border-white/8'"
+              :class="t.active ? 'bg-orange-500/10 border-orange-500/30' : 'bg-white/[0.03] border-white/8'"
             >
               <span
                 class="h-2 w-2 rounded-full transition-all duration-300"
@@ -637,7 +565,6 @@ const triggerRows = computed((): TriggerRow[] => {
               >{{ t.label }}</span>
             </div>
           </div>
-          <!-- Pressure bar -->
           <div class="mt-2 h-1 rounded-full bg-white/10 overflow-hidden">
             <div
               class="h-full rounded-full transition-all duration-700"
@@ -708,7 +635,7 @@ const triggerRows = computed((): TriggerRow[] => {
           v-else
           class="mt-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-foreground opacity-80"
         >
-          Evidence is temporarily unavailable. Log data is still loading or incomplete.
+          Evidence unavailable. Data is still loading.
         </div>
       </UiCard>
 
@@ -725,6 +652,8 @@ const triggerRows = computed((): TriggerRow[] => {
               {{ totalExerciseCount }} tracked
             </span>
           </div>
+
+          <p class="mt-3 text-[11px] text-foreground/60 leading-relaxed">{{ exerciseStatusNote }}</p>
 
           <div class="grid grid-cols-2 gap-2 mt-3">
             <div class="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
@@ -786,7 +715,7 @@ const triggerRows = computed((): TriggerRow[] => {
                       v-if="metric.learnedMuscleGroups.length === 0"
                       class="text-[9px] text-foreground/40"
                     >
-                      No learned muscle groups yet
+                      No muscle tags yet
                     </span>
                   </div>
                 </div>
@@ -824,7 +753,7 @@ const triggerRows = computed((): TriggerRow[] => {
             v-else
             class="px-4 py-8 text-center text-xs text-foreground/55"
           >
-            No exercise metrics yet. Add more workout logs to unlock trend analysis.
+            No exercise stats yet. Add more logs.
           </div>
         </UiCard>
       </template>

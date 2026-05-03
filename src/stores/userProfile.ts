@@ -28,7 +28,7 @@ export const useUserProfileStore = defineStore("userProfile", () => {
   const userProfile = ref<UserProfile>({});
   const hasCompletedSetup = useLocalStorage<boolean>("hasCompletedSetup", false);
   const apiKey = useLocalStorage<string | null>("userProfile:apiKey", null);
-  const isLoading = ref(false);
+  const isLoading = ref(true);
 
   const { handleAuthError } = useAuthErrorHandler();
 
@@ -51,18 +51,16 @@ export const useUserProfileStore = defineStore("userProfile", () => {
   watchEffect(async () => {
     const spreadsheetStore = useSpreadsheetStore();
     const { doc } = spreadsheetStore;
-    if (!doc) return;
+    if (!doc) {
+      isLoading.value = false;
+      return;
+    }
 
     isLoading.value = true;
 
     await migrateFromLocalStorage(doc);
 
     const result = await loadUserProfile(doc);
-    console.log(
-      "[userProfile] Load result:",
-      result.isOk() ? "OK" : "ERR",
-      result.isOk() ? result.value : result.error,
-    );
     if (result.isErr() && result.error === "auth-failed") {
       handleAuthError("user-profile-load");
       isLoading.value = false;
@@ -70,16 +68,12 @@ export const useUserProfileStore = defineStore("userProfile", () => {
     }
     if (result.isOk() && result.value) {
       userProfile.value = { ...result.value };
-      const hasData = profileHasData(result.value);
-      console.log("[userProfile] Profile has data:", hasData, "Data:", result.value);
-      if (hasData) {
+      if (profileHasData(result.value)) {
         hasCompletedSetup.value = true;
-        console.log("[userProfile] Set hasCompletedSetup = true");
       }
     }
 
     isLoading.value = false;
-    console.log("[userProfile] Loading complete. hasCompletedSetup:", hasCompletedSetup.value);
   });
 
   const debouncedSave = useDebounceFn(async () => {

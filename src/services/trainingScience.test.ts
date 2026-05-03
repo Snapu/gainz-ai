@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ExerciseLog } from "./exerciseLogs";
+import type { DeloadLifecycle } from "./deloadLifecycle";
 import {
   calculateE1RM,
   calculateE1RMInsights,
@@ -1232,5 +1233,50 @@ describe("deload-aware e1RM and fatigue", () => {
     const fatigue = calculateFatigueInsight([], e1rm, new Date(), undefined, false);
     expect(fatigue.shouldDeload).toBe(true);
     expect(fatigue.reason).toContain("declining");
+  });
+});
+
+
+describe("calculateTrainingInsights with explicit lifecycle", () => {
+  it("forces active deload status and pauses e1RM/plateau while lifecycle is active", () => {
+    const targetDate = new Date("2026-05-05T10:00:00.000Z");
+    const logs = [
+      createLog("Bench Press", new Date("2026-05-04T10:00:00.000Z"), 100, 5),
+      createLog("Bench Press", new Date("2026-05-03T10:00:00.000Z"), 95, 6),
+    ];
+
+    const lifecycle: DeloadLifecycle = {
+      status: "active",
+      startedAtIso: "2026-05-02T10:00:00.000Z",
+      endsAtIso: "2026-05-09T10:00:00.000Z",
+      triggerReason: "Volume spiked",
+      postStopConservativeSessionsRemaining: 0,
+    };
+
+    const insights = calculateTrainingInsights(logs, targetDate, undefined, undefined, lifecycle);
+
+    expect(insights.deloadStatus).toBe("active");
+    expect(insights.fatigue.shouldDeload).toBe(true);
+    expect(insights.fatigue.reason).toBe("Volume spiked");
+    expect(insights.mesocycleWeek).toBe(0);
+    expect(insights.e1rmPaused).toBe(true);
+    expect(insights.plateauPaused).toBe(true);
+    expect(insights.deloadTimeRemainingMs).toBe(4 * 86_400_000);
+  });
+
+  it("uses block anchor week counting when lifecycle is inactive", () => {
+    const targetDate = new Date("2026-05-15T00:00:00.000Z");
+    const lifecycle: DeloadLifecycle = {
+      status: "inactive",
+      currentBlockStartedAtIso: "2026-05-01T00:00:00.000Z",
+      postStopConservativeSessionsRemaining: 2,
+    };
+
+    const insights = calculateTrainingInsights([], targetDate, undefined, undefined, lifecycle);
+
+    expect(insights.deloadStatus).toBe("inactive");
+    expect(insights.mesocycleWeek).toBe(3);
+    expect(insights.postStopConservativeSessionsRemaining).toBe(2);
+    expect(insights.e1rmPaused).toBe(false);
   });
 });

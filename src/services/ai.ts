@@ -4,11 +4,12 @@ import { err, ok, type Result } from "neverthrow";
 
 import type { ExerciseLog } from "@/services/exerciseLogs";
 import type { TrainingSummary } from "@/services/trainingSummary";
+import type { DeloadLifecycle } from "@/services/deloadLifecycle";
 import type { UserProfile } from "@/services/userProfile";
 import { localeDateString } from "@/services/utils/date";
 import type { Event } from "@/types/event";
 import { getLearnedMuscleMap, learnFromAiResponse, VALID_MUSCLE_GROUPS } from "./exerciseMuscleMap";
-import { calculateTrainingInsights } from "./trainingScience";
+import { calculateTrainingInsights, summarizeTrainingInsights } from "./trainingScience";
 
 const INITIAL_LOG_WINDOW_DAYS = 14;
 const EXTENDED_LOG_WINDOW_DAYS = 28;
@@ -469,6 +470,53 @@ function buildPriorPlanSummary(
   }
 }
 
+function buildCompactProfileContext(userProfile: UserProfile): Record<string, unknown> {
+  return {
+    age: userProfile.age ?? null,
+    heightCm: userProfile.heightCm ?? null,
+    weightKg: userProfile.weightKg ?? null,
+    fitnessGoal: userProfile.fitnessGoal ?? [],
+    fitnessLevel: userProfile.fitnessLevel ?? null,
+    workoutDaysPerWeek: userProfile.workoutDaysPerWeek ?? null,
+    workoutLocation: userProfile.workoutLocation ?? null,
+    equipmentAccess: userProfile.equipmentAccess ?? [],
+  };
+}
+
+function buildCompactTrainingContext(
+  insights: ReturnType<typeof calculateTrainingInsights>,
+): Record<string, unknown> {
+  const summary = summarizeTrainingInsights(insights);
+  const exerciseTrends = Object.fromEntries(
+    Object.entries(insights.e1rm).map(([name, data]) => [name, {
+      e1rm: data.e1rm,
+      plateau: data.plateau,
+      bestRPE: data.bestRPE ?? null,
+      recentTrend: data.trend.slice(-3),
+    }]),
+  );
+
+  return {
+    summary,
+    phase: insights.phase,
+    acwr: insights.acwr,
+    mesocycleWeek: insights.mesocycleWeek,
+    deloadStatus: insights.deloadStatus,
+    deloadEndsAt: insights.deloadEndsAt,
+    deloadTimeRemainingMs: insights.deloadTimeRemainingMs,
+    e1rmPaused: insights.e1rmPaused,
+    plateauPaused: insights.plateauPaused,
+    fatigue: {
+      reason: insights.fatigue.reason ?? null,
+      weeklyTotalSets: insights.fatigue.weeklyTotalSets,
+      weeklyTonnage: insights.fatigue.weeklyTonnage,
+      triggeredBy: insights.fatigue.triggeredBy ?? [],
+    },
+    deloadTriggerSnapshot: insights.deloadTriggerSnapshot,
+    exerciseTrends,
+  };
+}
+
 function isServiceUnavailableError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const e = error as Record<string, unknown>;
@@ -481,6 +529,7 @@ function isServiceUnavailableError(error: unknown): boolean {
 export async function askAi(
   apiKey: string | undefined,
   userProfile: UserProfile,
+  deloadLifecycle: DeloadLifecycle | undefined,
   exerciseLogs: ExerciseLog[],
   trainingSummaries: TrainingSummary[],
   previousMessages: PreviousAiMessage[],
@@ -515,7 +564,8 @@ export async function askAi(
 
     // Profile: only on first message (it never changes mid-session)
     if (isFirstMessage) {
-      sections.push(`Profile: ${JSON.stringify(userProfile)}`);
+      sections.push(`Profile:
+${JSON.stringify(buildCompactProfileContext(userProfile))}`);
 
       // Highlight freeUserInput separately so the AI treats it as a primary directive
       if (userProfile.freeUserInput) {
@@ -577,10 +627,11 @@ export async function askAi(
       new Date(),
       learnedMap,
       userProfile.weightKg,
+      deloadLifecycle,
     );
     if (phase === "planning" || isFirstMessage) {
-      // Full insights for planning (and first-ever mid-workout call which needs full context)
-      sections.push(`Training Insights:\n${JSON.stringify(insights)}`);
+      sections.push(`Training Context:
+${JSON.stringify(buildCompactTrainingContext(insights))}`);
     } else {
       // Lightweight e1RM-only line for mid-workout and post-workout (~50-100 tokens vs ~500+)
       const e1rmCompact = Object.entries(insights.e1rm)

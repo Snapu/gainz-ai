@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/vue";
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { err, ok, type Result } from "neverthrow";
 import { z } from "zod";
+import { saveDeloadLifecycle } from "./deloadLifecycleSheet";
 import { isAuthError } from "./utils/isAuthError";
 import { parseData } from "./utils/parseData";
 
@@ -77,22 +78,33 @@ export type UserProfile = z.infer<typeof UserProfileSchema>;
 export type UserProfileWithApiKey = UserProfile & { apiKey?: string };
 
 const SHEET_NAME = "UserProfile";
+const USER_PROFILE_HEADERS = [
+  "age",
+  "heightCm",
+  "weightKg",
+  "fitnessGoal",
+  "fitnessLevel",
+  "workoutDaysPerWeek",
+  "workoutLocation",
+  "equipmentAccess",
+  "freeUserInput",
+] as const;
+
 const getSheet = (doc: GoogleSpreadsheet) => doc.sheetsByTitle[SHEET_NAME];
 const addSheet = (doc: GoogleSpreadsheet) =>
   doc.addSheet({
     title: SHEET_NAME,
-    headerValues: [
-      "age",
-      "heightCm",
-      "weightKg",
-      "fitnessGoal",
-      "fitnessLevel",
-      "workoutDaysPerWeek",
-      "workoutLocation",
-      "equipmentAccess",
-      "freeUserInput",
-    ],
+    headerValues: [...USER_PROFILE_HEADERS],
   });
+
+async function ensureUserProfileHeaders(sheet: any): Promise<void> {
+  await sheet.loadHeaderRow();
+  const currentHeaders: string[] = Array.isArray(sheet.headerValues) ? sheet.headerValues : [];
+  const missingHeaders = USER_PROFILE_HEADERS.filter((h) => !currentHeaders.includes(h));
+  if (missingHeaders.length === 0) return;
+  await sheet.setHeaderRow([...currentHeaders, ...missingHeaders]);
+  await sheet.loadHeaderRow();
+}
 
 function serializeForSheet(profile: UserProfile): Record<string, string> {
   return {
@@ -113,7 +125,7 @@ export async function loadUserProfile(
 ): Promise<Result<UserProfile | null, "load-failed" | "parse-data-failed" | "auth-failed">> {
   const sheet = getSheet(doc) ?? (await addSheet(doc));
   try {
-    await sheet.loadHeaderRow();
+    await ensureUserProfileHeaders(sheet);
     const rows = await sheet.getRows();
     if (rows.length === 0) {
       return ok(null);
@@ -139,7 +151,7 @@ export async function saveUserProfile(
 ): Promise<Result<void, "save-failed" | "auth-failed">> {
   try {
     const sheet = getSheet(doc) ?? (await addSheet(doc));
-    await sheet.loadHeaderRow();
+    await ensureUserProfileHeaders(sheet);
     const rows = await sheet.getRows();
     const serialized = serializeForSheet(profile);
 
@@ -163,40 +175,24 @@ export async function saveUserProfile(
   }
 }
 
-/**
- * Migrate user profile from old localStorage format to spreadsheet
- * Idempotent: safe to run multiple times (checks if already migrated)
- *
- * Migration steps:
- * 1. Check if spreadsheet already has data → skip (already migrated)
- * 2. Check for old localStorage key "userProfile"
- * 3. If data exists: extract apiKey, save profile to spreadsheet, clean up localStorage
- *
- * @returns "migrated" if data was migrated, "skipped" if already done, "no-data" if nothing to migrate
- */
 export async function migrateFromLocalStorage(
   doc: GoogleSpreadsheet,
 ): Promise<Result<"migrated" | "skipped" | "no-data", "migration-failed">> {
   try {
-    // Check if spreadsheet already has data (idempotency check)
     const loadResult = await loadUserProfile(doc);
     if (loadResult.isErr()) {
       return err("migration-failed");
     }
 
     if (loadResult.value !== null) {
-      // Spreadsheet already has data, migration already done or user is new
       return ok("skipped");
     }
 
-    // Check for old localStorage data
     const oldDataJson = localStorage.getItem("userProfile");
     if (!oldDataJson) {
-      // No old data to migrate
       return ok("no-data");
     }
 
-    // Parse old localStorage data
     let oldData: any;
     try {
       oldData = JSON.parse(oldDataJson);
@@ -208,26 +204,32 @@ export async function migrateFromLocalStorage(
       return err("migration-failed");
     }
 
-    // Extract apiKey (if present) and profile data
-    const { apiKey, ...profileData } = oldData;
+    const { apiKey, deloadLifecycle, ...profileData } = oldData;
 
-    // Save apiKey to new localStorage key (if it exists)
     if (apiKey) {
       localStorage.setItem("userProfile:apiKey", apiKey);
     }
 
-    // Save profile data (without apiKey) to spreadsheet
-    const saveResult = await saveUserProfile(profileData, doc);
-    if (saveResult.isErr()) {
+    const saveProfileResult = await saveUserProfile(profileData, doc);
+    if (saveProfileResult.isErr()) {
       console.error("Failed to save migrated profile to spreadsheet");
       Sentry.captureMessage("Failed to save migrated profile", {
         level: "error",
-        tags: { scope: "user-profile-service", feature: "migration-save" },
+        tags: { scope: "user-profile-service", feature: "migration-save-profile" },
       });
       return err("migration-failed");
     }
 
-    // Remove old localStorage key (migration complete)
+    const saveLifecycleResult = await saveDeloadLifecycle(deloadLifecycle, doc);
+    if (saveLifecycleResult.isErr()) {
+      console.error("Failed to save migrated deload lifecycle to spreadsheet");
+      Sentry.captureMessage("Failed to save migrated deload lifecycle", {
+        level: "error",
+        tags: { scope: "user-profile-service", feature: "migration-save-lifecycle" },
+      });
+      return err("migration-failed");
+    }
+
     localStorage.removeItem("userProfile");
 
     console.log("User profile migrated from localStorage to spreadsheet");

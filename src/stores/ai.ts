@@ -3,13 +3,17 @@ import { err, ok, type Result } from "neverthrow";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 
-import { askAi as askAiService, classifyExercises, getTodayLogsCount } from "@/services/ai";
-import { getMuscleActivation, normalizeExerciseName } from "@/services/trainingScience";
+import { askAi as askAiService, classifyExercises, getTodayLogsCount, type PreviousAiMessage } from "@/services/ai";
+import {
+  getMuscleActivation,
+  normalizeExerciseName,
+} from "@/services/trainingScience";
 import { localeDateString } from "@/services/utils/date";
 import { useEventsStore } from "@/stores/events";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
 import { useExerciseMuscleMapStore } from "@/stores/exerciseMuscleMap";
 import { useTrainingSummaryStore } from "@/stores/trainingSummary";
+import { useDeloadLifecycleStore } from "@/stores/deloadLifecycle";
 import { useUserProfileStore } from "@/stores/userProfile";
 
 interface AiMessage {
@@ -83,6 +87,7 @@ export const useAiStore = defineStore("ai", () => {
   const trainingSummaryStore = useTrainingSummaryStore();
   const eventsStore = useEventsStore();
   const exerciseMuscleMapStore = useExerciseMuscleMapStore();
+  const deloadLifecycleStore = useDeloadLifecycleStore();
 
   const todaySessionDate = computed(() => localeDateString(new Date()));
 
@@ -124,7 +129,6 @@ export const useAiStore = defineStore("ai", () => {
       console.debug("No new logs since last AI response, using cached messages.");
       return ok(undefined);
     }
-
     // Classify any unclassified exercises so the muscle map is complete before
     // building the training insights context that gets sent in the prompt.
     await classifyUnclassifiedIfNeeded();
@@ -135,9 +139,7 @@ export const useAiStore = defineStore("ai", () => {
     let userMessageId = "";
 
     try {
-      type PreviousMessagesParam = Parameters<typeof askAiService>[4];
-
-      const previousMessages: PreviousMessagesParam = messages.value.map((msg) => ({
+      const previousMessages: PreviousAiMessage[] = messages.value.map((msg) => ({
         role: msg.role,
         content: msg.content,
         sessionDate: msg.sessionDate,
@@ -160,6 +162,7 @@ export const useAiStore = defineStore("ai", () => {
       const result = await askAiService(
         apiKey,
         userProfileStore.userProfile,
+        deloadLifecycleStore.deloadLifecycle,
         exerciseLogsStore.exerciseLogs,
         trainingSummaryStore.summaries,
         previousMessages,

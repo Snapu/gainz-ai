@@ -1,5 +1,11 @@
 import type { ExerciseLog } from "./exerciseLogs";
 import { calculateWeeklyVolume } from "./fitnessMetrics";
+import {
+  getDeloadTimeRemainingMs,
+  getMesocycleWeekFromLifecycle,
+  type DeloadLifecycle,
+  type DeloadTriggerSnapshot,
+} from "./deloadLifecycle";
 
 // --- Types ---
 
@@ -52,6 +58,8 @@ export interface FatigueInsight {
   reason?: string;
   weeklyTotalSets: number[];
   weeklyTonnage: number[]; // sum of weight × reps per set, per week
+  triggeredBy?: string[]; // which trigger IDs fired (empty if none); populated by calculateFatigueInsight
+  decliningExercises?: number; // count of exercises with declining e1RM; populated by calculateFatigueInsight
 }
 
 /** A date range representing a detected deload week (exclusive start, inclusive end). */
@@ -67,6 +75,14 @@ export interface TrainingInsights {
   phase: SystemicPhase;
   acwr: number | null; // Acute:Chronic Workload Ratio (7-day load / avg weekly 28-day load)
   mesocycleWeek: number; // Weeks since last deload (or since first log if no deload detected)
+  deloadStatus: "active" | "inactive";
+  deloadStartedAt: string | null;
+  deloadEndsAt: string | null;
+  deloadTimeRemainingMs: number;
+  e1rmPaused: boolean;
+  plateauPaused: boolean;
+  postStopConservativeSessionsRemaining: number;
+  deloadTriggerSnapshot: DeloadTriggerSnapshot | null; // frozen snapshot from when deload was triggered
 }
 
 // --- Exercise → Muscle Activation Mapping ---
@@ -647,7 +663,14 @@ export function calculateFatigueInsight(
     }
   }
 
-  return { shouldDeload, reason, weeklyTotalSets, weeklyTonnage };
+  const triggeredBy: string[] = [];
+  if (volumeSpike) triggeredBy.push("volumeSpike");
+  if (volumeIncreasing) triggeredBy.push("volumeIncreasing");
+  if (performanceDecline) triggeredBy.push("performanceDecline");
+  // tonnage spike only fires when neither volumeSpike nor performanceDecline fired
+  if (shouldDeload && !volumeSpike && !performanceDecline) triggeredBy.push("tonnageSpike");
+
+  return { shouldDeload, reason, weeklyTotalSets, weeklyTonnage, triggeredBy, decliningExercises };
 }
 
 // --- Systemic Phase Detection ---
@@ -807,6 +830,7 @@ export function calculateTrainingInsights(
   targetDate: Date = new Date(),
   overrideMap?: Record<string, MuscleActivation>,
   bodyweightKg?: number,
+  lifecycle?: DeloadLifecycle,
 ): TrainingInsights {
   // Step 1: Detect deload weeks from volume (set count) — no e1RM dependency
   const deloadRanges = detectDeloadWeekRanges(logs, targetDate);
@@ -827,13 +851,241 @@ export function calculateTrainingInsights(
     currentWeekIsDeload,
   );
 
-  const phase = computeSystemicPhase(fatigue);
-  const acwr = computeACWR(logs, targetDate, bodyweightKg);
-  // mesocycleWeek=0 signals an active deload week — prevents the AI from also warning
-  // "deload overdue" when shouldDeload is already true and the deload is in progress.
-  const mesocycleWeek = fatigue.shouldDeload
-    ? 0
-    : computeMesocycleWeek(logs, targetDate, deloadRanges);
+  const isLifecycleDeload = lifecycle?.status === "active";
+  const fatigueWithLifecycle: FatigueInsight = isLifecycleDeload
+    ? {
+        ...fatigue,
+        shouldDeload: true,
+        reason: lifecycle.triggerReason ?? fatigue.reason,
+      }
+    : fatigue;
 
-  return { muscleGroups, e1rm, fatigue, phase, acwr, mesocycleWeek };
+  const phase = computeSystemicPhase(fatigueWithLifecycle);
+  const acwr = computeACWR(logs, targetDate, bodyweightKg);
+  const mesocycleWeek = lifecycle
+    ? getMesocycleWeekFromLifecycle(lifecycle, targetDate)
+    : fatigueWithLifecycle.shouldDeload
+      ? 0
+      : computeMesocycleWeek(logs, targetDate, deloadRanges);
+
+  return {
+    muscleGroups,
+    e1rm,
+    fatigue: fatigueWithLifecycle,
+    phase,
+    acwr,
+    mesocycleWeek,
+    deloadStatus: isLifecycleDeload ? "active" : "inactive",
+    deloadStartedAt: lifecycle?.startedAtIso ?? null,
+    deloadEndsAt: lifecycle?.endsAtIso ?? null,
+    deloadTimeRemainingMs: getDeloadTimeRemainingMs(lifecycle, targetDate),
+    e1rmPaused: isLifecycleDeload,
+    plateauPaused: isLifecycleDeload,
+    postStopConservativeSessionsRemaining: lifecycle?.postStopConservativeSessionsRemaining ?? 0,
+    deloadTriggerSnapshot: lifecycle?.triggerSnapshot ?? null,
+  };
+}
+
+export interface FatigueTriggerEvidence {
+  volumeIncreasing: boolean;
+  volumeSpike: boolean;
+  decliningExercises: number;
+  performanceDecline: boolean;
+  deloadTriggersPaused: boolean;
+  tonnageSpike: boolean;
+  inactiveTrigger: boolean;
+  returningAthlete: boolean;
+  buildTrigger: boolean;
+  // Set when deloadTriggersPaused — snapshot values from when the deload was triggered
+  snapshotVolumeDeltaPct: number | null;
+  snapshotTonnageDeltaPct: number | null;
+}
+
+/**
+ * Derive explicit trigger evidence from already-computed insights.
+ * Keeps UI trigger rendering consistent with service-layer fatigue rules.
+ */
+export function calculateFatigueTriggerEvidence(
+  insights: TrainingInsights,
+): FatigueTriggerEvidence {
+  const deloadTriggersPaused = insights.e1rmPaused;
+  const snapshot = insights.deloadTriggerSnapshot;
+
+  // --- During active deload: use frozen snapshot to show WHAT triggered the deload ---
+  // This preserves the original purpose of trigger details: show why the deload started,
+  // not misleading zeroed live values.
+  if (deloadTriggersPaused && snapshot?.triggeredBy) {
+    const tb = snapshot.triggeredBy;
+
+    // Recompute display delta values from the snapshot arrays (pre-deload peak)
+    const snapshotVolumeDeltaPct = (() => {
+      const s = snapshot.weeklyTotalSets;
+      if (s.length < 4) return null;
+      const prior = ((s[0] ?? 0) + (s[1] ?? 0) + (s[2] ?? 0)) / 3;
+      if (prior <= 0) return null;
+      return Math.round(((s[3] ?? 0) - prior) / prior * 100);
+    })();
+
+    const snapshotTonnageDeltaPct = (() => {
+      const t = snapshot.weeklyTonnage;
+      if (t.length < 4) return null;
+      const prior = ((t[0] ?? 0) + (t[1] ?? 0) + (t[2] ?? 0)) / 3;
+      if (prior <= 0) return null;
+      return Math.round(((t[3] ?? 0) - prior) / prior * 100);
+    })();
+
+    // Phase triggers (inactive, returning, build) are assessed from live data even during deload
+    const weeklySets = insights.fatigue.weeklyTotalSets;
+    const thisWeekSets = weeklySets[3] ?? 0;
+    const prevWeekSets = weeklySets[2] ?? 0;
+
+    return {
+      volumeSpike: tb.includes("volumeSpike"),
+      volumeIncreasing: tb.includes("volumeIncreasing"),
+      decliningExercises: snapshot.decliningExercisesAtStart ?? 0,
+      performanceDecline: tb.includes("performanceDecline"),
+      tonnageSpike: tb.includes("tonnageSpike"),
+      deloadTriggersPaused: true,
+      snapshotVolumeDeltaPct,
+      snapshotTonnageDeltaPct,
+      inactiveTrigger: false,
+      returningAthlete: prevWeekSets === 0 && thisWeekSets > 0,
+      buildTrigger: thisWeekSets > prevWeekSets && thisWeekSets >= 10,
+    };
+  }
+
+  // --- Not in deload (or in deload but no snapshot): live assessment ---
+  const weeklySets = insights.fatigue.weeklyTotalSets;
+  const weeklyTonnage = insights.fatigue.weeklyTonnage;
+
+  const thisWeekSets = weeklySets[3] ?? 0;
+  const prevWeekSets = weeklySets[2] ?? 0;
+  const priorSetsAvg =
+    weeklySets.length >= 4
+      ? ((weeklySets[0] ?? 0) + (weeklySets[1] ?? 0) + (weeklySets[2] ?? 0)) / 3
+      : 0;
+
+  const thisWeekTonnage = weeklyTonnage[3] ?? 0;
+  const priorTonnageAvg =
+    weeklyTonnage.length >= 4
+      ? ((weeklyTonnage[0] ?? 0) + (weeklyTonnage[1] ?? 0) + (weeklyTonnage[2] ?? 0)) / 3
+      : 0;
+
+  const volumeIncreasing =
+    !deloadTriggersPaused &&
+    weeklySets.length >= 4 &&
+    weeklySets.every((sets, i) => i === 0 || sets > (weeklySets[i - 1] ?? 0));
+
+  const volumeSpike = !deloadTriggersPaused && priorSetsAvg >= 12 && thisWeekSets > priorSetsAvg * 1.25;
+
+  let decliningExercises = 0;
+  if (!deloadTriggersPaused) {
+    for (const data of Object.values(insights.e1rm)) {
+      if (data.trend.length >= 3) {
+        const current = data.trend[data.trend.length - 1] ?? 0;
+        const prior2Avg =
+          ((data.trend[data.trend.length - 2] ?? 0) +
+            (data.trend[data.trend.length - 3] ?? 0)) /
+          2;
+        if (prior2Avg > 0 && current < prior2Avg * 0.95) decliningExercises++;
+      }
+    }
+  }
+
+  const performanceDecline = !deloadTriggersPaused && decliningExercises >= 2;
+  const tonnageSpike = !deloadTriggersPaused && priorTonnageAvg > 0 && thisWeekTonnage > priorTonnageAvg * 1.5;
+
+  const inactiveTrigger = !deloadTriggersPaused && thisWeekSets + prevWeekSets < 24;
+  const returningAthlete = prevWeekSets === 0 && thisWeekSets > 0;
+  const buildTrigger = thisWeekSets > prevWeekSets && thisWeekSets >= 10;
+
+  return {
+    volumeIncreasing,
+    volumeSpike,
+    decliningExercises,
+    performanceDecline,
+    deloadTriggersPaused,
+    tonnageSpike,
+    inactiveTrigger,
+    returningAthlete,
+    buildTrigger,
+    snapshotVolumeDeltaPct: null,
+    snapshotTonnageDeltaPct: null,
+  };
+}
+
+
+export interface TrainingInsightsSummary {
+  headline: string;
+  explanation: string;
+  nextAction: string;
+  transparency: string;
+  activeTriggerLabels: string[];
+  triggerCount: number;
+}
+
+export function summarizeTrainingInsights(
+  insights: TrainingInsights,
+): TrainingInsightsSummary {
+  const evidence = calculateFatigueTriggerEvidence(insights);
+  const activeTriggerLabels = [
+    evidence.volumeSpike ? "Volume spike" : null,
+    evidence.volumeIncreasing ? "4-week ramp" : null,
+    evidence.performanceDecline ? "Strength decline" : null,
+    evidence.tonnageSpike ? "Tonnage spike" : null,
+  ].filter((label): label is string => label !== null);
+
+  if (insights.deloadStatus === "active") {
+    return {
+      headline: "Deload week active",
+      explanation:
+        insights.fatigue.reason ??
+        "Recovery week is active due to high recent stress.",
+      nextAction:
+        "Keep load low, move well, then ramp up after deload.",
+      transparency:
+        activeTriggerLabels.length > 0
+          ? `Snapshot at deload start: ${activeTriggerLabels.join(", ")}.`
+          : "Snapshot from deload start.",
+      activeTriggerLabels,
+      triggerCount: activeTriggerLabels.length,
+    };
+  }
+
+  if (insights.phase === "Build") {
+    return {
+      headline: "Build phase",
+      explanation:
+        activeTriggerLabels.length > 0
+          ? `Workload is building and ${activeTriggerLabels.length} fatigue signal${activeTriggerLabels.length === 1 ? " is" : "s are"} already elevated.`
+          : "Build is active and recovery still looks good.",
+      nextAction:
+        activeTriggerLabels.length >= 2
+          ? "Progress carefully. Add less volume and prioritize recovery."
+          : "Use small jumps in load or reps.",
+      transparency: "Using live training data.",
+      activeTriggerLabels,
+      triggerCount: activeTriggerLabels.length,
+    };
+  }
+
+  if (insights.phase === "Maintain") {
+    return {
+      headline: "Maintain phase",
+      explanation: "Stress is stable. Maintain performance.",
+      nextAction: "Keep volume steady. Add work only if recovery stays strong.",
+      transparency: "Using live training data.",
+      activeTriggerLabels,
+      triggerCount: activeTriggerLabels.length,
+    };
+  }
+
+  return {
+    headline: "Inactive phase",
+    explanation: "Training dose is currently too low.",
+    nextAction: "Rebuild consistency first: add sessions or sets.",
+    transparency: "Using live training data.",
+    activeTriggerLabels,
+    triggerCount: activeTriggerLabels.length,
+  };
 }

@@ -29,9 +29,11 @@ import { useExerciseMuscleMapStore } from "@/stores/exerciseMuscleMap";
 import { useRestTimerStore } from "@/stores/restTimer";
 import { useSpreadsheetStore } from "@/stores/spreadsheet";
 import { useTrainingSummaryStore } from "@/stores/trainingSummary";
+import { useDeloadLifecycleStore } from "@/stores/deloadLifecycle";
 import { useUserProfileStore } from "@/stores/userProfile";
 
 const profileStore = useUserProfileStore();
+const deloadLifecycleStore = useDeloadLifecycleStore();
 const logsStore = useExerciseLogsStore();
 const muscleMapStore = useExerciseMuscleMapStore();
 const summaryStore = useTrainingSummaryStore();
@@ -146,7 +148,7 @@ const trainingInsights = computed(() => {
   const historicalLogs = summaryToExerciseLogs(summaryStore.summaries);
   const currentLogs = exerciseLogs.value;
   const allLogs = [...historicalLogs, ...currentLogs];
-  return calculateTrainingInsights(allLogs, new Date(), learnedMap.value);
+  return calculateTrainingInsights(allLogs, new Date(), learnedMap.value, profileStore.userProfile.weightKg, deloadLifecycleStore.deloadLifecycle);
 });
 
 // --- Group Logs ---
