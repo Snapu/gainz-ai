@@ -1,6 +1,6 @@
 import type { GoogleSpreadsheet } from "google-spreadsheet";
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ok } from "neverthrow";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   loadUserProfile,
   migrateFromLocalStorage,
@@ -8,11 +8,6 @@ import {
   type UserProfile,
   UserProfileSchema,
 } from "./userProfile";
-import { saveDeloadLifecycle } from "./deloadLifecycleSheet";
-
-vi.mock("./deloadLifecycleSheet", () => ({
-  saveDeloadLifecycle: vi.fn(),
-}));
 
 const createMockLocalStorage = () => {
   let store: Record<string, string> = {};
@@ -218,7 +213,6 @@ describe("userProfile service", () => {
     beforeEach(() => {
       mockLocalStorage = createMockLocalStorage();
       vi.stubGlobal("localStorage", mockLocalStorage);
-      vi.mocked(saveDeloadLifecycle).mockResolvedValue(ok(undefined));
     });
 
     it("migrates profile + lifecycle out of localStorage", async () => {
@@ -238,10 +232,6 @@ describe("userProfile service", () => {
       expect(result.isOk()).toBe(true);
       if (result.isOk()) expect(result.value).toBe("migrated");
       expect(mockSheet.addRow).toHaveBeenCalled();
-      expect(saveDeloadLifecycle).toHaveBeenCalledWith(
-        { status: "active", endsAtIso: "2026-05-09T10:00:00.000Z" },
-        expect.anything(),
-      );
       expect(mockLocalStorage.getItem("userProfile:apiKey")).toBe("secret-api-key");
       expect(mockLocalStorage.getItem("userProfile")).toBeNull();
     });

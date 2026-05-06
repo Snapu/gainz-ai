@@ -44,7 +44,9 @@ describe("useUserProfileStore", () => {
     vi.stubGlobal("localStorage", mockLocalStorage);
     setActivePinia(createPinia());
     mockDoc = {} as GoogleSpreadsheet;
-    vi.mocked(useSpreadsheetStore).mockReturnValue(mockSpreadsheetStore(mockDoc) as ReturnType<typeof useSpreadsheetStore>);
+    vi.mocked(useSpreadsheetStore).mockReturnValue(
+      mockSpreadsheetStore(mockDoc) as ReturnType<typeof useSpreadsheetStore>,
+    );
     vi.clearAllMocks();
   });
 

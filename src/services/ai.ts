@@ -1,15 +1,13 @@
 import { type GenerateContentConfig, GoogleGenAI, type Schema, Type } from "@google/genai";
 import * as Sentry from "@sentry/vue";
 import { err, ok, type Result } from "neverthrow";
-
 import type { ExerciseLog } from "@/services/exerciseLogs";
 import type { TrainingSummary } from "@/services/trainingSummary";
-import type { DeloadLifecycle } from "@/services/deloadLifecycle";
 import type { UserProfile } from "@/services/userProfile";
 import { localeDateString } from "@/services/utils/date";
 import type { Event } from "@/types/event";
-import { getLearnedMuscleMap, learnFromAiResponse, VALID_MUSCLE_GROUPS } from "./exerciseMuscleMap";
-import { calculateTrainingInsights, summarizeTrainingInsights } from "./trainingScience";
+import { learnFromAiResponse, VALID_MUSCLE_GROUPS } from "./exerciseMuscleMap";
+import { summarizeTrainingInsights, type TrainingInsights } from "./trainingScience/index";
 
 const INITIAL_LOG_WINDOW_DAYS = 14;
 const EXTENDED_LOG_WINDOW_DAYS = 28;
@@ -43,6 +41,8 @@ export interface ExerciseCleanupResult {
 export interface AiResponseData {
   scratchpad?: string;
   coachMessage: string;
+  /** Set to true by AI when fatigue detection signals shouldDeload=true. App auto-starts the deload. */
+  startDeload?: boolean;
   recommendedWorkout?: {
     exerciseName: string;
     targetSets: number;
@@ -63,6 +63,11 @@ export const aiResponseSchema: Schema = {
       type: Type.STRING,
       description:
         "Internal workspace for reasoning and calculations. Usage depends on phase — see system instructions. NOT shown to user.",
+    },
+    startDeload: {
+      type: Type.BOOLEAN,
+      description:
+        "Set to true ONLY when fatigue.shouldDeload is true. This signals the app to automatically begin a 7-day deload phase. Do NOT set true during an already-active deload (deloadStatus='active'). Omit or set false otherwise.",
     },
     coachMessage: {
       type: Type.STRING,
@@ -161,7 +166,7 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
 
 2. TRAINING SCIENCE DATA (CRITICAL):
 - You receive a 'trainingInsights' JSON containing pre-calculated scientific data. TRUST these numbers — do NOT recalculate them.
-- 'muscleGroups': Per-muscle weekly sets, volume landmark (below_MEV / at_MEV / at_MAV / approaching_MRV / above_MRV), training frequency, hours since last trained, and recoveryReady flag.
+- 'muscleGroups': Per-muscle weekly effective sets (direct + weighted secondary), directSets, volume landmark (below_MEV / at_MEV / at_MAV / approaching_MRV / above_MRV), training frequency, hours since last trained, and recoveryReady flag.
   - MEV = Minimum Effective Volume (need more volume to grow)
   - MAV = Maximum Adaptive Volume (optimal growth zone — 10-18 sets/week)
   - MRV = Maximum Recoverable Volume (too much — risk of overtraining)
@@ -184,10 +189,13 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
     Leg Curl           → Nordic Curl or Romanian Deadlift
     Lateral Raises     → Cable Lateral Raise or Machine Lateral Raise
     If the exact exercise name is not listed (e.g. locale variants like "Kniebeuge"), choose the variant by movement pattern/primary muscle and keep the same intent (compound→compound, isolation→isolation).
-- 'fatigue': Deload recommendation with reasoning. If shouldDeload is true, you MUST program a deload week (50-60% of normal volume). Reduce intensity by 10–15 percentage points on the e1RM scale (e.g., normally prescribing 75% e1RM → deload at 60–65% e1RM, NOT just -10% of the kg weight).
-  - 'fatigue.weeklyTonnage': Total kg lifted per week (RPE-adjusted weight × reps per set). Use alongside weeklyTotalSets for load-aware fatigue assessment. A 50%+ week-over-week tonnage spike is a red flag even if set count is stable (this matches the deload trigger threshold in the code).
+- 'fatigue': Deload recommendation with structured evidence. If shouldDeload is true: (1) set 'startDeload: true' in your JSON response — this automatically starts a 7-day recovery week in the app; (2) program the workout at 50-60% of normal volume; (3) reduce intensity by 10–15 percentage points on the e1RM scale (e.g., normally prescribing 75% e1RM → deload at 60–65% e1RM, NOT just -10% of the kg weight). Do NOT set startDeload=true if 'deloadStatus' is already 'active'.
+  - 'fatigue.riskScore': Additive fatigue risk score (>=3 is high risk in this model).
+  - 'fatigue.weeklyTonnage': Total weekly volume load in kg (weight × reps, not RPE-scaled).
+  - 'fatigue.loadWindow': Explicit weekMinus3/weekMinus2/weekMinus1/current values and ratios vs prior 3-week average.
+  - 'fatigue.hasSufficientHistory': False means there are not enough weekly windows yet; treat trigger metrics as low-confidence and avoid aggressive deload decisions.
+  - A 50%+ tonnage spike vs prior 3-week average is a red flag even when set count is stable (matches model threshold).
 - 'acwr': Acute:Chronic Workload Ratio (7-day tonnage ÷ avg weekly 28-day tonnage). Safe zone: 0.8–1.3. If > 1.3, reduce today’s volume by 15–20%. If > 1.5, strongly recommend rest or deload. If < 0.8, the athlete is undertraining — increase today's volume by 15–20% to rebuild the training stimulus. If null, insufficient history — proceed conservatively.
-- 'mesocycleWeek': Weeks into the current training block since the last deload (or since first session if no deload detected). Typical mesocycle = 4 weeks. Week 1: conservative volume at MEV. Weeks 2–3: progressive increase toward MAV. Week 4: peak volume approaching MRV. Week 5+: deload is overdue — flag this to the athlete. mesocycleWeek=0 means the current week is an active deload (shouldDeload=true) — do NOT additionally warn 'overdue'; just program the deload.
 - 'scratchpad' usage depends on phase:
   PLANNING / POST-WORKOUT: scratchpad MUST follow this structure BEFORE writing coachMessage:
     0. DATA VALIDATION: Sanity-check incoming metrics. Flag suspicious values (e.g. impossible e1RM, acwr < 0.3 or > 2.2). If suspicious, state a fallback assumption.
@@ -243,7 +251,7 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
 - If the user logged exercises NOT in your last plan, acknowledge them positively and factor them into volume accounting. Adjust remaining recommendations to avoid over-training those muscles.
 
 5. POST-WORKOUT BEHAVIOR:
-- If the phase is 'post-workout' (last log was >45 min ago today): (1) give a 1–2 sentence session recap noting any PRs or volume milestones; (2) briefly mention which muscles need recovery (use recoveryReady from trainingInsights); (3) if mesocycleWeek ≥ 4, note that a deload is due next session. Keep the total message to 2–3 sentences. Do NOT include recommendedWorkout.
+- If the phase is 'post-workout' (last log was >45 min ago today): (1) give a 1–2 sentence session recap noting any PRs or volume milestones; (2) briefly mention which muscles need recovery (use recoveryReady from trainingInsights); Keep the total message to 2–3 sentences. Do NOT include recommendedWorkout.
 
 You may receive:
 - A 'userProfile' JSON (first message only)
@@ -483,34 +491,39 @@ function buildCompactProfileContext(userProfile: UserProfile): Record<string, un
   };
 }
 
-function buildCompactTrainingContext(
-  insights: ReturnType<typeof calculateTrainingInsights>,
-): Record<string, unknown> {
+function buildCompactTrainingContext(insights: TrainingInsights): Record<string, unknown> {
   const summary = summarizeTrainingInsights(insights);
   const exerciseTrends = Object.fromEntries(
-    Object.entries(insights.e1rm).map(([name, data]) => [name, {
-      e1rm: data.e1rm,
-      plateau: data.plateau,
-      bestRPE: data.bestRPE ?? null,
-      recentTrend: data.trend.slice(-3),
-    }]),
+    Object.entries(insights.e1rm).map(([name, data]) => [
+      name,
+      {
+        e1rm: data.e1rm,
+        plateau: data.plateau,
+        bestRPE: data.bestRPE ?? null,
+        recentTrend: data.trend.slice(-3),
+      },
+    ]),
   );
 
   return {
     summary,
     phase: insights.phase,
     acwr: insights.acwr,
-    mesocycleWeek: insights.mesocycleWeek,
     deloadStatus: insights.deloadStatus,
     deloadEndsAt: insights.deloadEndsAt,
     deloadTimeRemainingMs: insights.deloadTimeRemainingMs,
     e1rmPaused: insights.e1rmPaused,
     plateauPaused: insights.plateauPaused,
     fatigue: {
+      shouldDeload: insights.fatigue.shouldDeload,
       reason: insights.fatigue.reason ?? null,
+      riskScore: insights.fatigue.riskScore,
+      hasSufficientHistory: insights.fatigue.hasSufficientHistory,
+      decliningExercises: insights.fatigue.decliningExercises,
       weeklyTotalSets: insights.fatigue.weeklyTotalSets,
       weeklyTonnage: insights.fatigue.weeklyTonnage,
-      triggeredBy: insights.fatigue.triggeredBy ?? [],
+      loadWindow: insights.fatigue.loadWindow,
+      triggeredBy: insights.fatigue.triggeredBy,
     },
     deloadTriggerSnapshot: insights.deloadTriggerSnapshot,
     exerciseTrends,
@@ -529,7 +542,7 @@ function isServiceUnavailableError(error: unknown): boolean {
 export async function askAi(
   apiKey: string | undefined,
   userProfile: UserProfile,
-  deloadLifecycle: DeloadLifecycle | undefined,
+  insights: TrainingInsights,
   exerciseLogs: ExerciseLog[],
   trainingSummaries: TrainingSummary[],
   previousMessages: PreviousAiMessage[],
@@ -620,15 +633,7 @@ ${JSON.stringify(buildCompactProfileContext(userProfile))}`);
       }
     }
 
-    // Training science insights
-    const learnedMap = getLearnedMuscleMap();
-    const insights = calculateTrainingInsights(
-      exerciseLogs,
-      new Date(),
-      learnedMap,
-      userProfile.weightKg,
-      deloadLifecycle,
-    );
+    // Training science insights — passed in pre-computed from the store
     if (phase === "planning" || isFirstMessage) {
       sections.push(`Training Context:
 ${JSON.stringify(buildCompactTrainingContext(insights))}`);

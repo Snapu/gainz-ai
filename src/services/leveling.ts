@@ -498,6 +498,7 @@ export function calculateUserProgress(
 
         // Pillar: Progression (PRs / Strength Breakthroughs)
         const currentE1RM = calculateE1RM(log.weight, log.reps, log.rpe);
+        if (currentE1RM === null) continue;
         const prevBest = historyE1RM.get(log.exerciseName) || 0;
 
         if (currentE1RM > prevBest * 1.025 && prevBest > 0) {

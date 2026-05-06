@@ -2,7 +2,6 @@ import * as Sentry from "@sentry/vue";
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { err, ok, type Result } from "neverthrow";
 import { z } from "zod";
-import { saveDeloadLifecycle } from "./deloadLifecycleSheet";
 import { isAuthError } from "./utils/isAuthError";
 import { parseData } from "./utils/parseData";
 
@@ -204,7 +203,7 @@ export async function migrateFromLocalStorage(
       return err("migration-failed");
     }
 
-    const { apiKey, deloadLifecycle, ...profileData } = oldData;
+    const { apiKey, ...profileData } = oldData;
 
     if (apiKey) {
       localStorage.setItem("userProfile:apiKey", apiKey);
@@ -216,16 +215,6 @@ export async function migrateFromLocalStorage(
       Sentry.captureMessage("Failed to save migrated profile", {
         level: "error",
         tags: { scope: "user-profile-service", feature: "migration-save-profile" },
-      });
-      return err("migration-failed");
-    }
-
-    const saveLifecycleResult = await saveDeloadLifecycle(deloadLifecycle, doc);
-    if (saveLifecycleResult.isErr()) {
-      console.error("Failed to save migrated deload lifecycle to spreadsheet");
-      Sentry.captureMessage("Failed to save migrated deload lifecycle", {
-        level: "error",
-        tags: { scope: "user-profile-service", feature: "migration-save-lifecycle" },
       });
       return err("migration-failed");
     }

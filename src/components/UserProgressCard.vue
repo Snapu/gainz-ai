@@ -6,6 +6,7 @@ import UiCard from "@/components/ui/UiCard.vue";
 import UiRadialProgress from "@/components/ui/UiRadialProgress.vue";
 import type { UserProgress } from "@/services/leveling";
 import type { SystemicPhase, TrainingInsights } from "@/services/trainingScience";
+import { useDeloadStore } from "@/stores/deload";
 
 const props = defineProps<{
   progress: UserProgress;
@@ -13,6 +14,8 @@ const props = defineProps<{
 }>();
 
 defineEmits<(e: "click") => void>();
+
+const deloadStore = useDeloadStore();
 
 const PHASE_THEME: Record<SystemicPhase, string> = {
   Deload: "text-orange-400 border border-orange-500/30 bg-orange-500/10",
@@ -81,7 +84,14 @@ const phaseTheme = computed(() => PHASE_THEME[props.insights.phase]);
             <div class="flex flex-col gap-1">
                <span class="text-[9px] font-black tracking-widest text-muted-foreground uppercase">Phase</span>
                <div class="flex items-center">
-                 <UiBadge :class="phaseTheme" class="text-[10px] uppercase tracking-wider px-1.5 py-0">
+                 <!-- Recovery week pill when deload is active -->
+                 <UiBadge
+                   v-if="deloadStore.active"
+                   class="text-[10px] uppercase tracking-wider px-1.5 py-0 text-orange-400 border border-orange-500/30 bg-orange-500/10"
+                 >
+                   Recovery · {{ deloadStore.daysRemaining }}d
+                 </UiBadge>
+                 <UiBadge v-else :class="phaseTheme" class="text-[10px] uppercase tracking-wider px-1.5 py-0">
                    {{ insights.phase }}
                  </UiBadge>
                </div>

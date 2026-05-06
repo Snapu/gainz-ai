@@ -3,17 +3,20 @@ import { err, ok, type Result } from "neverthrow";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 
-import { askAi as askAiService, classifyExercises, getTodayLogsCount, type PreviousAiMessage } from "@/services/ai";
 import {
-  getMuscleActivation,
-  normalizeExerciseName,
-} from "@/services/trainingScience";
+  askAi as askAiService,
+  classifyExercises,
+  getTodayLogsCount,
+  type PreviousAiMessage,
+} from "@/services/ai";
+import { getMuscleActivation, normalizeExerciseName } from "@/services/trainingScience";
 import { localeDateString } from "@/services/utils/date";
+import { useDeloadStore } from "@/stores/deload";
 import { useEventsStore } from "@/stores/events";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
 import { useExerciseMuscleMapStore } from "@/stores/exerciseMuscleMap";
+import { useTrainingInsightsStore } from "@/stores/trainingInsights";
 import { useTrainingSummaryStore } from "@/stores/trainingSummary";
-import { useDeloadLifecycleStore } from "@/stores/deloadLifecycle";
 import { useUserProfileStore } from "@/stores/userProfile";
 
 interface AiMessage {
@@ -87,7 +90,8 @@ export const useAiStore = defineStore("ai", () => {
   const trainingSummaryStore = useTrainingSummaryStore();
   const eventsStore = useEventsStore();
   const exerciseMuscleMapStore = useExerciseMuscleMapStore();
-  const deloadLifecycleStore = useDeloadLifecycleStore();
+  const deloadStore = useDeloadStore();
+  const trainingInsightsStore = useTrainingInsightsStore();
 
   const todaySessionDate = computed(() => localeDateString(new Date()));
 
@@ -131,7 +135,7 @@ export const useAiStore = defineStore("ai", () => {
     }
     // Classify any unclassified exercises so the muscle map is complete before
     // building the training insights context that gets sent in the prompt.
-    await classifyUnclassifiedIfNeeded();
+    await classifyExercisesIfNeeded();
 
     isLoading.value = true;
 
@@ -162,7 +166,7 @@ export const useAiStore = defineStore("ai", () => {
       const result = await askAiService(
         apiKey,
         userProfileStore.userProfile,
-        deloadLifecycleStore.deloadLifecycle,
+        trainingInsightsStore.insights,
         exerciseLogsStore.exerciseLogs,
         trainingSummaryStore.summaries,
         previousMessages,
@@ -186,6 +190,17 @@ export const useAiStore = defineStore("ai", () => {
       // learnFromAiResponse fires inside askAiService's finally block — refresh the
       // reactive map so any component using the store sees the new entries immediately.
       exerciseMuscleMapStore.refresh();
+
+      // Auto-start deload when AI signals shouldDeload — seamless, no user confirmation needed.
+      try {
+        const parsed: { startDeload?: boolean } = JSON.parse(result.value);
+        if (parsed.startDeload === true && !deloadStore.active) {
+          const { riskScore, triggeredBy } = trainingInsightsStore.insights.fatigue;
+          deloadStore.startDeload(riskScore, triggeredBy);
+        }
+      } catch {
+        // Non-critical: JSON parse errors are handled elsewhere
+      }
 
       // Save assistant message
       const assistantMessageId = `${Date.now()}-assistant`;
@@ -217,7 +232,7 @@ export const useAiStore = defineStore("ai", () => {
     }
   }
 
-  async function classifyUnclassifiedIfNeeded(): Promise<void> {
+  async function classifyExercisesIfNeeded(): Promise<void> {
     const apiKey = userProfileStore.apiKey;
     if (!apiKey) return;
 
@@ -250,5 +265,5 @@ export const useAiStore = defineStore("ai", () => {
     messages.value = [];
   }
 
-  return { askAi, clearMessages, isLoading, messages };
+  return { askAi, classifyExercisesIfNeeded, clearMessages, isLoading, messages };
 });

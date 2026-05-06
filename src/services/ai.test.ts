@@ -3,6 +3,7 @@ import type { Event } from "@/types/event";
 import type { PreviousAiMessage } from "./ai";
 import { askAi } from "./ai";
 import type { ExerciseLog } from "./exerciseLogs";
+import type { TrainingInsights } from "./trainingScience";
 import type { TrainingSummary } from "./trainingSummary";
 import type { UserProfile } from "./userProfile";
 
@@ -40,6 +41,49 @@ function createEvent(type: string, dates: string[]): Event {
   };
 }
 
+function createMockInsights(): TrainingInsights {
+  return {
+    phase: "Maintain",
+    acwr: null,
+    fatigue: {
+      shouldDeload: false,
+      reason: undefined,
+      hasSufficientHistory: false,
+      weeklyTotalSets: [],
+      weeklyTonnage: [],
+      loadWindow: {
+        sets: {
+          weekMinus3: 0,
+          weekMinus2: 0,
+          weekMinus1: 0,
+          current: 0,
+          prior3WeekAvg: 0,
+          ratioVsPriorAvg: null,
+        },
+        tonnage: {
+          weekMinus3: 0,
+          weekMinus2: 0,
+          weekMinus1: 0,
+          current: 0,
+          prior3WeekAvg: 0,
+          ratioVsPriorAvg: null,
+        },
+      },
+      triggeredBy: [],
+      decliningExercises: 0,
+      riskScore: 0,
+    },
+    e1rm: {},
+    muscleGroups: {},
+    deloadStatus: "none",
+    deloadEndsAt: null,
+    deloadTimeRemainingMs: null,
+    e1rmPaused: false,
+    plateauPaused: false,
+    deloadTriggerSnapshot: null,
+  };
+}
+
 describe("askAi - Events Integration (RED Phase)", () => {
   const mockApiKey = "test-api-key";
   const mockUserProfile = createUserProfile();
@@ -60,7 +104,7 @@ describe("askAi - Events Integration (RED Phase)", () => {
         askAi(
           mockApiKey,
           mockUserProfile,
-          undefined,
+          createMockInsights(),
           mockExerciseLogs,
           mockTrainingSummaries,
           mockPreviousMessages,
@@ -75,7 +119,7 @@ describe("askAi - Events Integration (RED Phase)", () => {
         askAi(
           mockApiKey,
           mockUserProfile,
-          undefined,
+          createMockInsights(),
           mockExerciseLogs,
           mockTrainingSummaries,
           mockPreviousMessages,
@@ -91,7 +135,7 @@ describe("askAi - Events Integration (RED Phase)", () => {
         askAi(
           mockApiKey,
           mockUserProfile,
-          undefined,
+          createMockInsights(),
           mockExerciseLogs,
           mockTrainingSummaries,
           mockPreviousMessages,
@@ -220,7 +264,7 @@ ${JSON.stringify(events, null, 2)}
       const result = await askAi(
         mockApiKey,
         mockUserProfile,
-        undefined,
+        createMockInsights(),
         mockExerciseLogs,
         mockTrainingSummaries,
         mockPreviousMessages,
@@ -233,7 +277,7 @@ ${JSON.stringify(events, null, 2)}
       const result = await askAi(
         mockApiKey,
         mockUserProfile,
-        undefined,
+        createMockInsights(),
         mockExerciseLogs,
         mockTrainingSummaries,
         mockPreviousMessages,

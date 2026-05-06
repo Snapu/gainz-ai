@@ -21,21 +21,20 @@ import { useToast } from "@/composables/useToast";
 import { WIZARD_STEPS } from "@/constants/wizard";
 import type { ExerciseLog } from "@/services/exerciseLogs";
 import { calculateUserProgress } from "@/services/leveling";
-import { calculateTrainingInsights } from "@/services/trainingScience";
 import { summaryToExerciseLogs, summaryToWorkoutDates } from "@/services/trainingSummary";
 import { localeDateString } from "@/services/utils/date";
+import { useDeloadStore } from "@/stores/deload";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
-import { useExerciseMuscleMapStore } from "@/stores/exerciseMuscleMap";
 import { useRestTimerStore } from "@/stores/restTimer";
 import { useSpreadsheetStore } from "@/stores/spreadsheet";
+import { useTrainingInsightsStore } from "@/stores/trainingInsights";
 import { useTrainingSummaryStore } from "@/stores/trainingSummary";
-import { useDeloadLifecycleStore } from "@/stores/deloadLifecycle";
 import { useUserProfileStore } from "@/stores/userProfile";
 
 const profileStore = useUserProfileStore();
-const deloadLifecycleStore = useDeloadLifecycleStore();
+const deloadStore = useDeloadStore();
+const trainingInsightsStore = useTrainingInsightsStore();
 const logsStore = useExerciseLogsStore();
-const muscleMapStore = useExerciseMuscleMapStore();
 const summaryStore = useTrainingSummaryStore();
 const spreadsheetStore = useSpreadsheetStore();
 const restTimerStore = useRestTimerStore();
@@ -46,7 +45,6 @@ const { isResting, formattedTime: formattedRestTime } = storeToRefs(restTimerSto
 
 const { userProfile } = storeToRefs(profileStore);
 const { exerciseLogs } = storeToRefs(logsStore);
-const { learnedMap } = storeToRefs(muscleMapStore);
 
 const isAIPanelOpen = ref(false);
 
@@ -144,12 +142,7 @@ const userProgress = computed(() => {
 });
 
 // --- Training Science ---
-const trainingInsights = computed(() => {
-  const historicalLogs = summaryToExerciseLogs(summaryStore.summaries);
-  const currentLogs = exerciseLogs.value;
-  const allLogs = [...historicalLogs, ...currentLogs];
-  return calculateTrainingInsights(allLogs, new Date(), learnedMap.value, profileStore.userProfile.weightKg, deloadLifecycleStore.deloadLifecycle);
-});
+const trainingInsights = computed(() => trainingInsightsStore.insights);
 
 // --- Group Logs ---
 interface GroupedSession {
