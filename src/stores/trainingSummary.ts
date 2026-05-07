@@ -16,30 +16,42 @@ export const useTrainingSummaryStore = defineStore("trainingSummary", () => {
   const isLoading = ref(false);
   const isInitialized = ref(false);
 
+  async function loadAndMigrate(doc: GoogleSpreadsheet) {
+    const loadResult = await loadTrainingSummary(doc);
+    if (loadResult.isErr()) {
+      console.error("Failed to load training summary:", loadResult.error);
+      Sentry.captureMessage("Failed to load training summary", {
+        level: "error",
+        tags: { scope: "training-summary-store", feature: "load" },
+        extra: { reason: loadResult.error },
+      });
+      return null;
+    }
+
+    const afterYearMigration = await migrateUnsummarizedYears(doc, loadResult.value);
+    return migrateUnsummarizedMonths(doc, afterYearMigration);
+  }
+
   async function init(doc: GoogleSpreadsheet) {
     if (isInitialized.value) return;
+    await refresh(doc);
+  }
+
+  async function refresh(docOverride?: GoogleSpreadsheet) {
+    const doc = docOverride ?? spreadsheetStore.doc;
+    if (!doc) return;
+
     isLoading.value = true;
 
     try {
-      const loadResult = await loadTrainingSummary(doc);
-      if (loadResult.isErr()) {
-        console.error("Failed to load training summary:", loadResult.error);
-        Sentry.captureMessage("Failed to load training summary", {
-          level: "error",
-          tags: { scope: "training-summary-store", feature: "init-load" },
-          extra: { reason: loadResult.error },
-        });
-        return;
-      }
-
-      const afterYearMigration = await migrateUnsummarizedYears(doc, loadResult.value);
-      const migratedSummaries = await migrateUnsummarizedMonths(doc, afterYearMigration);
+      const migratedSummaries = await loadAndMigrate(doc);
+      if (!migratedSummaries) return;
       summaries.value = migratedSummaries;
       isInitialized.value = true;
     } catch (error) {
-      console.error("Failed to init training summary:", error);
+      console.error("Failed to refresh training summary:", error);
       Sentry.captureException(error, {
-        tags: { scope: "training-summary-store", feature: "init" },
+        tags: { scope: "training-summary-store", feature: "refresh" },
       });
     } finally {
       isLoading.value = false;
@@ -52,5 +64,5 @@ export const useTrainingSummaryStore = defineStore("trainingSummary", () => {
     void init(doc);
   });
 
-  return { summaries, isLoading, isInitialized };
+  return { summaries, isLoading, isInitialized, refresh };
 });

@@ -75,6 +75,51 @@ async function saveTrainingSummaryRows(
   }
 }
 
+async function loadAllLogsForSummary(
+  doc: GoogleSpreadsheet,
+): Promise<Result<ExerciseLog[], "load-failed" | "parse-data-failed" | "sheet-not-found" | "auth-failed">> {
+  const currentYearLogsResult = await loadExerciseLogs(doc);
+  if (currentYearLogsResult.isErr()) return err(currentYearLogsResult.error);
+
+  const logs = [...currentYearLogsResult.value];
+  const pastYears = findPastYearLogSheets(doc);
+
+  for (const year of pastYears) {
+    const yearLogsResult = await loadLogsFromYear(year, doc);
+    if (yearLogsResult.isErr()) return err(yearLogsResult.error);
+    logs.push(...yearLogsResult.value);
+  }
+
+  return ok(logs);
+}
+
+export async function rebuildTrainingSummary(
+  doc: GoogleSpreadsheet,
+): Promise<
+  Result<
+    TrainingSummary[],
+    "load-failed" | "parse-data-failed" | "sheet-not-found" | "auth-failed" | "save-failed"
+  >
+> {
+  const logsResult = await loadAllLogsForSummary(doc);
+  if (logsResult.isErr()) return err(logsResult.error);
+
+  const sheet = getSheet(doc) ?? (await addSheet(doc));
+  const summaries = aggregateLogsToSummary(logsResult.value);
+
+  try {
+    await sheet.clearRows();
+  } catch (error) {
+    console.error("Failed to clear training summary. Error:", error);
+    return err("save-failed");
+  }
+
+  const saveResult = await saveTrainingSummaryRows(summaries, doc);
+  if (saveResult.isErr()) return err(saveResult.error);
+
+  return ok(summaries);
+}
+
 export function aggregateLogsToSummary(logs: ExerciseLog[]): TrainingSummary[] {
   if (logs.length === 0) return [];
 
@@ -219,9 +264,9 @@ export function summaryToExerciseLogs(summaries: TrainingSummary[]): ExerciseLog
           id: `hist-${summary.year}-${summary.month}-${summary.exerciseName}-${setsRemaining}`,
           exerciseName: summary.exerciseName,
           loggedAt: date,
-          weight: summary.maxWeight, // Approximation: use maxWeight for all historical sets
-          reps: summary.totalReps ? Math.floor(summary.totalReps / summary.sets) : 10, // Approximation
-          rpe: 8, // Sensible default for consistency
+          weight: summary.maxWeight,
+          reps: summary.totalReps ? Math.floor(summary.totalReps / summary.sets) : 10,
+          rpe: 8,
         });
         setsRemaining--;
       }

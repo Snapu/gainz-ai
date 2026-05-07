@@ -398,6 +398,14 @@ async function saveLog() {
           </div>
 
           <UiDropdownMenuItem 
+            @select="$router.push('/exercise-migration')"
+            class="group"
+          >
+            <span>Weight Migration</span>
+            <ChevronRight class="w-4 h-4 ml-auto opacity-40 group-hover:text-primary transition-colors" />
+          </UiDropdownMenuItem>
+
+          <UiDropdownMenuItem 
             @select="spreadsheetStore.openInBrowser()"
             class="group"
           >
