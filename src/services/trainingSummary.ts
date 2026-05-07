@@ -49,9 +49,13 @@ export async function loadTrainingSummary(
 
   try {
     const rows = await sheet.getRows<TrainingSummary>();
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth() + 1;
     return parseData(
       TrainingSummarySchema.array(),
-      rows.map((row) => row.toObject()),
+      rows
+        .map((row) => row.toObject())
+        .filter((r) => !(Number(r.year) === currentYear && Number(r.month) === currentMonth)),
     );
   } catch (error) {
     console.error("Failed to load training summary. Error:", error);
@@ -77,7 +81,9 @@ async function saveTrainingSummaryRows(
 
 async function loadAllLogsForSummary(
   doc: GoogleSpreadsheet,
-): Promise<Result<ExerciseLog[], "load-failed" | "parse-data-failed" | "sheet-not-found" | "auth-failed">> {
+): Promise<
+  Result<ExerciseLog[], "load-failed" | "parse-data-failed" | "sheet-not-found" | "auth-failed">
+> {
   const currentYearLogsResult = await loadExerciseLogs(doc);
   if (currentYearLogsResult.isErr()) return err(currentYearLogsResult.error);
 
@@ -104,8 +110,18 @@ export async function rebuildTrainingSummary(
   const logsResult = await loadAllLogsForSummary(doc);
   if (logsResult.isErr()) return err(logsResult.error);
 
+  // Exclude the current month — it is served live from exerciseLogs, not the summary sheet.
+  // Including it would create synthetic sessions (using maxWeight) that overlap with actual
+  // current-month logs in trainingInsightsStore.allLogs, causing false e1RM declines.
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
+  const logsExcludingCurrentMonth = logsResult.value.filter(
+    (log) =>
+      !(log.loggedAt.getFullYear() === currentYear && log.loggedAt.getMonth() + 1 === currentMonth),
+  );
+
   const sheet = getSheet(doc) ?? (await addSheet(doc));
-  const summaries = aggregateLogsToSummary(logsResult.value);
+  const summaries = aggregateLogsToSummary(logsExcludingCurrentMonth);
 
   try {
     await sheet.clearRows();

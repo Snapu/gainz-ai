@@ -4,9 +4,9 @@ import type { ExerciseLog } from "./exerciseLogs";
 import {
   applyExerciseWeightMigrationDecision,
   buildExerciseWeightMigrationCandidates,
+  type ExerciseWeightMigrationReview,
   loadExerciseWeightMigrationReviews,
   saveExerciseWeightMigrationReview,
-  type ExerciseWeightMigrationReview,
 } from "./exerciseWeightMigration";
 
 const { rebuildTrainingSummaryMock } = vi.hoisted(() => ({
@@ -52,9 +52,11 @@ const createMockDoc = (migrationSheet: any = null, logSheets: Record<string, any
       TrainingSummary: createMockSheet(),
       ...logSheets,
     },
-    addSheet: vi.fn().mockImplementation(async ({ headerValues }: { headerValues?: string[] }) =>
-      createMockSheet([], headerValues ?? []),
-    ),
+    addSheet: vi
+      .fn()
+      .mockImplementation(async ({ headerValues }: { headerValues?: string[] }) =>
+        createMockSheet([], headerValues ?? []),
+      ),
   }) as unknown as GoogleSpreadsheet;
 
 function makeReview(
@@ -96,7 +98,9 @@ describe("exerciseWeightMigration service", () => {
   });
 
   it("appends missing headers before loading", async () => {
-    const sheet = createMockSheet([createMockRow(makeReview() as unknown as Record<string, string>)]);
+    const sheet = createMockSheet([
+      createMockRow(makeReview() as unknown as Record<string, string>),
+    ]);
 
     const result = await loadExerciseWeightMigrationReviews(createMockDoc(sheet));
 
@@ -111,12 +115,10 @@ describe("exerciseWeightMigration service", () => {
 
   it("loads and parses migration reviews", async () => {
     const row = createMockRow(makeReview() as unknown as Record<string, string>);
-    const sheet = createMockSheet([row], [
-      "exerciseName",
-      "decision",
-      "reviewedAt",
-      "affectedLogCount",
-    ]);
+    const sheet = createMockSheet(
+      [row],
+      ["exerciseName", "decision", "reviewedAt", "affectedLogCount"],
+    );
 
     const result = await loadExerciseWeightMigrationReviews(createMockDoc(sheet));
 
@@ -133,12 +135,10 @@ describe("exerciseWeightMigration service", () => {
       reviewedAt: "2026-05-06T12:00:00.000Z",
       affectedLogCount: "4",
     });
-    const sheet = createMockSheet([row], [
-      "exerciseName",
-      "decision",
-      "reviewedAt",
-      "affectedLogCount",
-    ]);
+    const sheet = createMockSheet(
+      [row],
+      ["exerciseName", "decision", "reviewedAt", "affectedLogCount"],
+    );
 
     const result = await saveExerciseWeightMigrationReview(makeReview(), createMockDoc(sheet));
 
@@ -149,12 +149,10 @@ describe("exerciseWeightMigration service", () => {
   });
 
   it("adds a new review row when none exists", async () => {
-    const sheet = createMockSheet([], [
-      "exerciseName",
-      "decision",
-      "reviewedAt",
-      "affectedLogCount",
-    ]);
+    const sheet = createMockSheet(
+      [],
+      ["exerciseName", "decision", "reviewedAt", "affectedLogCount"],
+    );
 
     const result = await saveExerciseWeightMigrationReview(makeReview(), createMockDoc(sheet));
 
@@ -211,12 +209,10 @@ describe("exerciseWeightMigration service", () => {
       weight: "80",
       loggedAt: "2026-05-07T10:00:00.000Z",
     });
-    const migrationSheet = createMockSheet([], [
-      "exerciseName",
-      "decision",
-      "reviewedAt",
-      "affectedLogCount",
-    ]);
+    const migrationSheet = createMockSheet(
+      [],
+      ["exerciseName", "decision", "reviewedAt", "affectedLogCount"],
+    );
     const doc = createMockDoc(migrationSheet, {
       Logs2025: createMockSheet([previousYearRow]),
       Logs2026: createMockSheet([currentYearRow, untouchedRow]),
@@ -246,12 +242,10 @@ describe("exerciseWeightMigration service", () => {
       weight: "20",
       loggedAt: "2026-05-07T10:00:00.000Z",
     });
-    const migrationSheet = createMockSheet([], [
-      "exerciseName",
-      "decision",
-      "reviewedAt",
-      "affectedLogCount",
-    ]);
+    const migrationSheet = createMockSheet(
+      [],
+      ["exerciseName", "decision", "reviewedAt", "affectedLogCount"],
+    );
     const doc = createMockDoc(migrationSheet, {
       Logs2026: createMockSheet([currentYearRow]),
     });

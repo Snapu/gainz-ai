@@ -17,14 +17,9 @@ const ExerciseNameSchema = z
   .min(1)
   .transform((value) => value.replace(/\s+/g, " "));
 
-export const ExerciseWeightMigrationDecisionSchema = z.enum([
-  "keep_as_is",
-  "convert_to_total",
-]);
+export const ExerciseWeightMigrationDecisionSchema = z.enum(["keep_as_is", "convert_to_total"]);
 
-export type ExerciseWeightMigrationDecision = z.infer<
-  typeof ExerciseWeightMigrationDecisionSchema
->;
+export type ExerciseWeightMigrationDecision = z.infer<typeof ExerciseWeightMigrationDecisionSchema>;
 
 export const ExerciseWeightMigrationReviewSchema = z.object({
   exerciseName: ExerciseNameSchema,
@@ -182,7 +177,9 @@ export async function saveExerciseWeightMigrationReview(
     const rows = await sheet.getRows();
     const existingRow = rows.find((row) => {
       const parsedExerciseName = ExerciseNameSchema.safeParse(row.get("exerciseName"));
-      return parsedExerciseName.success && parsedExerciseName.data === normalizedReview.exerciseName;
+      return (
+        parsedExerciseName.success && parsedExerciseName.data === normalizedReview.exerciseName
+      );
     });
 
     if (existingRow) {

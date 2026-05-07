@@ -21,7 +21,9 @@ const { toast } = useToast();
 const { pendingExercises, reviewedCount, isLoading, activeExerciseName, lastError } =
   storeToRefs(migrationStore);
 
-const summaryText = computed(() => `${reviewedCount.value} reviewed · ${pendingExercises.value.length} pending`);
+const summaryText = computed(
+  () => `${reviewedCount.value} reviewed · ${pendingExercises.value.length} pending`,
+);
 
 function formatPreviewLog(candidateLog: ExerciseWeightMigrationCandidate["recentLogs"][number]) {
   return `${localeDateString(candidateLog.loggedAt)} · ${candidateLog.weight}kg`;
@@ -43,7 +45,11 @@ async function applyDecision(
 ) {
   const result = await migrationStore.applyDecision(candidate.exerciseName, decision);
   if (!result) {
-    toast({ title: "Migration unavailable", description: "Spreadsheet is not ready yet.", variant: "destructive" });
+    toast({
+      title: "Migration unavailable",
+      description: "Spreadsheet is not ready yet.",
+      variant: "destructive",
+    });
     return;
   }
 

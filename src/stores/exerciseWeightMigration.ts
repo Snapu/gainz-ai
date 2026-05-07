@@ -2,15 +2,15 @@ import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { err, ok, type Result } from "neverthrow";
 import { defineStore } from "pinia";
 import { computed, ref, watchEffect } from "vue";
+import { findPastYearLogSheets, loadExerciseLogs, loadLogsFromYear } from "@/services/exerciseLogs";
 import {
   applyExerciseWeightMigrationDecision,
   buildExerciseWeightMigrationCandidates,
-  loadExerciseWeightMigrationReviews,
   type ExerciseWeightMigrationCandidate,
   type ExerciseWeightMigrationDecision,
   type ExerciseWeightMigrationReview,
+  loadExerciseWeightMigrationReviews,
 } from "@/services/exerciseWeightMigration";
-import { findPastYearLogSheets, loadExerciseLogs, loadLogsFromYear } from "@/services/exerciseLogs";
 import { useExerciseLogsStore } from "./exerciseLogs";
 import { useSpreadsheetStore } from "./spreadsheet";
 import { useTrainingSummaryStore } from "./trainingSummary";
@@ -30,7 +30,12 @@ export const useExerciseWeightMigrationStore = defineStore("exerciseWeightMigrat
 
   async function loadAllLogs(
     doc: GoogleSpreadsheet,
-  ): Promise<Result<Awaited<ReturnType<typeof loadExerciseLogs>> extends Result<infer T, any> ? T : never, "load-failed" | "parse-data-failed" | "sheet-not-found" | "auth-failed">> {
+  ): Promise<
+    Result<
+      Awaited<ReturnType<typeof loadExerciseLogs>> extends Result<infer T, any> ? T : never,
+      "load-failed" | "parse-data-failed" | "sheet-not-found" | "auth-failed"
+    >
+  > {
     const currentYearLogsResult = await loadExerciseLogs(doc);
     if (currentYearLogsResult.isErr()) return err(currentYearLogsResult.error);
 
@@ -77,10 +82,7 @@ export const useExerciseWeightMigrationStore = defineStore("exerciseWeightMigrat
     }
   }
 
-  async function applyDecision(
-    exerciseName: string,
-    decision: ExerciseWeightMigrationDecision,
-  ) {
+  async function applyDecision(exerciseName: string, decision: ExerciseWeightMigrationDecision) {
     const doc = spreadsheetStore.doc;
     if (!doc) {
       lastError.value = "load-failed";
@@ -97,11 +99,7 @@ export const useExerciseWeightMigrationStore = defineStore("exerciseWeightMigrat
         return result;
       }
 
-      await Promise.all([
-        refresh(doc),
-        logsStore.refresh(),
-        trainingSummaryStore.refresh(doc),
-      ]);
+      await Promise.all([refresh(doc), logsStore.refresh(), trainingSummaryStore.refresh(doc)]);
 
       return result;
     } finally {
