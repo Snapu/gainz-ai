@@ -226,6 +226,7 @@ function toggleSession(date: string) {
 // --- Bottom Sheet Log Form State ---
 const isLogFormOpen = ref(false);
 const formExerciseName = ref("");
+const isDumbbellExercise = computed(() => /kurzhantel|dumbbell/i.test(formExerciseName.value));
 const formReps = ref<number | null>(null);
 const formWeight = ref<number | null>(null);
 const formDistance = ref<number | null>(null);
@@ -507,7 +508,7 @@ async function saveLog() {
         <!-- Metrics -->
         <div class="grid grid-cols-2 gap-4">
           <UiNumberField v-model="formReps" label="Reps" :min="0" :step="1" />
-          <UiNumberField v-model="formWeight" label="Weight (kg)" :min="0" :step="0.5" />
+          <UiNumberField v-model="formWeight" label="Weight (kg)" :min="0" :step="0.5" :description="isDumbbellExercise ? 'Total (both hands)' : undefined" />
           <UiNumberField v-model="formDistance" label="Distance (m)" :min="0" :step="10" />
           <UiNumberField v-model="formDuration" label="Duration (min)" :min="0" :step="0.5" />
         </div>

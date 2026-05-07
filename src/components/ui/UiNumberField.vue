@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 interface Props extends NumberFieldRootProps {
   class?: any;
   label?: string;
+  description?: string;
 }
 
 const props = defineProps<Props>();
@@ -51,5 +52,6 @@ const defaultLocale = typeof navigator !== "undefined" ? navigator.language : "e
         <Plus class="w-5 h-5" />
       </NumberFieldIncrement>
     </div>
+    <p v-if="description" class="text-xs text-muted-foreground ml-1">{{ description }}</p>
   </NumberFieldRoot>
 </template>
