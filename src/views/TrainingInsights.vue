@@ -100,6 +100,143 @@ const acwrValueLabel = computed(() =>
   insights.value.acwr === null ? "No baseline" : insights.value.acwr.toFixed(2),
 );
 
+type AcwrZone = {
+  label: string;
+  range: string;
+  detail: string;
+  toneClass: string;
+};
+
+const acwrZone = computed<AcwrZone>(() => {
+  const acwr = insights.value.acwr;
+  if (acwr === null) {
+    return {
+      label: "No baseline",
+      range: "Need 4-week history",
+      detail: "Log more sessions to unlock ACWR trend and workload zone.",
+      toneClass: "bg-white/5 text-foreground/65 border-white/15",
+    };
+  }
+
+  if (acwr < 0.6) {
+    return {
+      label: "Underloaded",
+      range: "< 0.60",
+      detail: "Training load is low relative to your baseline. You may be detraining.",
+      toneClass: "bg-slate-400/10 text-slate-300 border-slate-400/30",
+    };
+  }
+
+  if (acwr <= 1.3) {
+    return {
+      label: "Balanced",
+      range: "0.60 - 1.30",
+      detail: "Workload is in the productive range for build/maintain progression.",
+      toneClass: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30",
+    };
+  }
+
+  return {
+    label: "High ramp",
+    range: "> 1.30",
+    detail: "Acute load is rising quickly vs baseline. Fatigue and injury risk increase.",
+    toneClass: "bg-orange-500/10 text-orange-300 border-orange-500/30",
+  };
+});
+
+const acwrGaugePercent = computed(() => {
+  const acwr = insights.value.acwr;
+  if (acwr === null) return 0;
+  return clampPct((acwr / 1.8) * 100);
+});
+
+function formatTriggerLabel(trigger: string): string {
+  if (trigger === "tonnageSpike") return "Tonnage spike";
+  if (trigger === "volumeSpike") return "Volume spike";
+  if (trigger === "performanceDecline") return "Performance drop";
+  if (trigger === "volumeIncreasing") return "Volume ramp";
+  return trigger;
+}
+
+const fatigueRiskToneClass = computed(() => {
+  const score = insights.value.fatigue.riskScore;
+  if (score >= 5) return "text-red-300";
+  if (score >= 3) return "text-orange-300";
+  if (score >= 1) return "text-amber-200";
+  return "text-foreground/85";
+});
+
+const fatigueRiskLabel = computed(() => {
+  const score = insights.value.fatigue.riskScore;
+  if (score >= 5) return "High";
+  if (score >= 3) return "Elevated";
+  if (score >= 1) return "Mild";
+  return "Low";
+});
+
+const deloadStatusLabel = computed(() => {
+  if (insights.value.deloadStatus === "active") return "Active";
+  if (insights.value.deloadStatus === "completed") return "Completed";
+  if (insights.value.deloadStatus === "canceled") return "Stopped early";
+  return "None";
+});
+
+const deloadStatusToneClass = computed(() => {
+  if (insights.value.deloadStatus === "active") {
+    return "text-orange-300 border-orange-500/30 bg-orange-500/10";
+  }
+  if (insights.value.deloadStatus === "completed") {
+    return "text-emerald-300 border-emerald-500/30 bg-emerald-500/10";
+  }
+  if (insights.value.deloadStatus === "canceled") {
+    return "text-amber-200 border-amber-400/30 bg-amber-500/10";
+  }
+  return "bg-white/5 text-foreground/65 border-white/15";
+});
+
+const deloadStatusNote = computed(() => {
+  if (insights.value.deloadStatus === "active") {
+    return `${deloadStore.daysRemaining ?? 0}d remaining in recovery week.`;
+  }
+  if (insights.value.deloadStatus === "completed") {
+    return "Latest deload has completed. Fatigue detection is active again.";
+  }
+  if (insights.value.deloadStatus === "canceled") {
+    return "Deload was stopped early. Monitor fatigue and ACWR closely.";
+  }
+  return "No deload cycle is currently recorded.";
+});
+
+const fatigueWeekRows = computed(() => {
+  const loadWindow = insights.value.fatigue.loadWindow;
+  return [
+    {
+      key: "weekMinus3",
+      label: "Week -3",
+      sets: loadWindow.sets.weekMinus3,
+      tonnage: loadWindow.tonnage.weekMinus3,
+    },
+    {
+      key: "weekMinus2",
+      label: "Week -2",
+      sets: loadWindow.sets.weekMinus2,
+      tonnage: loadWindow.tonnage.weekMinus2,
+    },
+    {
+      key: "weekMinus1",
+      label: "Week -1",
+      sets: loadWindow.sets.weekMinus1,
+      tonnage: loadWindow.tonnage.weekMinus1,
+    },
+    {
+      key: "current",
+      label: "Current",
+      sets: loadWindow.sets.current,
+      tonnage: loadWindow.tonnage.current,
+    },
+  ];
+});
+
 const weeklyDeltaLabel = computed(() => {
   const pct = weeklySetSummary.value.deltaPct;
   if (pct === null) return "Not enough history";
@@ -221,143 +358,209 @@ function clampPct(value: number): number {
       <!-- ── TAB: Training Phase ── -->
       <template v-else-if="activeTab === 'phase'">
 
-        <!-- Active Deload Card -->
-        <UiCard v-if="insights.deloadStatus === 'active'" class="p-4 overflow-visible">
-          <div class="flex items-center justify-between gap-2 mb-3">
-            <div>
-              <p class="text-xs font-black uppercase tracking-wide text-orange-300">Recovery Week</p>
-              <p class="text-[11px] text-foreground/60 mt-0.5">
-                {{ deloadStore.daysRemaining }}d remaining — reduced volume &amp; intensity
-              </p>
-            </div>
-            <UiButton
-              variant="ghost"
-              size="sm"
-              class="text-[10px] text-foreground/50 border border-white/10 hover:text-red-400 hover:border-red-400/30"
-              @click="deloadStore.cancelDeload()"
-            >
-              End early
-            </UiButton>
-          </div>
-          <!-- Progress bar -->
-          <div class="h-2 rounded-full bg-white/10 overflow-hidden">
-            <div
-              class="h-full rounded-full bg-orange-400/70 transition-all duration-500"
-              :style="{ width: `${deloadStore.progressPercent ?? 0}%` }"
-            ></div>
-          </div>
-          <!-- Trigger badges -->
-          <div v-if="insights.deloadTriggerSnapshot" class="mt-3 flex flex-wrap gap-1.5">
-            <span
-              v-for="trigger in insights.deloadTriggerSnapshot.triggeredBy"
-              :key="trigger"
-              class="text-[9px] px-1.5 py-0.5 rounded border border-orange-500/20 bg-orange-500/10 text-orange-300"
-            >
-              {{ trigger === "tonnageSpike" ? "Tonnage spike" :
-                 trigger === "volumeSpike" ? "Volume spike" :
-                 trigger === "performanceDecline" ? "Performance drop" :
-                 trigger === "volumeIncreasing" ? "Volume trend" : trigger }}
-            </span>
-          </div>
-        </UiCard>
+<!-- Systemic + Deload Status -->
+<UiCard class="p-4 overflow-visible">
+  <div class="flex items-start justify-between gap-2 mb-3">
+    <div>
+      <p class="text-xs font-black uppercase tracking-wide text-foreground/90">Training Phase</p>
+      <p class="text-[11px] text-foreground/60 mt-0.5">Systemic and deload status</p>
+    </div>
+    <div class="flex flex-wrap justify-end gap-1.5">
+      <span
+        class="text-[10px] px-2 py-0.5 rounded-full border font-semibold uppercase tracking-wider"
+        :class="{
+          'text-orange-400 border-orange-500/30 bg-orange-500/10': insights.phase === 'Deload',
+          'text-emerald-400 border-emerald-500/30 bg-emerald-500/10': insights.phase === 'Build',
+          'text-cyan-400 border-cyan-500/30 bg-cyan-500/10': insights.phase === 'Maintain',
+          'bg-muted/50 text-muted-foreground border-white/10': insights.phase === 'Inactive',
+        }"
+      >
+        Phase: {{ insights.phase }}
+      </span>
+      <span
+        class="text-[10px] px-2 py-0.5 rounded-full border font-semibold uppercase tracking-wider"
+        :class="deloadStatusToneClass"
+      >
+        Deload: {{ deloadStatusLabel }}
+      </span>
+    </div>
+  </div>
 
-        <!-- Phase Summary Card (no active deload) -->
-        <UiCard v-else class="p-4 overflow-visible">
-          <div class="flex items-center justify-between gap-2 mb-3">
-            <div>
-              <p class="text-xs font-black uppercase tracking-wide text-foreground/90">Training Phase</p>
-              <p class="text-[11px] text-foreground/60 mt-0.5">Current systemic state</p>
-            </div>
-            <span
-              class="text-[10px] px-2 py-0.5 rounded-full border font-semibold uppercase tracking-wider"
-              :class="{
-                'text-orange-400 border-orange-500/30 bg-orange-500/10': insights.phase === 'Deload',
-                'text-emerald-400 border-emerald-500/30 bg-emerald-500/10': insights.phase === 'Build',
-                'text-cyan-400 border-cyan-500/30 bg-cyan-500/10': insights.phase === 'Maintain',
-                'bg-muted/50 text-muted-foreground border-white/10': insights.phase === 'Inactive',
-              }"
-            >
-              {{ insights.phase }}
-            </span>
-          </div>
-          <div class="grid grid-cols-2 gap-2">
-            <div class="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-              <p class="text-[10px] uppercase tracking-wide text-foreground/50">ACWR</p>
-              <p class="text-sm font-bold text-foreground/85">{{ acwrValueLabel }}</p>
-            </div>
-            <div class="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-              <p class="text-[10px] uppercase tracking-wide text-foreground/50">Fatigue Risk</p>
-              <p
-                class="text-sm font-bold"
-                :class="insights.fatigue.riskScore >= 3 ? 'text-orange-300' : 'text-foreground/85'"
-              >
-                {{ insights.fatigue.riskScore }}/5
-              </p>
-            </div>
-            <div class="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-              <p class="text-[10px] uppercase tracking-wide text-foreground/50">Sets this week</p>
-              <p class="text-sm font-bold text-foreground/85">{{ weeklySetSummary.thisWeekSets }}</p>
-            </div>
-            <div class="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-              <p class="text-[10px] uppercase tracking-wide text-foreground/50">Vs prior avg</p>
-              <p
-                class="text-sm font-bold"
-                :class="{
-                  'text-emerald-300': (weeklySetSummary.deltaPct ?? 0) > 0,
-                  'text-red-300': (weeklySetSummary.deltaPct ?? 0) < -10,
-                  'text-foreground/85': weeklySetSummary.deltaPct === null || Math.abs(weeklySetSummary.deltaPct) <= 10
-                }"
-              >
-                {{ weeklyDeltaLabel }}
-              </p>
-            </div>
-          </div>
+  <div class="rounded-lg border border-white/10 bg-white/[0.03] p-3 mb-3">
+    <div class="flex items-start justify-between gap-2">
+      <div>
+        <p class="text-[10px] uppercase tracking-wide text-foreground/50">ACWR Zone</p>
+        <p class="text-base font-black text-foreground/90 mt-0.5">
+          {{ acwrValueLabel }}
+          <span class="text-xs font-semibold text-foreground/65">({{ acwrZone.range }})</span>
+        </p>
+      </div>
+      <span
+        class="text-[10px] px-2 py-0.5 rounded-full border font-semibold uppercase tracking-wider"
+        :class="acwrZone.toneClass"
+      >
+        {{ acwrZone.label }}
+      </span>
+    </div>
+    <div class="mt-2 h-1.5 rounded-full bg-white/10 overflow-hidden">
+      <div
+        class="h-full rounded-full transition-all duration-500 bg-cyan-300/80"
+        :style="{ width: `${acwrGaugePercent}%` }"
+      ></div>
+    </div>
+    <p class="mt-2 text-[11px] text-foreground/60 leading-relaxed">{{ acwrZone.detail }}</p>
+  </div>
 
-          <!-- Fatigue trigger badges -->
-          <div v-if="insights.fatigue.triggeredBy.length > 0" class="mt-3 flex flex-wrap gap-1.5">
-            <p class="w-full text-[10px] text-foreground/50 mb-0.5">Fatigue signals:</p>
-            <span
-              v-for="trigger in insights.fatigue.triggeredBy"
-              :key="trigger"
-              class="text-[9px] px-1.5 py-0.5 rounded border border-orange-500/20 bg-orange-500/10 text-orange-300"
-            >
-              {{ trigger === "tonnageSpike" ? "Tonnage spike" :
-                 trigger === "volumeSpike" ? "Volume spike" :
-                 trigger === "performanceDecline" ? "Performance drop" :
-                 trigger === "volumeIncreasing" ? "Volume trend" : trigger }}
-            </span>
-          </div>
-        </UiCard>
+  <div class="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5">
+    <div class="flex items-center justify-between gap-2">
+      <div>
+        <p class="text-[10px] uppercase tracking-wide text-foreground/50">Deload Status</p>
+        <p class="text-xs text-foreground/75 mt-0.5">{{ deloadStatusNote }}</p>
+      </div>
+      <UiButton
+        v-if="insights.deloadStatus === 'active'"
+        variant="ghost"
+        size="sm"
+        class="text-[10px] text-foreground/50 border border-white/10 hover:text-red-400 hover:border-red-400/30"
+        @click="deloadStore.cancelDeload()"
+      >
+        Stop Deload Early
+      </UiButton>
+    </div>
 
-        <!-- Muscle Recovery Card -->
-        <UiCard class="p-4 overflow-visible">
-          <p class="text-xs font-black uppercase tracking-wide text-foreground/90 mb-3">Muscle Recovery</p>
-          <div class="space-y-2">
-            <template v-if="muscleInsightsList.length > 0">
-              <div
-                v-for="m in muscleInsightsList"
-                :key="m.muscleGroup"
-                class="flex items-center justify-between gap-2"
-              >
-                <span class="text-xs text-foreground/70 w-28 shrink-0">{{ m.muscleGroup }}</span>
-                <div class="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
-                  <div
-                    class="h-full rounded-full transition-all duration-500"
-                    :class="m.recoveryReady ? 'bg-emerald-400/70' : 'bg-red-400/70'"
-                    :style="{ width: `${clampPct((m.sets / 20) * 100)}%` }"
-                  ></div>
-                </div>
-                <span
-                  class="text-[9px] w-16 text-right shrink-0"
-                  :class="m.recoveryReady ? 'text-emerald-300' : 'text-red-300'"
-                >
-                  {{ m.recoveryReady ? "Ready" : "Recovering" }}
-                </span>
-              </div>
-            </template>
-            <p v-else class="text-xs text-foreground/50">No muscle data yet.</p>
-          </div>
-        </UiCard>
+    <div v-if="insights.deloadStatus === 'active'" class="mt-2">
+      <div class="h-2 rounded-full bg-white/10 overflow-hidden">
+        <div
+          class="h-full rounded-full bg-orange-400/70 transition-all duration-500"
+          :style="{ width: `${deloadStore.progressPercent ?? 0}%` }"
+        ></div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+      <div class="rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-2">
+        <p class="text-[10px] uppercase tracking-wide text-foreground/50">Ends At</p>
+        <p class="text-xs font-semibold text-foreground/80">
+          {{ insights.deloadEndsAt ? new Date(insights.deloadEndsAt).toLocaleDateString() : "N/A" }}
+        </p>
+      </div>
+      <div class="rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-2">
+        <p class="text-[10px] uppercase tracking-wide text-foreground/50">Time Remaining</p>
+        <p class="text-xs font-semibold text-foreground/80">
+          {{ insights.deloadTimeRemainingMs === null ? "N/A" : `${Math.ceil(insights.deloadTimeRemainingMs / (24 * 60 * 60 * 1000))}d` }}
+        </p>
+      </div>
+    </div>
+
+    <div v-if="insights.deloadTriggerSnapshot" class="mt-2">
+      <p class="text-[10px] text-foreground/50 mb-1">Latest deload trigger snapshot:</p>
+      <div class="flex flex-wrap gap-1.5">
+        <span
+          v-for="trigger in insights.deloadTriggerSnapshot.triggeredBy"
+          :key="`deload-${trigger}`"
+          class="text-[9px] px-1.5 py-0.5 rounded border border-orange-500/20 bg-orange-500/10 text-orange-300"
+        >
+          {{ formatTriggerLabel(trigger) }}
+        </span>
+        <span
+          class="text-[9px] px-1.5 py-0.5 rounded border border-white/15 bg-white/[0.03] text-foreground/60"
+        >
+          Risk score {{ insights.deloadTriggerSnapshot.riskScore }}
+        </span>
+      </div>
+    </div>
+  </div>
+</UiCard>
+
+<!-- Full Fatigue Detection Data -->
+<UiCard class="p-4 overflow-visible">
+  <div class="flex items-center justify-between gap-2 mb-3">
+    <div>
+      <p class="text-xs font-black uppercase tracking-wide text-foreground/90">Fatigue Detection</p>
+      <p class="text-[11px] text-foreground/60 mt-0.5">Complete model output</p>
+    </div>
+    <span class="text-[10px] px-2 py-0.5 rounded-full border border-white/10 font-semibold uppercase tracking-wider text-foreground/75">
+      {{ insights.fatigue.hasSufficientHistory ? "4-week history ready" : "insufficient history" }}
+    </span>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+    <div class="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+      <p class="text-[10px] uppercase tracking-wide text-foreground/50">Should Deload</p>
+      <p class="text-sm font-bold" :class="insights.fatigue.shouldDeload ? 'text-orange-300' : 'text-emerald-300'">
+        {{ insights.fatigue.shouldDeload ? "Yes" : "No" }}
+      </p>
+    </div>
+    <div class="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+      <p class="text-[10px] uppercase tracking-wide text-foreground/50">Risk Score</p>
+      <p class="text-sm font-bold" :class="fatigueRiskToneClass">
+        {{ insights.fatigue.riskScore }}/7 ({{ fatigueRiskLabel }})
+      </p>
+    </div>
+    <div class="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+      <p class="text-[10px] uppercase tracking-wide text-foreground/50">Primary Reason</p>
+      <p class="text-xs font-semibold text-foreground/80">
+        {{ insights.fatigue.reason ?? "No active fatigue trigger reason" }}
+      </p>
+    </div>
+    <div class="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+      <p class="text-[10px] uppercase tracking-wide text-foreground/50">Declining Exercises</p>
+      <p class="text-sm font-bold text-foreground/85">{{ insights.fatigue.decliningExercises }}</p>
+    </div>
+  </div>
+
+  <div class="mt-3">
+    <p class="text-[10px] text-foreground/50 mb-1">Triggered by</p>
+    <div class="flex flex-wrap gap-1.5">
+      <span
+        v-for="trigger in insights.fatigue.triggeredBy"
+        :key="`fatigue-${trigger}`"
+        class="text-[9px] px-1.5 py-0.5 rounded border border-orange-500/20 bg-orange-500/10 text-orange-300"
+      >
+        {{ formatTriggerLabel(trigger) }}
+      </span>
+      <span
+        v-if="insights.fatigue.triggeredBy.length === 0"
+        class="text-[10px] text-foreground/45"
+      >
+        No active triggers
+      </span>
+    </div>
+  </div>
+
+  <div class="mt-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5">
+    <p class="text-[10px] uppercase tracking-wide text-foreground/50 mb-2">Weekly Load Window</p>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div
+        v-for="row in fatigueWeekRows"
+        :key="row.key"
+        class="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1.5"
+      >
+        <p class="text-[10px] font-semibold text-foreground/70">{{ row.label }}</p>
+        <p class="text-[10px] text-foreground/55 mt-0.5">Sets: {{ row.sets }}</p>
+        <p class="text-[10px] text-foreground/55">Tonnage: {{ row.tonnage.toFixed(0) }}</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+      <div class="rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-2">
+        <p class="text-[10px] uppercase tracking-wide text-foreground/50">Sets vs prior avg</p>
+        <p class="text-xs font-semibold text-foreground/80">
+          {{ weeklyDeltaLabel }} | ratio {{ insights.fatigue.loadWindow.sets.ratioVsPriorAvg ?? "N/A" }}x
+        </p>
+      </div>
+      <div class="rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-2">
+        <p class="text-[10px] uppercase tracking-wide text-foreground/50">Tonnage vs prior avg</p>
+        <p class="text-xs font-semibold text-foreground/80">
+          {{ tonnageDeltaPct === null ? "Not enough history" : `${tonnageDeltaPct > 0 ? "+" : ""}${tonnageDeltaPct}%` }}
+          | ratio {{ insights.fatigue.loadWindow.tonnage.ratioVsPriorAvg ?? "N/A" }}x
+        </p>
+      </div>
+    </div>
+  </div>
+</UiCard>
+
+
 
       </template>
 
