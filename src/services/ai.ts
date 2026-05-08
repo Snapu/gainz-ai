@@ -87,11 +87,6 @@ const aiResponseSchema: Schema = {
         required: ["exerciseName", "targetSets", "targetReps", "restSeconds"],
         properties: {
           exerciseName: { type: Type.STRING },
-          reasoning: {
-            type: Type.STRING,
-            description:
-              "Your internal scratchpad to explain your logic for these targets based on user history. NOT shown to user.",
-          },
           targetSets: { type: Type.INTEGER },
           targetReps: { type: Type.STRING },
           targetWeight: {
@@ -178,11 +173,11 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
   - Note: 'sets' reflects a rolling 7-day window, NOT the current calendar week. Early in the week, the count includes sessions from the previous 7 days — interpret landmarks accordingly and do not assume this week's work alone caused a high set count.
   - BINDING: If any muscle shows landmark 'above_MRV', reduce its programmed sets to mavHigh equivalent this session, even if shouldDeload is false.
   - BINDING: If any muscle shows landmark 'approaching_MRV', cap new primary sets for that muscle to ≤2 this session to prevent crossing into overtraining.
-  - BINDING: Never prescribe primary sets for a muscle where recoveryReady=false, unless no other muscle group needs work — in that case halve the set count and note the early re-stimulation in reasoning.
+  - BINDING: Never prescribe primary sets for a muscle where recoveryReady=false, unless no other muscle group needs work — in that case halve the set count and note the early re-stimulation in scratchpad.
 - 'e1rm': Estimated 1-Rep Max per exercise with a 4-session trend and plateau detection. Use this to set precise targetWeight values.
   - The optional 'bestRPE' field is the effort rating (1–10) of the set that produced the e1RM estimate. If 'bestRPE' ≤ 7, the athlete still had reps in reserve and the estimate is conservative — increase the e1RM by 5% before applying the weight formula (e.g. reported e1RM 100kg + 5% = 105kg baseline).
-  - If 'e1rm' = 0 for any exercise, treat it as no history — use the 60–70% same-group compound e1RM fallback. Never prescribe 0kg. Flag in 'reasoning' that e1RM is unavailable.
-  - If plateau=true AND the exercise appears in the last 4 session logs, SWITCH to a mechanical variant for that movement pattern instead of repeating the same exercise.
+  - If 'e1rm' = 0 for any exercise, treat it as no history — use the 60–70% same-group compound e1RM fallback. Never prescribe 0kg. Flag in scratchpad that e1RM is unavailable.
+  - If plateau=true AND the exercise appears in the last 4 session logs, SWITCH to a mechanical variant for that movement pattern instead of repeating the same exercise. Plateau swaps are short-term (2–3 weeks); if the original exercise reappears in logs after the absence window (≥3 weeks), the plateau flag resets and it becomes eligible again. Consider rotating back to the original exercise at a fresh stimulus level (e.g. lower weight, higher reps, fresh technique focus) to reinvigorate the main lift.
     IMPORTANT: Only suggest variants using equipment listed in the user's equipmentAccess profile. Skip any variant that requires unavailable equipment.
     Bench Press        → Incline Dumbbell Press or Cable Flyes
     Squat              → Bulgarian Split Squat or Leg Press
@@ -201,16 +196,15 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
   - 'fatigue.hasSufficientHistory': False means there are not enough weekly windows yet; treat trigger metrics as low-confidence and avoid aggressive deload decisions.
   - A 50%+ tonnage spike vs prior 3-week average is a red flag even when set count is stable (matches model threshold).
 - 'acwr': Acute:Chronic Workload Ratio (7-day tonnage ÷ avg weekly 28-day tonnage). Safe zone: 0.8–1.3. If > 1.3, reduce today’s volume by 15–20%. If > 1.5, strongly recommend rest or deload. If < 0.8, the athlete is undertraining — increase today's volume by 15–20% to rebuild the training stimulus. If null, insufficient history — proceed conservatively.
+- Exercise selection hierarchy (BINDING): First keep session coherence (inferred split/day intent), then apply recovery gates and equipment limits, then use MEV/MAV/MRV + ACWR to adjust set dose. Do NOT pick exercises only because a muscle is below_MEV.
 - 'scratchpad' usage depends on phase:
   PLANNING / POST-WORKOUT: scratchpad MUST follow this structure BEFORE writing coachMessage:
-    0. DATA VALIDATION: Sanity-check incoming metrics. Flag suspicious values (e.g. impossible e1RM, acwr < 0.3 or > 2.2). If suspicious, state a fallback assumption.
-    1. VOLUME: Each muscle group — current sets vs. landmark (e.g. "Chest: 6 sets → below_MEV, needs 8+").
-    2. E1RM: Trend per exercise — increasing / plateau / declining.
-    3. FATIGUE: shouldDeload flag + reason. Note volume spikes.
-    4. RECOVERY: List muscles where recoveryReady=false. Use the recoveryReady flag from trainingInsights — do NOT apply your own recovery time rules.
-    5. WEIGHTS: Calculation per exercise (e.g. "Bench e1RM 120kg → 75% = 90 → round to 90kg").
-    6. PLAN: Exercise order with one-line rationale each.
-  MID-WORKOUT: scratchpad is OPTIONAL. If included, keep it to 1-2 lines (e.g. "Set 3/4 done @80kg RPE 8.5 — on track"). Do NOT run the full 6-step analysis.
+    0. DATA VALIDATION: Sanity-check incoming metrics. Flag suspicious values (e.g. impossible e1RM, acwr < 0.3 or > 2.2, riskScore clearly inconsistent with triggers). State a fallback assumption for any suspicious value.
+    1. SESSION SETUP: Infer today's session type from recent logs (split/day intent). Apply equipment/time/recovery gates upfront. Pick 1-2 anchor compounds first, then accessories. Commit plateau swaps before any load math. Exclude recoveryReady=false primary muscles unless fallback rule applies.
+    2. WEIGHTS: Per chosen exercise — e1RM × target% → round to 2.5kg. Note any bestRPE ≤7 adjustments (+5% baseline).
+    3. PLAN: Exercise order with one-line rationale each, including one rejected alternative when relevant (plateau/MRV/recovery/equipment reason).
+  CRITICAL: Steps 0–3 only. Do NOT add step 4, notes, disclaimers, or any structure beyond step 3. Fold all context into the 3 required steps.
+  MID-WORKOUT: scratchpad is OPTIONAL. If included, keep it to 1-2 lines (e.g. "Set 3/4 done @80kg RPE 8.5 — on track"). Do NOT run the full 4-step analysis.
 
 3. STRICT OUTPUT & TONAL RULES:
 - The user CANNOT reply. Do not ask questions or prompt for responses (e.g. never say "Let me know how it goes!").
@@ -226,14 +220,14 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
   If ranges overlap, prefer the narrower goal-specific band: for general_fitness use the 13–15 bridge zone above.
   All logged weights are total load (e.g., for dumbbell exercises: combined weight of both dumbbells, not per-hand). When prescribing dumbbell exercises, targetWeight must also be total weight (both dumbbells combined). You may clarify per-hand weight in the 'notes' field (e.g., '35 kg per hand').
   Always round to the nearest 2.5kg increment. Always give a single concrete number (e.g. "82.5kg"), never a range.
-  If e1RM is unavailable for a newly introduced exercise (no history), estimate starting weight as 60–70% of the primary compound e1RM for the same muscle group, rounded to 2.5kg. Flag in 'reasoning' that this is an estimated first-session weight.
+  If e1RM is unavailable for a newly introduced exercise (no history), estimate starting weight as 60–70% of the primary compound e1RM for the same muscle group, rounded to 2.5kg. Flag in scratchpad that this is an estimated first-session weight.
   For 'increase_mobility' goal or any stretching/mobility movement (e.g. hip flexor stretch, dead hang, cat-cow): set targetWeight = 'bodyweight' and restSeconds = 30–60. Do not apply e1RM percentage rules to stretches or static holds.
   For bodyweight exercises (Pull-Ups, Chin-Ups, Dips): the user's bodyweightKg is provided in their profile. Calculate added weight = (e1RM × target%) − bodyweightKg. If the result is ≤ 0, prescribe 'Bodyweight'. Otherwise round to nearest 2.5kg and prescribe as added weight (e.g. '+10kg').
 - Progressive Overload Protocol (MANDATORY): Follow double-progression.
   Step 1 — if the user hit the TOP of the rep range on ALL sets in the previous session, increase targetWeight by the increment below and reset targetReps to the BOTTOM of the range:
     Isolation / small-muscle (Curls, Lateral Raises, Flyes, Cable work) → +1.25kg (or nearest available increment, min 2.5kg if fractional plates unavailable)
     Compound upper-body (Bench Press, Row, Overhead Press)              → +2.5kg
-    Pull-Ups                                                            → +2.5kg via weight belt if available; otherwise add 1 rep until hitting the top of the rep range on all sets, then note in reasoning that a weight belt is needed to continue overload
+    Pull-Ups                                                            → +2.5kg via weight belt if available; otherwise add 1 rep until hitting the top of the rep range on all sets, then note in scratchpad that a weight belt is needed to continue overload
     Compound lower-body (Squat, Deadlift, Romanian Deadlift, Leg Press, Hip Thrust, Bulgarian Split Squat) → +5kg
   Step 2 — otherwise, keep the same weight and push reps higher within the range.
   Endurance override (improve_endurance): prioritize progression in this order: reps first, then +1 set, then 5–10s shorter rest (within endurance rest bands), and only then the smallest possible load increase.
@@ -246,8 +240,9 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
   20–25 reps (endurance/circuit)    → 15–30s between exercises, or 0s in true circuit (move directly to next station)
 - Exercise Order (MANDATORY): Always order recommendedWorkout with compound multi-joint movements first (e.g. Squat, Bench Press, Deadlift, Row, OHP), isolation movements last (e.g. Curls, Flyes, Lateral Raises). Within each category, order by the session's priority muscle group.
 - Exercise Names (MANDATORY): When recommending an exercise the user has previously logged, use the EXACT exerciseName string as it appears in their exercise logs — do NOT translate, anglicise, or normalise it. E.g. if logs show "Bankdrücken", use "Bankdrücken" not "Bench Press".
+- Tie-break rule (MANDATORY): If multiple exercise options are valid, choose by this order: (1) continuity with previously logged exact exerciseName, (2) setup simplicity with available equipment, (3) highest stimulus for the priority muscle with lowest fatigue cost.
 - Notes: NEVER use trivial cliches in the 'notes' field (e.g. "controlled execution", "deep squat"). Only provide advanced tempo/anatomical cues (e.g. "3s eccentric") or OMIT the field entirely.
-- LANGUAGE RULE: Only 'coachMessage' is shown to the user — write it in the user's locale. ALL other fields ('scratchpad', 'reasoning', 'muscleGroup', 'supersetId', 'targetWeight', 'notes') MUST be in English. This saves tokens and ensures reliable parsing.
+- LANGUAGE RULE: Only 'coachMessage' is shown to the user — write it in the user's locale. ALL other fields ('scratchpad', 'muscleGroup', 'supersetId', 'targetWeight', 'notes') MUST be in English. This saves tokens and ensures reliable parsing.
 
 4. MID-WORKOUT BEHAVIOR (CRITICAL):
 - Phase is explicitly provided as 'mid-workout'.
@@ -270,7 +265,7 @@ You may receive:
 - Current date and phase
 
 Here are examples:
-EXAMPLE 1 (Volume): {"scratchpad": "Chest 6 below_MEV needs 8+. Bench plateau 85kg. 85*75%=63.75 round 65kg.", "coachMessage": "Bench stalled, Chest 2 sets short. Adding 4-set block with Flyes gets to 8 sets.", "recommendedWorkout": [{"exerciseName": "Bench Press", "reasoning": "Plateau, below_MEV. Push weight to break stall.", "targetSets": 4, "targetReps": "8-12", "targetWeight": "65kg", "restSeconds": 120, "primaryMuscle": "Chest", "supersetId": "A"}, {"exerciseName": "Incline Flyes", "reasoning": "Isolation superset to add chest volume.", "targetSets": 4, "targetReps": "12-15", "targetWeight": "15kg", "restSeconds": 120, "primaryMuscle": "Chest", "supersetId": "A"}]}
+EXAMPLE 1 (Volume): {"scratchpad": "Chest 6 below_MEV needs 8+. Bench plateau 85kg. 85*75%=63.75 round 65kg.", "coachMessage": "Bench stalled, Chest 2 sets short. Adding 4-set block with Flyes gets to 8 sets.", "recommendedWorkout": [{"exerciseName": "Bench Press", "targetSets": 4, "targetReps": "8-12", "targetWeight": "65kg", "restSeconds": 120, "primaryMuscle": "Chest", "supersetId": "A"}, {"exerciseName": "Incline Flyes", "targetSets": 4, "targetReps": "12-15", "targetWeight": "15kg", "restSeconds": 120, "primaryMuscle": "Chest", "supersetId": "A"}]}
 EXAMPLE 2 (Deload): {"scratchpad": "Deload triggered. 75%-12pp=63%. Bench 120*65%=78 round 77.5.", "coachMessage": "Four weeks climbing volume. Drop weight ~15%, cut to 2 sets. Come back stronger.", "recommendedWorkout": [{"exerciseName": "Bench Press", "targetSets": 2, "targetReps": "10-12", "targetWeight": "77.5kg", "restSeconds": 120}, {"exerciseName": "Barbell Row", "targetSets": 2, "targetReps": "10-12", "targetWeight": "65kg", "restSeconds": 120}]}
 `,
 };
@@ -538,6 +533,12 @@ function isServiceUnavailableError(error: unknown): boolean {
   return false;
 }
 
+function isTimeoutError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const e = error as Record<string, unknown>;
+  return typeof e.message === "string" && /timed out|timeout/i.test(e.message);
+}
+
 export async function askAi(
   apiKey: string | undefined,
   userProfile: UserProfile,
@@ -554,8 +555,6 @@ export async function askAi(
 
   let aiResponseText = "";
 
-  const AI_TIMEOUT_MS = 90_000;
-
   try {
     const session = resolveCurrentSession(exerciseLogs);
     const todayLogs = session?.logs ?? [];
@@ -563,6 +562,8 @@ export async function askAi(
     const isFirstMessage = previousMessages.length === 0;
     const phase = getWorkoutPhase(session);
     const isMidWorkout = phase === "mid-workout";
+    // Planning calls can be substantially heavier than mid-workout updates.
+    const aiTimeoutMs = isFirstMessage || phase === "planning" ? 140_000 : 90_000;
 
     const initialWindow = getInitialLogsWindow(exerciseLogs);
     const workoutStatus = getWorkoutStatus(session);
@@ -672,33 +673,31 @@ ${JSON.stringify(buildCompactTrainingContext(insights))}`);
     // as the session ledger + prior plan summary, saving ~1500-2400 tokens.
     const conversationContents = [{ role: "user" as const, parts: [{ text: currentUserInput }] }];
 
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("AI request timed out")), AI_TIMEOUT_MS),
-    );
-    let responseStream: Awaited<ReturnType<typeof ai.models.generateContentStream>>;
-    try {
-      responseStream = await Promise.race([
+    const generateWithTimeout = (model: "gemini-3-flash-preview" | "gemini-2.5-flash") => {
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("AI request timed out")), aiTimeoutMs),
+      );
+      return Promise.race([
         ai.models.generateContentStream({
-          model: "gemini-3-flash-preview",
+          model,
           contents: conversationContents,
           config: aiConfig,
         }),
         timeoutPromise,
       ]);
+    };
+
+    let responseStream: Awaited<ReturnType<typeof ai.models.generateContentStream>>;
+    try {
+      responseStream = await generateWithTimeout("gemini-3-flash-preview");
     } catch (streamErr) {
-      if (isServiceUnavailableError(streamErr)) {
-        Sentry.captureMessage("Primary model busy, falling back to gemini-2.5-flash", {
+      if (isServiceUnavailableError(streamErr) || isTimeoutError(streamErr)) {
+        Sentry.captureMessage("Primary model unavailable/slow, falling back to gemini-2.5-flash", {
           level: "info",
           tags: { scope: "ai-service", feature: "model-fallback" },
+          extra: { timedOut: isTimeoutError(streamErr) },
         });
-        responseStream = await Promise.race([
-          ai.models.generateContentStream({
-            model: "gemini-2.5-flash",
-            contents: conversationContents,
-            config: aiConfig,
-          }),
-          timeoutPromise,
-        ]);
+        responseStream = await generateWithTimeout("gemini-2.5-flash");
       } else {
         throw streamErr;
       }

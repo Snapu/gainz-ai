@@ -17,6 +17,7 @@ export interface ExerciseE1RM {
 
 const PLATEAU_THRESHOLD = 0.05;
 const MIN_E1RM_TREND_SESSIONS = 3;
+const PLATEAU_RESET_DAYS = 21; // Clear plateau if exercise not logged for 3 weeks (indicates successful variant swap recovery)
 
 /**
  * Zourdos et al. (2016) RPE-to-%1RM lookup table.
@@ -116,6 +117,7 @@ export function calculateE1RM(weight: number, reps: number, rpe?: number): numbe
 export function calculateE1RMInsights(
   logs: ExerciseLog[],
   excludeRanges?: ExcludeRange[],
+  now: Date = new Date(),
 ): Record<string, ExerciseE1RM> {
   const filteredLogs =
     excludeRanges && excludeRanges.length > 0
@@ -161,7 +163,11 @@ export function calculateE1RMInsights(
     const currentE1RM = Math.max(...trend);
 
     const plateauThreshold = currentE1RM * PLATEAU_THRESHOLD;
+    // Check if exercise has been absent for plateau reset window (user switched to variant and recovery is underway)
+    const lastLogDate = new Date(sortedDays[sortedDays.length - 1]!);
+    const daysSinceLastLog = (now.getTime() - lastLogDate.getTime()) / 86400000;
     const plateau =
+      daysSinceLastLog < PLATEAU_RESET_DAYS &&
       trend.length >= MIN_E1RM_TREND_SESSIONS &&
       trend.slice(-3).every((v) => Math.abs(v - currentE1RM) <= plateauThreshold);
 

@@ -169,7 +169,7 @@ export const useAiStore = defineStore("ai", () => {
       messages.value.push(userMessage);
       saveMessagesToStorage(today, messages.value);
 
-      const result = await askAiService(
+      const serviceArgs = [
         apiKey,
         userProfileStore.userProfile,
         trainingInsightsStore.insights,
@@ -177,20 +177,28 @@ export const useAiStore = defineStore("ai", () => {
         trainingSummaryStore.summaries,
         previousMessages,
         eventsStore.events,
-      );
+      ] as const;
+
+      let result = await askAiService(...serviceArgs);
+
+      if (result.isErr()) {
+        if (result.error === "missing-api-key") {
+          // Remove the "AI request" user message on failure so we can retry
+          messages.value = messages.value.filter((m) => m.id !== userMessageId);
+          saveMessagesToStorage(today, messages.value);
+          return err("missing-api-key");
+        }
+
+        // Transient failure — wait 2s and retry once before giving up.
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        result = await askAiService(...serviceArgs);
+      }
 
       if (result.isErr()) {
         // Remove the "AI request" user message on failure so we can retry
         messages.value = messages.value.filter((m) => m.id !== userMessageId);
         saveMessagesToStorage(today, messages.value);
-
-        switch (result.error) {
-          case "missing-api-key":
-            return err("missing-api-key");
-          case "generate-content-stream-failed":
-          case "ai-request-failed":
-            return err("ai-failed");
-        }
+        return err("ai-failed");
       }
 
       // learnFromAiResponse fires inside askAiService's finally block — refresh the

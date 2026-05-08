@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { useDebounceFn, useTimeAgo } from "@vueuse/core";
 import DOMPurify from "dompurify";
-import { Loader2, Sparkles, Trash2, X } from "lucide-vue-next";
-import { computed, watch } from "vue";
+import { ChevronDown, Loader2, Sparkles, Trash2, X } from "lucide-vue-next";
+import { computed, ref, watch } from "vue";
 import ClickableList, { type ClickableListItem } from "@/components/ClickableList.vue";
 import UiBottomSheet from "@/components/ui/UiBottomSheet.vue";
 import UiCard from "@/components/ui/UiCard.vue";
@@ -131,6 +131,8 @@ const allInsights = computed<DisplayInsight[]>(() => {
     };
   });
 });
+
+const openScratchpads = ref<string[]>([]);
 
 function formatTime(d: Date) {
   return useTimeAgo(d).value;
@@ -282,6 +284,24 @@ function toWorkoutListItems(exercises: DisplayExercise[]): WorkoutListItem[] {
               v-html="renderMarkdown(insight.rawContent)"
             />
           </template>
+
+          <!-- Scratchpad collapsible -->
+          <div v-if="insight.parsedData?.scratchpad" class="mt-1">
+            <button
+              class="flex items-center gap-1 text-[10px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors"
+              @click="openScratchpads = openScratchpads.includes(insight.id) ? openScratchpads.filter(id => id !== insight.id) : [...openScratchpads, insight.id]"
+            >
+              <ChevronDown
+                class="w-3 h-3 transition-transform"
+                :class="openScratchpads.includes(insight.id) ? 'rotate-180' : ''"
+              />
+              Reasoning
+            </button>
+            <pre
+              v-if="openScratchpads.includes(insight.id)"
+              class="text-[10px] text-muted-foreground/50 bg-muted/20 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all mt-1.5"
+            >{{ insight.parsedData.scratchpad }}</pre>
+          </div>
 
           <div v-if="idx < allInsights.length - 1" class="border-t border-white/5 mt-2" />
         </div>
