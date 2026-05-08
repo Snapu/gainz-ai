@@ -1,0 +1,1 @@
+System.register(["./index-legacy-DFMPPGJC.js"],function(e,t){"use strict";var r;return{setters:[e=>{r=e.b2}],execute:function(){e("u",function(e,t="reka"){var n;let u;return u=null===(n=r)||void 0===n?void 0:n(),t?`${t}-${u}`:u})}}});
