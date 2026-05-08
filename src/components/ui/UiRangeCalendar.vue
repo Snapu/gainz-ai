@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { getLocalTimeZone, today } from "@internationalized/date";
-import { ChevronLeft, ChevronRight } from "lucide-vue-next";
+import { ChevronLeft, ChevronRight } from "@lucide/vue";
 import type { DateRange } from "reka-ui";
 import {
   RangeCalendarCell,

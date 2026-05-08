@@ -178,7 +178,7 @@ describe("calculateE1RMInsights", () => {
       createLog("Squat", daysLater(14), 100, 5),
       createLog("Squat", daysLater(21), 100, 5),
     ];
-    expect(calculateE1RMInsights(logs)["Squat"]!.plateau).toBe(true);
+    expect(calculateE1RMInsights(logs, undefined, daysLater(22))["Squat"]!.plateau).toBe(true);
   });
 
   it("does not flag plateau with fewer than 3 sessions in trend", () => {

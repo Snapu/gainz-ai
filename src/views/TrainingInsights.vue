@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { ArrowLeft, HelpCircle, Moon, Scale, TrendingDown, TrendingUp } from "@lucide/vue";
 import * as Sentry from "@sentry/vue";
-import { ArrowLeft, HelpCircle, Moon, Scale, TrendingDown, TrendingUp } from "lucide-vue-next";
 import { storeToRefs } from "pinia";
 import { computed, onMounted, ref } from "vue";
 import AppHeader from "@/components/AppHeader.vue";

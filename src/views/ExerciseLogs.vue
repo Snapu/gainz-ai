@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { ChevronRight, ExternalLink, Menu, Moon, Plus, Sparkles } from "@lucide/vue";
 import { haptic } from "ios-haptics";
-import { ChevronRight, ExternalLink, Menu, Moon, Plus, Sparkles } from "lucide-vue-next";
 import { storeToRefs } from "pinia";
 import { computed, ref, watch } from "vue";
 import AICoachingPanel from "@/components/AICoachingPanel.vue";

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronRight } from "lucide-vue-next";
+import { ChevronRight } from "@lucide/vue";
 import { computed } from "vue";
 import UiBadge from "@/components/ui/UiBadge.vue";
 import UiCard from "@/components/ui/UiCard.vue";

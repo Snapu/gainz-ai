@@ -54,7 +54,7 @@ export const useAuthStore = defineStore("auth", () => {
     return requestAccessToken()
       .andTee((response) => {
         accessToken.value = response.access_token;
-        expiresAt.value = parseInt(response.expires_in, 10) * 1000 + Date.now();
+        expiresAt.value = response.expires_in * 1000 + Date.now();
       })
       .orTee((error) => {
         console.error("Login failed", error);

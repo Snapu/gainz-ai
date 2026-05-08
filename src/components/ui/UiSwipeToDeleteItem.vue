@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Trash } from "lucide-vue-next";
+import { Trash } from "@lucide/vue";
 import UiSwipeableItem from "./UiSwipeableItem.vue";
 
 const props = withDefaults(defineProps<{ variant?: "card" | "inset" }>(), { variant: "card" });

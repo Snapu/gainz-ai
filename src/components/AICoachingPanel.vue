@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { ChevronDown, Loader2, Sparkles, Trash2, X } from "@lucide/vue";
 import { useDebounceFn, useTimeAgo } from "@vueuse/core";
 import DOMPurify from "dompurify";
-import { ChevronDown, Loader2, Sparkles, Trash2, X } from "lucide-vue-next";
 import { computed, ref, watch } from "vue";
 import ClickableList, { type ClickableListItem } from "@/components/ClickableList.vue";
 import UiBottomSheet from "@/components/ui/UiBottomSheet.vue";

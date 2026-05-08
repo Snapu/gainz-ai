@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronDown } from "lucide-vue-next";
+import { ChevronDown } from "@lucide/vue";
 import ExerciseLogItem from "@/components/ExerciseLogItem.vue";
 import UiCard from "@/components/ui/UiCard.vue";
 import type { ExerciseLog } from "@/services/exerciseLogs";

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CheckCircle2, X } from "lucide-vue-next";
+import { CheckCircle2, X } from "@lucide/vue";
 
 defineProps<{
   formattedTime: string;

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Plus, Search, X } from "lucide-vue-next";
+import { Plus, Search, X } from "@lucide/vue";
 import { DialogClose, DialogTitle } from "reka-ui";
 import { computed, ref, watch } from "vue";
 import { uiFieldClass, uiPressClass } from "@/components/ui/styles";

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { CalendarDate, getLocalTimeZone, today } from "@internationalized/date";
+import { ArrowLeft, Moon, Plus, X } from "@lucide/vue";
 import { haptic } from "ios-haptics";
-import { ArrowLeft, Moon, Plus, X } from "lucide-vue-next";
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import AppHeader from "@/components/AppHeader.vue";

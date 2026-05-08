@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BarChart2, CalendarDays, CheckCircle2, Hourglass, Timer } from "lucide-vue-next";
+import { BarChart2, CalendarDays, CheckCircle2, Hourglass, Timer } from "@lucide/vue";
 import { computed, ref } from "vue";
 import type { MuscleGroup, MuscleGroupInsight, VolumeLandmark } from "@/services/trainingScience";
 import { RECOVERY_HOURS, VOLUME_LANDMARKS } from "@/services/trainingScience";

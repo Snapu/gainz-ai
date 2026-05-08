@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { ArrowLeft, Check, Sparkles, X } from "@lucide/vue";
 import { useStepper } from "@vueuse/core";
-import { ArrowLeft, Check, Sparkles, X } from "lucide-vue-next";
 import { storeToRefs } from "pinia";
 import { computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";

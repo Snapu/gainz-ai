@@ -16,6 +16,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       vue(),
       tailwindcss(),
+
       legacy(),
       vueDevTools(),
       VitePWA({
@@ -24,7 +25,7 @@ export default defineConfig(({ mode }) => {
         srcDir: "public",
         filename: "service-worker.ts",
         devOptions: {
-          enabled: true,
+          enabled: false,
           type: "module",
         },
         includeAssets: ["favicon.png", "icon-192.png", "icon-512.png"],
