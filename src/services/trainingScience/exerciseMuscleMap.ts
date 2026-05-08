@@ -44,7 +44,7 @@ function act(primary: MuscleGroup, ...secondaries: [MuscleGroup, number][]): Mus
 }
 
 /** Default activation mapping for all known exercises. */
-export const DEFAULT_EXERCISE_ACTIVATION_MAP: Record<string, MuscleActivation> = {
+const DEFAULT_EXERCISE_ACTIVATION_MAP: Record<string, MuscleActivation> = {
   // Chest
   "Bench Press": act("Chest", ["Triceps", 0.5], ["Shoulders", 0.3]),
   Bankdrücken: act("Chest", ["Triceps", 0.5], ["Shoulders", 0.3]),

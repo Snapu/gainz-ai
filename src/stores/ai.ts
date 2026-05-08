@@ -11,6 +11,7 @@ import {
 } from "@/services/ai";
 import { getMuscleActivation, normalizeExerciseName } from "@/services/trainingScience";
 import { localeDateString } from "@/services/utils/date";
+import { resolveCurrentSession } from "@/services/workoutSession";
 import { useDeloadStore } from "@/stores/deload";
 import { useEventsStore } from "@/stores/events";
 import { useExerciseLogsStore } from "@/stores/exerciseLogs";
@@ -93,7 +94,11 @@ export const useAiStore = defineStore("ai", () => {
   const deloadStore = useDeloadStore();
   const trainingInsightsStore = useTrainingInsightsStore();
 
-  const todaySessionDate = computed(() => localeDateString(new Date()));
+  const todaySessionDate = computed(
+    () =>
+      resolveCurrentSession(exerciseLogsStore.exerciseLogs)?.sessionDate ??
+      localeDateString(new Date()),
+  );
 
   // Load today's messages on initialization
   messages.value = loadMessagesFromStorage(todaySessionDate.value);
@@ -120,8 +125,9 @@ export const useAiStore = defineStore("ai", () => {
       return err("missing-api-key");
     }
 
-    const today = localeDateString(new Date());
-    const todayLogsCount = getTodayLogsCount(exerciseLogsStore.exerciseLogs);
+    const today = todaySessionDate.value;
+    const currentSession = resolveCurrentSession(exerciseLogsStore.exerciseLogs);
+    const todayLogsCount = getTodayLogsCount(currentSession);
 
     // Check if we need to make a new request
     const lastMessage = messages.value[messages.value.length - 1];

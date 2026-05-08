@@ -79,7 +79,7 @@ export const RECOVERY_HOURS: Record<MuscleGroup, number> = {
   Glutes: 72,
 };
 
-export const VALID_MUSCLE_GROUPS = [
+const VALID_MUSCLE_GROUPS = [
   "Chest",
   "Back",
   "Quads",

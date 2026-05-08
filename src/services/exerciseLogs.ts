@@ -13,7 +13,7 @@ const optionalNumberSchema = z.preprocess((val) => {
   return Number.isNaN(num) ? undefined : num;
 }, z.number().optional());
 
-export const ExerciseLogSchema = z.object({
+const ExerciseLogSchema = z.object({
   id: z.uuid(),
   exerciseName: ExerciseNameSchema,
   reps: optionalNumberSchema,

@@ -1,11 +1,10 @@
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { defineStore } from "pinia";
-import { computed, watch } from "vue";
+import { watch } from "vue";
 import { useAuthErrorHandler } from "@/composables/useAuthErrorHandler";
 import {
   addExerciseLog as addExerciseLog_,
   deleteExerciseLog as deleteExerciseLog_,
-  type ExerciseLog,
   loadExerciseLogs,
 } from "@/services/exerciseLogs";
 import { useOfflineSyncedStore } from "@/services/utils/offlineSyncedStore";
@@ -42,11 +41,6 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
     },
   );
 
-  const startOfToday = new Date().setHours(0, 0, 0, 0);
-  const workoutStarted = computed(() =>
-    exerciseLogs.value.find((log) => log.loggedAt.getTime() > startOfToday),
-  );
-
   const addExerciseLog: typeof add = async (exerciseLog) => {
     console.log("Adding exercise log", exerciseLog);
     const result = await add(exerciseLog);
@@ -73,7 +67,6 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
 
   return {
     exerciseLogs,
-    workoutStarted,
     isLoading,
     isRefreshing,
     addExerciseLog,

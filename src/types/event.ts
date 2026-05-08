@@ -7,5 +7,3 @@ export const EventSchema = z.object({
 });
 
 export type Event = z.infer<typeof EventSchema>;
-
-export const EVENT_PRESETS = ["Sickness", "Injury", "Fasting", "Rest Day"];

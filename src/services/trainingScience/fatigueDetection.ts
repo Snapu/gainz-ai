@@ -79,16 +79,16 @@ export function isFatigueTriggerId(value: string): value is FatigueTriggerId {
   return Object.hasOwn(TRIGGER_WEIGHTS, value);
 }
 
-export function calculateFatigueRiskScore(triggeredBy: FatigueTriggerId[]): number {
+function calculateFatigueRiskScore(triggeredBy: FatigueTriggerId[]): number {
   return triggeredBy.reduce((score, triggerId) => score + TRIGGER_WEIGHTS[triggerId], 0);
 }
 
-export function getPrimaryFatigueReason(triggeredBy: FatigueTriggerId[]): string | undefined {
+function getPrimaryFatigueReason(triggeredBy: FatigueTriggerId[]): string | undefined {
   const topTrigger = TRIGGER_PRIORITY.find((triggerId) => triggeredBy.includes(triggerId));
   return topTrigger ? TRIGGER_REASON[topTrigger] : undefined;
 }
 
-export function buildFatigueLoadWindow(
+function buildFatigueLoadWindow(
   weeklyTotalSets: number[],
   weeklyTonnage: number[],
 ): FatigueInsight["loadWindow"] {

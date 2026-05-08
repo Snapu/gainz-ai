@@ -8,5 +8,3 @@ export const WIZARD_STEPS = [
   { id: "extra", title: "Additional Info" },
   { id: "apikey", title: "AI Coach Settings" },
 ] as const;
-
-export type WizardStepId = (typeof WIZARD_STEPS)[number]["id"];

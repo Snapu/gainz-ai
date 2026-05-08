@@ -8,7 +8,6 @@ import { useExerciseMuscleMapStore } from "@/stores/exerciseMuscleMap";
 import { useTrainingSummaryStore } from "@/stores/trainingSummary";
 import { useUserProfileStore } from "@/stores/userProfile";
 
-export type { TrainingInsights };
 
 /**
  * Cached training insights store.

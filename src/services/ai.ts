@@ -8,6 +8,11 @@ import { localeDateString } from "@/services/utils/date";
 import type { Event } from "@/types/event";
 import { learnFromAiResponse, VALID_MUSCLE_GROUPS } from "./exerciseMuscleMap";
 import { summarizeTrainingInsights, type TrainingInsights } from "./trainingScience/index";
+import {
+  getSessionStartBoundary,
+  resolveCurrentSession,
+  type WorkoutSession,
+} from "./workoutSession";
 
 const INITIAL_LOG_WINDOW_DAYS = 14;
 const EXTENDED_LOG_WINDOW_DAYS = 28;
@@ -56,7 +61,7 @@ export interface AiResponseData {
   }[];
 }
 
-export const aiResponseSchema: Schema = {
+const aiResponseSchema: Schema = {
   type: Type.OBJECT,
   properties: {
     scratchpad: {
@@ -140,7 +145,7 @@ export const aiResponseSchema: Schema = {
   required: ["coachMessage"],
 };
 
-export const aiConfig: GenerateContentConfig = {
+const aiConfig: GenerateContentConfig = {
   responseMimeType: "application/json",
   responseSchema: aiResponseSchema,
   // Low temperature: reduces hallucination for numeric targets (weights, sets, reps)
@@ -270,39 +275,32 @@ EXAMPLE 2 (Deload): {"scratchpad": "Deload triggered. 75%-12pp=63%. Bench 120*65
 `,
 };
 
-export function getTodayLogsCount(exerciseLogs: ExerciseLog[]): number {
-  const startOfToday = new Date().setHours(0, 0, 0, 0);
-  return exerciseLogs.filter((log) => log.loggedAt.getTime() > startOfToday).length;
+export function getTodayLogsCount(session: WorkoutSession | null): number {
+  return session?.logs.length ?? 0;
 }
 
-function getWorkoutStatus(exerciseLogs: ExerciseLog[]): string {
-  const startOfToday = new Date().setHours(0, 0, 0, 0);
-  const workoutStarted = exerciseLogs.find((log) => log.loggedAt.getTime() > startOfToday);
-  return workoutStarted ? `I already started my workout today.` : `I haven't worked out today yet.`;
+function getWorkoutStatus(session: WorkoutSession | null): string {
+  return session ? "I already started my workout today." : "I haven't worked out today yet.";
 }
 
-function getWorkoutPhase(exerciseLogs: ExerciseLog[]): "planning" | "mid-workout" | "post-workout" {
-  const now = Date.now();
-  const startOfToday = new Date(now).setHours(0, 0, 0, 0);
-  const todayLogs = exerciseLogs.filter((log) => log.loggedAt.getTime() > startOfToday);
-  if (todayLogs.length === 0) return "planning";
-
-  // Use reduce instead of Math.max(...spread) to avoid stack overflow on large log arrays.
-  const lastLogTime = todayLogs.reduce((max, l) => Math.max(max, l.loggedAt.getTime()), 0);
-  const minutesSinceLastLog = (now - lastLogTime) / 60000;
-  // If >45 min since last set, treat as post-workout
-  return minutesSinceLastLog > 45 ? "post-workout" : "mid-workout";
+function getWorkoutPhase(
+  session: WorkoutSession | null,
+): "planning" | "mid-workout" | "post-workout" {
+  return session?.phase ?? "planning";
 }
 
-function getDaysSinceLastWorkout(exerciseLogs: ExerciseLog[]): number | null {
-  const startOfToday = new Date().setHours(0, 0, 0, 0);
-  const pastLogs = exerciseLogs.filter((log) => log.loggedAt.getTime() < startOfToday);
+function getDaysSinceLastWorkout(
+  exerciseLogs: ExerciseLog[],
+  session: WorkoutSession | null,
+): number | null {
+  const sessionBoundary = getSessionStartBoundary(session);
+  const pastLogs = exerciseLogs.filter((log) => log.loggedAt.getTime() < sessionBoundary);
   if (pastLogs.length === 0) return null;
 
   // Use reduce instead of Math.max(...spread) to avoid stack overflow on large log arrays.
   const lastLogTime = pastLogs.reduce((max, l) => Math.max(max, l.loggedAt.getTime()), 0);
   const lastLogDate = new Date(lastLogTime);
-  const diffMs = startOfToday - lastLogDate.setHours(0, 0, 0, 0);
+  const diffMs = sessionBoundary - lastLogDate.setHours(0, 0, 0, 0);
   return Math.round(diffMs / 86400000);
 }
 
@@ -559,15 +557,15 @@ export async function askAi(
   const AI_TIMEOUT_MS = 90_000;
 
   try {
-    const startOfToday = new Date().setHours(0, 0, 0, 0);
-    const todayLogs = exerciseLogs.filter((log) => log.loggedAt.getTime() > startOfToday);
+    const session = resolveCurrentSession(exerciseLogs);
+    const todayLogs = session?.logs ?? [];
 
     const isFirstMessage = previousMessages.length === 0;
-    const phase = getWorkoutPhase(exerciseLogs);
+    const phase = getWorkoutPhase(session);
     const isMidWorkout = phase === "mid-workout";
 
     const initialWindow = getInitialLogsWindow(exerciseLogs);
-    const workoutStatus = getWorkoutStatus(exerciseLogs);
+    const workoutStatus = getWorkoutStatus(session);
     const now = new Date();
     const currentTime = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
 
@@ -588,7 +586,7 @@ ${JSON.stringify(buildCompactProfileContext(userProfile))}`);
     }
 
     // Days since last workout (critical for recovery)
-    const restDays = getDaysSinceLastWorkout(exerciseLogs);
+    const restDays = getDaysSinceLastWorkout(exerciseLogs, session);
     if (restDays !== null) {
       sections.push(`Days since last workout: ${restDays}`);
     }
@@ -628,7 +626,10 @@ ${JSON.stringify(buildCompactProfileContext(userProfile))}`);
 
     // First message: also include historical logs for context
     if (isFirstMessage) {
-      const historicalLogs = initialWindow.logs.filter((l) => l.loggedAt.getTime() < startOfToday);
+      const sessionBoundary = getSessionStartBoundary(session);
+      const historicalLogs = initialWindow.logs.filter(
+        (l) => l.loggedAt.getTime() < sessionBoundary,
+      );
       if (historicalLogs.length > 0) {
         sections.push(`${initialWindow.label}:\n${compactLogs(historicalLogs)}`);
       }

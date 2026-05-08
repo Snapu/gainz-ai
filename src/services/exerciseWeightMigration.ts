@@ -17,11 +17,11 @@ const ExerciseNameSchema = z
   .min(1)
   .transform((value) => value.replace(/\s+/g, " "));
 
-export const ExerciseWeightMigrationDecisionSchema = z.enum(["keep_as_is", "convert_to_total"]);
+const ExerciseWeightMigrationDecisionSchema = z.enum(["keep_as_is", "convert_to_total"]);
 
 export type ExerciseWeightMigrationDecision = z.infer<typeof ExerciseWeightMigrationDecisionSchema>;
 
-export const ExerciseWeightMigrationReviewSchema = z.object({
+const ExerciseWeightMigrationReviewSchema = z.object({
   exerciseName: ExerciseNameSchema,
   decision: ExerciseWeightMigrationDecisionSchema,
   reviewedAt: z.string().datetime(),
@@ -30,7 +30,7 @@ export const ExerciseWeightMigrationReviewSchema = z.object({
 
 export type ExerciseWeightMigrationReview = z.infer<typeof ExerciseWeightMigrationReviewSchema>;
 
-export interface ExerciseWeightMigrationPreviewLog {
+interface ExerciseWeightMigrationPreviewLog {
   weight: number;
   loggedAt: Date;
 }

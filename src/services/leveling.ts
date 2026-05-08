@@ -256,7 +256,7 @@ export function getTitleForLevel(level: number): string {
 /**
  * Get the appropriate avatar path for a given level.
  */
-export function getAvatarForLevel(level: number): string {
+function getAvatarForLevel(level: number): string {
   return getRankInfoForLevel(level).avatar;
 }
 
