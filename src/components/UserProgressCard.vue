@@ -33,7 +33,7 @@ const phaseTheme = computed(() => PHASE_THEME[props.insights.phase]);
     @click="$emit('click')"
     class="w-[calc(100%-2rem)] outline-none group hover:border-primary/50 block mx-4 mt-4 mb-0 relative transition-all duration-300 ring-1 ring-white/5 bg-card overflow-hidden p-0"
   >
-    <div class="flex flex-row min-h-[12rem]">
+    <div class="flex flex-row min-h-[11.25rem]">
       
       <!-- Rank: Avatar & Level Info (50% Width) -->
       <div class="w-1/2 relative shrink-0 border-r border-border/50 overflow-hidden group-hover:border-primary/30 transition-colors">
@@ -46,7 +46,7 @@ const phaseTheme = computed(() => PHASE_THEME[props.insights.phase]);
         <div class="absolute inset-0 bg-linear-to-t from-black/80 via-transparent to-transparent"></div>
         
         <!-- Level Progress -->
-        <div class="absolute bottom-5 left-5 flex items-center gap-2">
+        <div class="absolute bottom-4 left-4 flex items-center gap-2">
            <UiRadialProgress 
             :progress="progress.progressPercent" 
             :size="40" 
@@ -63,24 +63,24 @@ const phaseTheme = computed(() => PHASE_THEME[props.insights.phase]);
       </div>
 
       <!-- Rank: Text & Training Info (Right Side) -->
-      <div class="w-1/2 flex flex-col justify-between p-5 bg-card/40">
+      <div class="w-1/2 flex flex-col justify-between p-4 bg-card/40">
         
         <div class="flex flex-col gap-1 text-left">
           <span class="text-xs font-bold tracking-widest text-muted-foreground uppercase">Rank</span>
           <h2 class="text-xl font-bold tracking-tight text-foreground leading-none">
             {{ progress.title }}
           </h2>
-          <span class="text-xs font-medium text-muted-foreground leading-tight line-clamp-2 mt-1" v-if="progress.description">
+          <span class="text-xs font-medium text-muted-foreground leading-snug line-clamp-3 break-words mt-0.5" v-if="progress.description">
             {{ progress.description.split('.')[0] }}
           </span>
         </div>
         
         <!-- Divider -->
-        <div class="h-px w-full bg-border/50 my-3"></div>
+        <div class="h-px w-full bg-border/50 my-2"></div>
 
         <!-- Training Info & Action -->
         <div class="flex items-end justify-between w-full">
-          <div class="flex flex-col gap-3 text-left">
+          <div class="flex flex-col gap-2 text-left">
             <div class="flex flex-col gap-1">
                <span class="text-xs font-bold tracking-widest text-muted-foreground uppercase">Phase</span>
                <div class="flex items-center">
