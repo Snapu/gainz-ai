@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { cn } from "@/lib/utils";
 import { uiPressClass } from "@/components/ui/styles";
+import { cn } from "@/lib/utils";
 
 interface Props {
   as?: string;

@@ -13,8 +13,8 @@ import {
   useForwardPropsEmits,
 } from "reka-ui";
 import { computed, nextTick, watch } from "vue";
-import { useKeyboardHeight } from "@/composables/useKeyboardHeight";
 import { uiIconButtonClass } from "@/components/ui/styles";
+import { useKeyboardHeight } from "@/composables/useKeyboardHeight";
 import { cn } from "@/lib/utils";
 
 const props = defineProps<

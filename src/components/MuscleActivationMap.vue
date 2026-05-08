@@ -224,11 +224,8 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
     <!-- Tap hint -->
     <p :class="['text-center text-xs text-muted-foreground/40 mb-1 tracking-wider uppercase animate-pulse duration-300', selectedMuscle ? 'invisible' : '']">Tap a muscle for details</p>
 
-    <div class="relative w-full h-[72vh] overflow-hidden rounded-xl">
-
-      <!-- Scrollable map viewport -->
-      <div class="absolute inset-0 overflow-y-auto overflow-x-hidden overscroll-contain pb-12">
-        <div class="relative w-full aspect-[1/2] min-h-full">
+    <div class="relative w-full aspect-[1/1.85] overflow-hidden rounded-xl">
+      <div class="absolute inset-0 w-full h-full">
 
           <!-- IMAGE LAYER (Screen blended on the stacking context root to drop the black background) -->
           <div :key="'img-'+currentView.id" class="absolute inset-0 w-full h-full animate-in fade-in zoom-in-95 duration-300 mix-blend-screen">
@@ -302,16 +299,20 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
              @click.stop="toggleMuscle(muscle.name)"
            >
               <span
-                class="text-xs sm:text-sm font-bold uppercase tracking-widest leading-none mb-0.5 sm:mb-1 transition-colors duration-200"
+                class="text-xs sm:text-sm font-bold uppercase tracking-widest leading-none mb-1 sm:mb-1.5 transition-colors duration-200"
                 :class="selectedMuscle === muscle.name ? 'text-white' : 'text-foreground/90'"
               >
                 {{ muscle.name }}
               </span>
-              <span class="text-xs sm:text-xs font-mono text-muted-foreground uppercase tracking-wide bg-background/40 px-1 py-[1.5px] rounded backdrop-blur-md mb-0.5 whitespace-nowrap">
-                {{ getJargon(muscle.status?.landmark) }}
-              </span>
-              <span class="text-xs sm:text-sm font-mono font-bold whitespace-nowrap opacity-90 mt-[1px]" :style="{ color: getLineColor(muscle.status?.landmark) }">
-                {{ muscle.status?.sets != null ? muscle.status.sets.toFixed(1) : '0' }} <span class="opacity-50 font-sans text-xs sm:text-xs font-medium tracking-wide">SETS/WK</span>
+              <div class="flex items-center gap-1.5 mb-1 whitespace-nowrap">
+                <span class="text-[9px] sm:text-[10px] font-mono text-muted-foreground uppercase tracking-wider bg-white/5 border border-white/10 px-1.5 py-[2px] rounded">
+                  {{ getJargon(muscle.status?.landmark) }}
+                </span>
+                <Hourglass v-if="muscle.status && !muscle.status.recoveryReady" class="w-3 h-3 text-yellow-500" />
+                <CheckCircle2 v-else-if="muscle.status && muscle.status.recoveryReady" class="w-3 h-3 text-emerald-500/80" />
+              </div>
+              <span class="text-xs sm:text-sm font-mono font-bold whitespace-nowrap opacity-90 mt-[2px]" :style="{ color: getLineColor(muscle.status?.landmark) }">
+                {{ muscle.status?.sets != null ? muscle.status.sets.toFixed(1) : '0' }} <span class="opacity-50 font-sans text-[10px] sm:text-xs font-medium tracking-wide">SETS/WK</span>
               </span>
            </div>
 
@@ -395,7 +396,7 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
                 ></div>
               </div>
               <div class="flex justify-between text-xs text-muted-foreground/50 font-mono mt-1">
-                <span>{{ selectedDetail.hoursSinceLastTrained }}h elapsed</span>
+                <span>{{ Math.round(selectedDetail.hoursSinceLastTrained) }}h elapsed</span>
                 <span>{{ selectedDetail.recoveryHours }}h needed</span>
               </div>
             </template>
@@ -415,8 +416,6 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
 
         </div>
       </UiBottomSheet>
-
-    </div>
 
   </div>
 </template>

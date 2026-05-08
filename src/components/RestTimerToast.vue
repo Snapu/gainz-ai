@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { uiIconButtonClass } from "@/components/ui/styles";
 import { CheckCircle2, X } from "@lucide/vue";
+import { uiIconButtonClass } from "@/components/ui/styles";
 
 defineProps<{
   formattedTime: string;
