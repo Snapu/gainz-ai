@@ -19,7 +19,7 @@ const deloadStore = useDeloadStore();
 
 const PHASE_THEME: Record<SystemicPhase, string> = {
   Deload: "text-orange-400 border border-orange-500/30 bg-orange-500/10",
-  Build: "bg-primary/20 text-primary hover:bg-primary/30",
+  Build: "bg-primary/20 text-primary-foreground hover:bg-primary/30 hover:text-primary-foreground",
   Maintain: "text-cyan-400 border border-cyan-500/30 bg-cyan-500/10",
   Inactive: "bg-muted/50 text-muted-foreground",
 };
@@ -40,7 +40,7 @@ const phaseTheme = computed(() => PHASE_THEME[props.insights.phase]);
         <img 
           :src="progress.avatar" 
           :alt="progress.title" 
-          class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out" 
+          class="absolute inset-0 w-full h-full object-cover" 
         />
         
         <div class="absolute inset-0 bg-linear-to-t from-black/80 via-transparent to-transparent"></div>
@@ -55,7 +55,7 @@ const phaseTheme = computed(() => PHASE_THEME[props.insights.phase]);
             progress-class="text-primary drop-shadow-[0_0_8px_rgba(var(--primary),0.5)]"
           >
             <div class="flex flex-col items-center justify-center">
-              <span class="text-[8px] font-black text-white/70 uppercase leading-none mb-0.5">Lvl</span>
+              <span class="text-xs font-bold text-white/70 uppercase leading-none mb-0.5">Lvl</span>
               <span class="text-xs font-bold text-white leading-none">{{ progress.level }}</span>
             </div>
           </UiRadialProgress>
@@ -66,11 +66,11 @@ const phaseTheme = computed(() => PHASE_THEME[props.insights.phase]);
       <div class="w-1/2 flex flex-col justify-between p-5 bg-card/40">
         
         <div class="flex flex-col gap-1 text-left">
-          <span class="text-[9px] font-black tracking-widest text-muted-foreground uppercase">Rank</span>
-          <h2 class="text-xl font-black tracking-tight text-foreground leading-none">
+          <span class="text-xs font-bold tracking-widest text-muted-foreground uppercase">Rank</span>
+          <h2 class="text-xl font-bold tracking-tight text-foreground leading-none">
             {{ progress.title }}
           </h2>
-          <span class="text-[10px] font-medium text-muted-foreground leading-tight line-clamp-2 mt-1" v-if="progress.description">
+          <span class="text-xs font-medium text-muted-foreground leading-tight line-clamp-2 mt-1" v-if="progress.description">
             {{ progress.description.split('.')[0] }}
           </span>
         </div>
@@ -82,23 +82,23 @@ const phaseTheme = computed(() => PHASE_THEME[props.insights.phase]);
         <div class="flex items-end justify-between w-full">
           <div class="flex flex-col gap-3 text-left">
             <div class="flex flex-col gap-1">
-               <span class="text-[9px] font-black tracking-widest text-muted-foreground uppercase">Phase</span>
+               <span class="text-xs font-bold tracking-widest text-muted-foreground uppercase">Phase</span>
                <div class="flex items-center">
                  <!-- Recovery week pill when deload is active -->
                  <UiBadge
                    v-if="deloadStore.active"
-                   class="text-[10px] uppercase tracking-wider px-1.5 py-0 text-orange-400 border border-orange-500/30 bg-orange-500/10"
+                   class="text-xs uppercase tracking-wider px-1.5 py-0 text-orange-400 border border-orange-500/30 bg-orange-500/10"
                  >
                    Recovery · {{ deloadStore.daysRemaining }}d
                  </UiBadge>
-                 <UiBadge v-else :class="phaseTheme" class="text-[10px] uppercase tracking-wider px-1.5 py-0">
+                 <UiBadge v-else :class="phaseTheme" class="text-xs uppercase tracking-wider px-1.5 py-0">
                    {{ insights.phase }}
                  </UiBadge>
                </div>
             </div>
             
             <div class="flex flex-col gap-0.5">
-              <span class="text-[9px] font-black tracking-widest text-muted-foreground uppercase">Weekly Sets</span>
+              <span class="text-xs font-bold tracking-widest text-muted-foreground uppercase">Weekly Sets</span>
               <span class="text-lg font-bold text-foreground leading-none">
                 {{ insights.fatigue.weeklyTotalSets[3] || 0 }}
               </span>

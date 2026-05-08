@@ -45,6 +45,7 @@ const { isResting, formattedTime: formattedRestTime } = storeToRefs(restTimerSto
 
 const { userProfile } = storeToRefs(profileStore);
 const { exerciseLogs } = storeToRefs(logsStore);
+const { isInitialized: isSummaryReady } = storeToRefs(summaryStore);
 
 const isAIPanelOpen = ref(false);
 
@@ -378,7 +379,7 @@ async function saveLog() {
             </UiButton>
           </template>
           
-          <div class="px-3 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">
+          <div class="px-3 py-2 text-xs font-bold uppercase tracking-widest text-muted-foreground/50">
             Quick Edit
           </div>
           
@@ -394,7 +395,7 @@ async function saveLog() {
 
           <div class="h-px bg-white/5 my-1 mx-3"></div>
           
-          <div class="px-3 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">
+          <div class="px-3 py-2 text-xs font-bold uppercase tracking-widest text-muted-foreground/50">
             Data
           </div>
 
@@ -419,9 +420,15 @@ async function saveLog() {
 
     <!-- Unified Journey HUD -->
     <UserProgressCard 
+      v-if="isSummaryReady"
       :progress="userProgress" 
       :insights="trainingInsights" 
       @click="$router.push('/training-insights')" 
+    />
+    <!-- Skeleton placeholder while summaries load -->
+    <div
+      v-else
+      class="w-[calc(100%-2rem)] mx-4 mt-4 mb-0 h-48 rounded-xl bg-card ring-1 ring-white/5 animate-pulse"
     />
 
     <!-- Logs List -->
@@ -481,7 +488,7 @@ async function saveLog() {
         <!-- Exercise Stats -->
         <div
           v-if="exerciseStats && (exerciseStats.weightHistory.length >= 2 || exerciseStats.repsHistory.length >= 2)"
-          class="flex gap-3 p-3 rounded-2xl bg-card/40 border border-white/5 backdrop-blur-sm"
+          class="flex gap-3 p-3 rounded-xl bg-card/40 border border-white/5 backdrop-blur-sm"
         >
           <UiSparkline
             v-if="exerciseStats.weightHistory.length >= 2"
@@ -517,7 +524,7 @@ async function saveLog() {
         <!-- RPE Slider -->
         <div class="space-y-3 px-1 mt-2">
           <div class="flex items-center justify-between">
-            <span class="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Effort (RPE)</span>
+            <span class="text-xs font-bold uppercase tracking-widest text-muted-foreground/60">Effort (RPE)</span>
             <span class="text-xs font-bold text-primary">{{ rpeLabel }}</span>
           </div>
           <input 
@@ -530,7 +537,7 @@ async function saveLog() {
           />
         </div>
 
-        <UiButton class="w-full h-16 rounded-2xl text-lg mt-4" @click="saveLog">
+        <UiButton class="w-full h-16 rounded-xl text-lg mt-4" @click="saveLog">
           Save Set
         </UiButton>
       </div>

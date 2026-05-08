@@ -14,6 +14,7 @@ import {
 } from "reka-ui";
 import { computed, nextTick, watch } from "vue";
 import { useKeyboardHeight } from "@/composables/useKeyboardHeight";
+import { uiIconButtonClass } from "@/components/ui/styles";
 import { cn } from "@/lib/utils";
 
 const props = defineProps<
@@ -73,8 +74,8 @@ watch(
             </DialogTitle>
             <div v-else class="flex-1" />
             
-            <DialogClose class="rounded-full p-2.5 bg-white/5 hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-primary active:scale-95">
-              <X class="w-5 h-5 text-muted-foreground hover:text-foreground" />
+            <DialogClose :class="uiIconButtonClass">
+              <X class="w-5 h-5 text-muted-foreground" />
               <span class="sr-only">Close</span>
             </DialogClose>
           </div>

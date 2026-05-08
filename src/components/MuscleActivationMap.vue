@@ -122,6 +122,7 @@ const viewOptions = [
 ] as const;
 
 const currentView = computed(() => views.value[currentViewIndex.value]!);
+const isMapImageLoaded = ref(false);
 
 const isDetailOpen = computed({
   get: () => selectedMuscle.value !== null,
@@ -215,12 +216,13 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
         <UiSegmentedControl
           :options="viewOptions"
           v-model="currentViewIndex"
+          variant="secondary"
         />
       </div>
     </div>
 
     <!-- Tap hint -->
-    <p :class="['text-center text-[9px] text-muted-foreground/40 mb-1 tracking-wider uppercase animate-pulse duration-2000', selectedMuscle ? 'invisible' : '']">Tap a muscle for details</p>
+    <p :class="['text-center text-xs text-muted-foreground/40 mb-1 tracking-wider uppercase animate-pulse duration-300', selectedMuscle ? 'invisible' : '']">Tap a muscle for details</p>
 
     <div class="relative w-full h-[72vh] overflow-hidden rounded-xl">
 
@@ -229,20 +231,29 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
         <div class="relative w-full aspect-[1/2] min-h-full">
 
           <!-- IMAGE LAYER (Screen blended on the stacking context root to drop the black background) -->
-          <div :key="'img-'+currentView.id" class="absolute inset-0 w-full h-full animate-in fade-in zoom-in-95 duration-500 mix-blend-screen">
+          <div :key="'img-'+currentView.id" class="absolute inset-0 w-full h-full animate-in fade-in zoom-in-95 duration-300 mix-blend-screen">
             <div class="absolute inset-0 overflow-hidden bg-transparent">
                <img 
                  src="@/assets/muscle_map_anime.png" 
-                 class="absolute inset-y-0 w-[200%] h-full max-w-none pointer-events-none opacity-[0.25] invert transition-all duration-700 ease-in-out object-fill"
+                 loading="eager"
+                 fetchpriority="high"
+                 class="absolute inset-y-0 w-[200%] h-full max-w-none pointer-events-none opacity-[0.25] invert transition-all duration-300 ease-in-out object-fill"
                  :class="currentView.alignImage"
                  :style="{ transform: currentView.offsetStyle }"
+                 @load="isMapImageLoaded = true"
+                 @error="isMapImageLoaded = true"
                />
             </div>
           </div>
 
           <!-- OVERLAY LAYER (Normal blending to preserve text legibility) -->
           <!-- @click deselects when tapping empty space on the map -->
-          <div :key="'overlay-'+currentView.id" class="absolute inset-0 w-full h-full animate-in fade-in zoom-in-95 duration-500" @click="selectedMuscle = null">
+          <div
+            :key="'overlay-'+currentView.id"
+            class="absolute inset-0 w-full h-full transition-opacity duration-200"
+            :class="isMapImageLoaded ? 'opacity-100' : 'opacity-0 pointer-events-none'"
+            @click="selectedMuscle = null"
+          >
         
         <!-- SVG Overlay for Connecting Lines -->
         <svg class="absolute inset-0 w-full h-full pointer-events-none z-0 overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -291,16 +302,16 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
              @click.stop="toggleMuscle(muscle.name)"
            >
               <span
-                class="text-[10px] sm:text-[12px] font-black uppercase tracking-[0.2em] leading-none mb-0.5 sm:mb-1 transition-colors duration-200"
+                class="text-xs sm:text-sm font-bold uppercase tracking-widest leading-none mb-0.5 sm:mb-1 transition-colors duration-200"
                 :class="selectedMuscle === muscle.name ? 'text-white' : 'text-foreground/90'"
               >
                 {{ muscle.name }}
               </span>
-              <span class="text-[8px] sm:text-[8.5px] font-mono text-muted-foreground uppercase tracking-[0.1em] bg-background/40 px-1 py-[1.5px] rounded backdrop-blur-md mb-0.5 whitespace-nowrap">
+              <span class="text-xs sm:text-xs font-mono text-muted-foreground uppercase tracking-wide bg-background/40 px-1 py-[1.5px] rounded backdrop-blur-md mb-0.5 whitespace-nowrap">
                 {{ getJargon(muscle.status?.landmark) }}
               </span>
-              <span class="text-[9.5px] sm:text-[11px] font-mono font-bold whitespace-nowrap opacity-90 mt-[1px]" :style="{ color: getLineColor(muscle.status?.landmark) }">
-                {{ muscle.status?.sets != null ? muscle.status.sets.toFixed(1) : '0' }} <span class="opacity-50 font-sans text-[7.5px] sm:text-[8.5px] font-normal tracking-wide">SETS/WK</span>
+              <span class="text-xs sm:text-sm font-mono font-bold whitespace-nowrap opacity-90 mt-[1px]" :style="{ color: getLineColor(muscle.status?.landmark) }">
+                {{ muscle.status?.sets != null ? muscle.status.sets.toFixed(1) : '0' }} <span class="opacity-50 font-sans text-xs sm:text-xs font-medium tracking-wide">SETS/WK</span>
               </span>
            </div>
 
@@ -315,8 +326,8 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
         <template #header>
           <!-- Header: name + landmark badge -->
           <div v-if="selectedDetail" class="flex items-center gap-2 px-5 pt-6 pb-4 border-b border-white/10">
-            <span class="text-base font-black uppercase tracking-widest flex-1">{{ selectedDetail.name }}</span>
-            <span :class="['text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full', getLandmarkBadge(selectedDetail.landmark)]">
+            <span class="text-base font-bold uppercase tracking-widest flex-1">{{ selectedDetail.name }}</span>
+            <span :class="['text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full', getLandmarkBadge(selectedDetail.landmark)]">
               {{ getJargon(selectedDetail.landmark) }}
             </span>
           </div>
@@ -326,7 +337,7 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
           <!-- Volume Section -->
           <div class="px-5 pt-4 pb-4 border-b border-white/10 space-y-2">
             <div class="flex items-center justify-between mb-1">
-              <div class="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/60">
+              <div class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground/60">
                 <BarChart2 class="w-3.5 h-3.5" />
                 <span>Volume</span>
               </div>
@@ -349,13 +360,13 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
               <div class="h-full bg-red-500/30 shadow-[inset_0_0_8px_rgba(239,68,68,0.4)]" :style="{ width: (100 - selectedDetail.bar.mrvPct) + '%' }"></div>
               <!-- Current position needle -->
               <div
-                class="absolute top-0 h-full w-[2px] bg-white shadow-[0_0_5px_rgba(255,255,255,0.9)] transition-all duration-500 z-10"
+                class="absolute top-0 h-full w-[2px] bg-white shadow-[0_0_5px_rgba(255,255,255,0.9)] transition-all duration-300 z-10"
                 :style="{ left: selectedDetail.bar.currentPct + '%' }"
               ></div>
             </div>
 
             <!-- Bar axis labels -->
-            <div class="relative h-3.5 text-[8px] text-muted-foreground/50 font-mono select-none mt-1">
+            <div class="relative h-3.5 text-xs text-muted-foreground/50 font-mono select-none mt-1">
               <span class="absolute -translate-x-1/2" :style="{ left: selectedDetail.bar.mevPct + '%' }">MEV {{ selectedDetail.targets.mev }}</span>
               <span class="absolute -translate-x-1/2" :style="{ left: ((selectedDetail.bar.mavLowPct + selectedDetail.bar.mavHighPct) / 2) + '%' }">MAV {{ selectedDetail.targets.mavLow }}–{{ selectedDetail.targets.mavHigh }}</span>
               <span class="absolute -translate-x-1/2" :style="{ left: selectedDetail.bar.mrvPct + '%' }">MRV {{ selectedDetail.targets.mrv }}</span>
@@ -365,11 +376,11 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
           <!-- Recovery Section -->
           <div class="px-5 pt-4 pb-4 border-b border-white/10 space-y-2">
             <div class="flex items-center justify-between mb-1">
-              <div class="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/60">
+              <div class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground/60">
                 <Timer class="w-3.5 h-3.5" />
                 <span>Recovery</span>
               </div>
-              <div class="flex items-center gap-1 text-[10px] font-bold" :class="selectedDetail.recoveryReady ? 'text-green-400' : 'text-yellow-400'">
+              <div class="flex items-center gap-1 text-xs font-bold" :class="selectedDetail.recoveryReady ? 'text-green-400' : 'text-yellow-400'">
                 <CheckCircle2 v-if="selectedDetail.recoveryReady" class="w-3.5 h-3.5" />
                 <Hourglass v-else class="w-3.5 h-3.5" />
                 <span>{{ selectedDetail.recoveryReady ? 'Ready to train' : 'Still recovering' }}</span>
@@ -378,22 +389,22 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
             <template v-if="selectedDetail.hoursSinceLastTrained !== null">
               <div class="h-1.5 bg-white/10 rounded-full overflow-hidden">
                 <div
-                  class="h-full rounded-full transition-all duration-700"
+                  class="h-full rounded-full transition-all duration-300"
                   :class="selectedDetail.recoveryReady ? 'bg-green-400' : 'bg-yellow-400'"
                   :style="{ width: Math.min(100, (selectedDetail.hoursSinceLastTrained / selectedDetail.recoveryHours) * 100) + '%' }"
                 ></div>
               </div>
-              <div class="flex justify-between text-[8.5px] text-muted-foreground/50 font-mono mt-1">
+              <div class="flex justify-between text-xs text-muted-foreground/50 font-mono mt-1">
                 <span>{{ selectedDetail.hoursSinceLastTrained }}h elapsed</span>
                 <span>{{ selectedDetail.recoveryHours }}h needed</span>
               </div>
             </template>
-            <p v-else class="text-[9px] text-muted-foreground/40 italic">Not trained recently</p>
+            <p v-else class="text-xs text-muted-foreground/40 italic">Not trained recently</p>
           </div>
 
           <!-- Frequency Row -->
           <div class="flex items-center justify-between px-5 py-4 pb-8">
-            <div class="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/60">
+            <div class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground/60">
               <CalendarDays class="w-3.5 h-3.5" />
               <span>Frequency</span>
             </div>

@@ -6,6 +6,7 @@ import { computed, ref, watch } from "vue";
 import ClickableList, { type ClickableListItem } from "@/components/ClickableList.vue";
 import UiBottomSheet from "@/components/ui/UiBottomSheet.vue";
 import UiCard from "@/components/ui/UiCard.vue";
+import { uiIconButtonClass } from "@/components/ui/styles";
 import { useToast } from "@/composables/useToast";
 import type { AiResponseData } from "@/services/ai";
 import { useAiStore } from "@/stores/ai";
@@ -200,19 +201,21 @@ function toWorkoutListItems(exercises: DisplayExercise[]): WorkoutListItem[] {
         <span class="text-2xl font-bold tracking-tight">AI Coach</span>
         <div class="flex items-center gap-1">
           <button
+            type="button"
             v-if="allInsights.length > 0 && !aiStore.isLoading"
-            class="rounded-full p-2.5 bg-white/5 hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-primary active:scale-95"
+            :class="uiIconButtonClass"
             title="Clear chat history"
             @click="clearAndReset"
           >
-            <Trash2 class="w-4 h-4 text-muted-foreground hover:text-foreground" />
+            <Trash2 class="w-4 h-4 text-muted-foreground" />
             <span class="sr-only">Clear chat history</span>
           </button>
           <button
-            class="rounded-full p-2.5 bg-white/5 hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-primary active:scale-95"
+            type="button"
+            :class="uiIconButtonClass"
             @click="internalOpen = false"
           >
-            <X class="w-5 h-5 text-muted-foreground hover:text-foreground" />
+            <X class="w-5 h-5 text-muted-foreground" />
             <span class="sr-only">Close</span>
           </button>
         </div>
@@ -236,23 +239,23 @@ function toWorkoutListItems(exercises: DisplayExercise[]): WorkoutListItem[] {
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <Sparkles class="w-3.5 h-3.5 text-primary" />
-              <span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              <span class="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                 {{ insight.isLatest ? 'Latest Insight' : 'Insight' }}
               </span>
             </div>
-            <span class="text-[10px] text-muted-foreground font-semibold">{{ formatTime(insight.timestamp) }}</span>
+            <span class="text-xs text-muted-foreground font-semibold">{{ formatTime(insight.timestamp) }}</span>
           </div>
           
           <template v-if="insight.parsedData">
             <div 
-              class="text-sm leading-relaxed [&_strong]:text-primary [&_strong]:font-black"
+              class="text-sm leading-relaxed [&_strong]:text-primary [&_strong]:font-bold"
               :class="insight.isLatest ? 'text-foreground/90' : 'text-foreground/50'"
               v-html="renderMarkdown(insight.parsedData.coachMessage)"
             />
             
             <!-- Recommended Workout Cards -->
             <div v-if="insight.groupedWorkout?.length" class="mt-4 flex flex-col gap-2">
-              <p class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 mb-0.5 ml-1">Today's Workout</p>
+              <p class="text-xs font-bold uppercase tracking-widest text-muted-foreground/70 mb-0.5 ml-1">Today's Workout</p>
               
               <UiCard class="flex flex-col bg-card/40 border-white/5 divide-y divide-white/5 overflow-hidden">
                 <div 
@@ -261,7 +264,7 @@ function toWorkoutListItems(exercises: DisplayExercise[]): WorkoutListItem[] {
                   class="flex flex-col divide-y divide-white/5"
                 >
                   <!-- Superset Label -->
-                  <div v-if="group.isSuperset" class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/80 bg-muted/20 px-4 py-1.5 flex items-center gap-2">
+                  <div v-if="group.isSuperset" class="text-xs font-bold tracking-widest uppercase text-muted-foreground/80 bg-muted/20 px-4 py-1.5 flex items-center gap-2">
                     <Sparkles class="w-3 h-3 opacity-60" /> Superset {{ group.id }}
                   </div>
 
@@ -279,7 +282,7 @@ function toWorkoutListItems(exercises: DisplayExercise[]): WorkoutListItem[] {
           <!-- Legacy Fallback -->
           <template v-else>
             <div 
-              class="text-sm leading-relaxed [&_strong]:text-primary [&_strong]:font-black"
+              class="text-sm leading-relaxed [&_strong]:text-primary [&_strong]:font-bold"
               :class="insight.isLatest ? 'text-foreground/90' : 'text-foreground/50'"
               v-html="renderMarkdown(insight.rawContent)"
             />
@@ -288,7 +291,8 @@ function toWorkoutListItems(exercises: DisplayExercise[]): WorkoutListItem[] {
           <!-- Scratchpad collapsible -->
           <div v-if="insight.parsedData?.scratchpad" class="mt-1">
             <button
-              class="flex items-center gap-1 text-[10px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors"
+              type="button"
+              class="flex items-center gap-1 text-xs text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-lg"
               @click="openScratchpads = openScratchpads.includes(insight.id) ? openScratchpads.filter(id => id !== insight.id) : [...openScratchpads, insight.id]"
             >
               <ChevronDown
@@ -299,7 +303,7 @@ function toWorkoutListItems(exercises: DisplayExercise[]): WorkoutListItem[] {
             </button>
             <pre
               v-if="openScratchpads.includes(insight.id)"
-              class="text-[10px] text-muted-foreground/50 bg-muted/20 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all mt-1.5"
+              class="text-xs text-muted-foreground/50 bg-muted/20 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all mt-1.5"
             >{{ insight.parsedData.scratchpad }}</pre>
           </div>
 

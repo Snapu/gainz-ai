@@ -62,7 +62,7 @@ const emit = defineEmits<(e: "select", item: ClickableListItem) => void>();
         </div>
       </div>
 
-      <div v-if="item.description" class="mt-1.5 text-left text-[11px] italic text-muted-foreground/60">
+      <div v-if="item.description" class="mt-1.5 text-left text-sm italic text-muted-foreground/60">
         {{ item.description }}
       </div>
     </button>

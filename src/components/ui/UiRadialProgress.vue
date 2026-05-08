@@ -53,7 +53,7 @@ const center = computed(() => props.size / 2);
         stroke="currentColor"
         :stroke-width="strokeWidth"
         stroke-linecap="round"
-        :class="[progressClass, 'transition-all duration-1000 ease-out']"
+        :class="[progressClass, 'transition-all duration-300 ease-out']"
         :stroke-dasharray="circumference"
         :stroke-dashoffset="strokeDashoffset"
       />

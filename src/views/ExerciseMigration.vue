@@ -130,7 +130,7 @@ async function applyDecision(
             <span
               v-for="previewLog in candidate.recentLogs"
               :key="`${candidate.exerciseName}-${previewLog.loggedAt.toISOString()}`"
-              class="rounded-full border border-white/8 bg-card/60 px-3 py-1 text-[11px] font-medium text-foreground/80"
+              class="rounded-full border border-white/8 bg-card/60 px-3 py-1 text-sm font-medium text-foreground/80"
             >
               {{ formatPreviewLog(previewLog) }}
             </span>

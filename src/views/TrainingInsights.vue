@@ -46,7 +46,7 @@ type Tab = "map" | "phase" | "exercises";
 const activeTab = ref<Tab>("map");
 const tabOptions = [
   { id: "map", label: "Muscles" },
-  { id: "phase", label: "Training Phase" },
+  { id: "phase", label: "Phase" },
   { id: "exercises", label: "Exercises" },
 ] as const;
 
@@ -362,12 +362,12 @@ function clampPct(value: number): number {
 <UiCard class="p-4 overflow-visible">
   <div class="flex items-start justify-between gap-2 mb-3">
     <div>
-      <p class="text-xs font-black uppercase tracking-wide text-foreground/90">Training Phase</p>
-      <p class="text-[11px] text-foreground/60 mt-0.5">Systemic and deload status</p>
+      <p class="text-xs font-bold uppercase tracking-wide text-foreground/90 whitespace-nowrap">Training Phase</p>
+      <p class="text-sm text-foreground/60 mt-0.5">Systemic and deload status</p>
     </div>
     <div class="flex flex-wrap justify-end gap-1.5">
       <span
-        class="text-[10px] px-2 py-0.5 rounded-full border font-semibold uppercase tracking-wider"
+        class="text-xs px-2 py-0.5 rounded-full border font-semibold uppercase tracking-wider"
         :class="{
           'text-orange-400 border-orange-500/30 bg-orange-500/10': insights.phase === 'Deload',
           'text-emerald-400 border-emerald-500/30 bg-emerald-500/10': insights.phase === 'Build',
@@ -378,7 +378,7 @@ function clampPct(value: number): number {
         Phase: {{ insights.phase }}
       </span>
       <span
-        class="text-[10px] px-2 py-0.5 rounded-full border font-semibold uppercase tracking-wider"
+        class="text-xs px-2 py-0.5 rounded-full border font-semibold uppercase tracking-wider"
         :class="deloadStatusToneClass"
       >
         Deload: {{ deloadStatusLabel }}
@@ -389,14 +389,14 @@ function clampPct(value: number): number {
   <div class="rounded-lg border border-white/10 bg-white/[0.03] p-3 mb-3">
     <div class="flex items-start justify-between gap-2">
       <div>
-        <p class="text-[10px] uppercase tracking-wide text-foreground/50">ACWR Zone</p>
-        <p class="text-base font-black text-foreground/90 mt-0.5">
+        <p class="text-xs uppercase tracking-wide text-foreground/50">ACWR Zone</p>
+        <p class="text-base font-bold text-foreground/90 mt-0.5">
           {{ acwrValueLabel }}
           <span class="text-xs font-semibold text-foreground/65">({{ acwrZone.range }})</span>
         </p>
       </div>
       <span
-        class="text-[10px] px-2 py-0.5 rounded-full border font-semibold uppercase tracking-wider"
+        class="text-xs px-2 py-0.5 rounded-full border font-semibold uppercase tracking-wider"
         :class="acwrZone.toneClass"
       >
         {{ acwrZone.label }}
@@ -404,24 +404,24 @@ function clampPct(value: number): number {
     </div>
     <div class="mt-2 h-1.5 rounded-full bg-white/10 overflow-hidden">
       <div
-        class="h-full rounded-full transition-all duration-500 bg-cyan-300/80"
+        class="h-full rounded-full transition-all duration-300 bg-cyan-300/80"
         :style="{ width: `${acwrGaugePercent}%` }"
       ></div>
     </div>
-    <p class="mt-2 text-[11px] text-foreground/60 leading-relaxed">{{ acwrZone.detail }}</p>
+    <p class="mt-2 text-sm text-foreground/60 leading-relaxed">{{ acwrZone.detail }}</p>
   </div>
 
   <div class="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5">
     <div class="flex items-center justify-between gap-2">
       <div>
-        <p class="text-[10px] uppercase tracking-wide text-foreground/50">Deload Status</p>
+        <p class="text-xs uppercase tracking-wide text-foreground/50">Deload Status</p>
         <p class="text-xs text-foreground/75 mt-0.5">{{ deloadStatusNote }}</p>
       </div>
       <UiButton
         v-if="insights.deloadStatus === 'active'"
         variant="ghost"
         size="sm"
-        class="text-[10px] text-foreground/50 border border-white/10 hover:text-red-400 hover:border-red-400/30"
+        class="text-xs text-foreground/50 border border-white/10 hover:text-red-400 hover:border-red-400/30"
         @click="deloadStore.cancelDeload()"
       >
         Stop Deload Early
@@ -431,21 +431,21 @@ function clampPct(value: number): number {
     <div v-if="insights.deloadStatus === 'active'" class="mt-2">
       <div class="h-2 rounded-full bg-white/10 overflow-hidden">
         <div
-          class="h-full rounded-full bg-orange-400/70 transition-all duration-500"
+          class="h-full rounded-full bg-orange-400/70 transition-all duration-300"
           :style="{ width: `${deloadStore.progressPercent ?? 0}%` }"
         ></div>
       </div>
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
-      <div class="rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-2">
-        <p class="text-[10px] uppercase tracking-wide text-foreground/50">Ends At</p>
+      <div class="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-2">
+        <p class="text-xs uppercase tracking-wide text-foreground/50">Ends At</p>
         <p class="text-xs font-semibold text-foreground/80">
           {{ insights.deloadEndsAt ? new Date(insights.deloadEndsAt).toLocaleDateString() : "N/A" }}
         </p>
       </div>
-      <div class="rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-2">
-        <p class="text-[10px] uppercase tracking-wide text-foreground/50">Time Remaining</p>
+      <div class="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-2">
+        <p class="text-xs uppercase tracking-wide text-foreground/50">Time Remaining</p>
         <p class="text-xs font-semibold text-foreground/80">
           {{ insights.deloadTimeRemainingMs === null ? "N/A" : `${Math.ceil(insights.deloadTimeRemainingMs / (24 * 60 * 60 * 1000))}d` }}
         </p>
@@ -453,17 +453,17 @@ function clampPct(value: number): number {
     </div>
 
     <div v-if="insights.deloadTriggerSnapshot" class="mt-2">
-      <p class="text-[10px] text-foreground/50 mb-1">Latest deload trigger snapshot:</p>
+      <p class="text-xs text-foreground/50 mb-1">Latest deload trigger snapshot:</p>
       <div class="flex flex-wrap gap-1.5">
         <span
           v-for="trigger in insights.deloadTriggerSnapshot.triggeredBy"
           :key="`deload-${trigger}`"
-          class="text-[9px] px-1.5 py-0.5 rounded border border-orange-500/20 bg-orange-500/10 text-orange-300"
+          class="text-xs px-1.5 py-0.5 rounded border border-orange-500/20 bg-orange-500/10 text-orange-300"
         >
           {{ formatTriggerLabel(trigger) }}
         </span>
         <span
-          class="text-[9px] px-1.5 py-0.5 rounded border border-white/15 bg-white/[0.03] text-foreground/60"
+          class="text-xs px-1.5 py-0.5 rounded border border-white/15 bg-white/[0.03] text-foreground/60"
         >
           Risk score {{ insights.deloadTriggerSnapshot.riskScore }}
         </span>
@@ -476,52 +476,52 @@ function clampPct(value: number): number {
 <UiCard class="p-4 overflow-visible">
   <div class="flex items-center justify-between gap-2 mb-3">
     <div>
-      <p class="text-xs font-black uppercase tracking-wide text-foreground/90">Fatigue Detection</p>
-      <p class="text-[11px] text-foreground/60 mt-0.5">Complete model output</p>
+      <p class="text-xs font-bold uppercase tracking-wide text-foreground/90">Fatigue Detection</p>
+      <p class="text-sm text-foreground/60 mt-0.5">Complete model output</p>
     </div>
-    <span class="text-[10px] px-2 py-0.5 rounded-full border border-white/10 font-semibold uppercase tracking-wider text-foreground/75">
+    <span class="text-xs px-2 py-0.5 rounded-full border border-white/10 font-semibold uppercase tracking-wider text-foreground/75">
       {{ insights.fatigue.hasSufficientHistory ? "4-week history ready" : "insufficient history" }}
     </span>
   </div>
 
   <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
     <div class="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-      <p class="text-[10px] uppercase tracking-wide text-foreground/50">Should Deload</p>
+      <p class="text-xs uppercase tracking-wide text-foreground/50">Should Deload</p>
       <p class="text-sm font-bold" :class="insights.fatigue.shouldDeload ? 'text-orange-300' : 'text-emerald-300'">
         {{ insights.fatigue.shouldDeload ? "Yes" : "No" }}
       </p>
     </div>
     <div class="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-      <p class="text-[10px] uppercase tracking-wide text-foreground/50">Risk Score</p>
+      <p class="text-xs uppercase tracking-wide text-foreground/50">Risk Score</p>
       <p class="text-sm font-bold" :class="fatigueRiskToneClass">
         {{ insights.fatigue.riskScore }}/7 ({{ fatigueRiskLabel }})
       </p>
     </div>
     <div class="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-      <p class="text-[10px] uppercase tracking-wide text-foreground/50">Primary Reason</p>
+      <p class="text-xs uppercase tracking-wide text-foreground/50">Primary Reason</p>
       <p class="text-xs font-semibold text-foreground/80">
         {{ insights.fatigue.reason ?? "No active fatigue trigger reason" }}
       </p>
     </div>
     <div class="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-      <p class="text-[10px] uppercase tracking-wide text-foreground/50">Declining Exercises</p>
+      <p class="text-xs uppercase tracking-wide text-foreground/50">Declining Exercises</p>
       <p class="text-sm font-bold text-foreground/85">{{ insights.fatigue.decliningExercises }}</p>
     </div>
   </div>
 
   <div class="mt-3">
-    <p class="text-[10px] text-foreground/50 mb-1">Triggered by</p>
+    <p class="text-xs text-foreground/50 mb-1">Triggered by</p>
     <div class="flex flex-wrap gap-1.5">
       <span
         v-for="trigger in insights.fatigue.triggeredBy"
         :key="`fatigue-${trigger}`"
-        class="text-[9px] px-1.5 py-0.5 rounded border border-orange-500/20 bg-orange-500/10 text-orange-300"
+        class="text-xs px-1.5 py-0.5 rounded border border-orange-500/20 bg-orange-500/10 text-orange-300"
       >
         {{ formatTriggerLabel(trigger) }}
       </span>
       <span
         v-if="insights.fatigue.triggeredBy.length === 0"
-        class="text-[10px] text-foreground/45"
+        class="text-xs text-foreground/45"
       >
         No active triggers
       </span>
@@ -529,28 +529,28 @@ function clampPct(value: number): number {
   </div>
 
   <div class="mt-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5">
-    <p class="text-[10px] uppercase tracking-wide text-foreground/50 mb-2">Weekly Load Window</p>
+    <p class="text-xs uppercase tracking-wide text-foreground/50 mb-2">Weekly Load Window</p>
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
       <div
         v-for="row in fatigueWeekRows"
         :key="row.key"
-        class="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1.5"
+        class="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1.5"
       >
-        <p class="text-[10px] font-semibold text-foreground/70">{{ row.label }}</p>
-        <p class="text-[10px] text-foreground/55 mt-0.5">Sets: {{ row.sets }}</p>
-        <p class="text-[10px] text-foreground/55">Tonnage: {{ row.tonnage.toFixed(0) }}</p>
+        <p class="text-xs font-semibold text-foreground/70">{{ row.label }}</p>
+        <p class="text-xs text-foreground/55 mt-0.5">Sets: {{ row.sets }}</p>
+        <p class="text-xs text-foreground/55">Tonnage: {{ row.tonnage.toFixed(0) }}</p>
       </div>
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
-      <div class="rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-2">
-        <p class="text-[10px] uppercase tracking-wide text-foreground/50">Sets vs prior avg</p>
+      <div class="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-2">
+        <p class="text-xs uppercase tracking-wide text-foreground/50">Sets vs prior avg</p>
         <p class="text-xs font-semibold text-foreground/80">
           {{ weeklyDeltaLabel }} | ratio {{ insights.fatigue.loadWindow.sets.ratioVsPriorAvg ?? "N/A" }}x
         </p>
       </div>
-      <div class="rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-2">
-        <p class="text-[10px] uppercase tracking-wide text-foreground/50">Tonnage vs prior avg</p>
+      <div class="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-2">
+        <p class="text-xs uppercase tracking-wide text-foreground/50">Tonnage vs prior avg</p>
         <p class="text-xs font-semibold text-foreground/80">
           {{ tonnageDeltaPct === null ? "Not enough history" : `${tonnageDeltaPct > 0 ? "+" : ""}${tonnageDeltaPct}%` }}
           | ratio {{ insights.fatigue.loadWindow.tonnage.ratioVsPriorAvg ?? "N/A" }}x
@@ -568,31 +568,31 @@ function clampPct(value: number): number {
       <template v-else-if="activeTab === 'exercises'">
         <UiCard class="p-4 overflow-visible">
           <div class="flex items-center justify-between gap-2">
-            <p class="text-xs font-black uppercase tracking-wide text-foreground/90">
+            <p class="text-xs font-bold uppercase tracking-wide text-foreground/90">
               Exercise Metrics
             </p>
-            <span class="text-[10px] text-foreground/60">
+            <span class="text-xs text-foreground/60">
               {{ totalExerciseCount }} tracked
             </span>
           </div>
 
-          <p class="mt-3 text-[11px] text-foreground/60 leading-relaxed">{{ exerciseStatusNote }}</p>
+          <p class="mt-3 text-sm text-foreground/60 leading-relaxed">{{ exerciseStatusNote }}</p>
 
           <div class="grid grid-cols-2 gap-2 mt-3">
             <div class="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-              <p class="text-[10px] uppercase tracking-wide text-foreground/50">Plateaus</p>
+              <p class="text-xs uppercase tracking-wide text-foreground/50">Plateaus</p>
               <p class="text-sm font-bold text-orange-300">{{ plateauExerciseCount }}</p>
             </div>
             <div class="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-              <p class="text-[10px] uppercase tracking-wide text-foreground/50">Improving</p>
+              <p class="text-xs uppercase tracking-wide text-foreground/50">Improving</p>
               <p class="text-sm font-bold text-emerald-300">{{ improvingExerciseCount }}</p>
             </div>
             <div class="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-              <p class="text-[10px] uppercase tracking-wide text-foreground/50">Dropping</p>
+              <p class="text-xs uppercase tracking-wide text-foreground/50">Dropping</p>
               <p class="text-sm font-bold text-red-300">{{ droppingExerciseCount }}</p>
             </div>
             <div class="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-              <p class="text-[10px] uppercase tracking-wide text-foreground/50">Avg best RPE</p>
+              <p class="text-xs uppercase tracking-wide text-foreground/50">Avg best RPE</p>
               <p class="text-sm font-bold text-foreground/85">
                 {{ averageBestRPE === null ? "N/A" : averageBestRPE.toFixed(1) }}
               </p>
@@ -605,14 +605,14 @@ function clampPct(value: number): number {
             <div
               v-for="metric in exerciseMetrics"
               :key="metric.name"
-              class="px-3 py-2.5 transition-all duration-200 hover:bg-white/[0.04] active:bg-white/[0.06] select-none"
+              class="px-3 py-2.5 transition-all duration-200 hover:bg-white/[0.05] active:bg-white/[0.08] select-none"
             >
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
                   <p class="text-xs font-semibold text-foreground/90 truncate">{{ metric.name }}</p>
                   <div class="mt-1 flex items-center gap-2">
                     <span
-                      class="text-[9px] px-1.5 py-0.5 rounded-full border"
+                      class="text-xs px-1.5 py-0.5 rounded-full border"
                       :class="{
                         'bg-orange-500/10 text-orange-300 border-orange-500/30': metric.status === 'plateau',
                         'bg-emerald-500/10 text-emerald-300 border-emerald-500/30': metric.status === 'improving',
@@ -622,7 +622,7 @@ function clampPct(value: number): number {
                     >
                       {{ metric.status === "plateau" ? "Plateau" : metric.status === "improving" ? "Improving" : metric.status === "dropping" ? "Dropping" : "Stable" }}
                     </span>
-                    <span class="text-[10px] text-foreground/45">
+                    <span class="text-xs text-foreground/45">
                       Best RPE: {{ metric.bestRPE === null ? "N/A" : metric.bestRPE.toFixed(1) }}
                     </span>
                   </div>
@@ -630,13 +630,13 @@ function clampPct(value: number): number {
                     <span
                       v-for="group in metric.learnedMuscleGroups"
                       :key="`${metric.name}-${group}`"
-                      class="text-[9px] px-1.5 py-0.5 rounded border border-white/15 bg-white/[0.03] text-foreground/55"
+                      class="text-xs px-1.5 py-0.5 rounded border border-white/15 bg-white/[0.03] text-foreground/55"
                     >
                       {{ group }}
                     </span>
                     <span
                       v-if="metric.learnedMuscleGroups.length === 0"
-                      class="text-[9px] text-foreground/40"
+                      class="text-xs text-foreground/40"
                     >
                       No muscle tags yet
                     </span>
@@ -648,7 +648,7 @@ function clampPct(value: number): number {
                     e1RM {{ metric.e1rm.toFixed(1) }}
                   </p>
                   <p
-                    class="text-right text-[10px]"
+                    class="text-right text-xs"
                     :class="{
                       'text-emerald-300': metric.deltaPct !== null && metric.deltaPct > 0,
                       'text-red-300': metric.deltaPct !== null && metric.deltaPct < 0,
@@ -659,7 +659,7 @@ function clampPct(value: number): number {
                   </p>
                   <div class="mt-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
                     <div
-                      class="h-full rounded-full transition-all duration-500"
+                      class="h-full rounded-full transition-all duration-300"
                       :class="metric.deltaPct !== null && metric.deltaPct >= 2
                         ? 'bg-emerald-400/85'
                         : metric.deltaPct !== null && metric.deltaPct <= -2

@@ -82,7 +82,7 @@ const chartData = computed(() => {
           :x="width - padding.right"
           :y="chartData.maxLineY - 3"
           text-anchor="end"
-          class="text-[9px] font-bold"
+          class="text-xs font-bold"
           fill="oklch(0.7 0.05 60)"
         >
           MAX {{ maxValue }}
@@ -110,7 +110,7 @@ const chartData = computed(() => {
         v-if="label"
         :x="padding.left"
         :y="padding.top - 2"
-        class="text-[9px] font-bold uppercase"
+        class="text-xs font-bold uppercase"
         fill="oklch(0.55 0 0)"
       >
         {{ label }}
@@ -124,7 +124,7 @@ const chartData = computed(() => {
       :y="height / 2"
       text-anchor="middle"
       dominant-baseline="central"
-      class="text-[10px] fill-muted-foreground"
+      class="text-xs fill-muted-foreground"
     >
       —
     </text>

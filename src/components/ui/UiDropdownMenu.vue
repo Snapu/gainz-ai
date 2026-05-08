@@ -23,7 +23,7 @@ const props = defineProps<{
         :align="align || 'end'"
         :side-offset="8"
         :class="cn(
-          'z-50 min-w-[12rem] overflow-hidden rounded-2xl border border-white/10 bg-background/95 p-2 text-foreground shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95 duration-200',
+          'z-50 min-w-[12rem] overflow-hidden rounded-xl border border-white/10 bg-background/95 p-2 text-foreground shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95 duration-200',
         )"
       >
         <slot />

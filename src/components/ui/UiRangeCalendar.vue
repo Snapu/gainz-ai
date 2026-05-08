@@ -28,11 +28,11 @@ const now = today(getLocalTimeZone());
     :week-starts-on="1"
     fixed-weeks
     v-slot="{ grid, weekDays }"
-    class="rounded-2xl bg-card/60 border border-white/5 p-3 backdrop-blur-md w-full"
+    class="rounded-xl bg-card/60 border border-white/5 p-3 backdrop-blur-md w-full"
   >
     <RangeCalendarHeader class="flex items-center justify-between mb-1">
       <RangeCalendarPrev
-        class="inline-flex items-center justify-center rounded-xl w-9 h-9 bg-transparent hover:bg-white/10 active:scale-90 transition-all cursor-pointer text-muted-foreground hover:text-foreground outline-none"
+        class="inline-flex items-center justify-center rounded-xl w-9 h-9 bg-transparent hover:bg-white/10 active:scale-95 transition-all cursor-pointer text-muted-foreground hover:text-foreground outline-none"
       >
         <ChevronLeft class="w-5 h-5" />
       </RangeCalendarPrev>
@@ -40,7 +40,7 @@ const now = today(getLocalTimeZone());
       <RangeCalendarHeading class="text-sm font-bold text-foreground tracking-tight" />
 
       <RangeCalendarNext
-        class="inline-flex items-center justify-center rounded-xl w-9 h-9 bg-transparent hover:bg-white/10 active:scale-90 transition-all cursor-pointer text-muted-foreground hover:text-foreground outline-none"
+        class="inline-flex items-center justify-center rounded-xl w-9 h-9 bg-transparent hover:bg-white/10 active:scale-95 transition-all cursor-pointer text-muted-foreground hover:text-foreground outline-none"
       >
         <ChevronRight class="w-5 h-5" />
       </RangeCalendarNext>
@@ -53,7 +53,7 @@ const now = today(getLocalTimeZone());
             <RangeCalendarHeadCell
               v-for="day in weekDays"
               :key="day"
-              class="flex-1 text-center text-[11px] font-bold uppercase tracking-widest text-muted-foreground pb-2"
+              class="flex-1 text-center text-sm font-bold uppercase tracking-widest text-muted-foreground pb-2"
             >
               {{ day }}
             </RangeCalendarHeadCell>
@@ -77,8 +77,8 @@ const now = today(getLocalTimeZone());
                 :month="month.value"
                 class="relative inline-flex items-center justify-center rounded-xl w-full aspect-square text-sm font-semibold transition-all cursor-pointer
                   text-foreground/70 hover:bg-white/10 hover:text-foreground
-                  data-[today]:text-primary data-[today]:font-black
-                  data-[selected]:bg-primary data-[selected]:text-primary-foreground data-[selected]:font-bold data-[selected]:shadow-lg data-[selected]:shadow-primary/20
+                  data-[today]:bg-primary/25 data-[today]:ring-2 data-[today]:ring-primary data-[today]:text-primary data-[today]:font-bold
+                  data-[selected]:bg-primary data-[selected]:text-primary-foreground data-[selected]:font-bold data-[selected]:shadow-lg data-[selected]:shadow-lg/20
                   data-[highlighted]:bg-primary/15 data-[highlighted]:text-primary
                   data-[selection-start]:rounded-l-xl data-[selection-start]:bg-primary data-[selection-start]:text-primary-foreground
                   data-[selection-end]:rounded-r-xl data-[selection-end]:bg-primary data-[selection-end]:text-primary-foreground

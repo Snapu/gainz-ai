@@ -178,7 +178,7 @@ function skipWizard() {
         ></div>
       </div>
       <div v-else class="flex-1 text-center">
-        <h1 class="text-sm font-black uppercase tracking-[0.2em] text-muted-foreground/60 italic">Edit Profile</h1>
+        <h1 class="text-sm font-bold uppercase tracking-widest text-muted-foreground/60 italic">Edit Profile</h1>
       </div>
 
       <!-- Right: Skip or Spacer -->
@@ -198,7 +198,7 @@ function skipWizard() {
       <div class="flex-1 animate-in fade-in slide-in-from-right-4 duration-300" :key="currentStepIndex">
         <!-- Goal -->
         <template v-if="stepper.isCurrent('goal')">
-          <h2 class="text-3xl font-black mb-2 tracking-tight">What's your primary goal?</h2>
+          <h2 class="text-3xl font-bold mb-2 tracking-tight">What's your primary goal?</h2>
           <p class="text-muted-foreground mb-10 text-lg">Select all that apply.</p>
           <UiToggleGroup type="multiple" v-model="userProfile.fitnessGoal">
             <UiToggleGroupItem v-for="[label, value] in fitnessGoalLabels" :key="value" :value="value">
@@ -209,7 +209,7 @@ function skipWizard() {
 
         <!-- Level -->
         <template v-else-if="stepper.isCurrent('level')">
-          <h2 class="text-3xl font-black mb-2 tracking-tight">Experience level</h2>
+          <h2 class="text-3xl font-bold mb-2 tracking-tight">Experience level</h2>
           <p class="text-muted-foreground mb-10 text-lg">How long have you been training?</p>
           <UiToggleGroup type="single" v-model="userProfile.fitnessLevel">
             <UiToggleGroupItem v-for="[label, value] in fitnessLevelLabels" :key="value" :value="value">
@@ -220,7 +220,7 @@ function skipWizard() {
 
         <!-- Days -->
         <template v-else-if="stepper.isCurrent('days')">
-          <h2 class="text-3xl font-black mb-2 tracking-tight">Training frequency</h2>
+          <h2 class="text-3xl font-bold mb-2 tracking-tight">Training frequency</h2>
           <p class="text-muted-foreground mb-10 text-lg">Workouts per week</p>
           <UiToggleGroup type="single" v-model="workoutDaysString" class="grid grid-cols-2">
             <UiToggleGroupItem v-for="[label, value] in workoutDaysPerWeekLabels" :key="value" :value="String(value)" class="justify-center h-20 text-xl font-bold">
@@ -231,7 +231,7 @@ function skipWizard() {
 
         <!-- Location -->
         <template v-else-if="stepper.isCurrent('location')">
-          <h2 class="text-3xl font-black mb-2 tracking-tight">Where do you train?</h2>
+          <h2 class="text-3xl font-bold mb-2 tracking-tight">Where do you train?</h2>
           <p class="text-muted-foreground mb-10 text-lg">Sets your equipment baseline.</p>
           <UiToggleGroup type="single" v-model="userProfile.workoutLocation">
             <UiToggleGroupItem v-for="[label, value] in workoutLocationLabels" :key="value" :value="value">
@@ -242,7 +242,7 @@ function skipWizard() {
 
         <!-- Equipment -->
         <template v-else-if="stepper.isCurrent('equipment')">
-          <h2 class="text-3xl font-black mb-2 tracking-tight">Equipment access</h2>
+          <h2 class="text-3xl font-bold mb-2 tracking-tight">Equipment access</h2>
           <p class="text-muted-foreground mb-10 text-lg">Select what you have available.</p>
           <UiToggleGroup type="multiple" v-model="userProfile.equipmentAccess">
             <UiToggleGroupItem v-for="[label, value] in equipmentOptionLabels" :key="value" :value="value" class="py-3">
@@ -253,7 +253,7 @@ function skipWizard() {
 
         <!-- Body Stats -->
         <template v-else-if="stepper.isCurrent('stats')">
-          <h2 class="text-3xl font-black mb-2 tracking-tight">Body Stats</h2>
+          <h2 class="text-3xl font-bold mb-2 tracking-tight">Body Stats</h2>
           <p class="text-muted-foreground mb-10 text-lg">Optional, helps the AI format plans.</p>
           <div class="space-y-6">
             <UiNumberField v-model="userProfile.age" label="Age" :min="10" :max="120" />
@@ -264,7 +264,7 @@ function skipWizard() {
 
         <!-- Free Input -->
         <template v-else-if="stepper.isCurrent('extra')">
-          <h2 class="text-3xl font-black mb-2 tracking-tight">Additional Context</h2>
+          <h2 class="text-3xl font-bold mb-2 tracking-tight">Additional Context</h2>
           <p class="text-muted-foreground mb-10 text-lg">Any injuries, specific focus areas, or limitations?</p>
           <UiTextarea
             v-model="userProfile.freeUserInput"
@@ -275,7 +275,7 @@ function skipWizard() {
 
         <!-- API Key -->
         <template v-else-if="stepper.isCurrent('apikey')">
-          <h2 class="text-3xl font-black mb-2 tracking-tight">Enable AI Coach</h2>
+          <h2 class="text-3xl font-bold mb-2 tracking-tight">Enable AI Coach</h2>
           <p class="text-muted-foreground mb-10 text-lg">Enter your Gemini API Key to enable personalized feedback.</p>
           <UiInput
             v-model="apiKeyString"
@@ -294,7 +294,7 @@ function skipWizard() {
     <!-- Bottom Action -->
     <div v-if="!isEditMode" class="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-background via-background to-transparent pb-safe">
       <UiButton
-        class="w-full h-16 rounded-2xl text-lg font-bold tracking-wide transition-all data-[state=save]:bg-white data-[state=save]:text-black hover:data-[state=save]:scale-[0.98]"
+        class="w-full h-16 rounded-xl text-lg font-bold tracking-wide transition-all data-[state=save]:bg-white data-[state=save]:text-black"
         :data-state="stepper.isLast.value ? 'save' : 'next'"
         @click="handleNext"
       >

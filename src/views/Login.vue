@@ -48,7 +48,7 @@ async function handleLogin() {
       </div>
       
       <UiButton 
-        class="w-full text-lg h-16 rounded-2xl" 
+        class="w-full text-lg h-16 rounded-xl" 
         @click="handleLogin" 
         :disabled="isLoggingIn"
       >

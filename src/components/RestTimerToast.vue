@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { uiIconButtonClass } from "@/components/ui/styles";
 import { CheckCircle2, X } from "@lucide/vue";
 
 defineProps<{
@@ -10,7 +11,7 @@ defineEmits<(e: "dismiss") => void>();
 
 <template>
   <div 
-    class="group pointer-events-auto relative flex w-full max-w-[280px] items-center justify-between space-x-4 overflow-hidden rounded-2xl border border-white/10 bg-card/95 p-4 shadow-2xl backdrop-blur-xl transition-all"
+    class="group pointer-events-auto relative flex w-full max-w-[280px] items-center justify-between space-x-4 overflow-hidden rounded-xl border border-white/10 bg-card/95 p-4 shadow-2xl backdrop-blur-xl transition-all"
   >
     <div class="flex items-center gap-3 min-w-0">
       <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -18,10 +19,10 @@ defineEmits<(e: "dismiss") => void>();
       </div>
       
       <div class="grid gap-0.5 min-w-0">
-        <h3 class="text-[11px] font-black uppercase tracking-widest text-foreground/80 leading-none">Set Logged</h3>
+        <h3 class="text-sm font-bold uppercase tracking-widest text-foreground/80 leading-none">Set Logged</h3>
         <div class="flex items-center gap-1.5">
-          <span class="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Rest:</span>
-          <span class="font-mono text-sm font-black italic tracking-tighter text-primary tabular-nums leading-none">
+          <span class="text-xs text-muted-foreground font-bold uppercase tracking-wider">Rest:</span>
+          <span class="font-mono text-sm font-bold italic tracking-tighter text-primary tabular-nums leading-none">
             {{ formattedTime }}
           </span>
         </div>
@@ -29,9 +30,9 @@ defineEmits<(e: "dismiss") => void>();
     </div>
 
     <!-- Close Button -->
-    <button 
+    <button type="button" 
       @click="$emit('dismiss')"
-      class="rounded-lg p-2 text-foreground/30 transition-all hover:text-foreground hover:bg-white/5 active:scale-90"
+      :class="uiIconButtonClass"
     >
       <X class="h-4 w-4" />
     </button>

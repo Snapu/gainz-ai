@@ -16,7 +16,7 @@ describe("uiPressClass", () => {
 
 describe("uiFieldClass", () => {
   it("contains core field styles", () => {
-    expect(uiFieldClass).toContain("rounded-2xl");
+    expect(uiFieldClass).toContain("rounded-xl");
     expect(uiFieldClass).toContain("border");
     expect(uiFieldClass).toContain("focus-visible:ring-primary");
     expect(uiFieldClass).toContain("disabled:opacity-50");
@@ -31,9 +31,10 @@ describe("uiFieldErrorClass", () => {
 });
 
 describe("uiSelectableItemClass", () => {
-  it("contains hover and press states", () => {
+  it("contains hover and focus states", () => {
     expect(uiSelectableItemClass).toContain("hover:bg-white");
-    expect(uiSelectableItemClass).toContain("active:scale");
+    expect(uiSelectableItemClass).toContain("active:bg-white");
+    expect(uiSelectableItemClass).toContain("focus-visible:ring");
     expect(uiSelectableItemClass).toContain("cursor-pointer");
   });
 });

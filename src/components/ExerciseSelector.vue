@@ -2,7 +2,7 @@
 import { Plus, Search, X } from "@lucide/vue";
 import { DialogClose, DialogTitle } from "reka-ui";
 import { computed, ref, watch } from "vue";
-import { uiFieldClass, uiPressClass } from "@/components/ui/styles";
+import { uiFieldClass, uiIconButtonClass, uiPressClass } from "@/components/ui/styles";
 import { cn } from "@/lib/utils";
 import ClickableList, {
   type ClickableListItem,
@@ -97,16 +97,11 @@ watch(isOpen, (val) => {
     <template #header>
       <!-- Header -->
       <div class="flex items-center justify-between p-6 pb-2">
-        <DialogTitle class="text-2xl font-black italic tracking-tight">
+        <DialogTitle class="text-2xl font-bold italic tracking-tight">
           Choose <span class="text-primary">Exercise</span>
         </DialogTitle>
-        <DialogClose
-          :class="cn(
-            'rounded-full p-2 bg-white/5 hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-primary',
-            uiPressClass
-          )"
-        >
-          <X class="w-5 h-5 text-muted-foreground hover:text-foreground" />
+        <DialogClose :class="uiIconButtonClass">
+          <X class="w-5 h-5 text-muted-foreground" />
           <span class="sr-only">Close</span>
         </DialogClose>
       </div>
@@ -123,7 +118,7 @@ watch(isOpen, (val) => {
           :class="cn(
             uiFieldClass,
             uiPressClass,
-            'h-14 pl-12 pr-4 placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary'
+            'h-14 pl-12 pr-4 placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
           )"
         />
       </div>
@@ -133,10 +128,11 @@ watch(isOpen, (val) => {
     <div class="flex-1 overflow-y-auto px-6 pb-8 space-y-2 no-scrollbar">
       <!-- Create New Option -->
       <button
+        type="button"
         v-if="showCreateOption"
         @click="handleCreate"
         :class="cn(
-          'flex w-full items-center gap-4 rounded-2xl border border-primary/20 bg-primary/10 p-4 text-primary animate-in fade-in slide-in-from-top-2',
+          'flex w-full items-center gap-4 rounded-xl border border-primary/20 bg-primary/10 p-4 text-primary animate-in fade-in slide-in-from-top-2',
           uiPressClass
         )"
       >
@@ -144,7 +140,7 @@ watch(isOpen, (val) => {
           <Plus class="w-6 h-6" />
         </div>
         <div class="flex-1 text-left">
-          <span class="block text-sm font-black uppercase tracking-widest opacity-60">Create New</span>
+          <span class="block text-sm font-bold uppercase tracking-widest opacity-60">Create New</span>
           <span class="block text-lg font-bold leading-tight">{{ searchQuery }}</span>
         </div>
       </button>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { cn } from "@/lib/utils";
+import { uiPressClass } from "@/components/ui/styles";
 
 interface Props {
   as?: string;
@@ -17,7 +18,9 @@ const props = withDefaults(defineProps<Props>(), {
   <component
     :is="as"
     :class="cn(
-      'group relative overflow-hidden rounded-2xl border border-white/5 shadow-sm transition-all duration-300 isolate',
+      'group relative overflow-hidden rounded-xl border border-white/5 shadow-sm transition-all duration-300 isolate',
+      (as === 'button' || as === 'a') && 'cursor-pointer',
+      (as === 'button' || as === 'a') && uiPressClass,
       props.variant === 'list' && 'flex flex-col bg-card/40 border-white/5 divide-y divide-white/5',
       props.class
     )"

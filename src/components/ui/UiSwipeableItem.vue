@@ -151,7 +151,7 @@ onBeforeUnmount(() => {
   <div
     ref="containerRef"
     class="relative w-full overflow-hidden transition-colors duration-200"
-    :class="props.variant === 'card' && 'rounded-2xl'"
+    :class="props.variant === 'card' && 'rounded-xl'"
     @pointercancel="snapBack(false)"
   >
     <!-- Background action -->
@@ -171,12 +171,12 @@ onBeforeUnmount(() => {
       class="group/item relative w-full select-none transition-colors duration-300 isolate"
       :class="[
         props.variant === 'card'
-          ? 'px-4 py-3 rounded-2xl border border-white/5 bg-background shadow-sm'
+          ? 'px-4 py-3 rounded-xl border border-white/5 bg-background shadow-sm'
           : 'px-4 py-3',
         {
           'transition-transform duration-200 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]': !isSwiping || cancelledByScroll || isSnappingBack || visualOffset < SWIPE_INTENT_PX
         },
-        !isSwiping && props.variant === 'inset' && 'hover:bg-white/[0.04] active:bg-white/[0.06]',
+        !isSwiping && props.variant === 'inset' && 'hover:bg-white/[0.05] active:bg-white/[0.08]',
       ]"
       :style="{
         transform: `translateX(-${visualOffset}px)`,
@@ -186,14 +186,14 @@ onBeforeUnmount(() => {
       <!-- Gradient styling (card variant only) -->
       <div 
         v-if="props.variant === 'card'"
-        class="absolute inset-0 bg-linear-to-r from-card/60 to-card/20 rounded-2xl pointer-events-none -z-10 transition-colors duration-300"
+        class="absolute inset-0 bg-linear-to-r from-card/60 to-card/20 rounded-xl pointer-events-none -z-10 transition-colors duration-300"
         :class="{ 'group-hover/item:from-card/80': !isSwiping }"
       ></div>
 
       <!-- Subtle Glow effect on hover -->
       <div 
         class="absolute inset-0 bg-primary/5 opacity-0 transition-opacity pointer-events-none -z-10"
-        :class="[props.variant === 'card' && 'rounded-2xl', { 'group-hover/item:opacity-100': !isSwiping }]"
+        :class="[props.variant === 'card' && 'rounded-xl', { 'group-hover/item:opacity-100': !isSwiping }]"
       ></div>
       
       <div class="relative z-10 w-full">

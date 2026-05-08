@@ -13,6 +13,7 @@ import UiCard from "@/components/ui/UiCard.vue";
 import UiInput from "@/components/ui/UiInput.vue";
 import UiRangeCalendar from "@/components/ui/UiRangeCalendar.vue";
 import UiToggleGroup from "@/components/ui/UiToggleGroup.vue";
+import { uiIconButtonClass } from "@/components/ui/styles";
 import UiToggleGroupItem from "@/components/ui/UiToggleGroupItem.vue";
 import { useEventsStore } from "@/stores/events";
 import type { Event as AppEvent } from "@/types/event";
@@ -78,7 +79,7 @@ function remove(id: string) {
       <UiButton variant="ghost" size="icon" @click="router.back()" class="mr-4 -ml-2">
         <ArrowLeft class="w-6 h-6" />
       </UiButton>
-      <h1 class="text-xl font-black tracking-tight flex-1">Rest & Recovery</h1>
+      <h1 class="text-xl font-bold tracking-tight flex-1">Rest & Recovery</h1>
       <UiButton variant="ghost" size="icon" @click="isAddOpen = true">
         <Plus class="w-6 h-6" />
       </UiButton>
@@ -113,8 +114,8 @@ function remove(id: string) {
       <template #header>
         <div class="flex items-center justify-between p-6 pb-2 shrink-0">
           <h2 class="text-2xl font-bold tracking-tight">Log Recovery</h2>
-          <button @click="isAddOpen = false" class="rounded-full p-2.5 bg-white/5 hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-primary active:scale-95">
-            <X class="w-5 h-5 text-muted-foreground hover:text-foreground" />
+          <button type="button" @click="isAddOpen = false" :class="uiIconButtonClass">
+            <X class="w-5 h-5 text-muted-foreground" />
             <span class="sr-only">Close</span>
           </button>
         </div>
@@ -124,8 +125,8 @@ function remove(id: string) {
       <div class="flex flex-col gap-6 overflow-y-auto px-6 py-4 no-scrollbar">
         <div>
           <label class="text-xs font-semibold text-muted-foreground mb-3 block ml-1 uppercase tracking-wider">Type</label>
-          <UiToggleGroup type="single" v-model="formType" class="grid grid-cols-2 gap-2">
-            <UiToggleGroupItem v-for="t in PRESET_TYPES" :key="t" :value="t" variant="ghost" size="sm">
+          <UiToggleGroup type="single" v-model="formType" class="grid grid-cols-2 gap-3">
+            <UiToggleGroupItem v-for="t in PRESET_TYPES" :key="t" :value="t">
               {{ t }}
             </UiToggleGroupItem>
           </UiToggleGroup>
@@ -144,7 +145,7 @@ function remove(id: string) {
 
       <!-- Docked Footer Action -->
       <div class="px-6 pb-safe pt-4 shrink-0 bg-background/95 backdrop-blur z-10 border-t border-white/5">
-        <UiButton class="w-full h-14 rounded-2xl text-base font-black mb-6 shadow-lg shadow-primary/20 transition-all active:scale-[0.98]" @click="saveEvent">
+        <UiButton class="w-full h-14 rounded-xl text-base font-bold mb-6 shadow-lg shadow-lg/20 transition-all active:scale-95" @click="saveEvent">
           Save Entry
         </UiButton>
       </div>
