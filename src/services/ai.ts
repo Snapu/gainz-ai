@@ -34,6 +34,11 @@ export type PreviousAiMessage = {
 
 export type AskAiError = "missing-api-key" | "generate-content-stream-failed" | "ai-request-failed";
 
+export interface AskAiResult {
+  responseText: string;
+  requestPayload: string;
+}
+
 export interface ExerciseCleanupResult {
   classifications: Array<{
     exerciseName: string;
@@ -547,7 +552,7 @@ export async function askAi(
   trainingSummaries: TrainingSummary[],
   previousMessages: PreviousAiMessage[],
   events: Event[] = [],
-): Promise<Result<string, AskAiError>> {
+): Promise<Result<AskAiResult, AskAiError>> {
   if (!apiKey) return err("missing-api-key");
 
   const ai = new GoogleGenAI({ apiKey });
@@ -730,7 +735,7 @@ ${JSON.stringify(buildCompactTrainingContext(insights))}`);
       return err("generate-content-stream-failed");
     }
 
-    return ok(aiResponseText);
+    return ok({ responseText: aiResponseText, requestPayload: currentUserInput });
   } catch (error) {
     console.error("AI request failed:", error);
     Sentry.captureException(error, {

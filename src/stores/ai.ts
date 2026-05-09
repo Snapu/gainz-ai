@@ -207,7 +207,7 @@ export const useAiStore = defineStore("ai", () => {
 
       // Auto-start deload when AI signals shouldDeload — seamless, no user confirmation needed.
       try {
-        const parsed: { startDeload?: boolean } = JSON.parse(result.value);
+        const parsed: { startDeload?: boolean } = JSON.parse(result.value.responseText);
         if (parsed.startDeload === true && !deloadStore.active) {
           const { riskScore, triggeredBy } = trainingInsightsStore.insights.fatigue;
           deloadStore.startDeload(riskScore, triggeredBy);
@@ -216,12 +216,17 @@ export const useAiStore = defineStore("ai", () => {
         // Non-critical: JSON parse errors are handled elsewhere
       }
 
+      // Persist the exact request payload used for this response so UI can show it.
+      messages.value = messages.value.map((m) =>
+        m.id === userMessageId ? { ...m, content: result.value.requestPayload } : m,
+      );
+
       // Save assistant message
       const assistantMessageId = `${Date.now()}-assistant`;
       const assistantMessage: AiMessage = {
         id: assistantMessageId,
         role: "assistant",
-        content: result.value,
+        content: result.value.responseText,
         timestamp: new Date(),
         sessionDate: today,
         logsCount: todayLogsCount,

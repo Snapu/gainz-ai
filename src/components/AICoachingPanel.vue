@@ -109,17 +109,28 @@ interface DisplayInsight {
   rawContent: string;
   parsedData: AiResponseData | null;
   groupedWorkout: DisplayWorkoutGroup[] | null;
+  requestPayload: string | null;
 }
 
 // All AI responses, newest first
 const allInsights = computed<DisplayInsight[]>(() => {
-  const reversed = aiStore.messages
+  const allMessages = aiStore.messages;
+  const indexById = new Map(allMessages.map((m, i) => [m.id, i]));
+  const reversed = allMessages
     .filter((m) => m.role === "assistant")
     .slice()
     .reverse();
 
   return reversed.map((msg, idx) => {
     const parsedData = tryParseAiResponse(msg.content);
+    const msgIndex = indexById.get(msg.id);
+    const previous =
+      typeof msgIndex === "number" && msgIndex > 0 ? allMessages[msgIndex - 1] : null;
+    const requestPayload =
+      previous?.role === "user" && previous.content && previous.content !== "AI request"
+        ? previous.content
+        : null;
+
     return {
       id: msg.id,
       timestamp: msg.timestamp,
@@ -129,11 +140,13 @@ const allInsights = computed<DisplayInsight[]>(() => {
       groupedWorkout: parsedData?.recommendedWorkout
         ? groupWorkout(parsedData.recommendedWorkout as DisplayExercise[])
         : null,
+      requestPayload,
     };
   });
 });
 
 const openScratchpads = ref<string[]>([]);
+const openRequestPayloads = ref<string[]>([]);
 
 function formatTime(d: Date) {
   return useTimeAgo(d).value;
@@ -287,6 +300,25 @@ function toWorkoutListItems(exercises: DisplayExercise[]): WorkoutListItem[] {
               v-html="renderMarkdown(insight.rawContent)"
             />
           </template>
+
+          <!-- Sent data collapsible -->
+          <div v-if="insight.requestPayload" class="mt-1">
+            <button
+              type="button"
+              class="flex items-center gap-1 text-xs text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-lg"
+              @click="openRequestPayloads = openRequestPayloads.includes(insight.id) ? openRequestPayloads.filter(id => id !== insight.id) : [...openRequestPayloads, insight.id]"
+            >
+              <ChevronDown
+                class="w-3 h-3 transition-transform"
+                :class="openRequestPayloads.includes(insight.id) ? 'rotate-180' : ''"
+              />
+              Sent Data
+            </button>
+            <pre
+              v-if="openRequestPayloads.includes(insight.id)"
+              class="text-xs text-muted-foreground/50 bg-muted/20 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all mt-1.5"
+            >{{ insight.requestPayload }}</pre>
+          </div>
 
           <!-- Scratchpad collapsible -->
           <div v-if="insight.parsedData?.scratchpad" class="mt-1">
