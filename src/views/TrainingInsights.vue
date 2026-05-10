@@ -3,16 +3,16 @@ import { ArrowLeft, HelpCircle, Moon, Scale, TrendingDown, TrendingUp } from "@l
 import * as Sentry from "@sentry/vue";
 import { storeToRefs } from "pinia";
 import { computed, onMounted, ref } from "vue";
-import AppHeader from "@/components/AppHeader.vue";
-import MuscleActivationMap from "@/components/MuscleActivationMap.vue";
-import UiButton from "@/components/ui/UiButton.vue";
-import UiCard from "@/components/ui/UiCard.vue";
-import UiSegmentedControl from "@/components/ui/UiSegmentedControl.vue";
-import { getMuscleActivation, type MuscleGroupInsight } from "@/services/trainingScience/index";
-import { useAiStore } from "@/stores/ai";
-import { useDeloadStore } from "@/stores/deload";
-import { useExerciseMuscleMapStore } from "@/stores/exerciseMuscleMap";
-import { useTrainingInsightsStore } from "@/stores/trainingInsights";
+import { useAiStore } from "@/modules/aiCoach/presentation";
+import { useDeloadStore } from "@/modules/deload/presentation";
+import { useExerciseMuscleMapStore } from "@/modules/shared/presentation";
+import type { MuscleGroupInsight } from "@/modules/trainingInsights/domain";
+import { useTrainingInsightsStore } from "@/modules/trainingInsights/presentation";
+import AppHeader from "@/shared/presentation/components/AppHeader.vue";
+import MuscleActivationMap from "@/shared/presentation/components/MuscleActivationMap.vue";
+import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
+import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
+import UiSegmentedControl from "@/shared/presentation/components/ui/UiSegmentedControl.vue";
 
 const muscleMapStore = useExerciseMuscleMapStore();
 const deloadStore = useDeloadStore();
@@ -296,7 +296,7 @@ const exerciseMetrics = computed((): ExerciseMetric[] => {
         status = isDeloading ? "stable" : "dropping";
       }
 
-      const activation = getMuscleActivation(name, learnedMap.value);
+      const activation = muscleMapStore.resolveMuscleActivation(name);
       const learnedMuscleGroups = activation
         ? [activation.primaryMuscle, ...activation.secondaryMuscles.map((m) => m.muscleGroup)]
         : [];

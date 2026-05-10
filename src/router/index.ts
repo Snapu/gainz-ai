@@ -1,7 +1,7 @@
 import { createRouter, createWebHashHistory } from "vue-router";
-import { useAuthStore } from "@/stores/auth";
-import { useSpreadsheetStore } from "@/stores/spreadsheet";
-import { useUserProfileStore } from "@/stores/userProfile";
+import { useAuthStore } from "@/modules/auth/presentation";
+import { useUserProfileStore } from "@/modules/profile/presentation";
+import { useSpreadsheetStore } from "@/modules/shared/presentation";
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),

@@ -3,17 +3,17 @@ import { ArrowLeft } from "@lucide/vue";
 import { storeToRefs } from "pinia";
 import { computed } from "vue";
 import { useRouter } from "vue-router";
-import AppHeader from "@/components/AppHeader.vue";
-import EmptyState from "@/components/EmptyState.vue";
-import UiButton from "@/components/ui/UiButton.vue";
-import UiCard from "@/components/ui/UiCard.vue";
-import { useToast } from "@/composables/useToast";
 import type {
   ExerciseWeightMigrationCandidate,
   ExerciseWeightMigrationDecision,
-} from "@/services/exerciseWeightMigration";
-import { localeDateString } from "@/services/utils/date";
-import { useExerciseWeightMigrationStore } from "@/stores/exerciseWeightMigration";
+} from "@/modules/migration/application";
+import { useExerciseWeightMigrationStore } from "@/modules/migration/presentation";
+import { localeDateString } from "@/modules/shared/domain";
+import AppHeader from "@/shared/presentation/components/AppHeader.vue";
+import EmptyState from "@/shared/presentation/components/EmptyState.vue";
+import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
+import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
+import { useToast } from "@/shared/presentation/composables/useToast";
 
 const router = useRouter();
 const migrationStore = useExerciseWeightMigrationStore();

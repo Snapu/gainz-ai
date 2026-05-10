@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ArrowLeft } from "@lucide/vue";
 import { useRouter } from "vue-router";
-import UiButton from "@/components/ui/UiButton.vue";
+import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 
 const router = useRouter();
 </script>

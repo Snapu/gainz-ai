@@ -3,39 +3,40 @@ import { ChevronRight, ExternalLink, Menu, Moon, Plus, Sparkles } from "@lucide/
 import { haptic } from "ios-haptics";
 import { storeToRefs } from "pinia";
 import { computed, ref, watch } from "vue";
-import AICoachingPanel from "@/components/AICoachingPanel.vue";
-import AppHeader from "@/components/AppHeader.vue";
-import EmptyState from "@/components/EmptyState.vue";
-import type { ExerciseSelectorOptionDetails } from "@/components/ExerciseSelector.vue";
-import ExerciseSelector from "@/components/ExerciseSelector.vue";
-import RestTimerToast from "@/components/RestTimerToast.vue";
-import SessionLogGroup from "@/components/SessionLogGroup.vue";
-import UserProgressCard from "@/components/UserProgressCard.vue";
-import UiBottomSheet from "@/components/ui/UiBottomSheet.vue";
-import UiButton from "@/components/ui/UiButton.vue";
-import UiDropdownMenu from "@/components/ui/UiDropdownMenu.vue";
-import UiDropdownMenuItem from "@/components/ui/UiDropdownMenuItem.vue";
-import UiNumberField from "@/components/ui/UiNumberField.vue";
-import UiSparkline from "@/components/ui/UiSparkline.vue";
-import { useToast } from "@/composables/useToast";
-import { WIZARD_STEPS } from "@/constants/wizard";
-import type { ExerciseLog } from "@/services/exerciseLogs";
-import { calculateUserProgress } from "@/services/leveling";
-import { summaryToExerciseLogs, summaryToWorkoutDates } from "@/services/trainingSummary";
-import { localeDateString } from "@/services/utils/date";
-import { useDeloadStore } from "@/stores/deload";
-import { useExerciseLogsStore } from "@/stores/exerciseLogs";
-import { useRestTimerStore } from "@/stores/restTimer";
-import { useSpreadsheetStore } from "@/stores/spreadsheet";
-import { useTrainingInsightsStore } from "@/stores/trainingInsights";
-import { useTrainingSummaryStore } from "@/stores/trainingSummary";
-import { useUserProfileStore } from "@/stores/userProfile";
+import { useDeloadStore } from "@/modules/deload/presentation";
+import { useUserProfileStore, WIZARD_STEPS } from "@/modules/profile/presentation";
+import { localeDateString } from "@/modules/shared/domain";
+import {
+  useRestTimerStore,
+  useSpreadsheetStore,
+  useTrainingSummaryStore,
+  useUserProgressStore,
+} from "@/modules/shared/presentation";
+import { useTrainingInsightsStore } from "@/modules/trainingInsights/presentation";
+import type { ExerciseLog } from "@/modules/trainingLogs/domain";
+import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
+import AICoachingPanel from "@/shared/presentation/components/AICoachingPanel.vue";
+import AppHeader from "@/shared/presentation/components/AppHeader.vue";
+import EmptyState from "@/shared/presentation/components/EmptyState.vue";
+import type { ExerciseSelectorOptionDetails } from "@/shared/presentation/components/ExerciseSelector.vue";
+import ExerciseSelector from "@/shared/presentation/components/ExerciseSelector.vue";
+import RestTimerToast from "@/shared/presentation/components/RestTimerToast.vue";
+import SessionLogGroup from "@/shared/presentation/components/SessionLogGroup.vue";
+import UserProgressCard from "@/shared/presentation/components/UserProgressCard.vue";
+import UiBottomSheet from "@/shared/presentation/components/ui/UiBottomSheet.vue";
+import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
+import UiDropdownMenu from "@/shared/presentation/components/ui/UiDropdownMenu.vue";
+import UiDropdownMenuItem from "@/shared/presentation/components/ui/UiDropdownMenuItem.vue";
+import UiNumberField from "@/shared/presentation/components/ui/UiNumberField.vue";
+import UiSparkline from "@/shared/presentation/components/ui/UiSparkline.vue";
+import { useToast } from "@/shared/presentation/composables/useToast";
 
 const profileStore = useUserProfileStore();
 const deloadStore = useDeloadStore();
 const trainingInsightsStore = useTrainingInsightsStore();
 const logsStore = useExerciseLogsStore();
 const summaryStore = useTrainingSummaryStore();
+const userProgressStore = useUserProgressStore();
 const spreadsheetStore = useSpreadsheetStore();
 const restTimerStore = useRestTimerStore();
 const { toast } = useToast();
@@ -134,13 +135,7 @@ const exerciseOptionDetails = computed<Record<string, ExerciseSelectorOptionDeta
 });
 
 // --- Leveling ---
-const userProgress = computed(() => {
-  const historicalLogs = summaryToExerciseLogs(summaryStore.summaries);
-  const currentLogs = exerciseLogs.value;
-  const allLogs = [...historicalLogs, ...currentLogs];
-
-  return calculateUserProgress(allLogs, userProfile.value.workoutDaysPerWeek || 3);
-});
+const userProgress = computed(() => userProgressStore.userProgress);
 
 // --- Training Science ---
 const trainingInsights = computed(() => trainingInsightsStore.insights);

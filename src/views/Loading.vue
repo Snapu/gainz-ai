@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { useUserProfileStore } from "@/stores/userProfile";
+import { useUserProfileStore } from "@/modules/profile/presentation";
 
 const profileStore = useUserProfileStore();
 

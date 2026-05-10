@@ -4,21 +4,20 @@ import { useStepper } from "@vueuse/core";
 import { storeToRefs } from "pinia";
 import { computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import AppHeader from "@/components/AppHeader.vue";
-import UiButton from "@/components/ui/UiButton.vue";
-import UiInput from "@/components/ui/UiInput.vue";
-import UiNumberField from "@/components/ui/UiNumberField.vue";
-import UiTextarea from "@/components/ui/UiTextarea.vue";
-import UiToggleGroup from "@/components/ui/UiToggleGroup.vue";
-import UiToggleGroupItem from "@/components/ui/UiToggleGroupItem.vue";
-import { WIZARD_STEPS } from "@/constants/wizard";
 import type {
   EquipmentOption,
   FitnessGoal,
   FitnessLevel,
   WorkoutLocation,
-} from "@/stores/userProfile";
-import { useUserProfileStore } from "@/stores/userProfile";
+} from "@/modules/profile/presentation";
+import { useUserProfileStore, WIZARD_STEPS } from "@/modules/profile/presentation";
+import AppHeader from "@/shared/presentation/components/AppHeader.vue";
+import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
+import UiInput from "@/shared/presentation/components/ui/UiInput.vue";
+import UiNumberField from "@/shared/presentation/components/ui/UiNumberField.vue";
+import UiTextarea from "@/shared/presentation/components/ui/UiTextarea.vue";
+import UiToggleGroup from "@/shared/presentation/components/ui/UiToggleGroup.vue";
+import UiToggleGroupItem from "@/shared/presentation/components/ui/UiToggleGroupItem.vue";
 
 const router = useRouter();
 const route = useRoute();

@@ -10,7 +10,7 @@ import router from "@/router";
 
 /* Theme variables */
 import "@/theme/variables.css";
-import { CLIENT_ID } from "./stores/auth";
+import { CLIENT_ID } from "@/modules/auth/presentation";
 
 const app = createApp(App).use(createPinia()).use(router).use(vue3GoogleLogin, {
   clientId: CLIENT_ID,

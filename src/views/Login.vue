@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import UiButton from "@/components/ui/UiButton.vue";
-import { useToast } from "@/composables/useToast";
-import { useAuthStore } from "@/stores/auth";
+import { useAuthStore } from "@/modules/auth/presentation";
+import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
+import { useToast } from "@/shared/presentation/composables/useToast";
 
 const authStore = useAuthStore();
 const { toast } = useToast();
