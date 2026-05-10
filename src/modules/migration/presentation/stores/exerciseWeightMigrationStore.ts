@@ -12,12 +12,20 @@ import {
   loadExerciseWeightMigrationReviews,
 } from "@/modules/migration/application";
 import { createExerciseWeightMigrationRepository } from "@/modules/migration/infrastructure";
-import { useSpreadsheetStore, useTrainingSummaryStore } from "@/modules/shared/presentation";
+import {
+  useSpreadsheetRepositoryFactory,
+  useTrainingSummaryStore,
+} from "@/modules/shared/presentation";
 import { createTrainingLogsRepository } from "@/modules/trainingLogs/infrastructure";
 import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
 
 export const useExerciseWeightMigrationStore = defineStore("exerciseWeightMigration", () => {
-  const spreadsheetStore = useSpreadsheetStore();
+  const migrationRepoFactory = useSpreadsheetRepositoryFactory(
+    createExerciseWeightMigrationRepository,
+  );
+  const logsRepoFactory = useSpreadsheetRepositoryFactory(createTrainingLogsRepository);
+
+  const { spreadsheetStore, getDoc } = migrationRepoFactory;
   const logsStore = useExerciseLogsStore();
   const trainingSummaryStore = useTrainingSummaryStore();
 
@@ -30,16 +38,22 @@ export const useExerciseWeightMigrationStore = defineStore("exerciseWeightMigrat
   const reviewedCount = computed(() => reviewedExercises.value.length);
 
   async function refresh(docOverride?: GoogleSpreadsheet) {
-    const doc = docOverride ?? spreadsheetStore.doc;
+    const doc = getDoc(docOverride);
     if (!doc) return;
 
     isLoading.value = true;
     lastError.value = null;
 
     try {
-      const logsRepository = createTrainingLogsRepository(doc);
+      const migrationRepository = migrationRepoFactory.createRepository(doc);
+      const logsRepository = logsRepoFactory.createRepository(doc);
+      if (!migrationRepository || !logsRepository) {
+        lastError.value = "load-failed";
+        return;
+      }
+
       const [reviewsResult, logsResult] = await Promise.all([
-        loadExerciseWeightMigrationReviews(createExerciseWeightMigrationRepository(doc)),
+        loadExerciseWeightMigrationReviews(migrationRepository),
         loadAllLogsForMigration(logsRepository),
       ]);
 
@@ -64,8 +78,8 @@ export const useExerciseWeightMigrationStore = defineStore("exerciseWeightMigrat
   }
 
   async function applyDecision(exerciseName: string, decision: ExerciseWeightMigrationDecision) {
-    const doc = spreadsheetStore.doc;
-    if (!doc) {
+    const repository = migrationRepoFactory.createRepository();
+    if (!repository) {
       lastError.value = "load-failed";
       return null;
     }
@@ -74,17 +88,13 @@ export const useExerciseWeightMigrationStore = defineStore("exerciseWeightMigrat
     lastError.value = null;
 
     try {
-      const result = await applyExerciseWeightMigrationDecision(
-        exerciseName,
-        decision,
-        createExerciseWeightMigrationRepository(doc),
-      );
+      const result = await applyExerciseWeightMigrationDecision(exerciseName, decision, repository);
       if (result.isErr()) {
         lastError.value = result.error;
         return result;
       }
 
-      await Promise.all([refresh(doc), logsStore.refresh(), trainingSummaryStore.refresh(doc)]);
+      await Promise.all([refresh(), logsStore.refresh(), trainingSummaryStore.refresh()]);
 
       return result;
     } finally {

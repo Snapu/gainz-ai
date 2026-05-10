@@ -1,7 +1,10 @@
 import { err } from "neverthrow";
 import { defineStore } from "pinia";
 import { watch } from "vue";
-import { useOfflineSyncedStore, useSpreadsheetStore } from "@/modules/shared/presentation";
+import {
+  useOfflineSyncedStore,
+  useSpreadsheetRepositoryFactory,
+} from "@/modules/shared/presentation";
 import {
   addExerciseLog as addExerciseLog_,
   deleteExerciseLog as deleteExerciseLog_,
@@ -11,7 +14,9 @@ import { createTrainingLogsRepository } from "@/modules/trainingLogs/infrastruct
 import { useAuthErrorHandler } from "@/shared/presentation/composables/useAuthErrorHandler";
 
 export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
-  const spreadsheetStore = useSpreadsheetStore();
+  const { spreadsheetStore, createRepository } = useSpreadsheetRepositoryFactory(
+    createTrainingLogsRepository,
+  );
   const { handleAuthError } = useAuthErrorHandler();
   const {
     items: exerciseLogs,
@@ -23,21 +28,18 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
   } = useOfflineSyncedStore({
     getId: (log) => log.id,
     fetchRemote: () => {
-      const doc = spreadsheetStore.doc;
-      if (!doc) return Promise.resolve(err("load-failed"));
-      const repository = createTrainingLogsRepository(doc);
+      const repository = createRepository();
+      if (!repository) return Promise.resolve(err("load-failed"));
       return loadExerciseLogs(repository);
     },
     addRemote: (item) => {
-      const doc = spreadsheetStore.doc;
-      if (!doc) return Promise.resolve(err("add-failed"));
-      const repository = createTrainingLogsRepository(doc);
+      const repository = createRepository();
+      if (!repository) return Promise.resolve(err("add-failed"));
       return addExerciseLog_(item, repository);
     },
     removeRemote: (item) => {
-      const doc = spreadsheetStore.doc;
-      if (!doc) return Promise.resolve(err("delete-failed"));
-      const repository = createTrainingLogsRepository(doc);
+      const repository = createRepository();
+      if (!repository) return Promise.resolve(err("delete-failed"));
       return deleteExerciseLog_(item, repository);
     },
   });

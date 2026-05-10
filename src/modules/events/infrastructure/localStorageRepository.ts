@@ -1,4 +1,3 @@
-import type { EventsRepository } from "@/modules/events/application";
 import { type Event, EventSchema } from "@/modules/events/domain";
 
 const STORAGE_KEY = "events:stored";
@@ -30,11 +29,4 @@ export function loadEventsInfra(): Event[] {
 
 export function saveEventsInfra(events: Event[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
-}
-
-export function createEventsRepository(): EventsRepository {
-  return {
-    load: loadEventsInfra,
-    save: saveEventsInfra,
-  };
 }

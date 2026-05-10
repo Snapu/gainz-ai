@@ -2,7 +2,7 @@ import * as Sentry from "@sentry/vue";
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { defineStore } from "pinia";
 import { ref, watchEffect } from "vue";
-import { useSpreadsheetStore } from "@/modules/shared/presentation";
+import { useSpreadsheetRepositoryFactory } from "@/modules/shared/presentation";
 import {
   findPastYearLogSheets,
   loadExerciseLogs,
@@ -19,15 +19,20 @@ import {
 import { createTrainingSummaryRepository } from "@/modules/trainingSummary/infrastructure";
 
 export const useTrainingSummaryStore = defineStore("trainingSummary", () => {
-  const spreadsheetStore = useSpreadsheetStore();
+  const summaryRepoFactory = useSpreadsheetRepositoryFactory(createTrainingSummaryRepository);
+  const logsRepoFactory = useSpreadsheetRepositoryFactory(createTrainingLogsRepository);
+  const { spreadsheetStore, getDoc } = summaryRepoFactory;
+
   const summaries = ref<TrainingSummary[]>([]);
   const isLoading = ref(false);
   const isInitialized = ref(false);
 
   function createTrainingLogHistoryRepository(
     doc: GoogleSpreadsheet,
-  ): TrainingLogHistoryRepository {
-    const logsRepository = createTrainingLogsRepository(doc);
+  ): TrainingLogHistoryRepository | null {
+    const logsRepository = logsRepoFactory.createRepository(doc);
+    if (!logsRepository) return null;
+
     return {
       loadCurrentYearLogs: () => loadExerciseLogs(logsRepository),
       findPastYears: () => findPastYearLogSheets(logsRepository),
@@ -36,8 +41,9 @@ export const useTrainingSummaryStore = defineStore("trainingSummary", () => {
   }
 
   async function loadAndMigrate(doc: GoogleSpreadsheet) {
-    const summaryRepository = createTrainingSummaryRepository(doc);
+    const summaryRepository = summaryRepoFactory.createRepository(doc);
     const logsRepository = createTrainingLogHistoryRepository(doc);
+    if (!summaryRepository || !logsRepository) return null;
 
     const loadResult = await loadTrainingSummary(summaryRepository);
     if (loadResult.isErr()) {
@@ -64,7 +70,7 @@ export const useTrainingSummaryStore = defineStore("trainingSummary", () => {
   }
 
   async function refresh(docOverride?: GoogleSpreadsheet) {
-    const doc = docOverride ?? spreadsheetStore.doc;
+    const doc = getDoc(docOverride);
     if (!doc) return;
 
     isLoading.value = true;

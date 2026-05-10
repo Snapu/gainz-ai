@@ -15,7 +15,7 @@ import type {
   WorkoutLocation,
 } from "@/modules/profile/domain";
 import { createUserProfileRepository } from "@/modules/profile/infrastructure";
-import { useSpreadsheetStore } from "@/modules/shared/presentation";
+import { useSpreadsheetRepositoryFactory } from "@/modules/shared/presentation";
 import { useAuthErrorHandler } from "@/shared/presentation/composables/useAuthErrorHandler";
 
 export type {
@@ -33,6 +33,7 @@ export const useUserProfileStore = defineStore("userProfile", () => {
   const apiKey = useLocalStorage<string | null>("userProfile:apiKey", null);
   const isLoading = ref(true);
 
+  const { createRepository, getDoc } = useSpreadsheetRepositoryFactory(createUserProfileRepository);
   const { handleAuthError } = useAuthErrorHandler();
 
   const setupCompleted = computed(() => hasCompletedSetup.value);
@@ -52,8 +53,7 @@ export const useUserProfileStore = defineStore("userProfile", () => {
   }
 
   watchEffect(async () => {
-    const spreadsheetStore = useSpreadsheetStore();
-    const { doc } = spreadsheetStore;
+    const doc = getDoc();
     if (!doc) {
       isLoading.value = false;
       return;
@@ -61,7 +61,11 @@ export const useUserProfileStore = defineStore("userProfile", () => {
 
     isLoading.value = true;
 
-    const repository = createUserProfileRepository(doc);
+    const repository = createRepository(doc);
+    if (!repository) {
+      isLoading.value = false;
+      return;
+    }
 
     await migrateFromLocalStorage(repository);
 
@@ -82,11 +86,9 @@ export const useUserProfileStore = defineStore("userProfile", () => {
   });
 
   const debouncedSave = useDebounceFn(async () => {
-    const spreadsheetStore = useSpreadsheetStore();
-    const { doc } = spreadsheetStore;
-    if (!doc) return;
+    const repository = createRepository();
+    if (!repository) return;
 
-    const repository = createUserProfileRepository(doc);
     const result = await saveUserProfile(userProfile.value, repository);
     if (result.isErr() && result.error === "auth-failed") {
       handleAuthError("user-profile-save");

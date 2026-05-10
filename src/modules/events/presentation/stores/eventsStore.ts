@@ -1,18 +1,21 @@
 import { defineStore } from "pinia";
 import { type Ref, ref } from "vue";
 import { addEvent, type Event, loadEvents, removeEvent } from "@/modules/events/application";
-import { createEventsRepository } from "@/modules/events/infrastructure";
+import { loadEventsInfra, saveEventsInfra } from "@/modules/events/infrastructure";
 
 export const useEventsStore = defineStore("events", () => {
-  const repository = createEventsRepository();
-  const events: Ref<Event[]> = ref(loadEvents(repository));
+  const events: Ref<Event[]> = ref(loadEvents(loadEventsInfra()));
 
   function addEventToStore(event: Event): void {
-    events.value = addEvent(events.value, event, repository);
+    const nextEvents = addEvent(events.value, event);
+    saveEventsInfra(nextEvents);
+    events.value = nextEvents;
   }
 
   function removeEventFromStore(id: string): void {
-    events.value = removeEvent(events.value, id, repository);
+    const nextEvents = removeEvent(events.value, id);
+    saveEventsInfra(nextEvents);
+    events.value = nextEvents;
   }
 
   return {

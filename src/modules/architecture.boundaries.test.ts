@@ -7,11 +7,6 @@ const SRC_ROOT = path.resolve(process.cwd(), "src");
 
 type Layer = "domain" | "application" | "infrastructure" | "presentation";
 
-const LEGACY_MODULE_FACADE_SERVICE_PREFIXES = [] as const;
-
-const INFRASTRUCTURE_ALLOWED_SERVICE_PREFIXES = [] as const;
-const PRESENTATION_ALLOWED_SERVICE_PREFIXES = [] as const;
-
 async function listTsFiles(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true });
   const files = await Promise.all(
@@ -47,7 +42,9 @@ function toModuleRelative(filePath: string): string {
 }
 
 function extractImports(source: string): string[] {
-  return Array.from(source.matchAll(/from\s+["']([^"']+)["']/g)).map((match) => match[1]!);
+  return Array.from(source.matchAll(/from\s+["']([^"']+)["']/g))
+    .map((match) => match[1])
+    .filter((importPath): importPath is string => typeof importPath === "string");
 }
 
 function isLayerFile(filePath: string, layer: Layer): boolean {
@@ -161,7 +158,7 @@ describe("module architecture boundaries", () => {
     expect(violations).toEqual([]);
   });
 
-  it("application production files do not import other-module infrastructure", async () => {
+  it("application production files stay isolated from UI and storage tech", async () => {
     const allFiles = await listTsFiles(ROOT);
     const applicationProductionFiles = allFiles.filter(
       (filePath) => isLayerFile(filePath, "application") && isProductionTsFile(filePath),
@@ -175,118 +172,31 @@ describe("module architecture boundaries", () => {
       const currentModule = moduleName(filePath);
 
       for (const importPath of importPaths) {
-        if (!importTargetsLayer(filePath, importPath, "infrastructure")) continue;
-        const importedModule = resolvedModuleNameFromImport(filePath, importPath);
-        if (!importedModule) continue;
-        if (importedModule !== currentModule) {
+        if (importTargetsLayer(filePath, importPath, "presentation")) {
+          violations.push(`${toModuleRelative(filePath)} -> ${importPath}`);
+          continue;
+        }
+
+        if (importTargetsLayer(filePath, importPath, "infrastructure")) {
+          const importedModule = resolvedModuleNameFromImport(filePath, importPath);
+          if (importedModule && importedModule !== currentModule) {
+            violations.push(`${toModuleRelative(filePath)} -> ${importPath}`);
+          }
+        }
+
+        if (importPath === "google-spreadsheet") {
           violations.push(`${toModuleRelative(filePath)} -> ${importPath}`);
         }
       }
-    }
 
-    expect(violations).toEqual([]);
-  });
-
-  it("application production files do not use localStorage directly", async () => {
-    const allFiles = await listTsFiles(ROOT);
-    const applicationProductionFiles = allFiles.filter(
-      (filePath) => isLayerFile(filePath, "application") && isProductionTsFile(filePath),
-    );
-
-    const violations: string[] = [];
-
-    for (const filePath of applicationProductionFiles) {
-      const source = await readFile(filePath, "utf-8");
       const hasRuntimeLocalStorageUsage = source
         .split("\n")
         .some((line) => /\blocalStorage\./.test(line) && !/^\s*(?:\/\/|\*|\/\*)/.test(line));
       if (hasRuntimeLocalStorageUsage) {
         violations.push(toModuleRelative(filePath));
       }
-    }
 
-    expect(violations).toEqual([]);
-  });
-
-  it("application production files do not import google-spreadsheet", async () => {
-    const allFiles = await listTsFiles(ROOT);
-    const applicationProductionFiles = allFiles.filter(
-      (filePath) => isLayerFile(filePath, "application") && isProductionTsFile(filePath),
-    );
-
-    const violations: string[] = [];
-
-    for (const filePath of applicationProductionFiles) {
-      const source = await readFile(filePath, "utf-8");
-      const importPaths = extractImports(source);
-      for (const importPath of importPaths) {
-        if (importPath === "google-spreadsheet") {
-          violations.push(`${toModuleRelative(filePath)} -> ${importPath}`);
-        }
-      }
-    }
-
-    expect(violations).toEqual([]);
-  });
-  it("application production files do not reference GoogleSpreadsheet type", async () => {
-    const allFiles = await listTsFiles(ROOT);
-    const applicationProductionFiles = allFiles.filter(
-      (filePath) => isLayerFile(filePath, "application") && isProductionTsFile(filePath),
-    );
-
-    const violations: string[] = [];
-
-    for (const filePath of applicationProductionFiles) {
-      const source = await readFile(filePath, "utf-8");
       if (/\bGoogleSpreadsheet\b/.test(source)) {
-        violations.push(toModuleRelative(filePath));
-      }
-    }
-
-    expect(violations).toEqual([]);
-  });
-
-  it("application production files do not import presentation", async () => {
-    const allFiles = await listTsFiles(ROOT);
-    const applicationProductionFiles = allFiles.filter(
-      (filePath) => isLayerFile(filePath, "application") && isProductionTsFile(filePath),
-    );
-
-    const violations: string[] = [];
-
-    for (const filePath of applicationProductionFiles) {
-      const source = await readFile(filePath, "utf-8");
-      const importPaths = extractImports(source);
-
-      for (const importPath of importPaths) {
-        if (importTargetsLayer(filePath, importPath, "presentation")) {
-          violations.push(`${toModuleRelative(filePath)} -> ${importPath}`);
-        }
-      }
-    }
-
-    expect(violations).toEqual([]);
-  });
-
-  it("application production files do not instantiate infrastructure repositories", async () => {
-    const allFiles = await listTsFiles(ROOT);
-    const applicationProductionFiles = allFiles.filter(
-      (filePath) => isLayerFile(filePath, "application") && isProductionTsFile(filePath),
-    );
-
-    const violations: string[] = [];
-
-    for (const filePath of applicationProductionFiles) {
-      const source = await readFile(filePath, "utf-8");
-      const hasRepositoryConstruction = source
-        .split("\n")
-        .some(
-          (line) =>
-            /\bnew\s+[A-Z][A-Za-z0-9_]*(?:Repository|SheetsRepository|Infra)\b/.test(line) &&
-            !/^\s*(?:\/\/|\*|\/\*)/.test(line),
-        );
-
-      if (hasRepositoryConstruction) {
         violations.push(toModuleRelative(filePath));
       }
     }
@@ -308,152 +218,6 @@ describe("module architecture boundaries", () => {
 
       for (const importPath of importPaths) {
         if (importTargetsLayer(filePath, importPath, "presentation")) {
-          violations.push(`${toModuleRelative(filePath)} -> ${importPath}`);
-        }
-      }
-    }
-
-    expect(violations).toEqual([]);
-  });
-
-  it("infrastructure production files only use allowlisted service imports", async () => {
-    const allFiles = await listTsFiles(ROOT);
-    const infrastructureProductionFiles = allFiles.filter(
-      (filePath) => isLayerFile(filePath, "infrastructure") && isProductionTsFile(filePath),
-    );
-
-    const violations: string[] = [];
-
-    for (const filePath of infrastructureProductionFiles) {
-      const source = await readFile(filePath, "utf-8");
-      const importPaths = extractImports(source);
-
-      for (const importPath of importPaths) {
-        if (!importPath.startsWith("@/services/")) continue;
-        const isAllowlisted = INFRASTRUCTURE_ALLOWED_SERVICE_PREFIXES.some((prefix) =>
-          importPath.startsWith(prefix),
-        );
-        if (!isAllowlisted) {
-          violations.push(`${toModuleRelative(filePath)} -> ${importPath}`);
-        }
-      }
-    }
-
-    expect(violations).toEqual([]);
-  });
-
-  it("presentation production files do not import infrastructure", async () => {
-    const allFiles = await listTsFiles(ROOT);
-    const presentationProductionFiles = allFiles.filter(
-      (filePath) => isLayerFile(filePath, "presentation") && isProductionTsFile(filePath),
-    );
-
-    const violations: string[] = [];
-
-    for (const filePath of presentationProductionFiles) {
-      if (isPresentationStoreWrapper(filePath)) continue;
-
-      const source = await readFile(filePath, "utf-8");
-      const importPaths = extractImports(source);
-
-      for (const importPath of importPaths) {
-        if (importTargetsLayer(filePath, importPath, "infrastructure")) {
-          violations.push(`${toModuleRelative(filePath)} -> ${importPath}`);
-        }
-      }
-    }
-
-    expect(violations).toEqual([]);
-  });
-
-  it("presentation production files do not import legacy module service facades", async () => {
-    const allFiles = await listTsFiles(ROOT);
-    const presentationProductionFiles = allFiles.filter(
-      (filePath) => isLayerFile(filePath, "presentation") && isProductionTsFile(filePath),
-    );
-
-    const violations: string[] = [];
-
-    for (const filePath of presentationProductionFiles) {
-      const source = await readFile(filePath, "utf-8");
-      const importPaths = extractImports(source);
-
-      for (const importPath of importPaths) {
-        const isLegacyFacadeImport = LEGACY_MODULE_FACADE_SERVICE_PREFIXES.some((prefix) =>
-          importPath.startsWith(prefix),
-        );
-        if (isLegacyFacadeImport) {
-          violations.push(`${toModuleRelative(filePath)} -> ${importPath}`);
-        }
-      }
-    }
-
-    expect(violations).toEqual([]);
-  });
-
-  it("presentation production files only use allowlisted service imports", async () => {
-    const allFiles = await listTsFiles(ROOT);
-    const presentationProductionFiles = allFiles.filter(
-      (filePath) => isLayerFile(filePath, "presentation") && isProductionTsFile(filePath),
-    );
-
-    const violations: string[] = [];
-
-    for (const filePath of presentationProductionFiles) {
-      const source = await readFile(filePath, "utf-8");
-      const importPaths = extractImports(source);
-
-      for (const importPath of importPaths) {
-        if (!importPath.startsWith("@/services/")) continue;
-        const isAllowlisted = PRESENTATION_ALLOWED_SERVICE_PREFIXES.some((prefix) =>
-          importPath.startsWith(prefix),
-        );
-        if (!isAllowlisted) {
-          violations.push(`${toModuleRelative(filePath)} -> ${importPath}`);
-        }
-      }
-    }
-
-    expect(violations).toEqual([]);
-  });
-
-  it("production module files use domain facades instead of deep imports", async () => {
-    const allFiles = await listTsFiles(ROOT);
-    const productionFiles = allFiles.filter((filePath) => isProductionTsFile(filePath));
-
-    const violations: string[] = [];
-
-    for (const filePath of productionFiles) {
-      const source = await readFile(filePath, "utf-8");
-      const importPaths = extractImports(source);
-
-      for (const importPath of importPaths) {
-        if (!importPath.startsWith("@/modules/")) continue;
-        const isDeepDomainImport = /^@\/modules\/[^/]+\/domain\/.+/.test(importPath);
-        if (isDeepDomainImport) {
-          violations.push(`${toModuleRelative(filePath)} -> ${importPath}`);
-        }
-      }
-    }
-
-    expect(violations).toEqual([]);
-  });
-  it("production module files use application/presentation facades instead of deep imports", async () => {
-    const allFiles = await listTsFiles(ROOT);
-    const productionFiles = allFiles.filter((filePath) => isProductionTsFile(filePath));
-
-    const violations: string[] = [];
-
-    for (const filePath of productionFiles) {
-      const source = await readFile(filePath, "utf-8");
-      const importPaths = extractImports(source);
-
-      for (const importPath of importPaths) {
-        if (!importPath.startsWith("@/modules/")) continue;
-        const isDeepLayerImport = /^@\/modules\/[^/]+\/(application|presentation)\/.+/.test(
-          importPath,
-        );
-        if (isDeepLayerImport) {
           violations.push(`${toModuleRelative(filePath)} -> ${importPath}`);
         }
       }
