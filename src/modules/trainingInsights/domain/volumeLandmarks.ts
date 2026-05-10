@@ -1,4 +1,4 @@
-import { VALID_MUSCLE_GROUPS } from "@/modules/shared/domain";
+import { VALID_MUSCLE_GROUPS } from "@/modules/sharedKernel/domain";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 import { getMuscleActivation, type MuscleActivation, type MuscleGroup } from "./exerciseMuscleMap";
 

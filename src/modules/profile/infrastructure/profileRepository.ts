@@ -1,9 +1,9 @@
 import * as Sentry from "@sentry/vue";
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { err, ok, type Result } from "neverthrow";
+import { isAuthError } from "@/modules/platform/infrastructure";
 import type { UserProfileRepository } from "@/modules/profile/application";
-import { parseData } from "@/modules/shared/domain";
-import { isAuthError } from "@/modules/shared/infrastructure/utils/isAuthError";
+import { parseData } from "@/modules/sharedKernel/domain";
 import { type UserProfile, UserProfileSchema } from "../domain/types";
 
 const SHEET_NAME = "UserProfile";

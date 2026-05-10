@@ -1,6 +1,6 @@
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { err, ok, type Result } from "neverthrow";
-import { parseData } from "@/modules/shared/domain";
+import { parseData } from "@/modules/sharedKernel/domain";
 import type { TrainingSummaryRepository } from "@/modules/trainingSummary/application";
 import { type TrainingSummary, TrainingSummarySchema } from "@/modules/trainingSummary/domain";
 

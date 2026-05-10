@@ -1,7 +1,7 @@
 import { err, ok } from "neverthrow";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
-import { useOfflineSyncedStore } from "@/modules/shared/presentation";
+import { useOfflineSyncedStore } from "./offlineSyncedStore";
 
 // Mock @vueuse/core
 vi.mock("@vueuse/core", () => ({

@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/vue";
-import { isMuscleGroup, VALID_MUSCLE_GROUPS } from "@/modules/shared/domain";
+import { isMuscleGroup, VALID_MUSCLE_GROUPS } from "@/modules/sharedKernel/domain";
 import {
   getMuscleActivation,
   type MuscleActivation,

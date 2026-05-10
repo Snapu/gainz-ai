@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { parseOptionalNumber } from "@/modules/shared/domain";
+import { parseOptionalNumber } from "@/modules/sharedKernel/domain";
 
 export const FitnessGoalSchema = z.enum([
   "build_muscle",

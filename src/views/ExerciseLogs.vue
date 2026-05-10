@@ -4,14 +4,14 @@ import { haptic } from "ios-haptics";
 import { storeToRefs } from "pinia";
 import { computed, ref, watch } from "vue";
 import { useDeloadStore } from "@/modules/deload/presentation";
-import { useUserProfileStore, WIZARD_STEPS } from "@/modules/profile/presentation";
-import { localeDateString } from "@/modules/shared/domain";
 import {
   useRestTimerStore,
   useSpreadsheetStore,
   useTrainingSummaryStore,
   useUserProgressStore,
-} from "@/modules/shared/presentation";
+} from "@/modules/platform/presentation";
+import { useUserProfileStore, WIZARD_STEPS } from "@/modules/profile/presentation";
+import { localeDateString } from "@/modules/sharedKernel/domain";
 import { useTrainingInsightsStore } from "@/modules/trainingInsights/presentation";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";

@@ -4,7 +4,7 @@ import {
   getSpreadsheetId,
   loadSpreadsheet,
   SPREADSHEET_NAME,
-} from "@/modules/shared/infrastructure/spreadsheets";
+} from "@/modules/platform/infrastructure/spreadsheets";
 
 describe("spreadsheets", () => {
   beforeEach(() => {

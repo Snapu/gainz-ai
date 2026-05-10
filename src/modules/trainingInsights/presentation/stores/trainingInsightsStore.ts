@@ -1,8 +1,11 @@
 import { defineStore } from "pinia";
 import { computed } from "vue";
 import { useDeloadStore } from "@/modules/deload/presentation";
+import {
+  useExerciseMuscleMapStore,
+  useTrainingSummaryStore,
+} from "@/modules/platform/presentation";
 import { useUserProfileStore } from "@/modules/profile/presentation";
-import { useExerciseMuscleMapStore, useTrainingSummaryStore } from "@/modules/shared/presentation";
 import {
   calculateInsights,
   summaryToExerciseLogs,

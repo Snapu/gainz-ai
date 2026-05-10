@@ -1,7 +1,7 @@
 import * as Sentry from "@sentry/vue";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import { err, ok, type Result } from "neverthrow";
-import { isAuthError } from "@/modules/shared/infrastructure/utils/isAuthError";
+import { isAuthError } from "@/modules/platform/infrastructure/utils/isAuthError";
 
 export const SPREADSHEET_NAME = "Gainz AI App Database";
 

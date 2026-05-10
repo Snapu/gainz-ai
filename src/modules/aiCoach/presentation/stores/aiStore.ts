@@ -12,9 +12,12 @@ import {
 import { createAiCoachService } from "@/modules/aiCoach/infrastructure";
 import { useDeloadStore } from "@/modules/deload/presentation";
 import { useEventsStore } from "@/modules/events/presentation";
+import {
+  useExerciseMuscleMapStore,
+  useTrainingSummaryStore,
+} from "@/modules/platform/presentation";
 import { useUserProfileStore } from "@/modules/profile/presentation";
-import { localeDateString } from "@/modules/shared/domain";
-import { useExerciseMuscleMapStore, useTrainingSummaryStore } from "@/modules/shared/presentation";
+import { localeDateString } from "@/modules/sharedKernel/domain";
 import { getMuscleActivation, normalizeExerciseName } from "@/modules/trainingInsights/domain";
 import { useTrainingInsightsStore } from "@/modules/trainingInsights/presentation";
 import { resolveCurrentSession } from "@/modules/trainingLogs/application";

@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createExerciseMuscleMapRepository } from "@/modules/platform/infrastructure/exerciseMuscleMapRepository";
 import {
   applyAiCleanupResults,
   clearLearnedMap,
   getLearnedMapSize,
   getLearnedMuscleMap,
   learnFromAiResponse,
-} from "@/modules/shared/application";
-import { createExerciseMuscleMapRepository } from "@/modules/shared/infrastructure/exerciseMuscleMapRepository";
+} from "@/modules/sharedKernel/application";
 
 const repository = createExerciseMuscleMapRepository();
 

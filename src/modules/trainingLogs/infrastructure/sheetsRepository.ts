@@ -1,8 +1,8 @@
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { err, ok, type Result } from "neverthrow";
 import { ZodError, z } from "zod";
-import { parseData } from "@/modules/shared/domain";
-import { isAuthError } from "@/modules/shared/infrastructure/utils/isAuthError";
+import { isAuthError } from "@/modules/platform/infrastructure";
+import { parseData } from "@/modules/sharedKernel/domain";
 import type { TrainingLogsRepository } from "@/modules/trainingLogs/application";
 import { type ExerciseLog, ExerciseLogSchema } from "../domain/exerciseLog";
 

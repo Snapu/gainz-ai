@@ -5,7 +5,7 @@ import { storeToRefs } from "pinia";
 import { computed, onMounted, ref } from "vue";
 import { useAiStore } from "@/modules/aiCoach/presentation";
 import { useDeloadStore } from "@/modules/deload/presentation";
-import { useExerciseMuscleMapStore } from "@/modules/shared/presentation";
+import { useExerciseMuscleMapStore } from "@/modules/platform/presentation";
 import type { MuscleGroupInsight } from "@/modules/trainingInsights/domain";
 import { useTrainingInsightsStore } from "@/modules/trainingInsights/presentation";
 import AppHeader from "@/shared/presentation/components/AppHeader.vue";

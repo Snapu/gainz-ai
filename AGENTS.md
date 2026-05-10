@@ -158,18 +158,13 @@ src/
 │       │   └── ...
 │
 ├── modules/                         # DDD: Bounded contexts (domain-driven)
-│   ├── shared/                      # Domain-aware shared logic
-│   │   ├── domain/                  # Core entities, value objects, types
-│   │   │   ├── parseData.ts         # Canonical Zod parsing
-│   │   │   ├── date.ts              # Canonical date formatting
-│   │   │   └── ...
-│   │   ├── application/             # Use cases, orchestration
-│   │   │   ├── exerciseMuscleMap.ts
-│   │   │   ├── leveling.ts
-│   │   │   └── ...
-│   │   └── infrastructure/          # External integrations
-│   │       ├── spreadsheets.ts      # Google Sheets client
-│   │       └── ...
+│   ├── sharedKernel/                # Cross-domain domain/application facades
+│   │   ├── domain/                  # Cross-domain domain primitives and types
+│   │   └── application/             # Cross-domain application logic
+│   │
+│   ├── platform/                    # App platform seams (spreadsheet-coupled infra/presentation)
+│   │   ├── infrastructure/          # platform infrastructure adapters (sheets, storage adapters, auth error helpers)
+│   │   └── presentation/            # platform-coupled presentation stores/composables
 │   │
 │   ├── auth/                        # Auth bounded context
 │   │   ├── domain/
@@ -243,7 +238,7 @@ src/
 
 - **Use for**: Feature flags, step configurations, or lookups tied to one module
   - Example: `src/modules/profile/presentation/constants/wizard.ts` (profile onboarding steps)
-- **Shared constants**: General utilities like API URLs belong in `src/lib/` or `src/modules/shared/`
+- **Shared constants**: General utilities like API URLs belong in `src/lib/`, `src/modules/sharedKernel/`, or `src/modules/platform/`
 
 ### `src/views/` — Page-Level Components
 
@@ -286,11 +281,14 @@ src/
 | Service | File | Notes |
 |---------|------|-------|
 | AI (Google GenAI) | `src/modules/aiCoach/presentation/stores/aiStore.ts` | Uses `window.crypto.subtle` - mock in tests |
-| Google Sheets | `src/modules/shared/infrastructure/spreadsheets.ts` | Uses `google-spreadsheet` |
+| Google Sheets | `src/modules/platform/infrastructure/spreadsheets.ts` | Uses `google-spreadsheet` |
 | OAuth | `src/modules/auth/presentation/stores/authStore.ts` | Uses `vue3-google-login` |
 | Capacitor | `capacitor.config.ts` | Native plugins (haptics, keyboard, status-bar) |
 
 ## Architecture Boundaries
+
+- Use `@/modules/sharedKernel/domain` and `@/modules/sharedKernel/application` for cross-domain shared logic imports.
+- Use `@/modules/platform/infrastructure` and `@/modules/platform/presentation` for spreadsheet/platform-coupled seams.
 
 - **Domain layer** (`src/modules/*/domain/`) — No imports from services, stores, presentation, or other modules' infrastructure
 - **Application layer** (`src/modules/*/application/`) — May import from same module's domain; no direct infrastructure access
@@ -341,6 +339,6 @@ const logsStore = useExerciseLogsStore();
 - **Composables**: `src/shared/presentation/composables/useToast.ts`, `src/shared/presentation/composables/useAuthErrorHandler.ts`
 - **Store pattern**: `src/modules/auth/presentation/index.ts` (re-exporting `stores/authStore.ts`)
 - **Test example**: `src/modules/trainingSummary/application/trainingSummary.test.ts`
-- **Services**: `src/modules/shared/infrastructure/spreadsheets.ts`
+- **Services**: `src/modules/platform/infrastructure/spreadsheets.ts`
 - **Error handling**: use `neverthrow` result patterns in module application/infrastructure files
 - **Module boundaries**: `src/modules/architecture.boundaries.test.ts` (enforces layer rules)

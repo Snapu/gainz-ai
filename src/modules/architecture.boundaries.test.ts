@@ -256,6 +256,36 @@ describe("module architecture boundaries", () => {
     expect(violations).toEqual([]);
   });
 
+  it("source files do not import legacy shared module aliases", async () => {
+    const allFiles = await listSourceFiles(SRC_ROOT);
+    const sourceFiles = allFiles.filter((filePath) => {
+      if (filePath.includes("/node_modules/")) return false;
+      if (filePath.includes("/docs/")) return false;
+      if (filePath.endsWith(".test.ts")) return false;
+      return true;
+    });
+
+    const violations: string[] = [];
+
+    for (const filePath of sourceFiles) {
+      const relativePath = path.relative(SRC_ROOT, filePath).split(path.sep).join("/");
+
+      const source = await readFile(filePath, "utf-8");
+      const importPaths = extractImports(source);
+
+      for (const importPath of importPaths) {
+        const isLegacySharedAlias =
+          /^@\/modules\/shared\/(domain|application|presentation|infrastructure)\b/.test(
+            importPath,
+          );
+        if (isLegacySharedAlias) {
+          violations.push(`${relativePath} -> ${importPath}`);
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
   it("presentation production files only use allowlisted store imports", async () => {
     const allFiles = await listTsFiles(ROOT);
     const presentationProductionFiles = allFiles.filter(

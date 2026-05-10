@@ -1,6 +1,7 @@
 import { useDebounceFn, useLocalStorage } from "@vueuse/core";
 import { defineStore } from "pinia";
 import { computed, ref, watch, watchEffect } from "vue";
+import { useSpreadsheetRepositoryFactory } from "@/modules/platform/presentation";
 import {
   loadUserProfile,
   migrateFromLocalStorage,
@@ -15,7 +16,6 @@ import type {
   WorkoutLocation,
 } from "@/modules/profile/domain";
 import { createUserProfileRepository } from "@/modules/profile/infrastructure";
-import { useSpreadsheetRepositoryFactory } from "@/modules/shared/presentation";
 import { useAuthErrorHandler } from "@/shared/presentation/composables/useAuthErrorHandler";
 
 export type {

@@ -9,7 +9,7 @@ import {
   getSpreadsheetId,
   loadSpreadsheet,
   SPREADSHEET_NAME,
-} from "@/modules/shared/infrastructure/spreadsheets";
+} from "@/modules/platform/infrastructure/spreadsheets";
 import { useAuthErrorHandler } from "@/shared/presentation/composables/useAuthErrorHandler";
 
 export const useSpreadsheetStore = defineStore("spreadsheet", () => {

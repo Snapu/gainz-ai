@@ -1,4 +1,4 @@
-import { localeDateString } from "@/modules/shared/domain";
+import { localeDateString } from "@/modules/sharedKernel/domain";
 import type { ExerciseLog } from "../domain/exerciseLog";
 
 export type WorkoutPhase = "planning" | "mid-workout" | "post-workout";

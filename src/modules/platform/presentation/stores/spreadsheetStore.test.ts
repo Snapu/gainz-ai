@@ -1,10 +1,10 @@
 import { err, ok } from "neverthrow";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import * as spreadsheetService from "@/modules/shared/infrastructure/spreadsheets";
-import { useSpreadsheetStore } from "@/modules/shared/presentation";
+import * as spreadsheetService from "@/modules/platform/infrastructure/spreadsheets";
+import { useSpreadsheetStore } from "./spreadsheetStore";
 
-vi.mock("@/modules/shared/infrastructure/spreadsheets", () => ({
+vi.mock("@/modules/platform/infrastructure/spreadsheets", () => ({
   SPREADSHEET_NAME: "Test Spreadsheet",
   getSpreadsheetId: vi.fn(),
   loadSpreadsheet: vi.fn(),

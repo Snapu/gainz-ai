@@ -15,7 +15,7 @@ import { createExerciseWeightMigrationRepository } from "@/modules/migration/inf
 import {
   useSpreadsheetRepositoryFactory,
   useTrainingSummaryStore,
-} from "@/modules/shared/presentation";
+} from "@/modules/platform/presentation";
 import { createTrainingLogsRepository } from "@/modules/trainingLogs/infrastructure";
 import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
 

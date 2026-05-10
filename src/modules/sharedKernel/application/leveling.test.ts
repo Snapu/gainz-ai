@@ -3,7 +3,7 @@ import {
   calculateUserProgress,
   getNextTitleMilestone,
   getTitleForLevel,
-} from "@/modules/shared/application";
+} from "@/modules/sharedKernel/application";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 
 function mockLog(date: Date, exercise = "Bench Press", weight = 60): ExerciseLog {

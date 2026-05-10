@@ -2,10 +2,10 @@ import { type GenerateContentConfig, GoogleGenAI } from "@google/genai";
 import * as Sentry from "@sentry/vue";
 import { err, ok, type Result } from "neverthrow";
 import type { Event } from "@/modules/events/domain";
+import { createExerciseMuscleMapRepository } from "@/modules/platform/infrastructure";
 import type { UserProfile } from "@/modules/profile/domain";
-import { learnFromAiResponse, VALID_MUSCLE_GROUPS } from "@/modules/shared/application";
-import { localeDateString } from "@/modules/shared/domain";
-import { createExerciseMuscleMapRepository } from "@/modules/shared/infrastructure/exerciseMuscleMapRepository";
+import { learnFromAiResponse, VALID_MUSCLE_GROUPS } from "@/modules/sharedKernel/application";
+import { localeDateString } from "@/modules/sharedKernel/domain";
 import {
   summarizeTrainingInsights,
   type TrainingInsights,

@@ -20,7 +20,7 @@ import {
   isDeloadActive,
 } from "@/modules/deload/domain";
 import { createDeloadPhaseRepository } from "@/modules/deload/infrastructure";
-import { useSpreadsheetRepositoryFactory } from "@/modules/shared/presentation";
+import { useSpreadsheetRepositoryFactory } from "@/modules/platform/presentation";
 import { useAuthErrorHandler } from "@/shared/presentation/composables/useAuthErrorHandler";
 
 export type { DeloadPhase, DeloadStatus };

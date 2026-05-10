@@ -28,16 +28,16 @@ vi.mock("@/modules/profile/application", () => ({
   saveUserProfile: vi.fn(),
 }));
 
-vi.mock("@/modules/shared/presentation", () => ({
+vi.mock("@/modules/platform/presentation", () => ({
   useSpreadsheetStore: vi.fn(),
 }));
 
+import { useSpreadsheetStore } from "@/modules/platform/presentation";
 import {
   loadUserProfile,
   migrateFromLocalStorage,
   saveUserProfile,
 } from "@/modules/profile/application";
-import { useSpreadsheetStore } from "@/modules/shared/presentation";
 
 describe("useUserProfileStore", () => {
   let mockLocalStorage: ReturnType<typeof createMockLocalStorage>;

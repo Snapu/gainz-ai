@@ -41,7 +41,7 @@
  * CONFIGURATION CONSTANTS
  * ====================================================== */
 
-import type { UserProgress } from "@/modules/shared/domain";
+import type { UserProgress } from "@/modules/sharedKernel/domain";
 import { calculateE1RM, calculateMuscleGroupInsights } from "@/modules/trainingInsights/domain";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 

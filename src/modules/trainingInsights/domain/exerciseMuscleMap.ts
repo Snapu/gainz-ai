@@ -1,5 +1,5 @@
-import type { MuscleGroup } from "@/modules/shared/domain";
-import { exerciseNameKey } from "@/modules/shared/domain";
+import type { MuscleGroup } from "@/modules/sharedKernel/domain";
+import { exerciseNameKey } from "@/modules/sharedKernel/domain";
 
 // Re-export for backward compatibility
 export type { MuscleGroup };

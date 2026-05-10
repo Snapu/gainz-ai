@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { cleanExerciseName, parseOptionalNumber } from "@/modules/shared/domain";
+import { cleanExerciseName, parseOptionalNumber } from "@/modules/sharedKernel/domain";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 
 export const DEFAULT_PREVIEW_LOG_COUNT = 5;

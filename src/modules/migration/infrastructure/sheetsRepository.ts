@@ -2,8 +2,8 @@ import * as Sentry from "@sentry/vue";
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { err, ok, type Result } from "neverthrow";
 import type { ExerciseWeightMigrationRepository } from "@/modules/migration/application";
-import { cleanExerciseName, parseOptionalNumber } from "@/modules/shared/domain";
-import { isAuthError } from "@/modules/shared/infrastructure/utils/isAuthError";
+import { isAuthError } from "@/modules/platform/infrastructure";
+import { cleanExerciseName, parseOptionalNumber } from "@/modules/sharedKernel/domain";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 import {
   aggregateLogsToSummary,

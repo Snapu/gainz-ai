@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateUserProgress } from "@/modules/shared/application";
+import { calculateUserProgress } from "@/modules/sharedKernel/application";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 
 /**

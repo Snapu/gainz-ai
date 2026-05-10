@@ -2,7 +2,7 @@ import * as Sentry from "@sentry/vue";
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { err, ok, type Result } from "neverthrow";
 import type { DeloadPhaseRepository } from "@/modules/deload/application";
-import { isAuthError } from "@/modules/shared/infrastructure/utils/isAuthError";
+import { isAuthError } from "@/modules/platform/infrastructure";
 import { isFatigueTriggerId } from "@/modules/trainingInsights/domain";
 import type { DeloadPhase, FatigueTriggerId } from "../domain/types";
 

@@ -2,7 +2,7 @@
 import { ChevronRight } from "@lucide/vue";
 import { computed } from "vue";
 import { useDeloadStore } from "@/modules/deload/presentation";
-import type { UserProgress } from "@/modules/shared/domain";
+import type { UserProgress } from "@/modules/sharedKernel/domain";
 import type { SystemicPhase, TrainingInsights } from "@/modules/trainingInsights/domain";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";

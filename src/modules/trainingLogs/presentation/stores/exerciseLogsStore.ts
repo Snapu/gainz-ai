@@ -4,7 +4,7 @@ import { watch } from "vue";
 import {
   useOfflineSyncedStore,
   useSpreadsheetRepositoryFactory,
-} from "@/modules/shared/presentation";
+} from "@/modules/platform/presentation";
 import {
   addExerciseLog as addExerciseLog_,
   deleteExerciseLog as deleteExerciseLog_,

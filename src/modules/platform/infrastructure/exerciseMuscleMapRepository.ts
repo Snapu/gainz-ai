@@ -1,4 +1,4 @@
-import type { ExerciseMuscleMapRepository } from "@/modules/shared/application";
+import type { ExerciseMuscleMapRepository } from "@/modules/sharedKernel/application";
 
 const STORAGE_KEY = "exerciseMuscleMap";
 

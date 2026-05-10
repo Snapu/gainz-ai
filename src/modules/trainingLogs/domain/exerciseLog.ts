@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { cleanExerciseName, parseOptionalNumber } from "@/modules/shared/domain";
+import { cleanExerciseName, parseOptionalNumber } from "@/modules/sharedKernel/domain";
 
 const ExerciseNameSchema = z.string().overwrite(cleanExerciseName);
 

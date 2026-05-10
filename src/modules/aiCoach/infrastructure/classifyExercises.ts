@@ -1,7 +1,7 @@
 import { GoogleGenAI, type Schema, Type } from "@google/genai";
 import * as Sentry from "@sentry/vue";
 import { err, ok, type Result } from "neverthrow";
-import { VALID_MUSCLE_GROUPS } from "@/modules/shared/application";
+import { VALID_MUSCLE_GROUPS } from "@/modules/sharedKernel/application";
 import type { AskAiError, ExerciseCleanupResult } from "../domain/types";
 
 const CLASSIFICATION_TEMPERATURE = 0.1;
