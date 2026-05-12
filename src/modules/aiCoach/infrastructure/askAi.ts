@@ -530,7 +530,7 @@ export async function askAi(
 
     let responseStream: Awaited<ReturnType<typeof ai.models.generateContentStream>>;
     try {
-      responseStream = await generateWithTimeout("gemini-3-flash-preview");
+      responseStream = await generateWithTimeout("gemini-2.5-flash");
     } catch (streamErr) {
       if (isServiceUnavailableError(streamErr) || isTimeoutError(streamErr)) {
         Sentry.captureMessage("Primary model unavailable/slow, falling back to gemini-2.5-flash", {
@@ -538,7 +538,7 @@ export async function askAi(
           tags: { scope: "ai-service", feature: "model-fallback" },
           extra: { timedOut: isTimeoutError(streamErr) },
         });
-        responseStream = await generateWithTimeout("gemini-2.5-flash");
+        responseStream = await generateWithTimeout("gemini-3-flash-preview");
       } else {
         throw streamErr;
       }

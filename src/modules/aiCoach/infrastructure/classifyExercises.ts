@@ -90,7 +90,7 @@ Important rules:
     let response: { text?: string };
     try {
       response = await ai.models.generateContent({
-        model: "gemini-3.1-flash-lite-preview",
+        model: "gemini-2.5-flash",
         contents: classifyContents,
         config: classifyConfig,
       });
@@ -105,7 +105,7 @@ Important rules:
           },
         );
         response = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
+          model: "gemini-3.1-flash-lite-preview",
           contents: classifyContents,
           config: classifyConfig,
         });
