@@ -15,6 +15,9 @@ const props = defineProps<{
   muscleGroups: Partial<Record<MuscleGroup, MuscleGroupInsight>>;
 }>();
 
+const BASE = import.meta.env.BASE_URL.endsWith("/") ? import.meta.env.BASE_URL.slice(0, -1) : import.meta.env.BASE_URL;
+const MUSCLE_MAP_IMAGE_SRC = `${BASE}/assets/muscle/muscle-map-anime.png`;
+
 function getDotColor(landmark?: VolumeLandmark): string {
   if (!landmark) return "bg-white/30 border-white/50";
   switch (landmark) {
@@ -236,7 +239,7 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
           <div :key="'img-'+currentView.id" class="absolute inset-0 w-full h-full animate-in fade-in zoom-in-95 duration-300 mix-blend-screen">
             <div class="absolute inset-0 overflow-hidden bg-transparent">
                <img 
-                 src="@/assets/muscle_map_anime.png" 
+                 :src="MUSCLE_MAP_IMAGE_SRC" 
                  loading="eager"
                  fetchpriority="high"
                  class="absolute inset-y-0 w-[200%] h-full max-w-none pointer-events-none opacity-[0.25] invert transition-all duration-300 ease-in-out object-fill"

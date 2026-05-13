@@ -26,6 +26,7 @@ describe("leveling system", () => {
       expect(result.totalXP).toBe(0);
       expect(result.readiness).toBe(0.5); // READINESS_MIN
       expect(result.title).toBe("Novice Challenger");
+      expect(result.avatar).toBe("/assets/ranks/rank-1.png");
     });
 
     it("should calculate progress for a single exercise day", () => {
