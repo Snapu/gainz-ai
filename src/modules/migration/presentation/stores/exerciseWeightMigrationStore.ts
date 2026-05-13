@@ -1,4 +1,5 @@
 import type { GoogleSpreadsheet } from "google-spreadsheet";
+import { err, ok, ResultAsync } from "neverthrow";
 import { defineStore } from "pinia";
 import { computed, ref, watchEffect } from "vue";
 
@@ -16,14 +17,14 @@ import {
   useSpreadsheetRepositoryFactory,
   useTrainingSummaryStore,
 } from "@/modules/platform/presentation";
-import { createTrainingLogsRepository } from "@/modules/trainingLogs/infrastructure";
+import { createExerciseLogRepository } from "@/modules/trainingLogs/infrastructure";
 import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
 
 export const useExerciseWeightMigrationStore = defineStore("exerciseWeightMigration", () => {
   const migrationRepoFactory = useSpreadsheetRepositoryFactory(
     createExerciseWeightMigrationRepository,
   );
-  const logsRepoFactory = useSpreadsheetRepositoryFactory(createTrainingLogsRepository);
+  const logsRepoFactory = useSpreadsheetRepositoryFactory(createExerciseLogRepository);
 
   const { spreadsheetStore, getDoc } = migrationRepoFactory;
   const logsStore = useExerciseLogsStore();
@@ -44,37 +45,49 @@ export const useExerciseWeightMigrationStore = defineStore("exerciseWeightMigrat
     isLoading.value = true;
     lastError.value = null;
 
-    try {
-      const migrationRepository = migrationRepoFactory.createRepository(doc);
-      const logsRepository = logsRepoFactory.createRepository(doc);
-      if (!migrationRepository || !logsRepository) {
-        lastError.value = "load-failed";
-        return;
-      }
+    const migrationRepository = migrationRepoFactory.createRepository(doc);
+    const logsRepository = logsRepoFactory.createRepository(doc);
+    if (!migrationRepository || !logsRepository) {
+      lastError.value = "load-failed";
+      isLoading.value = false;
+      return;
+    }
 
-      const [reviewsResult, logsResult] = await Promise.all([
+    const result = await ResultAsync.fromPromise(
+      Promise.all([
         loadExerciseWeightMigrationReviews(migrationRepository),
         loadAllLogsForMigration(logsRepository),
-      ]);
+      ]),
+      (error) => {
+        console.error("Failed to refresh exercise weight migration data:", error);
+        return "load-failed" as const;
+      },
+    );
 
-      if (reviewsResult.isErr()) {
-        lastError.value = reviewsResult.error;
-        return;
-      }
+    isLoading.value = false;
 
-      if (logsResult.isErr()) {
-        lastError.value = logsResult.error;
-        return;
-      }
-
-      reviewedExercises.value = reviewsResult.value;
-      pendingExercises.value = buildPendingExerciseMigrationCandidates(
-        logsResult.value,
-        reviewsResult.value,
-      );
-    } finally {
-      isLoading.value = false;
+    if (result.isErr()) {
+      lastError.value = result.error;
+      return;
     }
+
+    const [reviewsResult, logsResult] = result.value;
+
+    if (reviewsResult.isErr()) {
+      lastError.value = reviewsResult.error;
+      return;
+    }
+
+    if (logsResult.isErr()) {
+      lastError.value = logsResult.error;
+      return;
+    }
+
+    reviewedExercises.value = reviewsResult.value;
+    pendingExercises.value = buildPendingExerciseMigrationCandidates(
+      logsResult.value,
+      reviewsResult.value,
+    );
   }
 
   async function applyDecision(exerciseName: string, decision: ExerciseWeightMigrationDecision) {
@@ -87,19 +100,34 @@ export const useExerciseWeightMigrationStore = defineStore("exerciseWeightMigrat
     activeExerciseName.value = exerciseName;
     lastError.value = null;
 
-    try {
-      const result = await applyExerciseWeightMigrationDecision(exerciseName, decision, repository);
-      if (result.isErr()) {
-        lastError.value = result.error;
-        return result;
-      }
-
-      await Promise.all([refresh(), logsStore.refresh(), trainingSummaryStore.refresh()]);
-
-      return result;
-    } finally {
-      activeExerciseName.value = null;
-    }
+    // Compose: apply → refresh all stores → isolate side effects (error handling + cleanup)
+    // Using orTee pattern from neverthrow-elegant: side effects don't pollute the chain
+    return ResultAsync.fromPromise(
+      applyExerciseWeightMigrationDecision(exerciseName, decision, repository),
+      (error) => {
+        console.error("Failed to apply exercise weight migration decision:", error);
+        return "save-failed" as const;
+      },
+    )
+      .andThen(() =>
+        ResultAsync.fromPromise(
+          Promise.all([refresh(), logsStore.refresh(), trainingSummaryStore.refresh()]),
+          (error) => {
+            console.error("Failed to refresh after decision:", error);
+            return "save-failed" as const;
+          },
+        ),
+      )
+      .map(() => {
+        // Success path: clean up state after both succeed
+        activeExerciseName.value = null;
+        return undefined;
+      })
+      .orTee((error) => {
+        // Error path (isolated): capture error and clean up on both success/failure
+        lastError.value = error;
+        activeExerciseName.value = null;
+      });
   }
 
   watchEffect(() => {

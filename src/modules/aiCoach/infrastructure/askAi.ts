@@ -1,6 +1,6 @@
 import { type GenerateContentConfig, GoogleGenAI } from "@google/genai";
 import * as Sentry from "@sentry/vue";
-import { err, ok, type Result } from "neverthrow";
+import { errAsync, Result, ResultAsync } from "neverthrow";
 import type { Event } from "@/modules/events/domain";
 import { createExerciseMuscleMapRepository } from "@/modules/platform/infrastructure";
 import type { UserProfile } from "@/modules/profile/domain";
@@ -296,38 +296,39 @@ function buildPriorPlanSummary(
   const lastAssistant = previousMessages.filter((m) => m.role === "assistant").slice(-1)[0];
   if (!lastAssistant) return null;
 
-  try {
-    const parsed = JSON.parse(lastAssistant.content);
-    if (!Array.isArray(parsed.recommendedWorkout) || parsed.recommendedWorkout.length === 0) {
-      return null;
-    }
+  const parsed = Result.fromThrowable(
+    () => JSON.parse(lastAssistant.content),
+    () => null,
+  )().unwrapOr(null);
+  if (!parsed) return null;
 
-    const todayExercises = new Map<string, number>();
-    for (const log of todayLogs) {
-      todayExercises.set(log.exerciseName, (todayExercises.get(log.exerciseName) ?? 0) + 1);
-    }
-
-    const lines = parsed.recommendedWorkout.map(
-      (ex: { exerciseName: string; targetSets: number; targetWeight?: string }) => {
-        const done = todayExercises.get(ex.exerciseName) ?? 0;
-        const target = ex.targetSets ?? 0;
-        let status: string;
-        if (target > 0 && done >= target) {
-          status = "✓ done";
-        } else if (done > 0) {
-          status = `${done}/${target} sets`;
-        } else {
-          status = "pending";
-        }
-        const weight = ex.targetWeight ? ` @${ex.targetWeight}` : "";
-        return `${ex.exerciseName}: ${status}${weight}`;
-      },
-    );
-
-    return `Last plan status:\n${lines.join("\n")}`;
-  } catch {
+  if (!Array.isArray(parsed.recommendedWorkout) || parsed.recommendedWorkout.length === 0) {
     return null;
   }
+
+  const todayExercises = new Map<string, number>();
+  for (const log of todayLogs) {
+    todayExercises.set(log.exerciseName, (todayExercises.get(log.exerciseName) ?? 0) + 1);
+  }
+
+  const lines = parsed.recommendedWorkout.map(
+    (ex: { exerciseName: string; targetSets: number; targetWeight?: string }) => {
+      const done = todayExercises.get(ex.exerciseName) ?? 0;
+      const target = ex.targetSets ?? 0;
+      let status: string;
+      if (target > 0 && done >= target) {
+        status = "✓ done";
+      } else if (done > 0) {
+        status = `${done}/${target} sets`;
+      } else {
+        status = "pending";
+      }
+      const weight = ex.targetWeight ? ` @${ex.targetWeight}` : "";
+      return `${ex.exerciseName}: ${status}${weight}`;
+    },
+  );
+
+  return `Last plan status:\n${lines.join("\n")}`;
 }
 
 function buildCompactProfileContext(userProfile: UserProfile): Record<string, unknown> {
@@ -401,7 +402,7 @@ export function getTodayLogsCount(session: WorkoutSession | null): number {
   return session?.logs.length ?? 0;
 }
 
-export async function askAi(
+export function askAi(
   apiKey: string | undefined,
   userProfile: UserProfile,
   insights: TrainingInsights,
@@ -409,185 +410,209 @@ export async function askAi(
   trainingSummaries: TrainingSummary[],
   previousMessages: PreviousAiMessage[],
   events: Event[] = [],
-): Promise<Result<AskAiResult, AskAiError>> {
-  if (!apiKey) return err("missing-api-key");
+): ResultAsync<AskAiResult, AskAiError> {
+  if (!apiKey) return errAsync("missing-api-key");
 
-  const ai = new GoogleGenAI({ apiKey });
-  const today = localeDateString(new Date());
-  let aiResponseText = "";
+  return ResultAsync.fromPromise(
+    (async () => {
+      const ai = new GoogleGenAI({ apiKey });
+      const today = localeDateString(new Date());
+      let aiResponseText = "";
+      let parsedAiResponse: Record<string, unknown> | null = null;
 
-  try {
-    const session = resolveCurrentSession(exerciseLogs);
-    const todayLogs = session?.logs ?? [];
+      try {
+        const session = resolveCurrentSession(exerciseLogs);
+        const todayLogs = session?.logs ?? [];
 
-    const isFirstMessage = previousMessages.length === 0;
-    const phase = getWorkoutPhase(session);
-    const isMidWorkout = phase === "mid-workout";
-    const aiTimeoutMs = isFirstMessage || phase === "planning" ? 140_000 : 90_000;
+        const isFirstMessage = previousMessages.length === 0;
+        const phase = getWorkoutPhase(session);
+        const isMidWorkout = phase === "mid-workout";
+        const aiTimeoutMs = isFirstMessage || phase === "planning" ? 140_000 : 90_000;
 
-    const initialWindow = getInitialLogsWindow(exerciseLogs);
-    const workoutStatus = getWorkoutStatus(session);
-    const now = new Date();
-    const currentTime = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
+        const initialWindow = getInitialLogsWindow(exerciseLogs);
+        const workoutStatus = getWorkoutStatus(session);
+        const now = new Date();
+        const currentTime = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
 
-    const sections: string[] = [
-      `Today is ${today} ${currentTime}, ${workoutStatus}\nPhase: ${phase}`,
-    ];
+        const sections: string[] = [
+          `Today is ${today} ${currentTime}, ${workoutStatus}\nPhase: ${phase}`,
+        ];
 
-    if (isFirstMessage) {
-      sections.push(`Profile:\n${JSON.stringify(buildCompactProfileContext(userProfile))}`);
-      if (userProfile.freeUserInput) {
-        sections.push(`User's own words about their goals:\n"${userProfile.freeUserInput}"`);
-      }
-    }
+        if (isFirstMessage) {
+          sections.push(`Profile:\n${JSON.stringify(buildCompactProfileContext(userProfile))}`);
+          if (userProfile.freeUserInput) {
+            sections.push(`User's own words about their goals:\n"${userProfile.freeUserInput}"`);
+          }
+        }
 
-    const restDays = getDaysSinceLastWorkout(exerciseLogs, session);
-    if (restDays !== null) {
-      sections.push(`Days since last workout: ${restDays}`);
-    }
+        const restDays = getDaysSinceLastWorkout(exerciseLogs, session);
+        if (restDays !== null) {
+          sections.push(`Days since last workout: ${restDays}`);
+        }
 
-    if (isFirstMessage) {
-      const pattern = getTrainingPattern(exerciseLogs);
-      if (pattern) sections.push(pattern);
-    }
+        if (isFirstMessage) {
+          const pattern = getTrainingPattern(exerciseLogs);
+          if (pattern) sections.push(pattern);
+        }
 
-    if (isFirstMessage && trainingSummaries.length > 0) {
-      const summariesForPrompt = trainingSummaries.slice(-MAX_SUMMARIES_IN_PROMPT);
-      sections.push(`Historical training summary:\n${JSON.stringify(summariesForPrompt)}`);
-    }
+        if (isFirstMessage && trainingSummaries.length > 0) {
+          const summariesForPrompt = trainingSummaries.slice(-MAX_SUMMARIES_IN_PROMPT);
+          sections.push(`Historical training summary:\n${JSON.stringify(summariesForPrompt)}`);
+        }
 
-    if (todayLogs.length > 0) {
-      sections.push(`Today's session so far:\n${compactLogs(todayLogs)}`);
-    }
+        if (todayLogs.length > 0) {
+          sections.push(`Today's session so far:\n${compactLogs(todayLogs)}`);
+        }
 
-    if (isMidWorkout && previousMessages.length > 0) {
-      const assistantMsgs = previousMessages.filter((m) => m.role === "assistant");
-      const lastAssistant = assistantMsgs[assistantMsgs.length - 1];
-      const cutoff = lastAssistant?.timestamp ? new Date(lastAssistant.timestamp).getTime() : 0;
-      const newLogs = todayLogs.filter((l) => l.loggedAt.getTime() > cutoff);
-      if (newLogs.length > 0) {
-        sections.push(`New since last update:\n${compactLogs(newLogs)}`);
-      }
+        if (isMidWorkout && previousMessages.length > 0) {
+          const assistantMsgs = previousMessages.filter((m) => m.role === "assistant");
+          const lastAssistant = assistantMsgs[assistantMsgs.length - 1];
+          const cutoff = lastAssistant?.timestamp ? new Date(lastAssistant.timestamp).getTime() : 0;
+          const newLogs = todayLogs.filter((l) => l.loggedAt.getTime() > cutoff);
+          if (newLogs.length > 0) {
+            sections.push(`New since last update:\n${compactLogs(newLogs)}`);
+          }
 
-      const planSummary = buildPriorPlanSummary(previousMessages, todayLogs);
-      if (planSummary) sections.push(planSummary);
-    }
+          const planSummary = buildPriorPlanSummary(previousMessages, todayLogs);
+          if (planSummary) sections.push(planSummary);
+        }
 
-    if (isFirstMessage) {
-      const sessionBoundary = getSessionStartBoundary(session);
-      const historicalLogs = initialWindow.logs.filter(
-        (l) => l.loggedAt.getTime() < sessionBoundary,
-      );
-      if (historicalLogs.length > 0) {
-        sections.push(`${initialWindow.label}:\n${compactLogs(historicalLogs)}`);
-      }
-    }
+        if (isFirstMessage) {
+          const sessionBoundary = getSessionStartBoundary(session);
+          const historicalLogs = initialWindow.logs.filter(
+            (l) => l.loggedAt.getTime() < sessionBoundary,
+          );
+          if (historicalLogs.length > 0) {
+            sections.push(`${initialWindow.label}:\n${compactLogs(historicalLogs)}`);
+          }
+        }
 
-    if (phase === "planning" || isFirstMessage) {
-      sections.push(`Training Context:\n${JSON.stringify(buildCompactTrainingContext(insights))}`);
-    } else {
-      const e1rmCompact = Object.entries(insights.e1rm)
-        .map(([name, d]) => {
-          let s = `${name}: ${d.e1rm}kg`;
-          if (d.plateau) s += " (plateau)";
-          if (d.bestRPE != null) s += ` @RPE${d.bestRPE}`;
-          return s;
-        })
-        .join(", ");
-      if (e1rmCompact) sections.push(`e1RM: ${e1rmCompact}`);
-    }
+        if (phase === "planning" || isFirstMessage) {
+          sections.push(
+            `Training Context:\n${JSON.stringify(buildCompactTrainingContext(insights))}`,
+          );
+        } else {
+          const e1rmCompact = Object.entries(insights.e1rm)
+            .map(([name, d]) => {
+              let s = `${name}: ${d.e1rm}kg`;
+              if (d.plateau) s += " (plateau)";
+              if (d.bestRPE != null) s += ` @RPE${d.bestRPE}`;
+              return s;
+            })
+            .join(", ");
+          if (e1rmCompact) sections.push(`e1RM: ${e1rmCompact}`);
+        }
 
-    if (events.length > 0) {
-      const eventsText = events
-        .map((event) => `- ${event.type}: ${event.dates.join(", ")}`)
-        .join("\n");
-      sections.push(`Health/schedule events:\n${eventsText}`);
-    }
+        if (events.length > 0) {
+          const eventsText = events
+            .map((event) => `- ${event.type}: ${event.dates.join(", ")}`)
+            .join("\n");
+          sections.push(`Health/schedule events:\n${eventsText}`);
+        }
 
-    sections.push(`Units: kg, minutes, meters\nLanguage: "${navigator.language}"`);
+        sections.push(`Units: kg, minutes, meters\nLanguage: "${navigator.language}"`);
 
-    const currentUserInput = sections.join("\n\n");
+        const currentUserInput = sections.join("\n\n");
 
-    if (import.meta.env.DEV) {
-      console.debug(currentUserInput);
-    }
+        if (import.meta.env.DEV) {
+          console.debug(currentUserInput);
+        }
 
-    const conversationContents = [{ role: "user" as const, parts: [{ text: currentUserInput }] }];
+        const conversationContents = [
+          { role: "user" as const, parts: [{ text: currentUserInput }] },
+        ];
 
-    const generateWithTimeout = (model: "gemini-3-flash-preview" | "gemini-2.5-flash") => {
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("AI request timed out")), aiTimeoutMs),
-      );
-      return Promise.race([
-        ai.models.generateContentStream({
-          model,
-          contents: conversationContents,
-          config: aiConfig,
-        }),
-        timeoutPromise,
-      ]);
-    };
+        const generateWithTimeout = (model: "gemini-3-flash-preview" | "gemini-2.5-flash") => {
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("AI request timed out")), aiTimeoutMs),
+          );
+          return Promise.race([
+            ai.models.generateContentStream({
+              model,
+              contents: conversationContents,
+              config: aiConfig,
+            }),
+            timeoutPromise,
+          ]);
+        };
 
-    let responseStream: Awaited<ReturnType<typeof ai.models.generateContentStream>>;
-    try {
-      responseStream = await generateWithTimeout("gemini-2.5-flash");
-    } catch (streamErr) {
-      if (isServiceUnavailableError(streamErr) || isTimeoutError(streamErr)) {
-        Sentry.captureMessage("Primary model unavailable/slow, falling back to gemini-2.5-flash", {
-          level: "info",
-          tags: { scope: "ai-service", feature: "model-fallback" },
-          extra: { timedOut: isTimeoutError(streamErr) },
-        });
-        responseStream = await generateWithTimeout("gemini-3-flash-preview");
-      } else {
-        throw streamErr;
-      }
-    }
+        let responseStream: Awaited<ReturnType<typeof ai.models.generateContentStream>>;
+        try {
+          responseStream = await generateWithTimeout("gemini-2.5-flash");
+        } catch (streamErr) {
+          if (isServiceUnavailableError(streamErr) || isTimeoutError(streamErr)) {
+            Sentry.captureMessage(
+              "Primary model unavailable/slow, falling back to gemini-3-flash-preview",
+              {
+                level: "info",
+                tags: { scope: "ai-service", feature: "model-fallback" },
+                extra: { timedOut: isTimeoutError(streamErr) },
+              },
+            );
+            responseStream = await generateWithTimeout("gemini-3-flash-preview");
+          } else {
+            throw streamErr;
+          }
+        }
 
-    aiResponseText = "";
-    for await (const chunk of responseStream) {
-      if (chunk.text) aiResponseText += chunk.text;
-    }
+        aiResponseText = "";
+        for await (const chunk of responseStream) {
+          if (chunk.text) aiResponseText += chunk.text;
+        }
 
-    try {
-      const parsed = JSON.parse(aiResponseText);
-      if (typeof parsed?.coachMessage !== "string" || parsed.coachMessage.trim() === "") {
-        Sentry.captureMessage("AI response missing coachMessage", {
-          level: "warning",
-          tags: { scope: "ai-service", feature: "ask-ai-response-validate" },
+        // Validate JSON response structure using Result.fromThrowable (neverthrow-elegant pattern)
+        const validationResult = Result.fromThrowable(
+          () => JSON.parse(aiResponseText) as Record<string, unknown>,
+          (error: unknown) => {
+            Sentry.captureException(error, {
+              tags: { scope: "ai-service", feature: "ask-ai-response-parse" },
+              extra: { responseLength: aiResponseText.length },
+            });
+            return "generate-content-stream-failed" as const;
+          },
+        )();
+
+        if (validationResult.isErr()) {
+          throw new Error(validationResult.error);
+        }
+
+        parsedAiResponse = validationResult.value;
+        if (
+          typeof parsedAiResponse.coachMessage !== "string" ||
+          parsedAiResponse.coachMessage.trim() === ""
+        ) {
+          Sentry.captureMessage("AI response missing coachMessage", {
+            level: "warning",
+            tags: { scope: "ai-service", feature: "ask-ai-response-validate" },
+            extra: { responseLength: aiResponseText.length },
+          });
+          throw new Error("generate-content-stream-failed");
+        }
+
+        return { responseText: aiResponseText, requestPayload: currentUserInput };
+      } catch (error) {
+        console.error("AI request failed:", error);
+        Sentry.captureException(error, {
+          tags: { scope: "ai-service", feature: "ask-ai-request" },
           extra: { responseLength: aiResponseText.length },
         });
-        return err("generate-content-stream-failed");
-      }
-    } catch (error) {
-      Sentry.captureException(error, {
-        tags: { scope: "ai-service", feature: "ask-ai-response-parse" },
-        extra: { responseLength: aiResponseText.length },
-      });
-      return err("generate-content-stream-failed");
-    }
-
-    return ok({ responseText: aiResponseText, requestPayload: currentUserInput });
-  } catch (error) {
-    console.error("AI request failed:", error);
-    Sentry.captureException(error, {
-      tags: { scope: "ai-service", feature: "ask-ai-request" },
-      extra: { responseLength: aiResponseText.length },
-    });
-    return err("generate-content-stream-failed");
-  } finally {
-    try {
-      if (aiResponseText) {
-        const parsed = JSON.parse(aiResponseText);
-        if (Array.isArray(parsed?.recommendedWorkout)) {
-          learnFromAiResponse(parsed.recommendedWorkout, createExerciseMuscleMapRepository());
+        throw error;
+      } finally {
+        if (parsedAiResponse && Array.isArray(parsedAiResponse.recommendedWorkout)) {
+          try {
+            learnFromAiResponse(
+              parsedAiResponse.recommendedWorkout,
+              createExerciseMuscleMapRepository(),
+            );
+          } catch (error) {
+            Sentry.captureException(error, {
+              tags: { scope: "ai-service", feature: "learn-from-response" },
+              extra: { responseLength: aiResponseText.length },
+            });
+          }
         }
       }
-    } catch (error) {
-      Sentry.captureException(error, {
-        tags: { scope: "ai-service", feature: "learn-from-response" },
-        extra: { responseLength: aiResponseText.length },
-      });
-    }
-  }
+    })(),
+    () => "generate-content-stream-failed" as AskAiError,
+  );
 }

@@ -1,11 +1,11 @@
-import { err, ok } from "neverthrow";
+import { err, errAsync, ok, okAsync } from "neverthrow";
 import { describe, expect, it, vi } from "vitest";
 import { type AiCoachService, askCoachWithSingleRetry, responseStartsDeload } from "./useCases";
 
 function makeService(askImpl: AiCoachService["ask"]): AiCoachService {
   return {
     ask: askImpl,
-    classifyExercises: vi.fn(async () => ok({ classifications: [] })),
+    classifyExercises: vi.fn(() => okAsync({ classifications: [] })),
     getTodayLogsCount: vi.fn(() => 0),
   };
 }
@@ -16,8 +16,8 @@ describe("aiCoach application use-cases", () => {
 
     const ask = vi
       .fn<AiCoachService["ask"]>()
-      .mockResolvedValueOnce(err("ai-request-failed"))
-      .mockResolvedValueOnce(ok({ responseText: "{}", requestPayload: "payload" }));
+      .mockReturnValueOnce(errAsync("ai-request-failed"))
+      .mockReturnValueOnce(okAsync({ responseText: "{}", requestPayload: "payload" }));
 
     const runPromise = askCoachWithSingleRetry(
       makeService(ask),
@@ -41,7 +41,7 @@ describe("aiCoach application use-cases", () => {
   });
 
   it("does not retry missing-api-key failures", async () => {
-    const ask = vi.fn<AiCoachService["ask"]>().mockResolvedValue(err("missing-api-key"));
+    const ask = vi.fn<AiCoachService["ask"]>().mockReturnValue(errAsync("missing-api-key"));
 
     const result = await askCoachWithSingleRetry(
       makeService(ask),

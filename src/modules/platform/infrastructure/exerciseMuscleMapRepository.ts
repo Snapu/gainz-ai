@@ -1,27 +1,35 @@
+import { ok, Result } from "neverthrow";
 import type { ExerciseMuscleMapRepository } from "@/modules/sharedKernel/application";
 
 const STORAGE_KEY = "exerciseMuscleMap";
 
+const readStoredMap = Result.fromThrowable(
+  () => localStorage.getItem(STORAGE_KEY),
+  () => "storage-read-failed" as const,
+);
+
+const parseStoredMap = Result.fromThrowable(JSON.parse, () => "storage-parse-failed" as const);
+
+const persistStoredMap = Result.fromThrowable(
+  (map: Record<string, unknown>) => localStorage.setItem(STORAGE_KEY, JSON.stringify(map)),
+  () => "storage-save-failed" as const,
+);
+
 export function loadStoredMuscleMapInfra(): Record<string, unknown> {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
-
-    const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return {};
-
-    return parsed as Record<string, unknown>;
-  } catch {
-    return {};
-  }
+  return readStoredMap()
+    .andThen((raw) => {
+      if (!raw) return ok<unknown, "storage-parse-failed">({});
+      return parseStoredMap(raw);
+    })
+    .map((parsed) => {
+      if (!parsed || typeof parsed !== "object") return {};
+      return parsed as Record<string, unknown>;
+    })
+    .unwrapOr({});
 }
 
 export function saveStoredMuscleMapInfra(map: Record<string, unknown>): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
-  } catch {
-    // Storage full or unavailable - degrade gracefully
-  }
+  void persistStoredMap(map);
 }
 
 export function clearStoredMuscleMapInfra(): void {

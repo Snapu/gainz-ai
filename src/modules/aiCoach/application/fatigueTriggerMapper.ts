@@ -1,13 +1,12 @@
-import type { FatigueTriggerId as DeloadFatigueTriggerId } from "@/modules/deload/domain";
-import type { FatigueTriggerId as TrainingFatigueTriggerId } from "@/modules/trainingInsights/domain";
+import type { FatigueTriggerId } from "@/modules/sharedKernel/domain";
 
 function assertNever(value: never): never {
   throw new Error(`Unsupported fatigue trigger: ${String(value)}`);
 }
 
 export function mapTrainingFatigueTriggersToDeload(
-  triggers: TrainingFatigueTriggerId[],
-): DeloadFatigueTriggerId[] {
+  triggers: FatigueTriggerId[],
+): FatigueTriggerId[] {
   return triggers.map((trigger) => {
     switch (trigger) {
       case "volumeSpike":

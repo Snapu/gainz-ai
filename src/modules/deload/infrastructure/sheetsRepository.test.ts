@@ -52,6 +52,21 @@ function createDoc(sheet?: MockSheet) {
 }
 
 describe("deload sheets repository", () => {
+  it("exposes a ResultAsync load contract for chaining", async () => {
+    const sheet = createSheet([]);
+    const doc = createDoc(sheet);
+
+    const result = loadDeloadPhaseInfra(doc as never);
+
+    expect(typeof result.andThen).toBe("function");
+    await expect(
+      result.match(
+        (value) => value,
+        () => "error",
+      ),
+    ).resolves.toBeNull();
+  });
+
   it("loads null when no rows exist", async () => {
     const sheet = createSheet([]);
     const doc = createDoc(sheet);

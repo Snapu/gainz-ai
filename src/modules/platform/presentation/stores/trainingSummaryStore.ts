@@ -1,8 +1,9 @@
 import * as Sentry from "@sentry/vue";
 import type { GoogleSpreadsheet } from "google-spreadsheet";
+import { errAsync, type ResultAsync } from "neverthrow";
 import { defineStore } from "pinia";
 import { ref, watchEffect } from "vue";
-import { createTrainingLogsRepository } from "@/modules/trainingLogs/infrastructure";
+import { createExerciseLogRepository } from "@/modules/trainingLogs/infrastructure";
 import {
   findPastYearLogSheets,
   loadExerciseLogs,
@@ -20,7 +21,7 @@ import { useSpreadsheetRepositoryFactory } from "../composables/spreadsheetRepos
 
 export const useTrainingSummaryStore = defineStore("trainingSummary", () => {
   const summaryRepoFactory = useSpreadsheetRepositoryFactory(createTrainingSummaryRepository);
-  const logsRepoFactory = useSpreadsheetRepositoryFactory(createTrainingLogsRepository);
+  const logsRepoFactory = useSpreadsheetRepositoryFactory(createExerciseLogRepository);
   const { spreadsheetStore, getDoc } = summaryRepoFactory;
 
   const summaries = ref<TrainingSummary[]>([]);
@@ -40,28 +41,29 @@ export const useTrainingSummaryStore = defineStore("trainingSummary", () => {
     };
   }
 
-  async function loadAndMigrate(doc: GoogleSpreadsheet) {
+  function loadAndMigrate(
+    doc: GoogleSpreadsheet,
+  ): ResultAsync<TrainingSummary[], "repository-unavailable" | "refresh-failed"> {
     const summaryRepository = summaryRepoFactory.createRepository(doc);
     const logsRepository = createTrainingLogHistoryRepository(doc);
-    if (!summaryRepository || !logsRepository) return null;
+    if (!summaryRepository || !logsRepository) return errAsync("repository-unavailable");
 
-    const loadResult = await loadTrainingSummary(summaryRepository);
-    if (loadResult.isErr()) {
-      console.error("Failed to load training summary:", loadResult.error);
-      Sentry.captureMessage("Failed to load training summary", {
-        level: "error",
-        tags: { scope: "training-summary-store", feature: "load" },
-        extra: { reason: loadResult.error },
-      });
-      return null;
-    }
-
-    const afterYearMigration = await migrateUnsummarizedYears(
-      summaryRepository,
-      logsRepository,
-      loadResult.value,
-    );
-    return migrateUnsummarizedMonths(summaryRepository, logsRepository, afterYearMigration);
+    return loadTrainingSummary(summaryRepository)
+      .orTee((error) => {
+        console.error("Failed to load training summary:", error);
+        Sentry.captureMessage("Failed to load training summary", {
+          level: "error",
+          tags: { scope: "training-summary-store", feature: "load" },
+          extra: { reason: error },
+        });
+      })
+      .andThen((loadedSummaries) =>
+        migrateUnsummarizedYears(summaryRepository, logsRepository, loadedSummaries),
+      )
+      .andThen((afterYearMigration) =>
+        migrateUnsummarizedMonths(summaryRepository, logsRepository, afterYearMigration),
+      )
+      .mapErr(() => "refresh-failed" as const);
   }
 
   async function init(doc: GoogleSpreadsheet) {
@@ -75,19 +77,21 @@ export const useTrainingSummaryStore = defineStore("trainingSummary", () => {
 
     isLoading.value = true;
 
-    try {
-      const migratedSummaries = await loadAndMigrate(doc);
-      if (!migratedSummaries) return;
-      summaries.value = migratedSummaries;
-      isInitialized.value = true;
-    } catch (error) {
+    const result = await loadAndMigrate(doc).orTee((error) => {
       console.error("Failed to refresh training summary:", error);
-      Sentry.captureException(error, {
+      Sentry.captureMessage("Failed to refresh training summary", {
+        level: "error",
         tags: { scope: "training-summary-store", feature: "refresh" },
+        extra: { reason: error },
       });
-    } finally {
-      isLoading.value = false;
+    });
+
+    if (result.isOk()) {
+      summaries.value = result.value;
+      isInitialized.value = true;
     }
+
+    isLoading.value = false;
   }
 
   watchEffect(() => {

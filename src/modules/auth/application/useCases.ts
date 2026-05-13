@@ -1,7 +1,7 @@
 import * as Sentry from "@sentry/vue";
 import { errAsync, okAsync, type ResultAsync } from "neverthrow";
 import type { CallbackTypes } from "vue3-google-login";
-import type { AuthError } from "@/modules/auth/domain";
+import type { AuthError, AuthTokenRequestError } from "@/modules/auth/domain";
 
 export const CLIENT_ID = "804592774481-hvo962fnjn23g9tt4i0s5d62f17pegg7.apps.googleusercontent.com";
 
@@ -11,15 +11,15 @@ export const SCOPES = [
   "https://www.googleapis.com/auth/drive.file",
 ];
 
-export interface GoogleAccessTokenRequester {
+export interface GoogleAccessTokenService {
   requestAccessToken(
     clientId: string,
     scopes: string[],
-  ): ResultAsync<CallbackTypes.TokenPopupResponse, unknown>;
+  ): ResultAsync<CallbackTypes.TokenPopupResponse, AuthTokenRequestError>;
 }
 
 export function requestAccessToken(
-  requester: GoogleAccessTokenRequester,
+  requester: GoogleAccessTokenService,
 ): ResultAsync<CallbackTypes.TokenPopupResponse, AuthError> {
   return requester
     .requestAccessToken(CLIENT_ID, SCOPES)

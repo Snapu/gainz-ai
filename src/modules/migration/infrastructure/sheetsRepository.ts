@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/vue";
 import type { GoogleSpreadsheet } from "google-spreadsheet";
-import { err, ok, type Result } from "neverthrow";
+import { errAsync, okAsync, Result, ResultAsync } from "neverthrow";
 import type { ExerciseWeightMigrationRepository } from "@/modules/migration/application";
 import { isAuthError } from "@/modules/platform/infrastructure";
 import { cleanExerciseName, parseOptionalNumber } from "@/modules/sharedKernel/domain";
@@ -112,10 +112,18 @@ function rowToExerciseLog(row: Pick<SheetRow, "get">): ExerciseLog | undefined {
   };
 }
 
-async function loadAllLogsForSummary(
+function mapSummaryLoadError(error: unknown): "load-failed" | "auth-failed" {
+  if (isAuthError(error)) return "auth-failed";
+  Sentry.captureException(error, {
+    tags: { scope: "exercise-weight-migration", feature: "summary-rebuild-load" },
+  });
+  return "load-failed";
+}
+
+function loadAllLogsForSummary(
   doc: GoogleSpreadsheet,
-): Promise<Result<ExerciseLog[], "load-failed" | "auth-failed">> {
-  try {
+): ResultAsync<ExerciseLog[], "load-failed" | "auth-failed"> {
+  return ResultAsync.fromThrowable(async () => {
     const logs: ExerciseLog[] = [];
 
     for (const sheet of getLogSheets(doc)) {
@@ -126,55 +134,63 @@ async function loadAllLogsForSummary(
       }
     }
 
-    return ok(logs);
-  } catch (error) {
-    if (isAuthError(error)) return err("auth-failed");
-    Sentry.captureException(error, {
-      tags: { scope: "exercise-weight-migration", feature: "summary-rebuild-load" },
-    });
-    return err("load-failed");
-  }
+    return logs;
+  }, mapSummaryLoadError)();
 }
 
-async function rebuildTrainingSummarySheet(
-  doc: GoogleSpreadsheet,
-): Promise<Result<TrainingSummary[], "load-failed" | "auth-failed" | "save-failed">> {
-  const logsResult = await loadAllLogsForSummary(doc);
-  if (logsResult.isErr()) return err(logsResult.error);
-
-  const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().getMonth() + 1;
-  const logsExcludingCurrentMonth = logsResult.value.filter(
-    (log) =>
-      !(log.loggedAt.getFullYear() === currentYear && log.loggedAt.getMonth() + 1 === currentMonth),
-  );
-
-  const summaries = aggregateLogsToSummary(logsExcludingCurrentMonth);
-
-  try {
-    const sheet = await ensureTrainingSummarySheet(doc);
-    await sheet.clearRows();
-    if (summaries.length > 0) {
-      await sheet.addRows(summaries);
-    }
-    return ok(summaries);
-  } catch (error) {
-    if (isAuthError(error)) return err("auth-failed");
-    Sentry.captureException(error, {
-      tags: { scope: "exercise-weight-migration", feature: "summary-rebuild-save" },
-    });
-    return err("save-failed");
-  }
+function mapSummarySaveError(error: unknown): "save-failed" | "auth-failed" {
+  if (isAuthError(error)) return "auth-failed";
+  Sentry.captureException(error, {
+    tags: { scope: "exercise-weight-migration", feature: "summary-rebuild-save" },
+  });
+  return "save-failed";
 }
 
-export async function loadExerciseWeightMigrationReviewsInfra(
+function rebuildTrainingSummarySheet(
   doc: GoogleSpreadsheet,
-): Promise<Result<ExerciseWeightMigrationReview[], MigrationLoadError>> {
-  try {
-    const sheet = getSheet(doc) ?? (await ensureSheet(doc));
-    await ensureHeaders(sheet);
-    const rows = await sheet.getRows();
-    const parsed = safeParseMigrationReviews(rows.map((row) => row.toObject()));
+): ResultAsync<TrainingSummary[], "load-failed" | "auth-failed" | "save-failed"> {
+  return loadAllLogsForSummary(doc).andThen((logs) => {
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth() + 1;
+    const logsExcludingCurrentMonth = logs.filter(
+      (log) =>
+        !(
+          log.loggedAt.getFullYear() === currentYear && log.loggedAt.getMonth() + 1 === currentMonth
+        ),
+    );
+
+    const summaries = aggregateLogsToSummary(logsExcludingCurrentMonth);
+
+    return ResultAsync.fromThrowable(async () => {
+      const sheet = await ensureTrainingSummarySheet(doc);
+      await sheet.clearRows();
+      if (summaries.length > 0) {
+        await sheet.addRows(summaries);
+      }
+      return summaries;
+    }, mapSummarySaveError)();
+  });
+}
+
+export function loadExerciseWeightMigrationReviewsInfra(
+  doc: GoogleSpreadsheet,
+): ResultAsync<ExerciseWeightMigrationReview[], MigrationLoadError> {
+  return ResultAsync.fromThrowable(
+    async () => {
+      const sheet = getSheet(doc) ?? (await ensureSheet(doc));
+      await ensureHeaders(sheet);
+      const rows = await sheet.getRows();
+      return rows.map((row) => row.toObject());
+    },
+    (error) => {
+      if (isAuthError(error)) return "auth-failed" as const;
+      Sentry.captureException(error, {
+        tags: { scope: "exercise-weight-migration", feature: "load" },
+      });
+      return "load-failed" as const;
+    },
+  )().andThen((rows) => {
+    const parsed = safeParseMigrationReviews(rows);
 
     if (!parsed.success) {
       Sentry.captureMessage("Failed to parse exercise migration reviews", {
@@ -182,127 +198,129 @@ export async function loadExerciseWeightMigrationReviewsInfra(
         tags: { scope: "exercise-weight-migration", feature: "load-parse" },
         extra: { issues: parsed.error.issues },
       });
-      return err("parse-data-failed");
+      return errAsync<ExerciseWeightMigrationReview[], MigrationLoadError>("parse-data-failed");
     }
 
-    return ok(parsed.data);
-  } catch (error) {
-    if (isAuthError(error)) return err("auth-failed");
-    Sentry.captureException(error, {
-      tags: { scope: "exercise-weight-migration", feature: "load" },
-    });
-    return err("load-failed");
-  }
+    return okAsync(parsed.data);
+  });
 }
 
-export async function saveExerciseWeightMigrationReviewInfra(
+export function saveExerciseWeightMigrationReviewInfra(
   review: ExerciseWeightMigrationReview,
   doc: GoogleSpreadsheet,
-): Promise<Result<void, MigrationSaveError>> {
-  try {
-    const sheet = await ensureSheet(doc);
-    await ensureHeaders(sheet);
-    const normalizedReview = parseMigrationReview(review);
-    const rows = (await sheet.getRows()) as SheetRow[];
-    const existingRow = rows.find((row) => {
-      const rawExerciseName = row.get("exerciseName");
-      if (!rawExerciseName) return false;
+): ResultAsync<void, MigrationSaveError> {
+  return ResultAsync.fromThrowable(
+    async () => {
+      const sheet = await ensureSheet(doc);
+      await ensureHeaders(sheet);
+      const normalizedReview = parseMigrationReview(review);
+      const rows = (await sheet.getRows()) as SheetRow[];
+      const existingRow = rows.find((row) => {
+        const rawExerciseName = row.get("exerciseName");
+        if (!rawExerciseName) return false;
 
-      try {
-        return normalizeExerciseName(String(rawExerciseName)) === normalizedReview.exerciseName;
-      } catch {
-        return false;
+        const normalizedRowExerciseName = Result.fromThrowable(
+          () => normalizeExerciseName(String(rawExerciseName)),
+          () => null,
+        )();
+
+        return (
+          normalizedRowExerciseName.isOk() &&
+          normalizedRowExerciseName.value === normalizedReview.exerciseName
+        );
+      });
+
+      if (existingRow) {
+        existingRow.assign(normalizedReview);
+        await existingRow.save();
+      } else {
+        await sheet.addRow(normalizedReview);
       }
-    });
-
-    if (existingRow) {
-      existingRow.assign(normalizedReview);
-      await existingRow.save();
-    } else {
-      await sheet.addRow(normalizedReview);
-    }
-
-    return ok(undefined);
-  } catch (error) {
-    if (isAuthError(error)) return err("auth-failed");
-    Sentry.captureException(error, {
-      tags: { scope: "exercise-weight-migration", feature: "save" },
-    });
-    return err("save-failed");
-  }
+    },
+    (error) => {
+      if (isAuthError(error)) return "auth-failed" as const;
+      Sentry.captureException(error, {
+        tags: { scope: "exercise-weight-migration", feature: "save" },
+      });
+      return "save-failed" as const;
+    },
+  )();
 }
 
-export async function applyExerciseWeightMigrationDecisionInfra(
+export function applyExerciseWeightMigrationDecisionInfra(
   exerciseName: string,
   decision: ExerciseWeightMigrationDecision,
   doc: GoogleSpreadsheet,
-): Promise<Result<ApplyExerciseWeightMigrationResult, MigrationApplyError>> {
+): ResultAsync<ApplyExerciseWeightMigrationResult, MigrationApplyError> {
   const normalizedExerciseName = normalizeExerciseName(exerciseName);
-  const reviewsResult = await loadExerciseWeightMigrationReviewsInfra(doc);
-  if (reviewsResult.isErr()) return err(reviewsResult.error);
-  if (
-    reviewsResult.value.some(
-      (review) => normalizeExerciseName(review.exerciseName) === normalizedExerciseName,
-    )
-  ) {
-    return err("already-reviewed");
-  }
-
-  try {
-    let updatedLogCount = 0;
-
-    if (decision === "convert_to_total") {
-      for (const sheet of getLogSheets(doc)) {
-        const rows = (await sheet.getRows()) as SheetRow[];
-        for (const row of rows) {
-          const rawExerciseName = String(row.get("exerciseName") ?? "").trim();
-          if (!rawExerciseName) continue;
-          const rowExerciseName = normalizeExerciseName(rawExerciseName);
-          if (rowExerciseName !== normalizedExerciseName) continue;
-
-          const weight = parseWeight(row.get("weight"));
-          if (weight === undefined) continue;
-
-          row.assign({ weight: String(weight * 2) });
-          await row.save();
-          updatedLogCount += 1;
-        }
-      }
-    } else {
-      for (const sheet of getLogSheets(doc)) {
-        const rows = (await sheet.getRows()) as SheetRow[];
-        for (const row of rows) {
-          const rawExerciseName = String(row.get("exerciseName") ?? "").trim();
-          if (!rawExerciseName) continue;
-          const rowExerciseName = normalizeExerciseName(rawExerciseName);
-          if (rowExerciseName !== normalizedExerciseName) continue;
-          if (parseWeight(row.get("weight")) === undefined) continue;
-          updatedLogCount += 1;
-        }
-      }
+  return loadExerciseWeightMigrationReviewsInfra(doc).andThen((reviews) => {
+    if (
+      reviews.some(
+        (review) => normalizeExerciseName(review.exerciseName) === normalizedExerciseName,
+      )
+    ) {
+      return errAsync<ApplyExerciseWeightMigrationResult, MigrationApplyError>("already-reviewed");
     }
 
-    const review = parseMigrationReview({
-      exerciseName: normalizedExerciseName,
-      decision,
-      reviewedAt: new Date().toISOString(),
-      affectedLogCount: updatedLogCount,
-    });
+    return ResultAsync.fromThrowable(
+      async () => {
+        let updatedLogCount = 0;
 
-    const saveResult = await saveExerciseWeightMigrationReviewInfra(review, doc);
-    if (saveResult.isErr()) return err(saveResult.error);
+        if (decision === "convert_to_total") {
+          for (const sheet of getLogSheets(doc)) {
+            const rows = (await sheet.getRows()) as SheetRow[];
+            for (const row of rows) {
+              const rawExerciseName = String(row.get("exerciseName") ?? "").trim();
+              if (!rawExerciseName) continue;
+              const rowExerciseName = normalizeExerciseName(rawExerciseName);
+              if (rowExerciseName !== normalizedExerciseName) continue;
 
-    const summaryResult = await rebuildTrainingSummarySheet(doc);
-    if (summaryResult.isErr()) return err("summary-rebuild-failed");
+              const weight = parseWeight(row.get("weight"));
+              if (weight === undefined) continue;
 
-    return ok({ review, updatedLogCount });
-  } catch (error) {
-    if (isAuthError(error)) return err("auth-failed");
-    Sentry.captureException(error, {
-      tags: { scope: "exercise-weight-migration", feature: "apply" },
-    });
-    return err("save-failed");
-  }
+              row.assign({ weight: String(weight * 2) });
+              await row.save();
+              updatedLogCount += 1;
+            }
+          }
+        } else {
+          for (const sheet of getLogSheets(doc)) {
+            const rows = (await sheet.getRows()) as SheetRow[];
+            for (const row of rows) {
+              const rawExerciseName = String(row.get("exerciseName") ?? "").trim();
+              if (!rawExerciseName) continue;
+              const rowExerciseName = normalizeExerciseName(rawExerciseName);
+              if (rowExerciseName !== normalizedExerciseName) continue;
+              if (parseWeight(row.get("weight")) === undefined) continue;
+              updatedLogCount += 1;
+            }
+          }
+        }
+
+        const review = parseMigrationReview({
+          exerciseName: normalizedExerciseName,
+          decision,
+          reviewedAt: new Date().toISOString(),
+          affectedLogCount: updatedLogCount,
+        });
+
+        return { review, updatedLogCount };
+      },
+      (error) => {
+        if (isAuthError(error)) return "auth-failed" as const;
+        Sentry.captureException(error, {
+          tags: { scope: "exercise-weight-migration", feature: "apply" },
+        });
+        return "save-failed" as const;
+      },
+    )().andThen(({ review, updatedLogCount }) =>
+      saveExerciseWeightMigrationReviewInfra(review, doc).andThen(() =>
+        rebuildTrainingSummarySheet(doc)
+          .map(() => ({ review, updatedLogCount }))
+          .mapErr(() => "summary-rebuild-failed" as const),
+      ),
+    );
+  });
 }
 
 export function createExerciseWeightMigrationRepository(

@@ -1,15 +1,20 @@
-import type { Result } from "neverthrow";
+import type { ResultAsync } from "neverthrow";
 import type { DeloadPhase } from "../domain/types";
 
 export interface DeloadPhaseRepository {
-  load: () => Promise<Result<DeloadPhase | null, "load-failed" | "auth-failed">>;
-  save: (phase: DeloadPhase | null) => Promise<Result<void, "save-failed" | "auth-failed">>;
+  load: () => ResultAsync<DeloadPhase | null, "load-failed" | "auth-failed">;
+  save: (phase: DeloadPhase | null) => ResultAsync<void, "save-failed" | "auth-failed">;
 }
 
-export function loadDeloadPhase(repository: DeloadPhaseRepository) {
+export function loadDeloadPhase(
+  repository: DeloadPhaseRepository,
+): ResultAsync<DeloadPhase | null, "load-failed" | "auth-failed"> {
   return repository.load();
 }
 
-export function saveDeloadPhase(phase: DeloadPhase | null, repository: DeloadPhaseRepository) {
+export function saveDeloadPhase(
+  phase: DeloadPhase | null,
+  repository: DeloadPhaseRepository,
+): ResultAsync<void, "save-failed" | "auth-failed"> {
   return repository.save(phase);
 }

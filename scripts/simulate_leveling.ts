@@ -1,5 +1,4 @@
 // Simulate 10 years of training
-const WEEKS_IN_10_YEARS = 520;
 const SESSIONS_PER_WEEK = 3.5;
 const SETS_PER_SESSION = 12;
 const RPE_AVG = 8.5; // High effort
@@ -17,7 +16,7 @@ const PR_CHANCE_PER_SESSION = 0.15; // Every 2 weeks approx
 const VOLUME_MAV_BONUS = 200;
 const MAV_CHANCE_PER_WEEK = 0.8; // Most weeks you hit MAV for at least one group
 
-function simulateYear(currentXP: number, readiness: number) {
+function simulateYear(readiness: number) {
   let yearlyXP = 0;
   for (let w = 0; w < 52; w++) {
     let weeklyXP = 0;
@@ -64,7 +63,7 @@ function runSimulation() {
   console.log("---------------------------------");
 
   for (let year = 1; year <= 15; year++) {
-    const earned = simulateYear(totalXP, readiness);
+    const earned = simulateYear(readiness);
     totalXP += earned;
 
     // Resolve level

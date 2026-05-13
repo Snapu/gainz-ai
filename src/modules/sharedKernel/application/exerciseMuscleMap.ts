@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/vue";
+import { Result } from "neverthrow";
 import { isMuscleGroup, VALID_MUSCLE_GROUPS } from "@/modules/sharedKernel/domain";
 import {
   getMuscleActivation,
@@ -43,44 +44,49 @@ function isValidMuscleGroup(value: string): value is MuscleGroup {
   return isMuscleGroup(value);
 }
 
+const loadStoredMap = Result.fromThrowable(
+  (repository: ExerciseMuscleMapRepository) => repository.load(),
+  () => "load-failed" as const,
+);
+
+const saveStoredMap = Result.fromThrowable(
+  (repository: ExerciseMuscleMapRepository, map: StoredMap) =>
+    repository.save(map as Record<string, unknown>),
+  () => "save-failed" as const,
+);
+
 /** Load the learned map from storage, migrating legacy entries on the fly. */
 function loadMap(repository: ExerciseMuscleMapRepository): StoredMap {
-  try {
-    const parsed = repository.load();
-
-    // Migrate legacy entries that have the old { muscleGroup, updatedAt } shape
-    const result: StoredMap = {};
-    for (const [key, entry] of Object.entries(parsed as Record<string, unknown>)) {
-      if (!entry || typeof entry !== "object") continue;
-      const e = entry as Record<string, unknown>;
-      if ("primaryMuscle" in e) {
-        // Already new format
-        result[key] = e as unknown as StoredEntry;
-      } else if ("muscleGroup" in e) {
-        // Legacy format - migrate gracefully
-        const legacy = e as unknown as LegacyStoredEntry;
-        if (isValidMuscleGroup(legacy.muscleGroup)) {
-          result[key] = {
-            primaryMuscle: legacy.muscleGroup,
-            secondaryMuscles: [],
-            updatedAt: legacy.updatedAt,
-          };
+  return loadStoredMap(repository)
+    .map((parsed) => {
+      // Migrate legacy entries that have the old { muscleGroup, updatedAt } shape
+      const result: StoredMap = {};
+      for (const [key, entry] of Object.entries(parsed as Record<string, unknown>)) {
+        if (!entry || typeof entry !== "object") continue;
+        const e = entry as Record<string, unknown>;
+        if ("primaryMuscle" in e) {
+          // Already new format
+          result[key] = e as unknown as StoredEntry;
+        } else if ("muscleGroup" in e) {
+          // Legacy format - migrate gracefully
+          const legacy = e as unknown as LegacyStoredEntry;
+          if (isValidMuscleGroup(legacy.muscleGroup)) {
+            result[key] = {
+              primaryMuscle: legacy.muscleGroup,
+              secondaryMuscles: [],
+              updatedAt: legacy.updatedAt,
+            };
+          }
         }
       }
-    }
-    return result;
-  } catch {
-    return {};
-  }
+      return result;
+    })
+    .unwrapOr({});
 }
 
 /** Save the map to storage. */
 function saveMap(map: StoredMap, repository: ExerciseMuscleMapRepository): void {
-  try {
-    repository.save(map as Record<string, unknown>);
-  } catch {
-    // Storage full or unavailable - degrade gracefully
-  }
+  void saveStoredMap(repository, map);
 }
 
 /** Evict oldest entries from the learned map if it exceeds MAX_MAP_ENTRIES. */

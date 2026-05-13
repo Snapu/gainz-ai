@@ -2,12 +2,17 @@ import { ok } from "neverthrow";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { loadAiMessagesFromStorageMock, cleanOldAiSessionsMock, removeAiMessagesFromStorageMock } =
-  vi.hoisted(() => ({
-    loadAiMessagesFromStorageMock: vi.fn(),
-    cleanOldAiSessionsMock: vi.fn(),
-    removeAiMessagesFromStorageMock: vi.fn(),
-  }));
+const {
+  loadAiMessagesFromStorageMock,
+  cleanOldAiSessionsMock,
+  removeAiMessagesFromStorageMock,
+  captureExceptionMock,
+} = vi.hoisted(() => ({
+  loadAiMessagesFromStorageMock: vi.fn(),
+  cleanOldAiSessionsMock: vi.fn(),
+  removeAiMessagesFromStorageMock: vi.fn(),
+  captureExceptionMock: vi.fn(),
+}));
 
 vi.mock("@/modules/aiCoach/application", () => ({
   askCoachWithSingleRetry: vi.fn(),
@@ -15,6 +20,11 @@ vi.mock("@/modules/aiCoach/application", () => ({
   getTodayLogsCount: vi.fn(() => 0),
   mapTrainingFatigueTriggersToDeload: vi.fn(() => []),
   responseStartsDeload: vi.fn(() => false),
+}));
+
+vi.mock("@sentry/vue", () => ({
+  captureException: captureExceptionMock,
+  captureMessage: vi.fn(),
 }));
 
 vi.mock("@/modules/aiCoach/infrastructure", () => ({
@@ -62,6 +72,8 @@ vi.mock("./aiMessageStorage", () => ({
   saveAiMessagesToStorage: vi.fn(() => ok(undefined)),
 }));
 
+import { askCoachWithSingleRetry } from "@/modules/aiCoach/application";
+import { useUserProfileStore } from "@/modules/profile/presentation";
 import { useAiStore } from "./aiStore";
 
 describe("useAiStore initialization", () => {
@@ -113,6 +125,25 @@ describe("useAiStore initialization", () => {
     if (result.isErr()) {
       expect(result.error).toBe("missing-api-key");
     }
+  });
+
+  it("returns ai-request-failed when askCoach throws unexpectedly", async () => {
+    vi.mocked(useUserProfileStore).mockReturnValue({
+      apiKey: "test-key",
+      userProfile: {},
+    } as never);
+    vi.mocked(askCoachWithSingleRetry).mockRejectedValueOnce(new Error("boom"));
+
+    const store = useAiStore();
+
+    const result = await store.askAi();
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBe("ai-request-failed");
+    }
+    expect(store.isLoading).toBe(false);
+    expect(captureExceptionMock).toHaveBeenCalled();
   });
 
   it("exposes setup store refs for devtools compatibility", () => {

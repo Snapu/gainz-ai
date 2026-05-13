@@ -1,4 +1,4 @@
-import type { Result } from "neverthrow";
+import type { ResultAsync } from "neverthrow";
 import type { ExerciseLog } from "../domain/exerciseLog";
 
 /**
@@ -6,46 +6,46 @@ import type { ExerciseLog } from "../domain/exerciseLog";
  * These orchestrate repository and domain logic through repository ports.
  */
 
-type LogsLoadError = "load-failed" | "parse-data-failed" | "auth-failed";
-type AddLogError = "add-failed" | "auth-failed";
-type DeleteLogError = "delete-failed" | "auth-failed";
-type YearLoadError = "load-failed" | "parse-data-failed" | "sheet-not-found";
+type ExerciseLogLoadError = "load-failed" | "parse-data-failed" | "auth-failed";
+type ExerciseLogAddError = "add-failed" | "auth-failed";
+type ExerciseLogDeleteError = "delete-failed" | "auth-failed";
+type ExerciseLogYearLoadError = "load-failed" | "parse-data-failed" | "sheet-not-found";
 
-export interface TrainingLogsRepository {
-  loadCurrentYear: () => Promise<Result<ExerciseLog[], LogsLoadError>>;
-  addLog: (log: ExerciseLog) => Promise<Result<void, AddLogError>>;
-  deleteLog: (log: ExerciseLog) => Promise<Result<void, DeleteLogError>>;
+export interface ExerciseLogRepository {
+  loadCurrentYear: () => ResultAsync<ExerciseLog[], ExerciseLogLoadError>;
+  addLog: (log: ExerciseLog) => ResultAsync<void, ExerciseLogAddError>;
+  deleteLog: (log: ExerciseLog) => ResultAsync<void, ExerciseLogDeleteError>;
   findPastYearSheets: () => number[];
-  loadYear: (year: number) => Promise<Result<ExerciseLog[], YearLoadError>>;
+  loadYear: (year: number) => ResultAsync<ExerciseLog[], ExerciseLogYearLoadError>;
 }
 
-export async function loadExerciseLogs(
-  repository: TrainingLogsRepository,
-): Promise<Result<ExerciseLog[], LogsLoadError>> {
+export function loadExerciseLogs(
+  repository: ExerciseLogRepository,
+): ResultAsync<ExerciseLog[], ExerciseLogLoadError> {
   return repository.loadCurrentYear();
 }
 
-export async function addExerciseLog(
+export function addExerciseLog(
   log: ExerciseLog,
-  repository: TrainingLogsRepository,
-): Promise<Result<void, AddLogError>> {
+  repository: ExerciseLogRepository,
+): ResultAsync<void, ExerciseLogAddError> {
   return repository.addLog(log);
 }
 
-export async function deleteExerciseLog(
+export function deleteExerciseLog(
   log: ExerciseLog,
-  repository: TrainingLogsRepository,
-): Promise<Result<void, DeleteLogError>> {
+  repository: ExerciseLogRepository,
+): ResultAsync<void, ExerciseLogDeleteError> {
   return repository.deleteLog(log);
 }
 
-export function findPastYearLogSheets(repository: TrainingLogsRepository): number[] {
+export function findPastYearLogSheets(repository: ExerciseLogRepository): number[] {
   return repository.findPastYearSheets();
 }
 
-export async function loadLogsFromYear(
+export function loadLogsFromYear(
   year: number,
-  repository: TrainingLogsRepository,
-): Promise<Result<ExerciseLog[], YearLoadError>> {
+  repository: ExerciseLogRepository,
+): ResultAsync<ExerciseLog[], ExerciseLogYearLoadError> {
   return repository.loadYear(year);
 }

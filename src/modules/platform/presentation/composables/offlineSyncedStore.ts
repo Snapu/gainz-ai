@@ -1,15 +1,28 @@
 import { useAsyncState, useDebounceFn, useDocumentVisibility, useOnline } from "@vueuse/core";
 
-import { err, ok, type Result } from "neverthrow";
+import { errAsync, okAsync, type Result, ResultAsync } from "neverthrow";
 import { ref, watch } from "vue";
 
 type UseOfflineSyncedStoreParams<T, FetchE, AddE, RemoveE, UpdateE = never> = {
   getId: (item: T) => string;
-  fetchRemote: () => Promise<Result<T[], FetchE>>;
-  addRemote: (item: T) => Promise<Result<void, AddE>>;
-  removeRemote: (item: T) => Promise<Result<void, RemoveE>>;
-  updateRemote?: (item: T) => Promise<Result<void, UpdateE>>;
+  fetchRemote: () => ResultAsync<T[], FetchE>;
+  addRemote: (item: T) => ResultAsync<void, AddE>;
+  removeRemote: (item: T) => ResultAsync<void, RemoveE>;
+  updateRemote?: (item: T) => ResultAsync<void, UpdateE>;
 };
+
+function unwrapAwaitedResult<T, E>(
+  resultLike: ResultAsync<T, E>,
+  mapThrownError: (error: unknown) => E,
+): ResultAsync<T, E> {
+  return ResultAsync.fromPromise((async () => await resultLike)(), mapThrownError).andThen(
+    (result) =>
+      result.match(
+        (value) => okAsync(value),
+        (error) => errAsync(error),
+      ),
+  );
+}
 
 /**
  * Simplified offline store that relies on Workbox BackgroundSync for request queuing.
@@ -31,10 +44,8 @@ export function useOfflineSyncedStore<T, FetchE, AddE, RemoveE, UpdateE = never>
     return result.value;
   }, []);
 
-  // Auto-sync when switching between PWA and browser (separate localStorage contexts)
   const visibility = useDocumentVisibility();
 
-  // Debounce refresh to avoid hammering API on rapid visibility changes
   const debouncedRefresh = useDebounceFn(async () => {
     if (isOnline.value) {
       console.log("App visible. Syncing with remote to prevent stale data...");
@@ -48,58 +59,49 @@ export function useOfflineSyncedStore<T, FetchE, AddE, RemoveE, UpdateE = never>
     }
   });
 
-  async function refresh(): Promise<Result<T[], FetchE | "refresh-in-progress">> {
-    if (isRefreshing.value) return err("refresh-in-progress"); // Prevent concurrent refreshes
+  function refresh(): ResultAsync<T[], FetchE | "refresh-in-progress"> {
+    if (isRefreshing.value) return errAsync("refresh-in-progress");
     isRefreshing.value = true;
 
-    try {
-      // Re-fetch remote data to get latest from other instances
-      const result = await fetchRemote();
-      if (result.isOk()) {
-        items.value = result.value;
-      }
-      return result;
-    } finally {
-      isRefreshing.value = false;
-    }
+    return unwrapAwaitedResult(fetchRemote(), (error) => error as FetchE | "refresh-in-progress")
+      .andTee((remoteItems) => {
+        items.value = remoteItems;
+      })
+      .andTee(() => {
+        isRefreshing.value = false;
+      })
+      .orTee(() => {
+        isRefreshing.value = false;
+      });
   }
 
-  async function add(item: T): Promise<Result<void, AddE>> {
-    // Optimistically update UI - create new array to trigger reactivity
+  function add(item: T): ResultAsync<void, AddE> {
     items.value = [...items.value, item];
 
-    // Call API - Workbox will queue if offline
-    const result = await addRemote(item);
-    if (result.isErr()) {
-      // Revert on immediate error (e.g., validation failure)
+    return unwrapAwaitedResult(addRemote(item), (error) => error as AddE).orElse((error) => {
       const itemId = getId(item);
       items.value = items.value.filter((i) => getId(i) !== itemId);
-    }
-    return result;
+      return errAsync(error);
+    });
   }
 
-  async function remove(item: T): Promise<Result<void, RemoveE>> {
-    // Optimistically update UI
+  function remove(item: T): ResultAsync<void, RemoveE> {
     const originalItems = [...items.value];
     const itemId = getId(item);
     items.value = items.value.filter((i) => getId(i) !== itemId);
 
-    // Call API - Workbox will queue if offline
-    const result = await removeRemote(item);
-    if (result.isErr()) {
-      // Revert on immediate error
+    return unwrapAwaitedResult(removeRemote(item), (error) => error as RemoveE).orElse((error) => {
       items.value = originalItems;
-    }
-    return result;
+      return errAsync(error);
+    });
   }
 
-  async function update(item: T): Promise<Result<void, UpdateE | "no-update-handler">> {
+  function update(item: T): ResultAsync<void, UpdateE | "no-update-handler"> {
     if (!updateRemote) {
       console.warn("updateRemote handler not provided");
-      return err("no-update-handler");
+      return errAsync("no-update-handler");
     }
 
-    // Optimistically update UI
     const itemId = getId(item);
     const index = items.value.findIndex((i) => getId(i) === itemId);
     if (index !== -1) {
@@ -108,13 +110,10 @@ export function useOfflineSyncedStore<T, FetchE, AddE, RemoveE, UpdateE = never>
       items.value = newItems;
     }
 
-    // Call API - Workbox will queue if offline
-    const result = await updateRemote(item);
-    if (result.isErr()) {
-      // Could revert here, but typically updates are idempotent
-      // and will be retried by Workbox
-    }
-    return result;
+    return unwrapAwaitedResult(
+      updateRemote(item),
+      (error) => error as UpdateE | "no-update-handler",
+    );
   }
 
   return { items, isLoading, isOnline, isRefreshing, add, remove, update, refresh };

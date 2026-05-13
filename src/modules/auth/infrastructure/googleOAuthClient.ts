@@ -1,11 +1,12 @@
 import { ResultAsync } from "neverthrow";
 import { type CallbackTypes, googleSdkLoaded } from "vue3-google-login";
-import type { GoogleAccessTokenRequester } from "@/modules/auth/application";
+import type { GoogleAccessTokenService } from "@/modules/auth/application";
+import type { AuthTokenRequestError } from "@/modules/auth/domain";
 
 export function requestGoogleAccessTokenInfra(
   clientId: string,
   scopes: string[],
-): ResultAsync<CallbackTypes.TokenPopupResponse, unknown> {
+): ResultAsync<CallbackTypes.TokenPopupResponse, AuthTokenRequestError> {
   return ResultAsync.fromPromise(
     new Promise<CallbackTypes.TokenPopupResponse>((resolve, reject) => {
       googleSdkLoaded((google) => {
@@ -18,11 +19,11 @@ export function requestGoogleAccessTokenInfra(
         client.requestAccessToken();
       });
     }),
-    (error) => error,
+    () => "token-request-failed" as const,
   );
 }
 
-export function createGoogleAccessTokenRequester(): GoogleAccessTokenRequester {
+export function createGoogleAccessTokenService(): GoogleAccessTokenService {
   return {
     requestAccessToken: requestGoogleAccessTokenInfra,
   };

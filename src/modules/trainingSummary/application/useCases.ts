@@ -1,75 +1,75 @@
-import { err, ok, type Result } from "neverthrow";
+import { err, ok, okAsync, type ResultAsync } from "neverthrow";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 import type { TrainingSummary } from "@/modules/trainingSummary/domain";
 
 export type { TrainingSummary } from "@/modules/trainingSummary/domain";
 
-type SummaryLoadError = "load-failed" | "parse-data-failed";
-type SummarySaveError = "save-failed";
-type LogsLoadError = "load-failed" | "parse-data-failed" | "sheet-not-found" | "auth-failed";
+type TrainingSummaryLoadError = "load-failed" | "parse-data-failed";
+type TrainingSummarySaveError = "save-failed";
+type TrainingSummaryLogsLoadError =
+  | "load-failed"
+  | "parse-data-failed"
+  | "sheet-not-found"
+  | "auth-failed";
 
 export interface TrainingSummaryRepository {
-  load: () => Promise<Result<TrainingSummary[], SummaryLoadError>>;
-  saveRows: (summaries: TrainingSummary[]) => Promise<Result<void, SummarySaveError>>;
-  clearRows: () => Promise<Result<void, SummarySaveError>>;
+  load: () => ResultAsync<TrainingSummary[], TrainingSummaryLoadError>;
+  saveRows: (summaries: TrainingSummary[]) => ResultAsync<void, TrainingSummarySaveError>;
+  clearRows: () => ResultAsync<void, TrainingSummarySaveError>;
 }
 
 export interface TrainingLogHistoryRepository {
-  loadCurrentYearLogs: () => Promise<Result<ExerciseLog[], LogsLoadError>>;
+  loadCurrentYearLogs: () => ResultAsync<ExerciseLog[], TrainingSummaryLogsLoadError>;
   findPastYears: () => number[];
-  loadYearLogs: (year: number) => Promise<Result<ExerciseLog[], LogsLoadError>>;
+  loadYearLogs: (year: number) => ResultAsync<ExerciseLog[], TrainingSummaryLogsLoadError>;
 }
 
-export async function loadTrainingSummary(
+export function loadTrainingSummary(
   summaryRepository: TrainingSummaryRepository,
-): Promise<Result<TrainingSummary[], SummaryLoadError>> {
+): ResultAsync<TrainingSummary[], TrainingSummaryLoadError> {
   return summaryRepository.load();
 }
 
-async function loadAllLogsForSummary(
+function loadAllLogsForSummary(
   logsRepository: TrainingLogHistoryRepository,
-): Promise<Result<ExerciseLog[], LogsLoadError>> {
-  const currentYearLogsResult = await logsRepository.loadCurrentYearLogs();
-  if (currentYearLogsResult.isErr()) return err(currentYearLogsResult.error);
+): ResultAsync<ExerciseLog[], TrainingSummaryLogsLoadError> {
+  return logsRepository.loadCurrentYearLogs().andThen((currentYearLogs) => {
+    const pastYears = logsRepository.findPastYears();
 
-  const logs = [...currentYearLogsResult.value];
-  const pastYears = logsRepository.findPastYears();
-
-  for (const year of pastYears) {
-    const yearLogsResult = await logsRepository.loadYearLogs(year);
-    if (yearLogsResult.isErr()) return err(yearLogsResult.error);
-    logs.push(...yearLogsResult.value);
-  }
-
-  return ok(logs);
+    return pastYears.reduce<ResultAsync<ExerciseLog[], TrainingSummaryLogsLoadError>>(
+      (allLogsResult, year) =>
+        allLogsResult.andThen((logs) =>
+          logsRepository.loadYearLogs(year).map((yearLogs) => [...logs, ...yearLogs]),
+        ),
+      okAsync([...currentYearLogs]),
+    );
+  });
 }
 
-export async function rebuildTrainingSummary(
+export function rebuildTrainingSummary(
   summaryRepository: TrainingSummaryRepository,
   logsRepository: TrainingLogHistoryRepository,
-): Promise<Result<TrainingSummary[], LogsLoadError | SummarySaveError>> {
-  const logsResult = await loadAllLogsForSummary(logsRepository);
-  if (logsResult.isErr()) return err(logsResult.error);
+): ResultAsync<TrainingSummary[], TrainingSummaryLogsLoadError | TrainingSummarySaveError> {
+  return loadAllLogsForSummary(logsRepository).andThen((logs) => {
+    // Exclude the current month — it is served live from exerciseLogs, not the summary sheet.
+    // Including it would create synthetic sessions (using maxWeight) that overlap with actual
+    // current-month logs in trainingInsightsStore.allLogs, causing false e1RM declines.
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth() + 1;
+    const logsExcludingCurrentMonth = logs.filter(
+      (log) =>
+        !(
+          log.loggedAt.getFullYear() === currentYear && log.loggedAt.getMonth() + 1 === currentMonth
+        ),
+    );
 
-  // Exclude the current month — it is served live from exerciseLogs, not the summary sheet.
-  // Including it would create synthetic sessions (using maxWeight) that overlap with actual
-  // current-month logs in trainingInsightsStore.allLogs, causing false e1RM declines.
-  const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().getMonth() + 1;
-  const logsExcludingCurrentMonth = logsResult.value.filter(
-    (log) =>
-      !(log.loggedAt.getFullYear() === currentYear && log.loggedAt.getMonth() + 1 === currentMonth),
-  );
+    const summaries = aggregateLogsToSummary(logsExcludingCurrentMonth);
 
-  const summaries = aggregateLogsToSummary(logsExcludingCurrentMonth);
-
-  const clearResult = await summaryRepository.clearRows();
-  if (clearResult.isErr()) return err(clearResult.error);
-
-  const saveResult = await summaryRepository.saveRows(summaries);
-  if (saveResult.isErr()) return err(saveResult.error);
-
-  return ok(summaries);
+    return summaryRepository
+      .clearRows()
+      .andThen(() => summaryRepository.saveRows(summaries))
+      .map(() => summaries);
+  });
 }
 
 export function aggregateLogsToSummary(logs: ExerciseLog[]): TrainingSummary[] {
@@ -236,99 +236,88 @@ export function getYearMonthsSummarized(summaries: TrainingSummary[]): Set<strin
   return new Set(summaries.map((s) => `${s.year}-${s.month}`));
 }
 
-async function rollupYearToSummary(
+function rollupYearToSummary(
   year: number,
   summaryRepository: TrainingSummaryRepository,
   logsRepository: TrainingLogHistoryRepository,
-): Promise<Result<TrainingSummary[], LogsLoadError | SummarySaveError>> {
-  const logsResult = await logsRepository.loadYearLogs(year);
-  if (logsResult.isErr()) return err(logsResult.error);
-
-  const summaries = aggregateLogsToSummary(logsResult.value);
-
-  const saveResult = await summaryRepository.saveRows(summaries);
-  if (saveResult.isErr()) return err(saveResult.error);
-
-  return ok(summaries);
+): ResultAsync<TrainingSummary[], TrainingSummaryLogsLoadError | TrainingSummarySaveError> {
+  return logsRepository.loadYearLogs(year).andThen((logs) => {
+    const summaries = aggregateLogsToSummary(logs);
+    return summaryRepository.saveRows(summaries).map(() => summaries);
+  });
 }
 
-export async function migrateUnsummarizedYears(
+export function migrateUnsummarizedYears(
   summaryRepository: TrainingSummaryRepository,
   logsRepository: TrainingLogHistoryRepository,
   existingSummaries: TrainingSummary[],
-): Promise<TrainingSummary[]> {
+): ResultAsync<TrainingSummary[], TrainingSummaryLogsLoadError | TrainingSummarySaveError> {
   const pastYears = logsRepository.findPastYears();
   const summarizedYears = getYearsSummarized(existingSummaries);
 
   const yearsToMigrate = pastYears.filter((year) => !summarizedYears.has(year));
 
-  if (yearsToMigrate.length === 0) return existingSummaries;
+  if (yearsToMigrate.length === 0) return okAsync(existingSummaries);
 
   console.log(`Migrating ${yearsToMigrate.length} year(s) to summary:`, yearsToMigrate);
 
-  const newSummaries: TrainingSummary[] = [...existingSummaries];
-
-  for (const year of yearsToMigrate) {
-    const result = await rollupYearToSummary(year, summaryRepository, logsRepository);
-    if (result.isOk()) {
-      newSummaries.push(...result.value);
-    } else {
-      console.error(`Failed to migrate year ${year}:`, result.error);
-    }
-  }
-
-  return newSummaries;
+  return yearsToMigrate.reduce<
+    ResultAsync<TrainingSummary[], TrainingSummaryLogsLoadError | TrainingSummarySaveError>
+  >(
+    (acc, year) =>
+      acc.andThen((summariesSoFar) =>
+        rollupYearToSummary(year, summaryRepository, logsRepository).map((yearSummaries) => [
+          ...summariesSoFar,
+          ...yearSummaries,
+        ]),
+      ),
+    okAsync([...existingSummaries]),
+  );
 }
 
-export async function migrateUnsummarizedMonths(
+export function migrateUnsummarizedMonths(
   summaryRepository: TrainingSummaryRepository,
   logsRepository: TrainingLogHistoryRepository,
   existingSummaries: TrainingSummary[],
-): Promise<TrainingSummary[]> {
+): ResultAsync<TrainingSummary[], TrainingSummaryLogsLoadError | TrainingSummarySaveError> {
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;
 
-  const logsResult = await logsRepository.loadCurrentYearLogs();
-  if (logsResult.isErr()) {
-    console.error("Failed to load current year logs for monthly migration:", logsResult.error);
-    return existingSummaries;
-  }
+  return logsRepository.loadCurrentYearLogs().andThen((logs) => {
+    if (logs.length === 0) return okAsync(existingSummaries);
 
-  const logs = logsResult.value;
-  if (logs.length === 0) return existingSummaries;
+    const summarizedYearMonths = getYearMonthsSummarized(existingSummaries);
 
-  const summarizedYearMonths = getYearMonthsSummarized(existingSummaries);
-
-  const monthsWithLogs = new Set<number>();
-  for (const log of logs) {
-    if (log.loggedAt.getFullYear() === currentYear) {
-      monthsWithLogs.add(log.loggedAt.getMonth() + 1);
+    const monthsWithLogs = new Set<number>();
+    for (const log of logs) {
+      if (log.loggedAt.getFullYear() === currentYear) {
+        monthsWithLogs.add(log.loggedAt.getMonth() + 1);
+      }
     }
-  }
 
-  const monthsToMigrate = [...monthsWithLogs].filter((month) => {
-    const isNotCurrentMonth = month < currentMonth;
-    const isNotAlreadySummarized = !summarizedYearMonths.has(`${currentYear}-${month}`);
-    return isNotCurrentMonth && isNotAlreadySummarized;
+    const monthsToMigrate = [...monthsWithLogs].filter((month) => {
+      const isNotCurrentMonth = month < currentMonth;
+      const isNotAlreadySummarized = !summarizedYearMonths.has(`${currentYear}-${month}`);
+      return isNotCurrentMonth && isNotAlreadySummarized;
+    });
+
+    if (monthsToMigrate.length === 0) return okAsync(existingSummaries);
+
+    console.log(
+      `Migrating ${monthsToMigrate.length} month(s) from ${currentYear}:`,
+      monthsToMigrate,
+    );
+
+    const logsForMonths = logs.filter((log) => {
+      const logYear = log.loggedAt.getFullYear();
+      const logMonth = log.loggedAt.getMonth() + 1;
+      return logYear === currentYear && monthsToMigrate.includes(logMonth);
+    });
+
+    const newMonthSummaries = aggregateLogsToSummary(logsForMonths);
+
+    return summaryRepository
+      .saveRows(newMonthSummaries)
+      .map(() => [...existingSummaries, ...newMonthSummaries]);
   });
-
-  if (monthsToMigrate.length === 0) return existingSummaries;
-
-  console.log(`Migrating ${monthsToMigrate.length} month(s) from ${currentYear}:`, monthsToMigrate);
-
-  const logsForMonths = logs.filter((log) => {
-    const logYear = log.loggedAt.getFullYear();
-    const logMonth = log.loggedAt.getMonth() + 1;
-    return logYear === currentYear && monthsToMigrate.includes(logMonth);
-  });
-
-  const newMonthSummaries = aggregateLogsToSummary(logsForMonths);
-
-  const saveResult = await summaryRepository.saveRows(newMonthSummaries);
-  if (saveResult.isErr()) {
-    console.error("Failed to save monthly summaries:", saveResult.error);
-    return existingSummaries;
-  }
-
-  return [...existingSummaries, ...newMonthSummaries];
 }

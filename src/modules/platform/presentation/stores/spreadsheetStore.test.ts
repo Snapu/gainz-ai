@@ -1,4 +1,4 @@
-import { err, ok } from "neverthrow";
+import { errAsync, okAsync } from "neverthrow";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as spreadsheetService from "@/modules/platform/infrastructure/spreadsheets";
@@ -35,14 +35,11 @@ describe("useSpreadsheetStore", () => {
     let getSpreadsheetIdCalls = 0;
     (spreadsheetService.getSpreadsheetId as any).mockImplementation(() => {
       getSpreadsheetIdCalls++;
-      // Simulate network delay
-      return new Promise((resolve) => {
-        setTimeout(() => resolve(ok(null)), 50);
-      });
+      return okAsync(null);
     });
 
     (spreadsheetService.createSpreadsheet as any).mockImplementation(() => {
-      return Promise.resolve(ok({ spreadsheetId: "new-id", loadInfo: vi.fn() }));
+      return okAsync({ spreadsheetId: "new-id", loadInfo: vi.fn() });
     });
 
     // Trigger multiple initializations concurrently
@@ -62,8 +59,8 @@ describe("useSpreadsheetStore", () => {
   it("should not create spreadsheet if getSpreadsheetId fails with an error", async () => {
     const store = useSpreadsheetStore();
 
-    (spreadsheetService.getSpreadsheetId as any).mockResolvedValue(
-      err("get-spreadsheet-id-failed"),
+    (spreadsheetService.getSpreadsheetId as any).mockReturnValue(
+      errAsync("get-spreadsheet-id-failed"),
     );
 
     await store.init("token1");

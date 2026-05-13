@@ -3,7 +3,7 @@ import { useLocalStorage } from "@vueuse/core";
 import { defineStore } from "pinia";
 import { computed } from "vue";
 import { CLIENT_ID, requestAccessToken } from "@/modules/auth/application";
-import { createGoogleAccessTokenRequester } from "@/modules/auth/infrastructure";
+import { createGoogleAccessTokenService } from "@/modules/auth/infrastructure";
 
 export { CLIENT_ID };
 
@@ -17,7 +17,7 @@ export const useAuthStore = defineStore("auth", () => {
   });
 
   function login() {
-    return requestAccessToken(createGoogleAccessTokenRequester())
+    return requestAccessToken(createGoogleAccessTokenService())
       .andTee((response) => {
         accessToken.value = response.access_token;
         expiresAt.value = response.expires_in * 1000 + Date.now();

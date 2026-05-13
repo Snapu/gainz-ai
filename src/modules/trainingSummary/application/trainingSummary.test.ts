@@ -1,9 +1,13 @@
+import { errAsync, okAsync } from "neverthrow";
 import { describe, expect, it } from "vitest";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 import {
   aggregateLogsToSummary,
   getYearMonthsSummarized,
   getYearsSummarized,
+  loadTrainingSummary,
+  migrateUnsummarizedMonths,
+  migrateUnsummarizedYears,
   summaryToWorkoutDates,
   type TrainingSummary,
 } from "@/modules/trainingSummary/application";
@@ -22,6 +26,22 @@ function createLog(
 }
 
 describe("trainingSummary", () => {
+  it("exposes a ResultAsync contract for loading summaries", async () => {
+    const repository = {
+      load: () => okAsync([]),
+    } as never;
+
+    const result = loadTrainingSummary(repository);
+
+    expect(typeof result.andThen).toBe("function");
+    await expect(
+      result.match(
+        (value) => value,
+        () => ["error"],
+      ),
+    ).resolves.toEqual([]);
+  });
+
   describe("aggregateLogsToSummary", () => {
     it("should return empty array for empty logs", () => {
       const result = aggregateLogsToSummary([]);
@@ -201,6 +221,44 @@ describe("trainingSummary", () => {
       expect(result[0]?.totalReps).toBe(18);
       expect(result[0]?.maxWeight).toBe(60);
       expect(result[0]?.totalVolume).toBe(600);
+    });
+  });
+
+  describe("migration use-cases", () => {
+    it("exposes a ResultAsync contract for migrateUnsummarizedYears", async () => {
+      const summaryRepository = {
+        saveRows: () => errAsync("save-failed" as const),
+      } as never;
+      const logsRepository = {
+        findPastYears: () => [2024],
+        loadYearLogs: () => okAsync([]),
+      } as never;
+
+      const result = migrateUnsummarizedYears(summaryRepository, logsRepository, []);
+
+      expect(typeof result.andThen).toBe("function");
+      await expect(
+        result.match(
+          (value) => value,
+          (error) => error,
+        ),
+      ).resolves.toBe("save-failed");
+    });
+
+    it("returns an Err when monthly log loading fails", async () => {
+      const summaryRepository = {
+        saveRows: () => okAsync(undefined),
+      } as never;
+      const logsRepository = {
+        loadCurrentYearLogs: () => errAsync("load-failed" as const),
+      } as never;
+
+      const result = await migrateUnsummarizedMonths(summaryRepository, logsRepository, []);
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBe("load-failed");
+      }
     });
   });
 

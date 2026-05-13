@@ -1,9 +1,10 @@
 import * as Sentry from "@sentry/vue";
-import { err, ok, type Result } from "neverthrow";
+import { errAsync, okAsync, ResultAsync } from "neverthrow";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 
 import {
+  type AskAiError,
   askCoachWithSingleRetry,
   classifyExerciseNames,
   getTodayLogsCount,
@@ -50,11 +51,19 @@ interface AiMessage {
   logsCount: number;
 }
 
+function isAskAiError(value: unknown): value is AskAiError {
+  return (
+    value === "missing-api-key" ||
+    value === "ai-request-failed" ||
+    value === "generate-content-stream-failed"
+  );
+}
+
 export const useAiStore = defineStore("ai", () => {
   const messages = ref<AiMessage[]>([]);
   const isLoading = ref(false);
   const hasInitialized = ref(false);
-  const inFlightRequest = ref<Promise<Result<void, "missing-api-key" | "ai-failed">> | null>(null);
+  const inFlightRequest = ref<ResultAsync<void, AskAiError> | null>(null);
 
   const userProfileStore = useUserProfileStore();
   const exerciseLogsStore = useExerciseLogsStore();
@@ -105,114 +114,115 @@ export const useAiStore = defineStore("ai", () => {
     }
   }
 
-  async function askAi(): Promise<Result<void, "missing-api-key" | "ai-failed">> {
+  function askAi(): ResultAsync<void, AskAiError> {
     ensureInitialized();
     if (inFlightRequest.value) {
-      return inFlightRequest.value;
+      return inFlightRequest.value as ResultAsync<void, AskAiError>;
     }
 
     const request = runAskAi();
     inFlightRequest.value = request;
-
-    try {
-      return await request;
-    } finally {
-      inFlightRequest.value = null;
-    }
+    void request.then(() => {
+      if (inFlightRequest.value === request) {
+        inFlightRequest.value = null;
+      }
+    });
+    return request;
   }
 
-  async function runAskAi(): Promise<Result<void, "missing-api-key" | "ai-failed">> {
+  function runAskAi(): ResultAsync<void, AskAiError> {
     const apiKey = userProfileStore.apiKey;
     if (!apiKey) {
-      return err("missing-api-key");
+      return errAsync("missing-api-key");
     }
 
-    const today = todaySessionDate.value;
-    const currentSession = resolveCurrentSession(exerciseLogsStore.exerciseLogs);
-    const todayLogsCount = getTodayLogsCount(aiCoachService, currentSession);
+    return ResultAsync.fromPromise(
+      (async (): Promise<void> => {
+        const today = todaySessionDate.value;
+        const currentSession = resolveCurrentSession(exerciseLogsStore.exerciseLogs);
+        const todayLogsCount = getTodayLogsCount(aiCoachService, currentSession);
 
-    const lastMessage = messages.value[messages.value.length - 1];
-    if (shouldUseCachedAssistantResponse(lastMessage, todayLogsCount, today)) {
-      console.debug("No new logs since last AI response, using cached messages.");
-      return ok(undefined);
-    }
+        const lastMessage = messages.value[messages.value.length - 1];
+        if (shouldUseCachedAssistantResponse(lastMessage, todayLogsCount, today)) {
+          console.debug("No new logs since last AI response, using cached messages.");
+          return;
+        }
 
-    await classifyExercisesIfNeeded();
+        await classifyExercisesIfNeeded();
 
-    isLoading.value = true;
-    let userMessageId = "";
+        isLoading.value = true;
+        let userMessageId = "";
 
-    try {
-      const previousMessages: PreviousAiMessage[] = toPreviousAiMessages(messages.value);
+        try {
+          const previousMessages: PreviousAiMessage[] = toPreviousAiMessages(messages.value);
 
-      const userMessage = createAiUserPlaceholder(today, todayLogsCount);
-      userMessageId = userMessage.id;
-      messages.value.push(userMessage);
-      persistMessages(today);
+          const userMessage = createAiUserPlaceholder(today, todayLogsCount);
+          userMessageId = userMessage.id;
+          messages.value.push(userMessage);
+          persistMessages(today);
 
-      const result = await askCoachWithSingleRetry(
-        aiCoachService,
-        apiKey,
-        userProfileStore.userProfile,
-        trainingInsightsStore.insights,
-        exerciseLogsStore.exerciseLogs,
-        trainingSummaryStore.summaries,
-        previousMessages,
-        eventsStore.events,
-      );
+          const result = await askCoachWithSingleRetry(
+            aiCoachService,
+            apiKey,
+            userProfileStore.userProfile,
+            trainingInsightsStore.insights,
+            exerciseLogsStore.exerciseLogs,
+            trainingSummaryStore.summaries,
+            previousMessages,
+            eventsStore.events,
+          );
 
-      if (result.isErr() && result.error === "missing-api-key") {
-        messages.value = removeMessageById(messages.value, userMessageId);
-        persistMessages(today);
-        return err("missing-api-key");
-      }
+          if (result.isErr()) {
+            throw result.error;
+          }
 
-      if (result.isErr()) {
-        messages.value = removeMessageById(messages.value, userMessageId);
-        persistMessages(today);
-        return err("ai-failed");
-      }
+          exerciseMuscleMapStore.refresh();
 
-      exerciseMuscleMapStore.refresh();
+          if (responseStartsDeload(result.value.responseText) && !deloadStore.active) {
+            const { riskScore, triggeredBy } = trainingInsightsStore.insights.fatigue;
+            deloadStore.startDeload(riskScore, mapTrainingFatigueTriggersToDeload(triggeredBy));
+          }
 
-      if (responseStartsDeload(result.value.responseText) && !deloadStore.active) {
-        const { riskScore, triggeredBy } = trainingInsightsStore.insights.fatigue;
-        deloadStore.startDeload(riskScore, mapTrainingFatigueTriggersToDeload(triggeredBy));
-      }
+          messages.value = replaceMessageContentById(
+            messages.value,
+            userMessageId,
+            result.value.requestPayload,
+          );
 
-      messages.value = replaceMessageContentById(
-        messages.value,
-        userMessageId,
-        result.value.requestPayload,
-      );
+          const assistantMessage = createAiAssistantMessage(
+            today,
+            todayLogsCount,
+            result.value.responseText,
+          );
+          messages.value.push(assistantMessage);
+          persistMessages(today);
+        } catch (error) {
+          if (userMessageId) {
+            messages.value = removeMessageById(messages.value, userMessageId);
+            persistMessages(today);
+          }
 
-      const assistantMessage = createAiAssistantMessage(
-        today,
-        todayLogsCount,
-        result.value.responseText,
-      );
-      messages.value.push(assistantMessage);
-      persistMessages(today);
-      return ok(undefined);
-    } catch (error) {
-      console.error("AI request failed:", error);
-      Sentry.captureException(error, {
-        tags: { scope: "ai-store", feature: "ask-ai" },
-        extra: { hasPendingUserMessage: !!userMessageId },
-      });
-      if (userMessageId) {
-        messages.value = removeMessageById(messages.value, userMessageId);
-        persistMessages(today);
-      }
-      return err("ai-failed");
-    } finally {
-      isLoading.value = false;
-    }
+          if (isAskAiError(error)) {
+            throw error;
+          }
+
+          console.error("AI request failed:", error);
+          Sentry.captureException(error, {
+            tags: { scope: "ai-store", feature: "ask-ai" },
+            extra: { hasPendingUserMessage: !!userMessageId },
+          });
+          throw "ai-request-failed" as const;
+        } finally {
+          isLoading.value = false;
+        }
+      })(),
+      (error) => (isAskAiError(error) ? error : "ai-request-failed"),
+    );
   }
 
-  async function classifyExercisesIfNeeded(): Promise<void> {
+  function classifyExercisesIfNeeded(): ResultAsync<void, never> {
     const apiKey = userProfileStore.apiKey;
-    if (!apiKey) return;
+    if (!apiKey) return okAsync(undefined);
 
     const seen = new Set<string>();
     const unclassified: string[] = [];
@@ -224,18 +234,21 @@ export const useAiStore = defineStore("ai", () => {
         unclassified.push(log.exerciseName);
       }
     }
-    if (unclassified.length === 0) return;
+    if (unclassified.length === 0) return okAsync(undefined);
 
-    const result = await classifyExerciseNames(aiCoachService, unclassified, apiKey);
-    if (result.isErr()) {
-      Sentry.captureMessage("AI store exercise pre-classification failed", {
-        level: "warning",
-        tags: { scope: "ai-store", feature: "exercise-preclassification" },
-        extra: { reason: result.error, unclassifiedCount: unclassified.length },
+    return classifyExerciseNames(aiCoachService, unclassified, apiKey)
+      .andTee((cleanupResult) => {
+        exerciseMuscleMapStore.applyCleanupResults(cleanupResult);
+      })
+      .map(() => undefined)
+      .orElse((error) => {
+        Sentry.captureMessage("AI store exercise pre-classification failed", {
+          level: "warning",
+          tags: { scope: "ai-store", feature: "exercise-preclassification" },
+          extra: { reason: error, unclassifiedCount: unclassified.length },
+        });
+        return okAsync(undefined);
       });
-      return;
-    }
-    exerciseMuscleMapStore.applyCleanupResults(result.value);
   }
 
   function clearMessages() {

@@ -6,6 +6,7 @@
  */
 
 import { useDebounceFn } from "@vueuse/core";
+import { okAsync, ResultAsync } from "neverthrow";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { loadDeloadPhase, saveDeloadPhase } from "@/modules/deload/application";
@@ -15,12 +16,12 @@ import {
   type DeloadStatus,
   deloadDaysRemaining,
   deloadProgressPercent,
-  type FatigueTriggerId,
   getDeloadStatus,
   isDeloadActive,
 } from "@/modules/deload/domain";
 import { createDeloadPhaseRepository } from "@/modules/deload/infrastructure";
 import { useSpreadsheetRepositoryFactory } from "@/modules/platform/presentation";
+import type { FatigueTriggerId } from "@/modules/sharedKernel/domain";
 import { useAuthErrorHandler } from "@/shared/presentation/composables/useAuthErrorHandler";
 
 export type { DeloadPhase, DeloadStatus };
@@ -66,32 +67,34 @@ export const useDeloadStore = defineStore("deload", () => {
     queueSave();
   }
 
-  async function load(): Promise<void> {
+  function load(): ResultAsync<void, never> {
     const doc = getDoc();
     if (!doc) {
       isLoading.value = false;
-      return;
+      return okAsync(undefined);
     }
 
     isLoading.value = true;
 
-    try {
-      const repository = createRepository(doc);
-      if (!repository) {
-        return;
-      }
-
-      const result = await loadDeloadPhase(repository);
-      if (result.isErr()) {
-        if (result.error === "auth-failed") handleAuthError("deload-phase-load");
-        return;
-      }
-      if (result.value) {
-        phase.value = result.value;
-      }
-    } finally {
+    const repository = createRepository(doc);
+    if (!repository) {
       isLoading.value = false;
+      return okAsync(undefined);
     }
+
+    return ResultAsync.fromPromise(loadDeloadPhase(repository), () => undefined as never)
+      .andThen((result) => {
+        if (result.isErr() && result.error === "auth-failed") {
+          handleAuthError("deload-phase-load");
+        }
+        if (result.isOk() && result.value) {
+          phase.value = result.value;
+        }
+        return okAsync(undefined);
+      })
+      .andTee(() => {
+        isLoading.value = false;
+      });
   }
 
   return {

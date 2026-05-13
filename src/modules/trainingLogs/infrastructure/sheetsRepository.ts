@@ -1,13 +1,13 @@
 import type { GoogleSpreadsheet } from "google-spreadsheet";
-import { err, ok, type Result } from "neverthrow";
+import { errAsync, ResultAsync } from "neverthrow";
 import { ZodError, z } from "zod";
 import { isAuthError } from "@/modules/platform/infrastructure";
 import { parseData } from "@/modules/sharedKernel/domain";
-import type { TrainingLogsRepository } from "@/modules/trainingLogs/application";
+import type { ExerciseLogRepository } from "@/modules/trainingLogs/application";
 import { type ExerciseLog, ExerciseLogSchema } from "../domain/exerciseLog";
 
 const LOGS_SHEET_PREFIX = "Logs";
-const SHEET_NAME = `${LOGS_SHEET_PREFIX}${new Date().getFullYear()}`;
+const SHEET_NAME = LOGS_SHEET_PREFIX + new Date().getFullYear();
 const CANONICAL_HEADERS = [
   "id",
   "exerciseName",
@@ -47,25 +47,20 @@ export class ExerciseLogsSheetsRepository {
     if (!headers.includes("id")) {
       console.log("Migrating exercise logs - adding UUIDs to existing data...");
 
-      try {
-        const rows = await sheet.getRows();
-        const rowData = rows.map((row) => row.toObject());
+      const rows = await sheet.getRows();
+      const rowData = rows.map((row) => row.toObject());
 
-        await sheet.setHeaderRow(["id", ...headers]);
-        await sheet.loadHeaderRow();
-        await sheet.clearRows();
+      await sheet.setHeaderRow(["id", ...headers]);
+      await sheet.loadHeaderRow();
+      await sheet.clearRows();
 
-        const rowsWithIds = rowData.map((row) => ({
-          id: crypto.randomUUID(),
-          ...row,
-        }));
+      const rowsWithIds = rowData.map((row) => ({
+        id: crypto.randomUUID(),
+        ...row,
+      }));
 
-        await sheet.addRows(rowsWithIds);
-        console.log(`Migration complete - added UUIDs to ${rowsWithIds.length} existing logs`);
-      } catch (error) {
-        console.error("Migration failed:", error);
-        throw error;
-      }
+      await sheet.addRows(rowsWithIds);
+      console.log("Migration complete - added UUIDs to " + rowsWithIds.length + " existing logs");
     }
 
     await sheet.loadHeaderRow();
@@ -77,72 +72,75 @@ export class ExerciseLogsSheetsRepository {
     }
   }
 
-  async loadCurrentYear(): Promise<
-    Result<ExerciseLog[], "load-failed" | "parse-data-failed" | "auth-failed">
+  loadCurrentYear(): ResultAsync<
+    ExerciseLog[],
+    "load-failed" | "parse-data-failed" | "auth-failed"
   > {
-    const sheet = this.getSheet() ?? (await this.addSheet());
-
-    await this.migrateExistingLogs();
-
-    try {
-      const rows = await sheet.getRows<ExerciseLog>();
-      console.debug("Fetched rows", rows);
-      return parseData(
-        ExerciseLogSchema.array(),
-        rows.map((row) => row.toObject()),
-      );
-    } catch (error) {
-      if (isAuthError(error)) {
-        console.error("Auth failed during load. Error:", error);
-        return err("auth-failed");
-      }
-      console.error("Failed to load exercise logs. Error:", error);
-      return err("load-failed");
-    }
+    return ResultAsync.fromThrowable(
+      async () => {
+        const sheet = this.getSheet() ?? (await this.addSheet());
+        await this.migrateExistingLogs();
+        const rows = await sheet.getRows<ExerciseLog>();
+        console.debug("Fetched rows", rows);
+        return rows.map((row) => row.toObject());
+      },
+      (error) => {
+        if (isAuthError(error)) {
+          console.error("Auth failed during load. Error:", error);
+          return "auth-failed" as const;
+        }
+        console.error("Failed to load exercise logs. Error:", error);
+        return "load-failed" as const;
+      },
+    )().andThen((rows) => parseData(ExerciseLogSchema.array(), rows));
   }
 
-  async addLog(log: ExerciseLog): Promise<Result<void, "add-failed" | "auth-failed">> {
-    try {
-      const sheet = this.getSheet() ?? (await this.addSheet());
+  addLog(log: ExerciseLog): ResultAsync<void, "add-failed" | "auth-failed"> {
+    return ResultAsync.fromThrowable(
+      async () => {
+        const sheet = this.getSheet() ?? (await this.addSheet());
 
-      const logWithId = {
-        ...log,
-        id: log.id || crypto.randomUUID(),
-      };
+        const logWithId = {
+          ...log,
+          id: log.id || crypto.randomUUID(),
+        };
 
-      await sheet.addRow(ExerciseLogSchema.parse(logWithId));
-      return ok();
-    } catch (error) {
-      if (isAuthError(error)) {
-        console.error("Auth failed during add. Error:", error);
-        return err("auth-failed");
-      }
-      console.error("Failed to add exercise log. Error:", error);
-      if (error instanceof ZodError) console.error(z.prettifyError(error));
-      return err("add-failed");
-    }
+        await sheet.addRow(ExerciseLogSchema.parse(logWithId));
+      },
+      (error) => {
+        if (isAuthError(error)) {
+          console.error("Auth failed during add. Error:", error);
+          return "auth-failed" as const;
+        }
+        console.error("Failed to add exercise log. Error:", error);
+        if (error instanceof ZodError) console.error(z.prettifyError(error));
+        return "add-failed" as const;
+      },
+    )();
   }
 
-  async deleteLog(log: ExerciseLog): Promise<Result<void, "delete-failed" | "auth-failed">> {
+  deleteLog(log: ExerciseLog): ResultAsync<void, "delete-failed" | "auth-failed"> {
     const sheet = this.getSheet();
     if (!sheet) {
       console.error("Failed to delete exercise log. Sheet does not exist.");
-      return err("delete-failed");
+      return errAsync("delete-failed" as const);
     }
-    try {
-      const rows = await sheet.getRows<ExerciseLog>();
-      const rowToDelete = rows.find((row) => row.get("id") === log.id);
-      console.debug("Deleting row:", rowToDelete);
-      await rowToDelete?.delete();
-      return ok();
-    } catch (error) {
-      if (isAuthError(error)) {
-        console.error("Auth failed during delete. Error:", error);
-        return err("auth-failed");
-      }
-      console.error("Failed to delete exercise log. Error:", error);
-      return err("delete-failed");
-    }
+    return ResultAsync.fromThrowable(
+      async () => {
+        const rows = await sheet.getRows<ExerciseLog>();
+        const rowToDelete = rows.find((row) => row.get("id") === log.id);
+        console.debug("Deleting row:", rowToDelete);
+        await rowToDelete?.delete();
+      },
+      (error) => {
+        if (isAuthError(error)) {
+          console.error("Auth failed during delete. Error:", error);
+          return "auth-failed" as const;
+        }
+        console.error("Failed to delete exercise log. Error:", error);
+        return "delete-failed" as const;
+      },
+    )();
   }
 
   findPastYearSheets(): number[] {
@@ -162,32 +160,34 @@ export class ExerciseLogsSheetsRepository {
     return pastYears.sort((a, b) => a - b);
   }
 
-  async loadYear(
+  loadYear(
     year: number,
-  ): Promise<Result<ExerciseLog[], "load-failed" | "parse-data-failed" | "sheet-not-found">> {
-    const sheetName = `${LOGS_SHEET_PREFIX}${year}`;
+  ): ResultAsync<ExerciseLog[], "load-failed" | "parse-data-failed" | "sheet-not-found"> {
+    const sheetName = LOGS_SHEET_PREFIX + year;
     const sheet = this.doc.sheetsByTitle[sheetName];
 
-    if (!sheet) return err("sheet-not-found");
+    if (!sheet) return errAsync("sheet-not-found" as const);
 
-    try {
-      const rows = await sheet.getRows<ExerciseLog>();
-      const rowsWithIds = rows.map((row) => {
-        const obj = row.toObject();
-        return {
-          ...obj,
-          id: obj.id || crypto.randomUUID(),
-        };
-      });
-      return parseData(ExerciseLogSchema.array(), rowsWithIds);
-    } catch (error) {
-      console.error(`Failed to load logs from year ${year}. Error:`, error);
-      return err("load-failed");
-    }
+    return ResultAsync.fromThrowable(
+      async () => {
+        const rows = await sheet.getRows<ExerciseLog>();
+        return rows.map((row) => {
+          const obj = row.toObject();
+          return {
+            ...obj,
+            id: obj.id || crypto.randomUUID(),
+          };
+        });
+      },
+      (error) => {
+        console.error("Failed to load logs from year " + year + ". Error:", error);
+        return "load-failed" as const;
+      },
+    )().andThen((rows) => parseData(ExerciseLogSchema.array(), rows));
   }
 }
 
-export function createTrainingLogsRepository(doc: GoogleSpreadsheet): TrainingLogsRepository {
+export function createExerciseLogRepository(doc: GoogleSpreadsheet): ExerciseLogRepository {
   const repository = new ExerciseLogsSheetsRepository(doc);
 
   return {

@@ -1,4 +1,4 @@
-import { errAsync, okAsync, Result, ResultAsync } from "neverthrow";
+import { errAsync, Result, ResultAsync } from "neverthrow";
 import type { Event } from "@/modules/events/domain";
 import type { UserProfile } from "@/modules/profile/domain";
 import type { TrainingInsights } from "@/modules/trainingInsights/domain";
@@ -35,11 +35,11 @@ export interface AiCoachService {
     trainingSummaries: TrainingSummary[],
     previousMessages: PreviousAiMessage[],
     events?: Event[],
-  ): Promise<Result<AskAiResult, AskAiError>>;
+  ): ResultAsync<AskAiResult, AskAiError>;
   classifyExercises(
     exerciseNames: string[],
     apiKey: string | undefined,
-  ): Promise<Result<ExerciseCleanupResult, AskAiError>>;
+  ): ResultAsync<ExerciseCleanupResult, AskAiError>;
   getTodayLogsCount(session: WorkoutSession | null): number;
 }
 
@@ -52,7 +52,7 @@ export function askCoach(
   trainingSummaries: TrainingSummary[],
   previousMessages: PreviousAiMessage[],
   events?: Event[],
-): Promise<Result<AskAiResult, AskAiError>> {
+): ResultAsync<AskAiResult, AskAiError> {
   return service.ask(
     apiKey,
     userProfile,
@@ -68,7 +68,7 @@ export function classifyExerciseNames(
   service: AiCoachService,
   exerciseNames: string[],
   apiKey: string | undefined,
-): Promise<Result<ExerciseCleanupResult, AskAiError>> {
+): ResultAsync<ExerciseCleanupResult, AskAiError> {
   return service.classifyExercises(exerciseNames, apiKey);
 }
 
@@ -91,39 +91,24 @@ export function askCoachWithSingleRetry(
   events?: Event[],
   retryDelayMs = 2000,
 ): ResultAsync<AskAiResult, AskAiError> {
-  return ResultAsync.fromPromise(
-    (async () => {
-      let result = await askCoach(
-        service,
-        apiKey,
-        userProfile,
-        insights,
-        exerciseLogs,
-        trainingSummaries,
-        previousMessages,
-        events,
-      );
+  const askOnce = () =>
+    askCoach(
+      service,
+      apiKey,
+      userProfile,
+      insights,
+      exerciseLogs,
+      trainingSummaries,
+      previousMessages,
+      events,
+    );
 
-      if (result.isErr() && result.error !== "missing-api-key") {
-        await delay(retryDelayMs);
-        result = await askCoach(
-          service,
-          apiKey,
-          userProfile,
-          insights,
-          exerciseLogs,
-          trainingSummaries,
-          previousMessages,
-          events,
-        );
-      }
+  return askOnce().orElse((error) => {
+    if (error === "missing-api-key") return errAsync(error);
 
-      return result;
-    })(),
-    () => "ai-request-failed" as AskAiError,
-  ).andThen((result) => {
-    if (result.isErr()) return errAsync(result.error);
-    return okAsync(result.value);
+    return ResultAsync.fromPromise(delay(retryDelayMs), () => "ai-request-failed" as const).andThen(
+      () => askOnce(),
+    );
   });
 }
 

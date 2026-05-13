@@ -1,16 +1,17 @@
 import * as Sentry from "@sentry/vue";
 import type { GoogleSpreadsheet } from "google-spreadsheet";
-import { err, ok, type Result } from "neverthrow";
+import { ResultAsync } from "neverthrow";
 import type { DeloadPhaseRepository } from "@/modules/deload/application";
 import { isDeloadFatigueTriggerId } from "@/modules/deload/domain";
 import { isAuthError } from "@/modules/platform/infrastructure";
-import type { DeloadPhase, FatigueTriggerId } from "../domain/types";
+import type { FatigueTriggerId } from "@/modules/sharedKernel/domain";
+import type { DeloadPhase } from "../domain/types";
 
 const SHEET_NAME = "DeloadPhase";
 const HEADERS = ["startedAt", "endsAt", "fatigueRiskScore", "triggeredBy", "canceledAt"] as const;
 
-type LoadError = "load-failed" | "auth-failed";
-type SaveError = "save-failed" | "auth-failed";
+type DeloadPhaseLoadError = "load-failed" | "auth-failed";
+type DeloadPhaseSaveError = "save-failed" | "auth-failed";
 
 function getSheet(doc: GoogleSpreadsheet) {
   return doc.sheetsByTitle[SHEET_NAME];
@@ -67,28 +68,35 @@ function serialize(phase: DeloadPhase | null): Record<string, string> {
   };
 }
 
-export async function loadDeloadPhaseInfra(
+function mapLoadError(error: unknown): DeloadPhaseLoadError {
+  if (isAuthError(error)) return "auth-failed";
+  Sentry.captureException(error, { tags: { scope: "deload-phase-sheet", feature: "load" } });
+  return "load-failed";
+}
+
+function mapSaveError(error: unknown): DeloadPhaseSaveError {
+  if (isAuthError(error)) return "auth-failed";
+  Sentry.captureException(error, { tags: { scope: "deload-phase-sheet", feature: "save" } });
+  return "save-failed";
+}
+
+export function loadDeloadPhaseInfra(
   doc: GoogleSpreadsheet,
-): Promise<Result<DeloadPhase | null, LoadError>> {
-  try {
+): ResultAsync<DeloadPhase | null, DeloadPhaseLoadError> {
+  return ResultAsync.fromThrowable(async () => {
     const sheet = getSheet(doc) ?? (await ensureSheet(doc));
     await ensureHeaders(sheet);
     const rows = await sheet.getRows();
-    if (rows.length === 0) return ok(null);
-    const phase = deserialize(rows[0]!.toObject());
-    return ok(phase);
-  } catch (error) {
-    if (isAuthError(error)) return err("auth-failed");
-    Sentry.captureException(error, { tags: { scope: "deload-phase-sheet", feature: "load" } });
-    return err("load-failed");
-  }
+    if (rows.length === 0) return null;
+    return deserialize(rows[0]!.toObject());
+  }, mapLoadError)();
 }
 
-export async function saveDeloadPhaseInfra(
+export function saveDeloadPhaseInfra(
   phase: DeloadPhase | null,
   doc: GoogleSpreadsheet,
-): Promise<Result<void, SaveError>> {
-  try {
+): ResultAsync<void, DeloadPhaseSaveError> {
+  return ResultAsync.fromThrowable(async () => {
     const sheet = await ensureSheet(doc);
     await ensureHeaders(sheet);
     const rows = await sheet.getRows();
@@ -99,12 +107,7 @@ export async function saveDeloadPhaseInfra(
     } else {
       await sheet.addRow(data);
     }
-    return ok(undefined);
-  } catch (error) {
-    if (isAuthError(error)) return err("auth-failed");
-    Sentry.captureException(error, { tags: { scope: "deload-phase-sheet", feature: "save" } });
-    return err("save-failed");
-  }
+  }, mapSaveError)();
 }
 
 export function createDeloadPhaseRepository(doc: GoogleSpreadsheet): DeloadPhaseRepository {

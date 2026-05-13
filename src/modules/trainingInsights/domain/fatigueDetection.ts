@@ -1,10 +1,10 @@
+import {
+  type FatigueTriggerId,
+  isFatigueTriggerId as isSharedFatigueTriggerId,
+} from "@/modules/sharedKernel/domain";
 import type { ExerciseE1RM } from "./e1rm";
 
-export type FatigueTriggerId =
-  | "volumeSpike"
-  | "tonnageSpike"
-  | "performanceDecline"
-  | "volumeIncreasing";
+export type { FatigueTriggerId } from "@/modules/sharedKernel/domain";
 
 /** Fatigue accumulation insight for deload decisions. */
 export interface FatigueInsight {
@@ -76,7 +76,7 @@ function toFourWeekWindow(values: number[]): [number, number, number, number] {
 }
 
 export function isFatigueTriggerId(value: string): value is FatigueTriggerId {
-  return Object.hasOwn(TRIGGER_WEIGHTS, value);
+  return isSharedFatigueTriggerId(value);
 }
 
 function calculateFatigueRiskScore(triggeredBy: FatigueTriggerId[]): number {

@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/vue";
 import type { GoogleSpreadsheet } from "google-spreadsheet";
-import { err, ok, type Result } from "neverthrow";
+import { errAsync, okAsync, Result, ResultAsync } from "neverthrow";
 import { isAuthError } from "@/modules/platform/infrastructure";
 import type { UserProfileRepository } from "@/modules/profile/application";
 import { parseData } from "@/modules/sharedKernel/domain";
@@ -55,36 +55,52 @@ function serializeForSheet(profile: UserProfile): Record<string, string> {
   };
 }
 
-export async function loadUserProfileInfra(
+export function loadUserProfileInfra(
   doc: GoogleSpreadsheet,
-): Promise<Result<UserProfile | null, "load-failed" | "parse-data-failed" | "auth-failed">> {
-  const sheet = getSheet(doc) ?? (await addSheet(doc));
-  try {
-    await ensureUserProfileHeaders(sheet);
-    const rows = await sheet.getRows();
-    if (rows.length === 0) {
-      return ok(null);
-    }
-    const result = parseData(UserProfileSchema, rows[0]?.toObject());
-    return result.isOk() ? ok(result.value) : err(result.error);
-  } catch (error) {
+): ResultAsync<UserProfile | null, "load-failed" | "parse-data-failed" | "auth-failed"> {
+  const mapLoadError = (error: unknown): "load-failed" | "auth-failed" => {
     if (isAuthError(error)) {
       console.error("Auth failed during loadUserProfile. Error:", error);
-      return err("auth-failed");
+      return "auth-failed";
     }
     console.error("Failed to load user profile. Error:", error);
     Sentry.captureException(error, {
       tags: { scope: "user-profile-service", feature: "load" },
     });
-    return err("load-failed");
-  }
+    return "load-failed";
+  };
+
+  return ResultAsync.fromThrowable(async () => {
+    const sheet = getSheet(doc) ?? (await addSheet(doc));
+    await ensureUserProfileHeaders(sheet);
+    const rows = await sheet.getRows();
+    if (rows.length === 0) {
+      return null;
+    }
+    return rows[0]?.toObject() ?? null;
+  }, mapLoadError)().andThen((row) => {
+    if (!row) return okAsync(null);
+    return parseData(UserProfileSchema, row);
+  });
 }
 
-export async function saveUserProfileInfra(
+export function saveUserProfileInfra(
   profile: UserProfile,
   doc: GoogleSpreadsheet,
-): Promise<Result<void, "save-failed" | "auth-failed">> {
-  try {
+): ResultAsync<void, "save-failed" | "auth-failed"> {
+  const mapSaveError = (error: unknown): "save-failed" | "auth-failed" => {
+    if (isAuthError(error)) {
+      console.error("Auth failed during saveUserProfile. Error:", error);
+      return "auth-failed";
+    }
+    console.error("Failed to save user profile. Error:", error);
+    Sentry.captureException(error, {
+      tags: { scope: "user-profile-service", feature: "save" },
+    });
+    return "save-failed";
+  };
+
+  return ResultAsync.fromThrowable(async () => {
     const sheet = getSheet(doc) ?? (await addSheet(doc));
     await ensureUserProfileHeaders(sheet);
     const rows = await sheet.getRows();
@@ -96,85 +112,78 @@ export async function saveUserProfileInfra(
     } else {
       await sheet.addRow(serialized);
     }
-    return ok();
-  } catch (error) {
-    if (isAuthError(error)) {
-      console.error("Auth failed during saveUserProfile. Error:", error);
-      return err("auth-failed");
-    }
-    console.error("Failed to save user profile. Error:", error);
-    Sentry.captureException(error, {
-      tags: { scope: "user-profile-service", feature: "save" },
-    });
-    return err("save-failed");
-  }
+  }, mapSaveError)();
 }
 
-export async function migrateFromLocalStorageInfra(
+export function migrateFromLocalStorageInfra(
   doc: GoogleSpreadsheet,
-): Promise<Result<"migrated" | "skipped" | "no-data", "migration-failed">> {
-  try {
-    const loadResult = await loadUserProfileInfra(doc);
-    if (loadResult.isErr()) {
-      return err("migration-failed");
-    }
-
-    if (loadResult.value !== null) {
-      return ok("skipped");
-    }
-
-    const oldDataJson = localStorage.getItem("userProfile");
-    if (!oldDataJson) {
-      return ok("no-data");
-    }
-
-    let oldData: unknown;
-    try {
-      oldData = JSON.parse(oldDataJson);
-    } catch (parseError) {
-      console.error("Failed to parse old userProfile localStorage:", parseError);
-      Sentry.captureException(parseError, {
-        tags: { scope: "user-profile-service", feature: "migration-parse" },
-      });
-      return err("migration-failed");
-    }
-
-    if (!oldData || typeof oldData !== "object") {
-      return err("migration-failed");
-    }
-
-    const oldDataRecord = oldData as Record<string, unknown>;
-    const apiKey =
-      typeof oldDataRecord.apiKey === "string" && oldDataRecord.apiKey.length > 0
-        ? oldDataRecord.apiKey
-        : undefined;
-    const { apiKey: _apiKey, ...profileData } = oldDataRecord;
-
-    if (apiKey) {
-      localStorage.setItem("userProfile:apiKey", apiKey);
-    }
-
-    const saveProfileResult = await saveUserProfileInfra(profileData as UserProfile, doc);
-    if (saveProfileResult.isErr()) {
-      console.error("Failed to save migrated profile to spreadsheet");
-      Sentry.captureMessage("Failed to save migrated profile", {
-        level: "error",
-        tags: { scope: "user-profile-service", feature: "migration-save-profile" },
-      });
-      return err("migration-failed");
-    }
-
-    localStorage.removeItem("userProfile");
-
-    console.log("User profile migrated from localStorage to spreadsheet");
-    return ok("migrated");
-  } catch (error) {
+): ResultAsync<"migrated" | "skipped" | "no-data", "migration-failed"> {
+  const mapMigrationError = (error: unknown): "migration-failed" => {
     console.error("Migration failed:", error);
     Sentry.captureException(error, {
       tags: { scope: "user-profile-service", feature: "migration" },
     });
-    return err("migration-failed");
-  }
+    return "migration-failed";
+  };
+
+  return loadUserProfileInfra(doc)
+    .mapErr(mapMigrationError)
+    .andThen((existingProfile) => {
+      if (existingProfile !== null) {
+        return okAsync<"migrated" | "skipped" | "no-data", "migration-failed">("skipped");
+      }
+
+      const oldDataJson = localStorage.getItem("userProfile");
+      if (!oldDataJson) {
+        return okAsync<"migrated" | "skipped" | "no-data", "migration-failed">("no-data");
+      }
+
+      const parseOldDataResult = Result.fromThrowable(
+        () => JSON.parse(oldDataJson),
+        (parseError) => {
+          console.error("Failed to parse old userProfile localStorage:", parseError);
+          Sentry.captureException(parseError, {
+            tags: { scope: "user-profile-service", feature: "migration-parse" },
+          });
+          return "migration-failed" as const;
+        },
+      )();
+
+      if (parseOldDataResult.isErr()) {
+        return errAsync(parseOldDataResult.error);
+      }
+
+      const oldData = parseOldDataResult.value;
+      if (!oldData || typeof oldData !== "object") {
+        return errAsync("migration-failed" as const);
+      }
+
+      const oldDataRecord = oldData as Record<string, unknown>;
+      const apiKey =
+        typeof oldDataRecord.apiKey === "string" && oldDataRecord.apiKey.length > 0
+          ? oldDataRecord.apiKey
+          : undefined;
+      const { apiKey: _apiKey, ...profileData } = oldDataRecord;
+
+      if (apiKey) {
+        localStorage.setItem("userProfile:apiKey", apiKey);
+      }
+
+      return saveUserProfileInfra(profileData as UserProfile, doc)
+        .mapErr((error) => {
+          console.error("Failed to save migrated profile to spreadsheet", error);
+          Sentry.captureMessage("Failed to save migrated profile", {
+            level: "error",
+            tags: { scope: "user-profile-service", feature: "migration-save-profile" },
+          });
+          return "migration-failed" as const;
+        })
+        .map(() => {
+          localStorage.removeItem("userProfile");
+          console.log("User profile migrated from localStorage to spreadsheet");
+          return "migrated" as const;
+        });
+    });
 }
 
 export function createUserProfileRepository(doc: GoogleSpreadsheet): UserProfileRepository {

@@ -1,1 +1,2 @@
-export type AuthError = "token-request-failed" | "missing-scopes";
+export type AuthTokenRequestError = "token-request-failed";
+export type AuthError = AuthTokenRequestError | "missing-scopes";

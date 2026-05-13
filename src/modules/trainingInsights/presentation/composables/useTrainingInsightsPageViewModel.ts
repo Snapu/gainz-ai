@@ -7,9 +7,9 @@ import { useExerciseMuscleMapStore } from "@/modules/platform/presentation";
 import type { MuscleGroupInsight } from "@/modules/trainingInsights/presentation";
 import { useTrainingInsightsStore } from "@/modules/trainingInsights/presentation";
 
-type Tab = "map" | "phase" | "exercises";
+type TrainingInsightsTab = "map" | "phase" | "exercises";
 
-type AcwrZone = {
+type AcwrZoneViewModel = {
   label: string;
   range: string;
   detail: string;
@@ -26,7 +26,7 @@ type ExerciseMetric = {
   status: "plateau" | "improving" | "dropping" | "stable";
 };
 
-type MuscleGroupEntry = MuscleGroupInsight & { muscleGroup: string };
+type MuscleGroupWithKey = MuscleGroupInsight & { muscleGroup: string };
 
 function clampPct(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
@@ -44,15 +44,15 @@ export function useTrainingInsightsPageViewModel() {
     void aiStore.classifyExercisesIfNeeded();
   });
 
-  const activeTab = ref<Tab>("map");
+  const activeTab = ref<TrainingInsightsTab>("map");
   const tabOptions = [
     { id: "map", label: "Muscles" },
     { id: "phase", label: "Phase" },
     { id: "exercises", label: "Exercises" },
   ] as const;
 
-  const muscleInsightsList = computed((): MuscleGroupEntry[] => {
-    const result: MuscleGroupEntry[] = [];
+  const muscleInsightsList = computed((): MuscleGroupWithKey[] => {
+    const result: MuscleGroupWithKey[] = [];
     for (const [group, insight] of Object.entries(insights.value.muscleGroups)) {
       if (insight !== undefined) {
         result.push({ ...insight, muscleGroup: group });
@@ -100,7 +100,7 @@ export function useTrainingInsightsPageViewModel() {
     insights.value.acwr === null ? "No baseline" : insights.value.acwr.toFixed(2),
   );
 
-  const acwrZone = computed<AcwrZone>(() => {
+  const acwrZone = computed<AcwrZoneViewModel>(() => {
     const acwr = insights.value.acwr;
     if (acwr === null) {
       return {

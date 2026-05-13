@@ -1,6 +1,6 @@
 import { GoogleGenAI, type Schema, Type } from "@google/genai";
 import * as Sentry from "@sentry/vue";
-import { err, ok, type Result } from "neverthrow";
+import { errAsync, okAsync, Result, ResultAsync } from "neverthrow";
 import { VALID_MUSCLE_GROUPS } from "@/modules/sharedKernel/application";
 import type { AskAiError, ExerciseCleanupResult } from "../domain/types";
 
@@ -57,12 +57,12 @@ function isServiceUnavailableError(error: unknown): boolean {
  *
  * Returns structured proposals that should be passed to `applyAiCleanupResults()`.
  */
-export async function classifyExercises(
+export function classifyExercises(
   exerciseNames: string[],
   apiKey: string | undefined,
-): Promise<Result<ExerciseCleanupResult, AskAiError>> {
-  if (!apiKey) return err("missing-api-key");
-  if (exerciseNames.length === 0) return ok({ classifications: [] });
+): ResultAsync<ExerciseCleanupResult, AskAiError> {
+  if (!apiKey) return errAsync("missing-api-key");
+  if (exerciseNames.length === 0) return okAsync({ classifications: [] });
 
   const ai = new GoogleGenAI({ apiKey });
 
@@ -86,51 +86,77 @@ Important rules:
   };
   const classifyContents = [{ role: "user" as const, parts: [{ text: prompt }] }];
 
-  try {
-    let response: { text?: string };
-    try {
-      response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: classifyContents,
-        config: classifyConfig,
-      });
-    } catch (innerErr) {
-      if (isServiceUnavailableError(innerErr)) {
-        Sentry.captureMessage(
-          "Classification primary model unavailable, falling back to gemini-3.1-flash-lite-preview",
-          {
-            level: "info",
-            tags: { scope: "ai-service", feature: "model-fallback" },
-            extra: { exerciseCount: exerciseNames.length },
-          },
-        );
-        response = await ai.models.generateContent({
-          model: "gemini-3.1-flash-lite-preview",
-          contents: classifyContents,
-          config: classifyConfig,
-        });
-      } else {
-        throw innerErr;
-      }
+  const requestPrimary = ResultAsync.fromPromise(
+    ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: classifyContents,
+      config: classifyConfig,
+    }),
+    (error) => error,
+  );
+
+  // Elegant fallback pattern: try primary model → if unavailable (503), try fallback
+  // Per neverthrow-elegant: .orElse() for error recovery and fallback chains
+  const requestWithFallback = requestPrimary.orElse((error) => {
+    if (!isServiceUnavailableError(error)) {
+      return errAsync<{ text?: string }, unknown>(error);
     }
 
-    const text = response.text ?? "";
-    const parsed = JSON.parse(text) as ExerciseCleanupResult;
-    if (!Array.isArray(parsed?.classifications)) {
-      Sentry.captureMessage("Exercise classification returned invalid schema", {
-        level: "warning",
+    Sentry.captureMessage(
+      "Classification primary model unavailable, falling back to gemini-3.1-flash-lite-preview",
+      {
+        level: "info",
+        tags: { scope: "ai-service", feature: "model-fallback" },
+        extra: { exerciseCount: exerciseNames.length },
+      },
+    );
+
+    return ResultAsync.fromPromise(
+      ai.models.generateContent({
+        model: "gemini-3.1-flash-lite-preview",
+        contents: classifyContents,
+        config: classifyConfig,
+      }),
+      (fallbackError) => fallbackError,
+    );
+  });
+
+  return requestWithFallback
+    .mapErr((error) => {
+      console.error("Exercise classification failed:", error);
+      Sentry.captureException(error, {
         tags: { scope: "ai-service", feature: "exercise-classification" },
         extra: { exerciseCount: exerciseNames.length },
       });
-      return err("ai-request-failed");
-    }
-    return ok(parsed);
-  } catch (error) {
-    console.error("Exercise classification failed:", error);
-    Sentry.captureException(error, {
-      tags: { scope: "ai-service", feature: "exercise-classification" },
-      extra: { exerciseCount: exerciseNames.length },
+      return "ai-request-failed" as const;
+    })
+    .andThen((response) => {
+      const parseResult = Result.fromThrowable(
+        () => JSON.parse(response.text ?? "") as ExerciseCleanupResult,
+        (error) => {
+          console.error("Exercise classification failed:", error);
+          Sentry.captureException(error, {
+            tags: { scope: "ai-service", feature: "exercise-classification" },
+            extra: { exerciseCount: exerciseNames.length },
+          });
+          return "ai-request-failed" as const;
+        },
+      )();
+
+      if (parseResult.isErr()) {
+        return errAsync<ExerciseCleanupResult, AskAiError>(parseResult.error);
+      }
+
+      const parsed = parseResult.value;
+      if (!Array.isArray(parsed?.classifications)) {
+        Sentry.captureMessage("Exercise classification returned invalid schema", {
+          level: "warning",
+          tags: { scope: "ai-service", feature: "exercise-classification" },
+          extra: { exerciseCount: exerciseNames.length },
+        });
+        return errAsync<ExerciseCleanupResult, AskAiError>("ai-request-failed");
+      }
+
+      return okAsync<ExerciseCleanupResult, AskAiError>(parsed);
     });
-    return err("ai-request-failed");
-  }
 }

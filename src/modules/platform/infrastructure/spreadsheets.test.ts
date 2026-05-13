@@ -12,6 +12,25 @@ describe("spreadsheets", () => {
   });
 
   describe("getSpreadsheetId", () => {
+    it("should expose a ResultAsync contract for chaining", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          files: [{ id: "spreadsheet-123", modifiedTime: "2024-03-15T10:00:00Z" }],
+        }),
+      });
+
+      const result = getSpreadsheetId(SPREADSHEET_NAME, "access-token");
+
+      expect(typeof result.andThen).toBe("function");
+      await expect(
+        result.match(
+          (value) => value,
+          () => null,
+        ),
+      ).resolves.toBe("spreadsheet-123");
+    });
+
     it("should return spreadsheet id when found", async () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,

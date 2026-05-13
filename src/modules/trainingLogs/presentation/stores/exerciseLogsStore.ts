@@ -1,4 +1,4 @@
-import { err } from "neverthrow";
+import { errAsync } from "neverthrow";
 import { defineStore } from "pinia";
 import { watch } from "vue";
 import {
@@ -10,12 +10,13 @@ import {
   deleteExerciseLog as deleteExerciseLog_,
   loadExerciseLogs,
 } from "@/modules/trainingLogs/application";
-import { createTrainingLogsRepository } from "@/modules/trainingLogs/infrastructure";
+import type { ExerciseLog } from "@/modules/trainingLogs/domain";
+import { createExerciseLogRepository } from "@/modules/trainingLogs/infrastructure";
 import { useAuthErrorHandler } from "@/shared/presentation/composables/useAuthErrorHandler";
 
 export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
   const { spreadsheetStore, createRepository } = useSpreadsheetRepositoryFactory(
-    createTrainingLogsRepository,
+    createExerciseLogRepository,
   );
   const { handleAuthError } = useAuthErrorHandler();
   const {
@@ -25,21 +26,26 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
     add,
     remove,
     refresh,
-  } = useOfflineSyncedStore({
+  } = useOfflineSyncedStore<
+    ExerciseLog,
+    "load-failed" | "parse-data-failed" | "auth-failed",
+    "add-failed" | "auth-failed",
+    "delete-failed" | "auth-failed"
+  >({
     getId: (log) => log.id,
     fetchRemote: () => {
       const repository = createRepository();
-      if (!repository) return Promise.resolve(err("load-failed"));
+      if (!repository) return errAsync("load-failed");
       return loadExerciseLogs(repository);
     },
     addRemote: (item) => {
       const repository = createRepository();
-      if (!repository) return Promise.resolve(err("add-failed"));
+      if (!repository) return errAsync("add-failed");
       return addExerciseLog_(item, repository);
     },
     removeRemote: (item) => {
       const repository = createRepository();
-      if (!repository) return Promise.resolve(err("delete-failed"));
+      if (!repository) return errAsync("delete-failed");
       return deleteExerciseLog_(item, repository);
     },
   });
@@ -58,22 +64,24 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
     },
   );
 
-  const addExerciseLog: typeof add = async (exerciseLog) => {
+  const addExerciseLog: typeof add = (exerciseLog) => {
     console.log("Adding exercise log", exerciseLog);
-    const result = await add(exerciseLog);
-    if (result.isErr() && result.error === "auth-failed") {
-      handleAuthError("exercise-log-add");
-    }
-    return result;
+    return add(exerciseLog).mapErr((error) => {
+      if (error === "auth-failed") {
+        handleAuthError("exercise-log-add");
+      }
+      return error;
+    });
   };
 
-  const removeExerciseLog: typeof remove = async (exerciseLog) => {
+  const removeExerciseLog: typeof remove = (exerciseLog) => {
     console.log("Removing exercise log", exerciseLog);
-    const result = await remove(exerciseLog);
-    if (result.isErr() && result.error === "auth-failed") {
-      handleAuthError("exercise-log-delete");
-    }
-    return result;
+    return remove(exerciseLog).mapErr((error) => {
+      if (error === "auth-failed") {
+        handleAuthError("exercise-log-delete");
+      }
+      return error;
+    });
   };
 
   function lastLogForExercise(exerciseName: string) {

@@ -1,4 +1,5 @@
 import type { GoogleSpreadsheet } from "google-spreadsheet";
+import { okAsync } from "neverthrow";
 import { describe, expect, it, vi } from "vitest";
 import {
   applyExerciseWeightMigrationDecision,
@@ -70,6 +71,22 @@ function createLog(exerciseName: string, loggedAt: string, weight?: number): Exe
 }
 
 describe("exerciseWeightMigration service", () => {
+  it("exposes a ResultAsync contract for loading reviews", async () => {
+    const repository = {
+      loadReviews: () => okAsync([]),
+    } as never;
+
+    const result = loadExerciseWeightMigrationReviews(repository);
+
+    expect(typeof result.andThen).toBe("function");
+    await expect(
+      result.match(
+        (value) => value,
+        () => ["error"],
+      ),
+    ).resolves.toEqual([]);
+  });
+
   it("creates the sheet if it is missing", async () => {
     const doc = createMockDoc(null);
 
@@ -154,6 +171,28 @@ describe("exerciseWeightMigration service", () => {
     );
 
     expect(result.isOk()).toBe(true);
+    expect(sheet.addRow).toHaveBeenCalledWith(makeReview());
+  });
+
+  it("ignores malformed existing exercise names when saving a new review", async () => {
+    const malformedExistingRow = createMockRow({
+      exerciseName: "   ",
+      decision: "keep_as_is",
+      reviewedAt: "2026-05-06T12:00:00.000Z",
+      affectedLogCount: "4",
+    });
+    const sheet = createMockSheet(
+      [malformedExistingRow],
+      ["exerciseName", "decision", "reviewedAt", "affectedLogCount"],
+    );
+
+    const result = await saveExerciseWeightMigrationReview(
+      makeReview(),
+      createExerciseWeightMigrationRepository(createMockDoc(sheet)),
+    );
+
+    expect(result.isOk()).toBe(true);
+    expect(malformedExistingRow.assign).not.toHaveBeenCalled();
     expect(sheet.addRow).toHaveBeenCalledWith(makeReview());
   });
 

@@ -1,14 +1,15 @@
-import type { Result } from "neverthrow";
+import type { ResultAsync } from "neverthrow";
 import type { UserProfile } from "../domain/types";
 
+export type UserProfileLoadError = "load-failed" | "parse-data-failed" | "auth-failed";
+export type UserProfileSaveError = "save-failed" | "auth-failed";
+export type UserProfileMigrationResult = "migrated" | "skipped" | "no-data";
+export type UserProfileMigrationError = "migration-failed";
+
 export interface UserProfileRepository {
-  load: () => Promise<
-    Result<UserProfile | null, "load-failed" | "parse-data-failed" | "auth-failed">
-  >;
-  save: (profile: UserProfile) => Promise<Result<void, "save-failed" | "auth-failed">>;
-  migrateFromLocalStorage: () => Promise<
-    Result<"migrated" | "skipped" | "no-data", "migration-failed">
-  >;
+  load: () => ResultAsync<UserProfile | null, UserProfileLoadError>;
+  save: (profile: UserProfile) => ResultAsync<void, UserProfileSaveError>;
+  migrateFromLocalStorage: () => ResultAsync<UserProfileMigrationResult, UserProfileMigrationError>;
 }
 
 export function loadUserProfile(repository: UserProfileRepository) {
