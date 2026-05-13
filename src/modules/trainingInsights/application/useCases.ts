@@ -1,3 +1,4 @@
+import type { DeloadPhase } from "@/modules/deload/domain";
 import type { MuscleActivation } from "@/modules/trainingInsights/domain";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 import {
@@ -6,7 +7,6 @@ import {
 } from "@/modules/trainingSummary/application";
 import {
   calculateTrainingInsights,
-  type DeloadPhase,
   summarizeTrainingInsights,
   type TrainingInsights,
 } from "../domain";

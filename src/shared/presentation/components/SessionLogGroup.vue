@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ChevronDown } from "@lucide/vue";
-import type { ExerciseLog } from "@/modules/trainingLogs/domain";
+import type { ExerciseLog } from "@/modules/trainingLogs/presentation";
 import ExerciseLogItem from "@/shared/presentation/components/ExerciseLogItem.vue";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 

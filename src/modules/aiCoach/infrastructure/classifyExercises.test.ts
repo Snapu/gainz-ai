@@ -62,7 +62,7 @@ describe("classifyExercises", () => {
     expect(generateContentMock).toHaveBeenCalledTimes(1);
     expect(generateContentMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: "gemini-3.1-flash-lite-preview",
+        model: "gemini-2.5-flash",
         config: expect.objectContaining({ temperature: 0.1 }),
       }),
     );
@@ -80,7 +80,7 @@ describe("classifyExercises", () => {
     const result = await classifyExercises(["Bench Press"], "test-api-key");
 
     const models = generateContentMock.mock.calls.slice(-2).map((call) => call[0]?.model);
-    expect(models).toEqual(["gemini-3.1-flash-lite-preview", "gemini-2.5-flash"]);
+    expect(models).toEqual(["gemini-2.5-flash", "gemini-3.1-flash-lite-preview"]);
     expect(captureMessageMock).toHaveBeenCalled();
     expect(result.isOk()).toBe(true);
   });

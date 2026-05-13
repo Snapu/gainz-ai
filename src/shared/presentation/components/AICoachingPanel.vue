@@ -2,8 +2,8 @@
 import { ChevronDown, Loader2, Sparkles, Trash2, X } from "@lucide/vue";
 import { useDebounceFn, useTimeAgo } from "@vueuse/core";
 import DOMPurify from "dompurify";
-import { computed, ref, watch } from "vue";
-import type { AiResponseData } from "@/modules/aiCoach/domain";
+import { computed, onMounted, ref, watch } from "vue";
+import type { AiResponseData } from "@/modules/aiCoach/presentation";
 import { useAiStore } from "@/modules/aiCoach/presentation";
 import ClickableList, {
   type ClickableListItem,
@@ -25,6 +25,10 @@ const { toast } = useToast();
 const internalOpen = computed({
   get: () => props.open,
   set: (val) => emit("update:open", val),
+});
+
+onMounted(() => {
+  aiStore.initialize();
 });
 
 // Auto-fetch insights when the panel opens

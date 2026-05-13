@@ -97,7 +97,7 @@ Important rules:
     } catch (innerErr) {
       if (isServiceUnavailableError(innerErr)) {
         Sentry.captureMessage(
-          "Classification primary model unavailable, falling back to gemini-2.5-flash",
+          "Classification primary model unavailable, falling back to gemini-3.1-flash-lite-preview",
           {
             level: "info",
             tags: { scope: "ai-service", feature: "model-fallback" },

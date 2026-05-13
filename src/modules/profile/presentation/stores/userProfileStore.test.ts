@@ -29,10 +29,10 @@ vi.mock("@/modules/profile/application", () => ({
 }));
 
 vi.mock("@/modules/platform/presentation", () => ({
-  useSpreadsheetStore: vi.fn(),
+  useSpreadsheetRepositoryFactory: vi.fn(),
 }));
 
-import { useSpreadsheetStore } from "@/modules/platform/presentation";
+import { useSpreadsheetRepositoryFactory } from "@/modules/platform/presentation";
 import {
   loadUserProfile,
   migrateFromLocalStorage,
@@ -48,9 +48,11 @@ describe("useUserProfileStore", () => {
     vi.stubGlobal("localStorage", mockLocalStorage);
     setActivePinia(createPinia());
     mockDoc = {} as GoogleSpreadsheet;
-    vi.mocked(useSpreadsheetStore).mockReturnValue(
-      mockSpreadsheetStore(mockDoc) as ReturnType<typeof useSpreadsheetStore>,
-    );
+    vi.mocked(useSpreadsheetRepositoryFactory).mockReturnValue({
+      spreadsheetStore: mockSpreadsheetStore(mockDoc),
+      getDoc: () => mockDoc,
+      createRepository: vi.fn(() => ({})),
+    } as unknown as ReturnType<typeof useSpreadsheetRepositoryFactory>);
     vi.clearAllMocks();
   });
 

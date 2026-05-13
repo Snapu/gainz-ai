@@ -4,10 +4,12 @@ import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 
 import {
-  askCoach as askAiService,
+  askCoachWithSingleRetry,
   classifyExerciseNames,
   getTodayLogsCount,
+  mapTrainingFatigueTriggersToDeload,
   type PreviousAiMessage,
+  responseStartsDeload,
 } from "@/modules/aiCoach/application";
 import { createAiCoachService } from "@/modules/aiCoach/infrastructure";
 import { useDeloadStore } from "@/modules/deload/presentation";
@@ -17,11 +19,27 @@ import {
   useTrainingSummaryStore,
 } from "@/modules/platform/presentation";
 import { useUserProfileStore } from "@/modules/profile/presentation";
-import { localeDateString } from "@/modules/sharedKernel/domain";
-import { getMuscleActivation, normalizeExerciseName } from "@/modules/trainingInsights/domain";
-import { useTrainingInsightsStore } from "@/modules/trainingInsights/presentation";
-import { resolveCurrentSession } from "@/modules/trainingLogs/application";
-import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
+import { localeDateString } from "@/modules/sharedKernel/presentation";
+import {
+  getMuscleActivation,
+  normalizeExerciseName,
+  useTrainingInsightsStore,
+} from "@/modules/trainingInsights/presentation";
+import { resolveCurrentSession, useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
+import {
+  createAiAssistantMessage,
+  createAiUserPlaceholder,
+  removeMessageById,
+  replaceMessageContentById,
+  shouldUseCachedAssistantResponse,
+  toPreviousAiMessages,
+} from "./aiMessageHelpers";
+import {
+  cleanOldAiSessions,
+  loadAiMessagesFromStorage,
+  removeAiMessagesFromStorage,
+  saveAiMessagesToStorage,
+} from "./aiMessageStorage";
 
 interface AiMessage {
   id: string;
@@ -32,59 +50,10 @@ interface AiMessage {
   logsCount: number;
 }
 
-const STORAGE_KEY_PREFIX = "ai-messages-";
-const MAX_SESSION_AGE_DAYS = 7;
-function getStorageKey(sessionDate: string): string {
-  return `${STORAGE_KEY_PREFIX}${sessionDate}`;
-}
-
-function loadMessagesFromStorage(sessionDate: string): AiMessage[] {
-  try {
-    const stored = localStorage.getItem(getStorageKey(sessionDate));
-    if (!stored) return [];
-
-    const parsed = JSON.parse(stored);
-    return parsed.map((msg: AiMessage) => ({
-      ...msg,
-      timestamp: new Date(msg.timestamp),
-    }));
-  } catch (error) {
-    console.error("Failed to load messages from storage:", error);
-    return [];
-  }
-}
-
-function saveMessagesToStorage(sessionDate: string, messages: AiMessage[]) {
-  try {
-    localStorage.setItem(getStorageKey(sessionDate), JSON.stringify(messages));
-  } catch (error) {
-    console.error("Failed to save messages to storage:", error);
-  }
-}
-
-function cleanOldSessions() {
-  const cutoffDate = new Date();
-  cutoffDate.setDate(cutoffDate.getDate() - MAX_SESSION_AGE_DAYS);
-
-  const keysToRemove: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key?.startsWith(STORAGE_KEY_PREFIX)) {
-      const sessionDateStr = key.replace(STORAGE_KEY_PREFIX, "");
-      if (sessionDateStr < localeDateString(cutoffDate)) {
-        keysToRemove.push(key);
-      }
-    }
-  }
-
-  keysToRemove.forEach((key) => {
-    localStorage.removeItem(key);
-  });
-}
-
 export const useAiStore = defineStore("ai", () => {
   const messages = ref<AiMessage[]>([]);
   const isLoading = ref(false);
+  const hasInitialized = ref(false);
   const inFlightRequest = ref<Promise<Result<void, "missing-api-key" | "ai-failed">> | null>(null);
 
   const userProfileStore = useUserProfileStore();
@@ -102,10 +71,42 @@ export const useAiStore = defineStore("ai", () => {
       localeDateString(new Date()),
   );
 
-  messages.value = loadMessagesFromStorage(todaySessionDate.value);
-  cleanOldSessions();
+  function initialize(): void {
+    if (hasInitialized.value) return;
+
+    const loadedMessagesResult = loadAiMessagesFromStorage<AiMessage>(todaySessionDate.value);
+    if (loadedMessagesResult.isErr()) {
+      Sentry.captureMessage("Failed to load AI messages from storage", {
+        level: "warning",
+        tags: { scope: "ai-store", feature: "storage-load" },
+      });
+      messages.value = [];
+    } else {
+      messages.value = loadedMessagesResult.value;
+    }
+
+    cleanOldAiSessions();
+    hasInitialized.value = true;
+  }
+
+  function ensureInitialized(): void {
+    if (!hasInitialized.value) {
+      initialize();
+    }
+  }
+
+  function persistMessages(sessionDate: string): void {
+    const saveResult = saveAiMessagesToStorage(sessionDate, messages.value);
+    if (saveResult.isErr()) {
+      Sentry.captureMessage("Failed to save AI messages to storage", {
+        level: "warning",
+        tags: { scope: "ai-store", feature: "storage-save" },
+      });
+    }
+  }
 
   async function askAi(): Promise<Result<void, "missing-api-key" | "ai-failed">> {
+    ensureInitialized();
     if (inFlightRequest.value) {
       return inFlightRequest.value;
     }
@@ -131,11 +132,7 @@ export const useAiStore = defineStore("ai", () => {
     const todayLogsCount = getTodayLogsCount(aiCoachService, currentSession);
 
     const lastMessage = messages.value[messages.value.length - 1];
-    if (
-      lastMessage?.role === "assistant" &&
-      lastMessage.logsCount === todayLogsCount &&
-      lastMessage.sessionDate === today
-    ) {
+    if (shouldUseCachedAssistantResponse(lastMessage, todayLogsCount, today)) {
       console.debug("No new logs since last AI response, using cached messages.");
       return ok(undefined);
     }
@@ -146,27 +143,15 @@ export const useAiStore = defineStore("ai", () => {
     let userMessageId = "";
 
     try {
-      const previousMessages: PreviousAiMessage[] = messages.value.map((msg) => ({
-        role: msg.role,
-        content: msg.content,
-        sessionDate: msg.sessionDate,
-        timestamp: msg.timestamp.toISOString(),
-        logsCount: msg.logsCount,
-      }));
+      const previousMessages: PreviousAiMessage[] = toPreviousAiMessages(messages.value);
 
-      userMessageId = `${Date.now()}-user`;
-      const userMessage: AiMessage = {
-        id: userMessageId,
-        role: "user",
-        content: "AI request",
-        timestamp: new Date(),
-        sessionDate: today,
-        logsCount: todayLogsCount,
-      };
+      const userMessage = createAiUserPlaceholder(today, todayLogsCount);
+      userMessageId = userMessage.id;
       messages.value.push(userMessage);
-      saveMessagesToStorage(today, messages.value);
+      persistMessages(today);
 
-      const serviceArgs = [
+      const result = await askCoachWithSingleRetry(
+        aiCoachService,
         apiKey,
         userProfileStore.userProfile,
         trainingInsightsStore.insights,
@@ -174,54 +159,40 @@ export const useAiStore = defineStore("ai", () => {
         trainingSummaryStore.summaries,
         previousMessages,
         eventsStore.events,
-      ] as const;
+      );
 
-      let result = await askAiService(aiCoachService, ...serviceArgs);
-
-      if (result.isErr()) {
-        if (result.error === "missing-api-key") {
-          messages.value = messages.value.filter((m) => m.id !== userMessageId);
-          saveMessagesToStorage(today, messages.value);
-          return err("missing-api-key");
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        result = await askAiService(aiCoachService, ...serviceArgs);
+      if (result.isErr() && result.error === "missing-api-key") {
+        messages.value = removeMessageById(messages.value, userMessageId);
+        persistMessages(today);
+        return err("missing-api-key");
       }
 
       if (result.isErr()) {
-        messages.value = messages.value.filter((m) => m.id !== userMessageId);
-        saveMessagesToStorage(today, messages.value);
+        messages.value = removeMessageById(messages.value, userMessageId);
+        persistMessages(today);
         return err("ai-failed");
       }
 
       exerciseMuscleMapStore.refresh();
 
-      try {
-        const parsed: { startDeload?: boolean } = JSON.parse(result.value.responseText);
-        if (parsed.startDeload === true && !deloadStore.active) {
-          const { riskScore, triggeredBy } = trainingInsightsStore.insights.fatigue;
-          deloadStore.startDeload(riskScore, triggeredBy);
-        }
-      } catch {
-        // Non-critical: JSON parse errors are handled elsewhere
+      if (responseStartsDeload(result.value.responseText) && !deloadStore.active) {
+        const { riskScore, triggeredBy } = trainingInsightsStore.insights.fatigue;
+        deloadStore.startDeload(riskScore, mapTrainingFatigueTriggersToDeload(triggeredBy));
       }
 
-      messages.value = messages.value.map((m) =>
-        m.id === userMessageId ? { ...m, content: result.value.requestPayload } : m,
+      messages.value = replaceMessageContentById(
+        messages.value,
+        userMessageId,
+        result.value.requestPayload,
       );
 
-      const assistantMessageId = `${Date.now()}-assistant`;
-      const assistantMessage: AiMessage = {
-        id: assistantMessageId,
-        role: "assistant",
-        content: result.value.responseText,
-        timestamp: new Date(),
-        sessionDate: today,
-        logsCount: todayLogsCount,
-      };
+      const assistantMessage = createAiAssistantMessage(
+        today,
+        todayLogsCount,
+        result.value.responseText,
+      );
       messages.value.push(assistantMessage);
-      saveMessagesToStorage(today, messages.value);
+      persistMessages(today);
       return ok(undefined);
     } catch (error) {
       console.error("AI request failed:", error);
@@ -230,8 +201,8 @@ export const useAiStore = defineStore("ai", () => {
         extra: { hasPendingUserMessage: !!userMessageId },
       });
       if (userMessageId) {
-        messages.value = messages.value.filter((m) => m.id !== userMessageId);
-        saveMessagesToStorage(today, messages.value);
+        messages.value = removeMessageById(messages.value, userMessageId);
+        persistMessages(today);
       }
       return err("ai-failed");
     } finally {
@@ -268,9 +239,19 @@ export const useAiStore = defineStore("ai", () => {
   }
 
   function clearMessages() {
-    localStorage.removeItem(getStorageKey(todaySessionDate.value));
+    ensureInitialized();
+    removeAiMessagesFromStorage(todaySessionDate.value);
     messages.value = [];
   }
 
-  return { askAi, classifyExercisesIfNeeded, clearMessages, isLoading, messages };
+  return {
+    initialize,
+    askAi,
+    classifyExercisesIfNeeded,
+    clearMessages,
+    isLoading,
+    messages,
+    hasInitialized,
+    inFlightRequest,
+  };
 });

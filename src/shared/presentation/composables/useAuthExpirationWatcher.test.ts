@@ -1,18 +1,41 @@
 // src/composables/useAuthExpirationWatcher.test.ts
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ref } from "vue";
+import { createApp, defineComponent, h, ref } from "vue";
 import { useAuthStore } from "@/modules/auth/presentation";
 import { useToast } from "@/shared/presentation/composables/useToast";
 import { useAuthExpirationWatcher } from "./useAuthExpirationWatcher";
 
-vi.mock("@/composables/useToast");
+vi.mock("@/shared/presentation/composables/useToast");
 vi.mock("@/modules/auth/presentation");
+
+function mountWatcherComposable() {
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+
+  const app = createApp(
+    defineComponent({
+      setup() {
+        useAuthExpirationWatcher();
+        return () => h("div");
+      },
+    }),
+  );
+
+  app.mount(host);
+
+  return () => {
+    app.unmount();
+    host.remove();
+  };
+}
 
 describe("useAuthExpirationWatcher", () => {
   const mockToast = vi.fn();
   const mockDismiss = vi.fn();
   const mockLogout = vi.fn();
+
+  let cleanupMount: (() => void) | null = null;
 
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -27,6 +50,11 @@ describe("useAuthExpirationWatcher", () => {
   });
 
   afterEach(() => {
+    if (cleanupMount) {
+      cleanupMount();
+      cleanupMount = null;
+    }
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -40,7 +68,7 @@ describe("useAuthExpirationWatcher", () => {
       login: vi.fn(),
     } as unknown as ReturnType<typeof useAuthStore>);
 
-    useAuthExpirationWatcher();
+    cleanupMount = mountWatcherComposable();
 
     // First check happens immediately
     vi.advanceTimersByTime(100);
@@ -66,7 +94,7 @@ describe("useAuthExpirationWatcher", () => {
       login: vi.fn(),
     } as unknown as ReturnType<typeof useAuthStore>);
 
-    useAuthExpirationWatcher();
+    cleanupMount = mountWatcherComposable();
 
     vi.advanceTimersByTime(100);
 
@@ -83,7 +111,7 @@ describe("useAuthExpirationWatcher", () => {
       login: vi.fn(),
     } as unknown as ReturnType<typeof useAuthStore>);
 
-    useAuthExpirationWatcher();
+    cleanupMount = mountWatcherComposable();
 
     // Check happens immediately
     vi.advanceTimersByTime(0);

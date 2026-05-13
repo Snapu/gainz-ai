@@ -2,20 +2,20 @@ import * as Sentry from "@sentry/vue";
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { defineStore } from "pinia";
 import { ref, watchEffect } from "vue";
+import { createTrainingLogsRepository } from "@/modules/trainingLogs/infrastructure";
 import {
   findPastYearLogSheets,
   loadExerciseLogs,
   loadLogsFromYear,
-} from "@/modules/trainingLogs/application";
-import { createTrainingLogsRepository } from "@/modules/trainingLogs/infrastructure";
+} from "@/modules/trainingLogs/presentation";
+import { createTrainingSummaryRepository } from "@/modules/trainingSummary/infrastructure";
 import {
   loadTrainingSummary,
   migrateUnsummarizedMonths,
   migrateUnsummarizedYears,
   type TrainingLogHistoryRepository,
   type TrainingSummary,
-} from "@/modules/trainingSummary/application";
-import { createTrainingSummaryRepository } from "@/modules/trainingSummary/infrastructure";
+} from "@/modules/trainingSummary/presentation";
 import { useSpreadsheetRepositoryFactory } from "../composables/spreadsheetRepositoryFactory";
 
 export const useTrainingSummaryStore = defineStore("trainingSummary", () => {

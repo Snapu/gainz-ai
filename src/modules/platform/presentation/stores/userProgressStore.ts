@@ -1,9 +1,9 @@
 import { defineStore } from "pinia";
 import { computed } from "vue";
 import { useUserProfileStore } from "@/modules/profile/presentation";
-import { calculateUserProgress } from "@/modules/sharedKernel/application";
+import { calculateUserProgress } from "@/modules/sharedKernel/presentation";
 import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
-import { summaryToExerciseLogs } from "@/modules/trainingSummary/application";
+import { summaryToExerciseLogs } from "@/modules/trainingSummary/presentation";
 import { useTrainingSummaryStore } from "./trainingSummaryStore";
 
 export const useUserProgressStore = defineStore("userProgress", () => {

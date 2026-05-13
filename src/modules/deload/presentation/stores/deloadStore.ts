@@ -7,7 +7,7 @@
 
 import { useDebounceFn } from "@vueuse/core";
 import { defineStore } from "pinia";
-import { computed, ref, watch } from "vue";
+import { computed, ref } from "vue";
 import { loadDeloadPhase, saveDeloadPhase } from "@/modules/deload/application";
 import {
   createDeloadPhase,
@@ -42,15 +42,6 @@ export const useDeloadStore = defineStore("deload", () => {
     return [{ start: new Date(phase.value.startedAt), end: new Date(phase.value.endsAt) }];
   });
 
-  function startDeload(fatigueRiskScore: number, triggeredBy: FatigueTriggerId[]): void {
-    phase.value = createDeloadPhase(fatigueRiskScore, triggeredBy);
-  }
-
-  function cancelDeload(): void {
-    if (!phase.value || !active.value) return;
-    phase.value = { ...phase.value, canceledAt: new Date().toISOString() };
-  }
-
   const debouncedSave = useDebounceFn(async () => {
     const repository = createRepository();
     if (!repository) return;
@@ -60,13 +51,20 @@ export const useDeloadStore = defineStore("deload", () => {
     }
   }, 800);
 
-  watch(
-    phase,
-    () => {
-      void debouncedSave();
-    },
-    { deep: true },
-  );
+  function queueSave(): void {
+    void debouncedSave();
+  }
+
+  function startDeload(fatigueRiskScore: number, triggeredBy: FatigueTriggerId[]): void {
+    phase.value = createDeloadPhase(fatigueRiskScore, triggeredBy);
+    queueSave();
+  }
+
+  function cancelDeload(): void {
+    if (!phase.value || !active.value) return;
+    phase.value = { ...phase.value, canceledAt: new Date().toISOString() };
+    queueSave();
+  }
 
   async function load(): Promise<void> {
     const doc = getDoc();
@@ -76,20 +74,24 @@ export const useDeloadStore = defineStore("deload", () => {
     }
 
     isLoading.value = true;
-    const repository = createRepository(doc);
-    if (!repository) {
-      isLoading.value = false;
-      return;
-    }
 
-    const result = await loadDeloadPhase(repository);
-    if (result.isErr()) {
-      if (result.error === "auth-failed") handleAuthError("deload-phase-load");
+    try {
+      const repository = createRepository(doc);
+      if (!repository) {
+        return;
+      }
+
+      const result = await loadDeloadPhase(repository);
+      if (result.isErr()) {
+        if (result.error === "auth-failed") handleAuthError("deload-phase-load");
+        return;
+      }
+      if (result.value) {
+        phase.value = result.value;
+      }
+    } finally {
       isLoading.value = false;
-      return;
     }
-    if (result.value) phase.value = result.value;
-    isLoading.value = false;
   }
 
   return {

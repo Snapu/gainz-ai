@@ -2,6 +2,7 @@ import { createRouter, createWebHashHistory } from "vue-router";
 import { useAuthStore } from "@/modules/auth/presentation";
 import { useSpreadsheetStore } from "@/modules/platform/presentation";
 import { useUserProfileStore } from "@/modules/profile/presentation";
+import { resolveRouteTarget } from "./routePolicy";
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -59,44 +60,12 @@ router.beforeEach(async (to) => {
   const userProfileStore = useUserProfileStore();
   const spreadsheetStore = useSpreadsheetStore();
 
-  console.log("[router] Guard triggered:", {
-    to: to.path,
+  return resolveRouteTarget(to.path, to.query, {
     isLoggedIn: authStore.isLoggedIn,
     hasDoc: !!spreadsheetStore.doc,
     isLoading: userProfileStore.isLoading,
     setupCompleted: userProfileStore.setupCompleted,
   });
-
-  // 1. Public pages
-  if (to.path === "/privacy" || to.path === "/impressum") {
-    return true;
-  }
-
-  // 2. Auth check
-  if (!authStore.isLoggedIn) {
-    return to.path === "/" ? true : "/";
-  }
-
-  // 3. Loading check
-  if (!spreadsheetStore.doc || userProfileStore.isLoading) {
-    return to.path === "/loading" ? true : "/loading";
-  }
-
-  // 4. Setup check
-  if (!userProfileStore.setupCompleted) {
-    return to.path.startsWith("/wizard") ? true : "/wizard/fitness-goal";
-  }
-
-  // 5. Normal operation (logged in & setup completed)
-  // If user tries to go to login, loading, or wizard (without edit mode), redirect to logs
-  const isExcluded = ["/", "/loading"].includes(to.path);
-  const isWizardWithoutEdit = to.path.startsWith("/wizard") && to.query.mode !== "edit";
-
-  if (isExcluded || isWizardWithoutEdit) {
-    return "/exercise-logs";
-  }
-
-  return true;
 });
 
 export default router;

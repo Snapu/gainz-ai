@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ExerciseLog } from "@/modules/trainingLogs/domain";
+import type { ExerciseLog } from "@/modules/trainingLogs/presentation";
 import UiSwipeToDeleteItem from "@/shared/presentation/components/ui/UiSwipeToDeleteItem.vue";
 
 const props = defineProps<{

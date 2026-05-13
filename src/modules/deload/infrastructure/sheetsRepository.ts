@@ -2,8 +2,8 @@ import * as Sentry from "@sentry/vue";
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { err, ok, type Result } from "neverthrow";
 import type { DeloadPhaseRepository } from "@/modules/deload/application";
+import { isDeloadFatigueTriggerId } from "@/modules/deload/domain";
 import { isAuthError } from "@/modules/platform/infrastructure";
-import { isFatigueTriggerId } from "@/modules/trainingInsights/domain";
 import type { DeloadPhase, FatigueTriggerId } from "../domain/types";
 
 const SHEET_NAME = "DeloadPhase";
@@ -43,7 +43,7 @@ function deserialize(raw: Record<string, string>): DeloadPhase | null {
   const triggers = (triggeredBy ?? "")
     .split(",")
     .map((t) => t.trim())
-    .filter((t): t is FatigueTriggerId => isFatigueTriggerId(t));
+    .filter((t): t is FatigueTriggerId => isDeloadFatigueTriggerId(t));
 
   return {
     startedAt,

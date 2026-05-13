@@ -1,13 +1,16 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import type { ExerciseCleanupResult } from "@/modules/aiCoach/application";
+import type { ExerciseCleanupResult } from "@/modules/aiCoach/presentation";
 import { createExerciseMuscleMapRepository } from "@/modules/platform/infrastructure/exerciseMuscleMapRepository";
 import {
   applyAiCleanupResults,
   clearLearnedMap as clearLearnedMapService,
   getLearnedMuscleMap,
-} from "@/modules/sharedKernel/application";
-import { getMuscleActivation, type MuscleActivation } from "@/modules/trainingInsights/domain";
+} from "@/modules/sharedKernel/presentation";
+import {
+  getMuscleActivation,
+  type MuscleActivation,
+} from "@/modules/trainingInsights/presentation";
 
 export const useExerciseMuscleMapStore = defineStore("exerciseMuscleMap", () => {
   const repository = createExerciseMuscleMapRepository();

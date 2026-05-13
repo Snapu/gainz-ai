@@ -1,6 +1,6 @@
 import { useDebounceFn, useLocalStorage } from "@vueuse/core";
 import { defineStore } from "pinia";
-import { computed, ref, watch, watchEffect } from "vue";
+import { computed, ref, watch } from "vue";
 import { useSpreadsheetRepositoryFactory } from "@/modules/platform/presentation";
 import {
   loadUserProfile,
@@ -52,38 +52,52 @@ export const useUserProfileStore = defineStore("userProfile", () => {
     );
   }
 
-  watchEffect(async () => {
-    const doc = getDoc();
-    if (!doc) {
-      isLoading.value = false;
-      return;
-    }
+  watch(
+    () => getDoc(),
+    (doc, _previousDoc, onCleanup) => {
+      let cancelled = false;
+      onCleanup(() => {
+        cancelled = true;
+      });
 
-    isLoading.value = true;
+      void (async () => {
+        if (!doc) {
+          isLoading.value = false;
+          return;
+        }
 
-    const repository = createRepository(doc);
-    if (!repository) {
-      isLoading.value = false;
-      return;
-    }
+        isLoading.value = true;
 
-    await migrateFromLocalStorage(repository);
+        const repository = createRepository(doc);
+        if (!repository) {
+          isLoading.value = false;
+          return;
+        }
 
-    const result = await loadUserProfile(repository);
-    if (result.isErr() && result.error === "auth-failed") {
-      handleAuthError("user-profile-load");
-      isLoading.value = false;
-      return;
-    }
-    if (result.isOk() && result.value) {
-      userProfile.value = { ...result.value };
-      if (profileHasData(result.value)) {
-        hasCompletedSetup.value = true;
-      }
-    }
+        await migrateFromLocalStorage(repository);
+        if (cancelled) return;
 
-    isLoading.value = false;
-  });
+        const result = await loadUserProfile(repository);
+        if (cancelled) return;
+
+        if (result.isErr() && result.error === "auth-failed") {
+          handleAuthError("user-profile-load");
+          isLoading.value = false;
+          return;
+        }
+
+        if (result.isOk() && result.value) {
+          userProfile.value = { ...result.value };
+          if (profileHasData(result.value)) {
+            hasCompletedSetup.value = true;
+          }
+        }
+
+        isLoading.value = false;
+      })();
+    },
+    { immediate: true },
+  );
 
   const debouncedSave = useDebounceFn(async () => {
     const repository = createRepository();

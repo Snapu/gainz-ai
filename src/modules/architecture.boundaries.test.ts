@@ -308,4 +308,87 @@ describe("module architecture boundaries", () => {
 
     expect(violations).toEqual([]);
   });
+  it("views and shared presentation files do not import module domain/application/infrastructure layers directly", async () => {
+    const viewFiles = await listSourceFiles(path.resolve(SRC_ROOT, "views"));
+    const sharedPresentationFiles = await listSourceFiles(
+      path.resolve(SRC_ROOT, "shared/presentation"),
+    );
+    const sourceFiles = [...viewFiles, ...sharedPresentationFiles].filter((filePath) => {
+      if (filePath.endsWith(".test.ts")) return false;
+      return true;
+    });
+
+    const violations: string[] = [];
+
+    for (const filePath of sourceFiles) {
+      const source = await readFile(filePath, "utf-8");
+      const importPaths = extractImports(source);
+
+      for (const importPath of importPaths) {
+        if (!importPath.startsWith("@/modules/")) continue;
+
+        const importsRestrictedLayer =
+          /^@\/modules\/[^/]+\/(domain|application|infrastructure)(\/|$)/.test(importPath);
+
+        if (importsRestrictedLayer) {
+          const relativePath = path.relative(SRC_ROOT, filePath).split(path.sep).join("/");
+          violations.push(`${relativePath} -> ${importPath}`);
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it("module page components keep orchestration in composables/stores", async () => {
+    const pageComponents = [
+      path.resolve(ROOT, "trainingLogs/presentation/components/ExerciseLogsPage.vue"),
+      path.resolve(ROOT, "trainingInsights/presentation/components/TrainingInsightsPage.vue"),
+    ];
+
+    const violations: string[] = [];
+
+    for (const filePath of pageComponents) {
+      const source = await readFile(filePath, "utf-8");
+      const hasDirectStoreUsage = /\buse[A-Za-z0-9]+Store\(/.test(source);
+      if (hasDirectStoreUsage) {
+        violations.push(toModuleRelative(filePath));
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it("presentation store files use facades for cross-module domain/application imports", async () => {
+    const allFiles = await listTsFiles(ROOT);
+    const presentationStoreFiles = allFiles.filter(
+      (filePath) =>
+        isLayerFile(filePath, "presentation") &&
+        isProductionTsFile(filePath) &&
+        isPresentationStoreWrapper(filePath),
+    );
+
+    const violations: string[] = [];
+
+    for (const filePath of presentationStoreFiles) {
+      const source = await readFile(filePath, "utf-8");
+      const importPaths = extractImports(source);
+      const currentModule = moduleName(filePath);
+
+      for (const importPath of importPaths) {
+        const targetsRestrictedLayer =
+          importTargetsLayer(filePath, importPath, "domain") ||
+          importTargetsLayer(filePath, importPath, "application");
+
+        if (!targetsRestrictedLayer) continue;
+
+        const importedModule = resolvedModuleNameFromImport(filePath, importPath);
+        if (importedModule && importedModule !== currentModule) {
+          violations.push(`${toModuleRelative(filePath)} -> ${importPath}`);
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
 });

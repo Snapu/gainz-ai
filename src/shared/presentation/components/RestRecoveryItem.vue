@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { getLocalTimeZone, parseDate } from "@internationalized/date";
-import type { Event as AppEvent } from "@/modules/events/domain";
+import type { AppEvent } from "@/modules/events/presentation";
 import UiSwipeToDeleteItem from "@/shared/presentation/components/ui/UiSwipeToDeleteItem.vue";
 
 const props = defineProps<{

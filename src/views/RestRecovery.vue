@@ -4,7 +4,7 @@ import { ArrowLeft, Moon, Plus, X } from "@lucide/vue";
 import { haptic } from "ios-haptics";
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
-import type { Event as AppEvent } from "@/modules/events/domain";
+import type { AppEvent } from "@/modules/events/presentation";
 import { useEventsStore } from "@/modules/events/presentation";
 import AppHeader from "@/shared/presentation/components/AppHeader.vue";
 import EmptyState from "@/shared/presentation/components/EmptyState.vue";

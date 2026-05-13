@@ -6,9 +6,9 @@ import { useRouter } from "vue-router";
 import type {
   ExerciseWeightMigrationCandidate,
   ExerciseWeightMigrationDecision,
-} from "@/modules/migration/application";
+} from "@/modules/migration/presentation";
 import { useExerciseWeightMigrationStore } from "@/modules/migration/presentation";
-import { localeDateString } from "@/modules/sharedKernel/domain";
+import { localeDateString } from "@/modules/sharedKernel/presentation";
 import AppHeader from "@/shared/presentation/components/AppHeader.vue";
 import EmptyState from "@/shared/presentation/components/EmptyState.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";

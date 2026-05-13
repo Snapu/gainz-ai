@@ -5,7 +5,7 @@ import { useToast } from "@/shared/presentation/composables/useToast";
 import { useAuthErrorHandler } from "./useAuthErrorHandler";
 
 vi.mock("@/modules/auth/presentation");
-vi.mock("@/composables/useToast");
+vi.mock("@/shared/presentation/composables/useToast");
 
 describe("useAuthErrorHandler", () => {
   const mockLogout = vi.fn();

@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { BarChart2, CalendarDays, CheckCircle2, Hourglass, Timer } from "@lucide/vue";
 import { computed, ref } from "vue";
-import type {
-  MuscleGroup,
-  MuscleGroupInsight,
-  VolumeLandmark,
-} from "@/modules/trainingInsights/domain";
-import { RECOVERY_HOURS, VOLUME_LANDMARKS } from "@/modules/trainingInsights/domain";
+import {
+  type MuscleGroup,
+  type MuscleGroupInsight,
+  RECOVERY_HOURS,
+  VOLUME_LANDMARKS,
+  type VolumeLandmark,
+} from "@/modules/trainingInsights/presentation";
 import UiBottomSheet from "./ui/UiBottomSheet.vue";
 import UiSegmentedControl from "./ui/UiSegmentedControl.vue";
 

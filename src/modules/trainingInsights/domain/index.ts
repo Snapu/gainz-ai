@@ -30,7 +30,6 @@ import { calculateFatigueInsight } from "./fatigueDetection";
 import { calculateMuscleGroupInsights, type MuscleGroupInsight } from "./volumeLandmarks";
 
 export * from "./acwr";
-export * from "./deloadPhase";
 export * from "./e1rm";
 // Re-export sub-modules so consumers can import types from the barrel.
 export * from "./exerciseMuscleMap";

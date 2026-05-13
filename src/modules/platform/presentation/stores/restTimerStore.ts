@@ -60,6 +60,10 @@ export const useRestTimerStore = defineStore("restTimer", () => {
   }
 
   return {
+    // Returned for Pinia setup-store compatibility (DevTools/SSR/plugins).
+    restStartTime,
+    restElapsed,
+    visibility,
     isResting,
     formattedTime,
     start,
