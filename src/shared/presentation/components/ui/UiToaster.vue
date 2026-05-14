@@ -22,7 +22,8 @@ const { toasts, dismiss } = useToast();
     <ToastRoot
       v-for="t in toasts"
       :key="t.id"
-      :duration="t.duration ?? 5000"
+      :duration="t.persistent ? Number.POSITIVE_INFINITY : (t.duration ?? 5000)"
+      :type="t.persistent ? 'foreground' : 'foreground'"
       @update:open="!$event && dismiss(t.id!)"
       :class="[
         'group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-xl border p-5 shadow-2xl transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--reka-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--reka-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full mt-4 backdrop-blur-xl',

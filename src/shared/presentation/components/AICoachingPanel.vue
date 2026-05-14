@@ -281,8 +281,8 @@ function clearAndReset() {
                         :class="cn(uiSelectableItemClass, 'pr-14')"
                         @click="handleLogExercise(exercise)"
                       >
-                        <div class="flex w-full items-center justify-between gap-3">
-                          <h3 class="truncate pr-4 text-sm font-bold tracking-tight text-foreground">
+                        <div class="flex w-full items-start justify-between gap-3">
+                          <h3 class="pr-4 text-sm font-bold tracking-tight text-foreground break-words">
                             {{ exercise.exerciseName }}
                           </h3>
                           <div class="flex shrink-0 flex-wrap justify-end gap-3 text-xs font-semibold text-muted-foreground">
