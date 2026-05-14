@@ -1,0 +1,1 @@
+import{H as e,O as t,S as n,xt as r}from"./UiButton-CxebPqFu.js";import{m as i}from"./index-dSZakTLZ.js";var a=t({__name:`TrainingInsights`,setup(t){return(t,a)=>(e(),n(r(i)))}});export{a as default};
