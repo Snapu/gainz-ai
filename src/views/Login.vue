@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref } from "vue";
+import { useRouter } from "vue-router";
 import { useAuthStore } from "@/modules/auth/presentation";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import { useToast } from "@/shared/presentation/composables/useToast";
 
+const router = useRouter();
 const authStore = useAuthStore();
 const { toast } = useToast();
 const isLoggingIn = ref(false);
@@ -26,6 +28,8 @@ async function handleLogin() {
           variant: "destructive",
         });
       }
+    } else {
+      router.push("/loading");
     }
   } catch (err) {
     toast({

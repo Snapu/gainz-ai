@@ -15,7 +15,9 @@ const props = defineProps<{
   muscleGroups: Partial<Record<MuscleGroup, MuscleGroupInsight>>;
 }>();
 
-const BASE = import.meta.env.BASE_URL.endsWith("/") ? import.meta.env.BASE_URL.slice(0, -1) : import.meta.env.BASE_URL;
+const BASE = import.meta.env.BASE_URL.endsWith("/")
+  ? import.meta.env.BASE_URL.slice(0, -1)
+  : import.meta.env.BASE_URL;
 const MUSCLE_MAP_IMAGE_SRC = `${BASE}/assets/muscle/muscle-map-anime.png`;
 
 function getDotColor(landmark?: VolumeLandmark): string {

@@ -8,7 +8,7 @@
     "build": "run-p type-check \"build-only {@}\" --",
     "docs": "rm -rf dist docs && npm run build && cp -r dist docs",
     "preview": "vite preview",
-    "test:unit": "vitest",
+    "test:unit": "vitest --no-watch",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
     "lint": "biome check . --write",
