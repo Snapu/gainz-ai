@@ -1,17 +1,18 @@
 <script setup lang="ts">
-import { ChevronDown, Loader2, Sparkles, Trash2, X } from "@lucide/vue";
+import { ChevronDown, Loader2, Search, Sparkles, Trash2, X } from "@lucide/vue";
 import { useDebounceFn, useTimeAgo } from "@vueuse/core";
 import DOMPurify from "dompurify";
 import { computed, onMounted, ref, watch } from "vue";
 import type { AiResponseData } from "@/modules/aiCoach/presentation";
 import { useAiStore } from "@/modules/aiCoach/presentation";
-import ClickableList, {
-  type ClickableListItem,
-} from "@/shared/presentation/components/ClickableList.vue";
-import { uiIconButtonClass } from "@/shared/presentation/components/ui/styles";
+import {
+  uiIconButtonClass,
+  uiSelectableItemClass,
+} from "@/shared/presentation/components/ui/styles";
 import UiBottomSheet from "@/shared/presentation/components/ui/UiBottomSheet.vue";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 import { useToast } from "@/shared/presentation/composables/useToast";
+import { cn } from "@/shared/presentation/lib/utils";
 
 const props = defineProps<{ open: boolean }>();
 const emit = defineEmits<{
@@ -83,10 +84,6 @@ interface DisplayWorkoutGroup {
   id: string;
   isSuperset: boolean;
   exercises: DisplayExercise[];
-}
-
-interface WorkoutListItem extends ClickableListItem {
-  exercise: DisplayExercise;
 }
 
 function groupWorkout(workout: DisplayExercise[] | undefined): DisplayWorkoutGroup[] | null {
@@ -196,21 +193,6 @@ function clearAndReset() {
   aiStore.clearMessages();
   debouncedAskAi();
 }
-
-function toWorkoutListItems(exercises: DisplayExercise[]): WorkoutListItem[] {
-  return exercises.map((exercise) => ({
-    id: exercise.exerciseName,
-    title: exercise.exerciseName,
-    description: exercise.notes,
-    meta: [
-      ...(exercise.targetWeight
-        ? [{ label: exercise.targetWeight, tone: "primary" as const }]
-        : []),
-      { label: `${exercise.targetSets}×${exercise.targetReps} reps` },
-    ],
-    exercise,
-  }));
-}
 </script>
 
 <template>
@@ -288,11 +270,44 @@ function toWorkoutListItems(exercises: DisplayExercise[]): WorkoutListItem[] {
                   </div>
 
                   <!-- Exercise Items (Tappable for one-tap logging) -->
-                  <ClickableList
-                    :items="toWorkoutListItems(group.exercises)"
-                    :as-card="false"
-                    @select="handleLogExercise(($event as WorkoutListItem).exercise)"
-                  />
+                  <div class="flex flex-col">
+                    <div
+                      v-for="exercise in group.exercises"
+                      :key="exercise.exerciseName"
+                      class="relative flex"
+                    >
+                      <button
+                        type="button"
+                        :class="cn(uiSelectableItemClass, 'pr-14')"
+                        @click="handleLogExercise(exercise)"
+                      >
+                        <div class="flex w-full items-center justify-between gap-3">
+                          <h3 class="truncate pr-4 text-sm font-bold tracking-tight text-foreground">
+                            {{ exercise.exerciseName }}
+                          </h3>
+                          <div class="flex shrink-0 flex-wrap justify-end gap-3 text-xs font-semibold text-muted-foreground">
+                            <span v-if="exercise.targetWeight" class="text-primary">{{ exercise.targetWeight }}</span>
+                            <span>{{ exercise.targetSets }}×{{ exercise.targetReps }} reps</span>
+                          </div>
+                        </div>
+                        <div v-if="exercise.notes" class="mt-1.5 text-left text-sm italic text-muted-foreground/60">
+                          {{ exercise.notes }}
+                        </div>
+                      </button>
+                      
+                      <a
+                        :href="`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(exercise.exerciseName + ' exercise')}`"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="absolute right-3 top-1/2 -translate-y-1/2 z-10 p-2.5 text-muted-foreground/50 hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-full cursor-pointer"
+                        title="Search Images"
+                        @click.stop
+                      >
+                        <Search class="w-4 h-4" />
+                        <span class="sr-only">Search images for {{ exercise.exerciseName }}</span>
+                      </a>
+                    </div>
+                  </div>
                 </div>
               </UiCard>
             </div>
