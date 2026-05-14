@@ -137,6 +137,41 @@ describe("calculateTrainingInsights", () => {
       expect(result.deloadTimeRemainingMs).toBeLessThan(DELOAD_DURATION_MS);
     });
 
+    it("averages out deload weeks from the prior 3-week baseline to prevent false spikes", () => {
+      // Create a 4-week history where:
+      // W-3 (normal): 15 sets
+      // W-2 (normal): 15 sets
+      // W-1 (deload): 5 sets
+      // W0 (normal resumed): 15 sets
+
+      const logs: ExerciseLog[] = [];
+      const addLogs = (daysAgo: number, sets: number) => {
+        for (let i = 0; i < sets; i++) {
+          logs.push(
+            makeLog("Bench Press", new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000)),
+          );
+        }
+      };
+
+      addLogs(24, 15); // Week -3
+      addLogs(17, 15); // Week -2
+      addLogs(10, 5); // Week -1 (Deload week)
+      addLogs(3, 15); // Current week
+
+      const completedDeload = createDeloadPhase(
+        4,
+        ["performanceDecline"],
+        new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000), // Started 14 days ago, ended 7 days ago
+      );
+
+      const result = calculateTrainingInsights(logs, now, undefined, undefined, completedDeload);
+
+      // With the baseline averaging fix, the 5-set week is replaced by the average of the 15-set weeks.
+      // So the baseline is ~15 sets, and 15 sets in the current week should NOT trigger a volume spike.
+      expect(result.fatigue.triggeredBy).not.toContain("volumeSpike");
+      expect(result.fatigue.triggeredBy).not.toContain("tonnageSpike");
+    });
+
     it("deloadStatus is completed after endsAt passes", () => {
       const deloadPhase = createDeloadPhase(
         4,

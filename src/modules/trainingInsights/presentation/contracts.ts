@@ -8,6 +8,7 @@ export type {
 } from "@/modules/trainingInsights/domain";
 export {
   getMuscleActivation,
+  MAX_FATIGUE_RISK_SCORE,
   normalizeExerciseName,
   RECOVERY_HOURS,
   VOLUME_LANDMARKS,

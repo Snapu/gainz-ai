@@ -19,6 +19,7 @@ const {
   formatTriggerLabel,
   fatigueRiskToneClass,
   fatigueRiskLabel,
+  fatigueRiskPercent,
   deloadStatusLabel,
   deloadStatusToneClass,
   fatigueWeekRows,
@@ -146,11 +147,11 @@ const {
                   </span>
                 </div>
                 <p class="text-sm font-bold mt-1" :class="fatigueRiskToneClass">
-                  {{ insights.fatigue.riskScore }}/7 <span class="text-xs font-normal text-foreground/60">({{ fatigueRiskLabel }})</span>
+                  {{ fatigueRiskPercent }}% <span class="text-xs font-normal text-foreground/60">({{ fatigueRiskLabel }})</span>
                 </p>
               </div>
-              <div class="flex gap-0.5 mt-3">
-                <div v-for="i in 7" :key="i" class="h-1.5 flex-1 rounded-sm transition-colors duration-300" :class="[i <= insights.fatigue.riskScore ? (i <= 2 ? 'bg-emerald-400' : i <= 4 ? 'bg-amber-400' : i <= 6 ? 'bg-orange-400' : 'bg-red-500') : 'bg-white/10']"></div>
+              <div class="mt-3 relative h-1.5 rounded-full bg-white/10 overflow-hidden">
+                <div class="h-full rounded-full transition-all duration-300 relative z-10" :class="[fatigueRiskPercent <= 28 ? 'bg-emerald-400/90' : fatigueRiskPercent <= 57 ? 'bg-amber-400/90' : fatigueRiskPercent <= 85 ? 'bg-orange-400/90' : 'bg-red-500/90']" :style="{ width: `${fatigueRiskPercent}%` }"></div>
               </div>
             </div>
           </div>
@@ -292,7 +293,7 @@ const {
                       {{ metric.learnedMuscleGroups.length > 0 ? metric.learnedMuscleGroups.join(', ') : 'No muscle tags' }}
                     </span>
                     <span class="w-1 h-1 rounded-full bg-white/20 shrink-0"></span>
-                    <span class="shrink-0">RPE: {{ metric.bestRPE === null ? "-" : metric.bestRPE.toFixed(1) }}</span>
+                    <span class="shrink-0 text-foreground/70">{{ metric.lastTrainedLabel }}</span>
                   </div>
                 </div>
 

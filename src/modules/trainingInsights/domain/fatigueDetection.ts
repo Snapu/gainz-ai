@@ -57,6 +57,11 @@ const TRIGGER_WEIGHTS: Record<FatigueTriggerId, number> = {
   volumeIncreasing: 1,
 };
 
+export const MAX_FATIGUE_RISK_SCORE = Object.values(TRIGGER_WEIGHTS).reduce(
+  (sum, val) => sum + val,
+  0,
+);
+
 const TRIGGER_PRIORITY: FatigueTriggerId[] = [
   "performanceDecline",
   "tonnageSpike",

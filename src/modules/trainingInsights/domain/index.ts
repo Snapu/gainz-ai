@@ -117,12 +117,45 @@ export function calculateTrainingInsights(
   // Build 4-week weekly set/tonnage arrays for fatigue detection.
   const weeklyTotalSets: number[] = [];
   const weeklyTonnage: number[] = [];
+  const isWeekDeload: boolean[] = [];
+
   for (let w = 3; w >= 0; w--) {
     const weekEnd = new Date(targetDate.getTime() - w * 7 * 24 * 60 * 60 * 1000);
     const weekStart = new Date(weekEnd.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    let overlapsDeload = false;
+    if (phase) {
+      const deloadStart = new Date(phase.startedAt).getTime();
+      const deloadEnd = new Date(phase.endsAt).getTime();
+      if (weekStart.getTime() < deloadEnd && weekEnd.getTime() > deloadStart) {
+        overlapsDeload = true;
+      }
+    }
+    isWeekDeload.push(overlapsDeload);
+
     const weekLogs = logs.filter((l) => l.loggedAt > weekStart && l.loggedAt <= weekEnd);
     weeklyTotalSets.push(weekLogs.length);
     weeklyTonnage.push(weekLogs.reduce((sum, l) => sum + (l.weight ?? 0) * (l.reps ?? 0), 0));
+  }
+
+  // To prevent a completed deload from artificially depressing the prior 3-week baseline,
+  // we replace any deload-affected week in the baseline (indices 0, 1, 2) with the
+  // average of the non-deload baseline weeks.
+  const nonDeloadBaselineIndices = [0, 1, 2].filter((i) => !isWeekDeload[i]);
+  if (nonDeloadBaselineIndices.length > 0 && nonDeloadBaselineIndices.length < 3) {
+    const avgNonDeloadSets =
+      nonDeloadBaselineIndices.reduce((sum, i) => sum + weeklyTotalSets[i]!, 0) /
+      nonDeloadBaselineIndices.length;
+    const avgNonDeloadTonnage =
+      nonDeloadBaselineIndices.reduce((sum, i) => sum + weeklyTonnage[i]!, 0) /
+      nonDeloadBaselineIndices.length;
+
+    for (let i = 0; i < 3; i++) {
+      if (isWeekDeload[i]) {
+        weeklyTotalSets[i] = avgNonDeloadSets;
+        weeklyTonnage[i] = avgNonDeloadTonnage;
+      }
+    }
   }
 
   // Suppress fatigue detection while deload is active to prevent re-triggering.

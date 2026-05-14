@@ -4,8 +4,12 @@ import { useRouter } from "vue-router";
 import { useAiStore } from "@/modules/aiCoach/presentation";
 import { useDeloadStore } from "@/modules/deload/presentation";
 import { useExerciseMuscleMapStore } from "@/modules/platform/presentation";
-import type { MuscleGroupInsight } from "@/modules/trainingInsights/presentation";
-import { useTrainingInsightsStore } from "@/modules/trainingInsights/presentation";
+import {
+  MAX_FATIGUE_RISK_SCORE,
+  type MuscleGroupInsight,
+  normalizeExerciseName,
+  useTrainingInsightsStore,
+} from "@/modules/trainingInsights/presentation";
 
 type TrainingInsightsTab = "map" | "phase" | "exercises";
 
@@ -24,6 +28,8 @@ type ExerciseMetric = {
   bestRPE: number | null;
   learnedMuscleGroups: string[];
   status: "plateau" | "improving" | "dropping" | "stable";
+  lastLoggedAt: Date;
+  lastTrainedLabel: string;
 };
 
 type MuscleGroupWithKey = MuscleGroupInsight & { muscleGroup: string };
@@ -167,6 +173,10 @@ export function useTrainingInsightsPageViewModel() {
     return "Low";
   });
 
+  const fatigueRiskPercent = computed(() => {
+    return Math.round((insights.value.fatigue.riskScore / MAX_FATIGUE_RISK_SCORE) * 100);
+  });
+
   const deloadStatusLabel = computed(() => {
     if (insights.value.deloadStatus === "active") return "Active";
     if (insights.value.deloadStatus === "completed") return "Completed";
@@ -260,6 +270,20 @@ export function useTrainingInsightsPageViewModel() {
   });
 
   const exerciseMetrics = computed((): ExerciseMetric[] => {
+    // Build a map of exercise name to its latest loggedAt date
+    const latestDates = new Map<string, number>();
+    for (const log of trainingInsightsStore.allLogs) {
+      const canonical = normalizeExerciseName(log.exerciseName);
+      const time = log.loggedAt.getTime();
+      const existing = latestDates.get(canonical) ?? 0;
+      if (time > existing) {
+        latestDates.set(canonical, time);
+      }
+    }
+
+    const now = new Date().getTime();
+    const fourWeeksMs = 28 * 24 * 60 * 60 * 1000;
+
     return Object.entries(insights.value.e1rm)
       .map(([name, data]) => {
         const trend = data.trend;
@@ -284,6 +308,16 @@ export function useTrainingInsightsPageViewModel() {
           ? [activation.primaryMuscle, ...activation.secondaryMuscles.map((m) => m.muscleGroup)]
           : [];
 
+        const canonical = normalizeExerciseName(name);
+        const lastLogTime = latestDates.get(canonical) ?? 0;
+
+        const daysAgo = Math.floor((now - lastLogTime) / (1000 * 60 * 60 * 24));
+        let lastTrainedLabel = "";
+        if (daysAgo === 0) lastTrainedLabel = "Today";
+        else if (daysAgo < 7) lastTrainedLabel = `${daysAgo}d ago`;
+        else if (daysAgo < 28) lastTrainedLabel = `${Math.floor(daysAgo / 7)}w ago`;
+        else lastTrainedLabel = "4w+ ago";
+
         return {
           name,
           e1rm: current,
@@ -292,14 +326,15 @@ export function useTrainingInsightsPageViewModel() {
           bestRPE: data.bestRPE ?? null,
           learnedMuscleGroups: Array.from(new Set(learnedMuscleGroups)),
           status,
+          lastLoggedAt: new Date(lastLogTime),
+          lastTrainedLabel,
         };
       })
+      .filter((m) => {
+        return now - m.lastLoggedAt.getTime() <= fourWeeksMs;
+      })
       .sort((a, b) => {
-        if (a.plateau !== b.plateau) return a.plateau ? -1 : 1;
-        const aMag = Math.abs(a.deltaPct ?? 0);
-        const bMag = Math.abs(b.deltaPct ?? 0);
-        if (aMag !== bMag) return bMag - aMag;
-        return b.e1rm - a.e1rm;
+        return b.lastLoggedAt.getTime() - a.lastLoggedAt.getTime();
       });
   });
 
@@ -349,6 +384,7 @@ export function useTrainingInsightsPageViewModel() {
     formatTriggerLabel,
     fatigueRiskToneClass,
     fatigueRiskLabel,
+    fatigueRiskPercent,
     deloadStatusLabel,
     deloadStatusToneClass,
     deloadStatusNote,
