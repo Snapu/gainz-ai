@@ -30,6 +30,7 @@ type ExerciseMetric = {
   status: "plateau" | "improving" | "dropping" | "stable";
   lastLoggedAt: Date;
   lastTrainedLabel: string;
+  isStale: boolean;
 };
 
 type MuscleGroupWithKey = MuscleGroupInsight & { muscleGroup: string };
@@ -269,7 +270,7 @@ export function useTrainingInsightsPageViewModel() {
     return Math.round(delta);
   });
 
-  const exerciseMetrics = computed((): ExerciseMetric[] => {
+  const allExerciseMetrics = computed((): ExerciseMetric[] => {
     // Build a map of exercise name to its latest loggedAt date
     const latestDates = new Map<string, number>();
     for (const log of trainingInsightsStore.allLogs) {
@@ -282,7 +283,6 @@ export function useTrainingInsightsPageViewModel() {
     }
 
     const now = new Date().getTime();
-    const fourWeeksMs = 28 * 24 * 60 * 60 * 1000;
 
     return Object.entries(insights.value.e1rm)
       .map(([name, data]) => {
@@ -328,28 +328,31 @@ export function useTrainingInsightsPageViewModel() {
           status,
           lastLoggedAt: new Date(lastLogTime),
           lastTrainedLabel,
+          isStale: daysAgo >= 28,
         };
-      })
-      .filter((m) => {
-        return now - m.lastLoggedAt.getTime() <= fourWeeksMs;
       })
       .sort((a, b) => {
         return b.lastLoggedAt.getTime() - a.lastLoggedAt.getTime();
       });
   });
 
-  const totalExerciseCount = computed(() => exerciseMetrics.value.length);
+  const activeExerciseMetrics = computed(() => allExerciseMetrics.value.filter((m) => !m.isStale));
+  const staleExerciseMetrics = computed(() => allExerciseMetrics.value.filter((m) => m.isStale));
+
+  const totalExerciseCount = computed(() => activeExerciseMetrics.value.length);
   const plateauExerciseCount = computed(
-    () => exerciseMetrics.value.filter((m) => m.status === "plateau").length,
+    () => activeExerciseMetrics.value.filter((m) => m.status === "plateau").length,
   );
   const improvingExerciseCount = computed(
-    () => exerciseMetrics.value.filter((m) => m.status === "improving").length,
+    () => activeExerciseMetrics.value.filter((m) => m.status === "improving").length,
   );
   const droppingExerciseCount = computed(
-    () => exerciseMetrics.value.filter((m) => m.status === "dropping").length,
+    () => activeExerciseMetrics.value.filter((m) => m.status === "dropping").length,
   );
   const averageBestRPE = computed(() => {
-    const vals = exerciseMetrics.value.map((m) => m.bestRPE).filter((v): v is number => v !== null);
+    const vals = activeExerciseMetrics.value
+      .map((m) => m.bestRPE)
+      .filter((v): v is number => v !== null);
     if (vals.length === 0) return null;
     return vals.reduce((sum, v) => sum + v, 0) / vals.length;
   });
@@ -357,11 +360,12 @@ export function useTrainingInsightsPageViewModel() {
   const exerciseStatusNote = computed(() => {
     const { plateauPaused, plateauExerciseCount: _ } = {
       plateauPaused: insights.value.plateauPaused,
-      plateauExerciseCount: exerciseMetrics.value.filter((m) => m.status === "plateau").length,
+      plateauExerciseCount: activeExerciseMetrics.value.filter((m) => m.status === "plateau")
+        .length,
     };
     if (plateauPaused) return "Plateau & drop detection paused during recovery week.";
-    const plateaus = exerciseMetrics.value.filter((m) => m.status === "plateau").length;
-    const improving = exerciseMetrics.value.filter((m) => m.status === "improving").length;
+    const plateaus = activeExerciseMetrics.value.filter((m) => m.status === "plateau").length;
+    const improving = activeExerciseMetrics.value.filter((m) => m.status === "improving").length;
     if (plateaus === 0 && improving === 0) return "No significant strength trends detected yet.";
     const parts: string[] = [];
     if (improving > 0) parts.push(`${improving} exercise${improving > 1 ? "s" : ""} improving`);
@@ -393,7 +397,9 @@ export function useTrainingInsightsPageViewModel() {
     maxTonnage,
     weeklyDeltaLabel,
     tonnageDeltaPct,
-    exerciseMetrics,
+    activeExerciseMetrics,
+    staleExerciseMetrics,
+    allExerciseMetrics,
     totalExerciseCount,
     plateauExerciseCount,
     improvingExerciseCount,

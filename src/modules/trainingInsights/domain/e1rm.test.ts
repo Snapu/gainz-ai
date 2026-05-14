@@ -165,7 +165,7 @@ describe("calculateE1RMInsights", () => {
       createLog("Bench Press", daysLater(14), 110, 3),
       createLog("Bench Press", daysLater(21), 115, 3),
     ];
-    const result = calculateE1RMInsights(logs);
+    const result = calculateE1RMInsights(logs, undefined, daysLater(30));
     expect(result["Bench Press"]!.trend).toHaveLength(4);
     expect(result["Bench Press"]!.e1rm).toBeGreaterThan(100);
     expect(result["Bench Press"]!.plateau).toBe(false);
@@ -178,7 +178,7 @@ describe("calculateE1RMInsights", () => {
       createLog("Squat", daysLater(14), 100, 5),
       createLog("Squat", daysLater(21), 100, 5),
     ];
-    expect(calculateE1RMInsights(logs, undefined, daysLater(22))["Squat"]!.plateau).toBe(true);
+    expect(calculateE1RMInsights(logs, undefined, daysLater(30))["Squat"]!.plateau).toBe(true);
   });
 
   it("does not flag plateau with fewer than 3 sessions in trend", () => {
@@ -186,14 +186,16 @@ describe("calculateE1RMInsights", () => {
       createLog("Squat", daysLater(0), 100, 5),
       createLog("Squat", daysLater(7), 100, 5),
     ];
-    expect(calculateE1RMInsights(logs)["Squat"]!.plateau).toBe(false);
+    expect(calculateE1RMInsights(logs, undefined, daysLater(30))["Squat"]!.plateau).toBe(false);
   });
 
   it("caps trend at 4 most recent sessions", () => {
     const logs = Array.from({ length: 8 }, (_, i) =>
       createLog("Deadlift", daysLater(i * 7), 100 + i * 5, 3),
     );
-    expect(calculateE1RMInsights(logs)["Deadlift"]!.trend).toHaveLength(4);
+    expect(calculateE1RMInsights(logs, undefined, daysLater(30))["Deadlift"]!.trend).toHaveLength(
+      4,
+    );
   });
 
   it("uses best e1RM across multiple sets within the same session", () => {
@@ -202,18 +204,18 @@ describe("calculateE1RMInsights", () => {
       createLog("Bench Press", daysLater(0), 100, 5),
       createLog("Bench Press", daysLater(0), 95, 5),
     ];
-    const result = calculateE1RMInsights(logs);
+    const result = calculateE1RMInsights(logs, undefined, daysLater(10));
     expect(result["Bench Press"]!.trend[0]).toBeCloseTo(calculateE1RM(100, 5)!, 1);
   });
 
   it("skips sets with null e1RM (reps > 20) and counts only valid sessions", () => {
     const logs = [createLog("Curl", daysLater(0), 20, 25), createLog("Curl", daysLater(7), 30, 10)];
-    expect(calculateE1RMInsights(logs)["Curl"]!.trend).toHaveLength(1);
+    expect(calculateE1RMInsights(logs, undefined, daysLater(30))["Curl"]!.trend).toHaveLength(1);
   });
 
   it("returns nothing for exercise where all sets have null e1RM", () => {
     const logs = [createLog("Walk", daysLater(0), 0, 0)];
-    expect(calculateE1RMInsights(logs)["Walk"]).toBeUndefined();
+    expect(calculateE1RMInsights(logs, undefined, daysLater(30))["Walk"]).toBeUndefined();
   });
 
   it("case-insensitive name matching groups all variants together", () => {
@@ -222,7 +224,7 @@ describe("calculateE1RMInsights", () => {
       createLog("BENCH PRESS", daysLater(7), 102, 5),
       createLog("Bench Press", daysLater(14), 104, 5),
     ];
-    const result = calculateE1RMInsights(logs);
+    const result = calculateE1RMInsights(logs, undefined, daysLater(30));
     expect(Object.keys(result)).toHaveLength(1);
     expect(result["bench press"]!.trend).toHaveLength(3);
   });
@@ -234,7 +236,7 @@ describe("calculateE1RMInsights", () => {
       createLog("Bench Press", daysLater(7), 102, 5),
       createLog("Squat", daysLater(7), 155, 5),
     ];
-    const result = calculateE1RMInsights(logs);
+    const result = calculateE1RMInsights(logs, undefined, daysLater(30));
     expect(Object.keys(result)).toHaveLength(2);
     expect(result["Squat"]!.e1rm).toBeGreaterThan(result["Bench Press"]!.e1rm);
   });
@@ -247,8 +249,8 @@ describe("calculateE1RMInsights", () => {
       createLog("OHP", daysLater(21), 64, 3),
     ];
     const deloadRange = { start: daysLater(13), end: daysLater(15) };
-    const withDeload = calculateE1RMInsights(logs, [deloadRange]);
-    const withoutDeload = calculateE1RMInsights(logs);
+    const withDeload = calculateE1RMInsights(logs, [deloadRange], daysLater(30));
+    const withoutDeload = calculateE1RMInsights(logs, undefined, daysLater(30));
     expect(withDeload["OHP"]!.trend).toHaveLength(3);
     expect(withDeload["OHP"]!.e1rm).toBeGreaterThanOrEqual(withoutDeload["OHP"]!.e1rm);
   });
@@ -259,11 +261,19 @@ describe("calculateE1RMInsights", () => {
       createLog("Row", daysLater(7), 110, 6, 9),
       createLog("Row", daysLater(14), 105, 7, 8),
     ];
-    expect(calculateE1RMInsights(logs)["Row"]!.bestRPE).toBe(9);
+    expect(calculateE1RMInsights(logs, undefined, daysLater(30))["Row"]!.bestRPE).toBe(9);
   });
 
   it("bestRPE is undefined when no log has RPE recorded", () => {
     const logs = [createLog("Row", daysLater(0), 100, 8), createLog("Row", daysLater(7), 110, 6)];
-    expect(calculateE1RMInsights(logs)["Row"]!.bestRPE).toBeUndefined();
+    expect(calculateE1RMInsights(logs, undefined, daysLater(30))["Row"]!.bestRPE).toBeUndefined();
+  });
+
+  it("includes trendDates corresponding to the sessions in the trend array", () => {
+    const logs = [createLog("Row", daysLater(0), 100, 8), createLog("Row", daysLater(7), 110, 6)];
+    const result = calculateE1RMInsights(logs, undefined, daysLater(30));
+    expect(result["Row"]!.trendDates).toHaveLength(2);
+    expect(result["Row"]!.trendDates[0].toDateString()).toBe(daysLater(0).toDateString());
+    expect(result["Row"]!.trendDates[1].toDateString()).toBe(daysLater(7).toDateString());
   });
 });

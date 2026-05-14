@@ -11,6 +11,7 @@ export interface ExcludeRange {
 export interface ExerciseE1RM {
   e1rm: number;
   trend: number[];
+  trendDates: Date[];
   plateau: boolean;
   bestRPE?: number;
 }
@@ -18,6 +19,7 @@ export interface ExerciseE1RM {
 const PLATEAU_THRESHOLD = 0.05;
 const MIN_E1RM_TREND_SESSIONS = 3;
 const PLATEAU_RESET_DAYS = 21; // Clear plateau if exercise not logged for 3 weeks (indicates successful variant swap recovery)
+const MS_PER_DAY = 86400000;
 
 /**
  * Zourdos et al. (2016) RPE-to-%1RM lookup table.
@@ -159,17 +161,23 @@ export function calculateE1RMInsights(
 
     if (sessionE1RMs.length === 0) continue;
 
-    const trend = sessionE1RMs.slice(-4);
-    const currentE1RM = Math.max(...trend);
-
-    const plateauThreshold = currentE1RM * PLATEAU_THRESHOLD;
-    // Check if exercise has been absent for plateau reset window (user switched to variant and recovery is underway)
     const lastLogDate = new Date(sortedDays[sortedDays.length - 1]!);
-    const daysSinceLastLog = (now.getTime() - lastLogDate.getTime()) / 86400000;
+    const daysSinceLastLog = (now.getTime() - lastLogDate.getTime()) / MS_PER_DAY;
+
+    const trend = sessionE1RMs.slice(-4);
+    const trendDateStrings = sortedDays.slice(-4);
+    const trendDates = trendDateStrings.map((d) => new Date(d));
+
+    // currentE1RM should represent the latest session, not the max of the block
+    const currentE1RM = trend[trend.length - 1]!;
+    const peakE1RM = Math.max(...trend);
+
+    const plateauThreshold = peakE1RM * PLATEAU_THRESHOLD;
+    // Check if exercise has been absent for plateau reset window (user switched to variant and recovery is underway)
     const plateau =
       daysSinceLastLog < PLATEAU_RESET_DAYS &&
       trend.length >= MIN_E1RM_TREND_SESSIONS &&
-      trend.slice(-3).every((v) => Math.abs(v - currentE1RM) <= plateauThreshold);
+      trend.slice(-3).every((v) => Math.abs(v - peakE1RM) <= plateauThreshold);
 
     const allRPEs = sortedDays.flatMap((day) =>
       sessions.get(day)!.flatMap((l) => (l.rpe !== undefined && l.rpe > 0 ? [l.rpe] : [])),
@@ -181,6 +189,7 @@ export function calculateE1RMInsights(
       result[displayName] = {
         e1rm: currentE1RM,
         trend,
+        trendDates,
         plateau,
         bestRPE,
       };

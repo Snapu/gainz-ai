@@ -27,7 +27,7 @@ const {
   maxTonnage,
   weeklyDeltaLabel,
   tonnageDeltaPct,
-  exerciseMetrics,
+  allExerciseMetrics,
   totalExerciseCount,
   plateauExerciseCount,
   improvingExerciseCount,
@@ -268,12 +268,18 @@ const {
         </UiCard>
 
         <UiCard variant="list">
-          <template v-if="exerciseMetrics.length > 0">
-            <div
-              v-for="metric in exerciseMetrics"
-              :key="metric.name"
-              class="px-3 sm:px-4 py-2.5 sm:py-3 border-b border-white/5 last:border-0 transition-all duration-200 hover:bg-white/[0.05] active:bg-white/[0.08] select-none"
-            >
+          <template v-if="allExerciseMetrics.length > 0">
+            <template v-for="(metric, index) in allExerciseMetrics" :key="metric.name">
+              <div 
+                v-if="metric.isStale && (index === 0 || !allExerciseMetrics[index - 1].isStale)"
+                class="px-3 sm:px-4 py-1.5 bg-white/[0.02] border-y border-white/5 text-[10px] font-semibold text-foreground/40 tracking-widest uppercase"
+              >
+                Inactive (> 4 Weeks)
+              </div>
+              <div
+                class="px-3 sm:px-4 py-2.5 sm:py-3 border-b border-white/5 last:border-0 transition-all duration-200 hover:bg-white/[0.05] active:bg-white/[0.08] select-none"
+                :class="{ 'opacity-50 grayscale-[0.5]': metric.isStale }"
+              >
               <div class="flex items-center justify-between gap-3">
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center gap-2">
@@ -317,7 +323,8 @@ const {
                   </div>
                 </div>
               </div>
-            </div>
+              </div>
+            </template>
           </template>
           <div
             v-else

@@ -112,7 +112,7 @@ export function calculateTrainingInsights(
       ? [{ start: new Date(phase.startedAt), end: new Date(phase.endsAt) }]
       : undefined;
 
-  const e1rm = calculateE1RMInsights(logs, excludeRanges);
+  const e1rm = calculateE1RMInsights(logs, excludeRanges, targetDate);
 
   // Build 4-week weekly set/tonnage arrays for fatigue detection.
   const weeklyTotalSets: number[] = [];
@@ -159,7 +159,13 @@ export function calculateTrainingInsights(
   }
 
   // Suppress fatigue detection while deload is active to prevent re-triggering.
-  const fatigue = calculateFatigueInsight(weeklyTotalSets, weeklyTonnage, e1rm, deloadActive);
+  const fatigue = calculateFatigueInsight(
+    weeklyTotalSets,
+    weeklyTonnage,
+    e1rm,
+    deloadActive,
+    targetDate,
+  );
   const acwr = computeEWMAACWR(logs, targetDate);
   const muscleGroups = calculateMuscleGroupInsights(logs, targetDate, overrideMap);
   const systemicPhase = derivePhase(acwr, fatigue.shouldDeload, deloadStatus, muscleGroups);

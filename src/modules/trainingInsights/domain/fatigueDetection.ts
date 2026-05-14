@@ -49,6 +49,8 @@ const VOLUME_SPIKE_MULTIPLIER = 1.25;
 const TONNAGE_SPIKE_MULTIPLIER = 1.5;
 const DECLINE_THRESHOLD = 0.95;
 const MIN_DECLINING_EXERCISES = 2;
+const ACUTE_FATIGUE_RECENCY_DAYS = 14;
+const MS_PER_DAY = 86400000;
 
 const TRIGGER_WEIGHTS: Record<FatigueTriggerId, number> = {
   volumeSpike: 2,
@@ -149,6 +151,7 @@ export function calculateFatigueInsight(
   weeklyTonnage: number[],
   e1rmData: Record<string, ExerciseE1RM>,
   isCurrentWeekDeload = false,
+  targetDate: Date = new Date(),
 ): FatigueInsight {
   if (weeklyTotalSets.length < 4 || weeklyTonnage.length < 4) {
     return {
@@ -181,6 +184,14 @@ export function calculateFatigueInsight(
   if (!isCurrentWeekDeload) {
     for (const data of Object.values(e1rmData)) {
       if (data.trend.length < 3) continue;
+
+      const lastLogDate = data.trendDates[data.trendDates.length - 1]!;
+      const daysSinceLastLog = (targetDate.getTime() - lastLogDate.getTime()) / MS_PER_DAY;
+
+      // If the exercise hasn't been trained recently,
+      // any drop is likely detraining or an old drop, not a current fatigue indicator.
+      if (daysSinceLastLog > ACUTE_FATIGUE_RECENCY_DAYS) continue;
+
       const current = data.trend[data.trend.length - 1]!;
       const prior2Avg =
         ((data.trend[data.trend.length - 2] ?? 0) + (data.trend[data.trend.length - 3] ?? 0)) / 2;

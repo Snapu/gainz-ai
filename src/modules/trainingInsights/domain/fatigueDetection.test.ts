@@ -18,14 +18,35 @@ describe("isFatigueTriggerId", () => {
 });
 
 describe("calculateFatigueInsight", () => {
+  const now = new Date();
   const improvingE1RM: Record<string, ExerciseE1RM> = {
-    "Bench Press": { e1rm: 120, trend: [112, 115, 118, 120], plateau: false },
-    Squat: { e1rm: 180, trend: [170, 174, 177, 180], plateau: false },
+    "Bench Press": {
+      e1rm: 120,
+      trend: [112, 115, 118, 120],
+      trendDates: [now, now, now, now],
+      plateau: false,
+    },
+    Squat: {
+      e1rm: 180,
+      trend: [170, 174, 177, 180],
+      trendDates: [now, now, now, now],
+      plateau: false,
+    },
   };
 
   const decliningE1RM: Record<string, ExerciseE1RM> = {
-    Bench: { e1rm: 100, trend: [120, 116, 110, 104], plateau: false },
-    Squat: { e1rm: 150, trend: [170, 164, 159, 152], plateau: false },
+    Bench: {
+      e1rm: 100,
+      trend: [120, 116, 110, 104],
+      trendDates: [now, now, now, now],
+      plateau: false,
+    },
+    Squat: {
+      e1rm: 150,
+      trend: [170, 164, 159, 152],
+      trendDates: [now, now, now, now],
+      plateau: false,
+    },
   };
 
   it("returns non-triggering defaults when fewer than 4 weeks are available", () => {
@@ -79,6 +100,33 @@ describe("calculateFatigueInsight", () => {
     expect(result.decliningExercises).toBe(0);
     expect(result.triggeredBy).not.toContain("performanceDecline");
     expect(result.shouldDeload).toBe(false);
+  });
+
+  it("ignores performance decline if the last session was > 14 days ago (detraining)", () => {
+    const oldDate = new Date(now.getTime() - 20 * 86400000);
+    const staleDecliningE1RM: Record<string, ExerciseE1RM> = {
+      Bench: {
+        e1rm: 100,
+        trend: [120, 116, 110, 104],
+        trendDates: [oldDate, oldDate, oldDate, oldDate],
+        plateau: false,
+      },
+      Squat: {
+        e1rm: 150,
+        trend: [170, 164, 159, 152],
+        trendDates: [oldDate, oldDate, oldDate, oldDate],
+        plateau: false,
+      },
+    };
+    const result = calculateFatigueInsight(
+      [14, 14, 14, 14],
+      [900, 900, 900, 900],
+      staleDecliningE1RM,
+      false,
+      now,
+    );
+    expect(result.triggeredBy).not.toContain("performanceDecline");
+    expect(result.decliningExercises).toBe(0);
   });
 
   it("detects 4-week ramp using robust progressive pattern (not strict every-step spike)", () => {
