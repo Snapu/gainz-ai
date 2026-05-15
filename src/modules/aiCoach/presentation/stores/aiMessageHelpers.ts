@@ -7,18 +7,7 @@ interface AiMessageLike {
   timestamp: Date;
   sessionDate: string;
   logsCount: number;
-}
-
-export function shouldUseCachedAssistantResponse(
-  lastMessage: AiMessageLike | undefined,
-  todayLogsCount: number,
-  todaySessionDate: string,
-): boolean {
-  return (
-    lastMessage?.role === "assistant" &&
-    lastMessage.logsCount === todayLogsCount &&
-    lastMessage.sessionDate === todaySessionDate
-  );
+  logsChecksum?: string;
 }
 
 export function toPreviousAiMessages(messages: AiMessageLike[]): PreviousAiMessage[] {
@@ -28,10 +17,15 @@ export function toPreviousAiMessages(messages: AiMessageLike[]): PreviousAiMessa
     sessionDate: message.sessionDate,
     timestamp: message.timestamp.toISOString(),
     logsCount: message.logsCount,
+    logsChecksum: message.logsChecksum,
   }));
 }
 
-export function createAiUserPlaceholder(sessionDate: string, logsCount: number): AiMessageLike {
+export function createAiUserPlaceholder(
+  sessionDate: string,
+  logsCount: number,
+  logsChecksum?: string,
+): AiMessageLike {
   return {
     id: `${Date.now()}-user`,
     role: "user",
@@ -39,6 +33,7 @@ export function createAiUserPlaceholder(sessionDate: string, logsCount: number):
     timestamp: new Date(),
     sessionDate,
     logsCount,
+    logsChecksum,
   };
 }
 
@@ -46,6 +41,7 @@ export function createAiAssistantMessage(
   sessionDate: string,
   logsCount: number,
   responseText: string,
+  logsChecksum?: string,
 ): AiMessageLike {
   return {
     id: `${Date.now()}-assistant`,
@@ -54,6 +50,7 @@ export function createAiAssistantMessage(
     timestamp: new Date(),
     sessionDate,
     logsCount,
+    logsChecksum,
   };
 }
 

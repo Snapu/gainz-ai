@@ -53,7 +53,7 @@ const debouncedAskAi = useDebounceFn(() => {
 watch(
   () => props.open,
   (isOpen) => {
-    if (isOpen && !aiStore.isLoading) {
+    if (isOpen) {
       debouncedAskAi();
     }
   },

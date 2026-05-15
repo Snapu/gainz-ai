@@ -150,6 +150,5 @@ describe("useAiStore initialization", () => {
     const store = useAiStore();
 
     expect("hasInitialized" in store).toBe(true);
-    expect("inFlightRequest" in store).toBe(true);
   });
 });
