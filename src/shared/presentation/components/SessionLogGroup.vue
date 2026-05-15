@@ -45,18 +45,21 @@ defineEmits<{
           <!-- Quick Stats -->
           <div class="grid grid-cols-3 gap-2 sm:gap-3 flex-1 min-w-0">
             <div class="flex min-w-0 flex-col items-start gap-0.5">
-              <span class="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Sets</span>
-              <span class="text-sm font-bold text-foreground">{{ stats.sets }}</span>
+              <span class="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Volume</span>
+              <span class="text-sm font-bold text-foreground flex items-baseline gap-1 min-w-0">
+                <span class="truncate">{{ stats.sets }}</span>
+                <span class="text-xs font-semibold text-muted-foreground uppercase">Sets</span>
+              </span>
             </div>
             <div class="flex min-w-0 flex-col items-start gap-0.5">
-              <span class="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Exercises</span>
-              <span class="text-sm font-bold text-foreground">{{ stats.exerciseCount }}</span>
+              <span class="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Exercises</span>
+              <span class="text-sm font-bold text-foreground truncate">{{ stats.exerciseCount }}</span>
             </div>
             <div class="flex min-w-0 flex-col items-start gap-0.5">
-              <span class="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Volume</span>
-              <span class="text-sm font-bold text-foreground flex items-baseline gap-0.5 min-w-0">
+              <span class="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Tonnage</span>
+              <span class="text-sm font-bold text-foreground flex items-baseline gap-1 min-w-0">
                 <span class="truncate">{{ stats.volume.toLocaleString() }}</span>
-                <span class="text-xs text-muted-foreground uppercase">KG</span>
+                <span class="text-xs font-semibold text-muted-foreground uppercase">KG</span>
               </span>
             </div>
           </div>

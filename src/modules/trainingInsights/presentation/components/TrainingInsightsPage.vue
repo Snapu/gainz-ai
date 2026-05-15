@@ -120,8 +120,8 @@ const {
             <div class="rounded-lg border border-white/10 bg-white/[0.03] p-2.5 flex flex-col justify-between">
               <div>
                 <div class="flex justify-between items-start">
-                  <p class="text-[10px] uppercase tracking-wide text-foreground/50">ACWR Zone</p>
-                  <span class="text-[9px] px-1.5 py-0.5 rounded border uppercase font-bold" :class="acwrZone.toneClass">
+                  <p class="text-xs uppercase tracking-wide text-foreground/50">ACWR Zone</p>
+                  <span class="text-xs px-1.5 py-0.5 rounded border uppercase font-bold" :class="acwrZone.toneClass">
                     {{ acwrZone.label }}
                   </span>
                 </div>
@@ -141,8 +141,8 @@ const {
             <div class="rounded-lg border border-white/10 bg-white/[0.03] p-2.5 flex flex-col justify-between">
               <div>
                 <div class="flex justify-between items-start">
-                  <p class="text-[10px] uppercase tracking-wide text-foreground/50">Risk Score</p>
-                  <span class="text-[9px] px-1.5 py-0.5 rounded border uppercase font-bold text-foreground/60" :class="{ 'text-orange-300 border-orange-500/30 bg-orange-500/10': insights.fatigue.shouldDeload, 'border-white/10': !insights.fatigue.shouldDeload }">
+                  <p class="text-xs uppercase tracking-wide text-foreground/50">Risk Score</p>
+                  <span class="text-xs px-1.5 py-0.5 rounded border uppercase font-bold text-foreground/60" :class="{ 'text-orange-300 border-orange-500/30 bg-orange-500/10': insights.fatigue.shouldDeload, 'border-white/10': !insights.fatigue.shouldDeload }">
                     {{ insights.fatigue.shouldDeload ? 'DELOAD REC' : 'NO DELOAD' }}
                   </span>
                 </div>
@@ -272,13 +272,13 @@ const {
             <template v-for="(metric, index) in allExerciseMetrics" :key="metric.name">
               <div 
                 v-if="metric.isStale && (index === 0 || !allExerciseMetrics[index - 1].isStale)"
-                class="px-3 sm:px-4 py-1.5 bg-white/[0.02] border-y border-white/5 text-[10px] font-semibold text-foreground/40 tracking-widest uppercase"
+                class="px-3 sm:px-4 py-1.5 bg-white/5 border-y border-white/5 text-xs font-semibold text-foreground/40 tracking-widest uppercase"
               >
                 Inactive (> 4 Weeks)
               </div>
               <div
-                class="px-3 sm:px-4 py-2.5 sm:py-3 border-b border-white/5 last:border-0 transition-all duration-200 hover:bg-white/[0.05] active:bg-white/[0.08] select-none"
-                :class="{ 'opacity-50 grayscale-[0.5]': metric.isStale }"
+                class="px-3 sm:px-4 py-2.5 sm:py-3 border-b border-white/5 last:border-0 transition-all duration-200 hover:bg-white/5 active:bg-white/10 select-none"
+                :class="{ 'opacity-50': metric.isStale }"
               >
               <div class="flex items-center justify-between gap-3">
                 <div class="min-w-0 flex-1">
@@ -305,14 +305,14 @@ const {
 
                 <div class="shrink-0 flex items-center gap-2 sm:gap-3">
                   <div class="text-right hidden sm:block">
-                    <p class="text-[9px] uppercase tracking-wide text-foreground/45">e1RM</p>
+                    <p class="text-xs uppercase tracking-wide text-foreground/45">e1RM</p>
                   </div>
                   <p class="text-sm font-bold text-foreground/90 w-[40px] sm:w-[48px] text-right">
                     {{ metric.e1rm.toFixed(1) }}
                   </p>
                   <!-- Delta Pill -->
                   <div 
-                    class="w-[42px] sm:w-[48px] py-1 rounded text-center text-[10px] sm:text-xs font-bold shrink-0"
+                    class="w-[42px] sm:w-[48px] py-1 rounded text-center text-xs font-bold shrink-0"
                     :class="{
                       'bg-emerald-500/15 text-emerald-400': metric.deltaPct !== null && metric.deltaPct > 0,
                       'bg-red-500/15 text-red-400': metric.deltaPct !== null && metric.deltaPct < 0,
