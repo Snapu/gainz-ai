@@ -1,0 +1,1 @@
+System.register(["./UiButton-legacy-DvHoKGVR.js","./index-legacy-Bn3Zsp3E.js"],function(e,t){var n,s,u,c,i;return{setters:[function(e){n=e.H,s=e.O,u=e.S,c=e.xt},function(e){i=e.r}],execute:function(){e("default",s({__name:"ExerciseLogs",setup:e=>(e,t)=>(n(),u(c(i)))}))}}});

@@ -319,8 +319,10 @@ export function useExerciseLogsPageViewModel() {
       (ex) => ex.exerciseName === formExerciseName.value
     );
 
+    const DEFAULT_REST_SECONDS = 120; // 2 minutes generic fallback
+
     restTimerStore.reset();
-    restTimerStore.start(plannedExercise?.restSeconds);
+    restTimerStore.start(plannedExercise?.restSeconds ?? DEFAULT_REST_SECONDS);
 
     isLogFormOpen.value = false;
   }
