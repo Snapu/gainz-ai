@@ -174,9 +174,7 @@ describe("useAiStore currentWorkoutPlan", () => {
         id: "msg-2",
         role: "assistant" as const,
         content: JSON.stringify({
-          recommendedWorkout: [
-            { exerciseName: "Bench Press", restSeconds: 120 },
-          ],
+          recommendedWorkout: [{ exerciseName: "Bench Press", restSeconds: 120 }],
         }),
         timestamp: new Date(),
         sessionDate: "2026-01-01",
@@ -184,9 +182,7 @@ describe("useAiStore currentWorkoutPlan", () => {
       },
     ];
 
-    expect(store.currentWorkoutPlan).toEqual([
-      { exerciseName: "Bench Press", restSeconds: 120 },
-    ]);
+    expect(store.currentWorkoutPlan).toEqual([{ exerciseName: "Bench Press", restSeconds: 120 }]);
   });
 
   it("returns null if no assistant message", () => {

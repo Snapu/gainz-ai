@@ -2,6 +2,7 @@ import { haptic } from "ios-haptics";
 import { storeToRefs } from "pinia";
 import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
+import { useAiStore } from "@/modules/aiCoach/presentation";
 import { useDeloadStore } from "@/modules/deload/presentation";
 import {
   useRestTimerStore,
@@ -11,7 +12,6 @@ import {
 } from "@/modules/platform/presentation";
 import { WIZARD_STEPS } from "@/modules/profile/presentation";
 import { localeDateString } from "@/modules/sharedKernel/presentation";
-import { useAiStore } from "@/modules/aiCoach/presentation";
 import { useTrainingInsightsStore } from "@/modules/trainingInsights/presentation";
 import type { ExerciseLog } from "@/modules/trainingLogs/presentation";
 import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
@@ -316,7 +316,7 @@ export function useExerciseLogsPageViewModel() {
     await logsStore.addExerciseLog(log);
 
     const plannedExercise = aiStore.currentWorkoutPlan?.find(
-      (ex) => ex.exerciseName === formExerciseName.value
+      (ex) => ex.exerciseName === formExerciseName.value,
     );
 
     const DEFAULT_REST_SECONDS = 120; // 2 minutes generic fallback

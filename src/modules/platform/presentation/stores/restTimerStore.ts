@@ -1,5 +1,4 @@
 import { useDocumentVisibility, useIntervalFn, useLocalStorage } from "@vueuse/core";
-import { haptic } from "ios-haptics";
 import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
 
@@ -57,34 +56,10 @@ export const useRestTimerStore = defineStore("restTimer", () => {
     return targetRestSeconds.value !== null && restElapsed.value >= targetRestSeconds.value;
   });
 
-  watch(isOvertime, (overtime) => {
-    if (overtime) {
-      haptic.confirm();
-
-      // Show notification using native API for maximum reliability
-      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-        const notification = new Notification("Rest Complete!", {
-          body: "Time to start your next set.",
-          tag: "rest-timer-complete",
-        });
-
-        notification.onclick = () => {
-          window.focus();
-          notification.close();
-        };
-      }
-    }
-  });
-
   function start(duration?: number) {
     restStartTime.value = Date.now();
     if (duration) {
       targetRestSeconds.value = duration;
-    }
-
-    // Request notification permission if not yet granted
-    if (typeof Notification !== "undefined" && Notification.permission === "default") {
-      Notification.requestPermission();
     }
   }
 

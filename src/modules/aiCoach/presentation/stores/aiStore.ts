@@ -269,7 +269,9 @@ export const useAiStore = defineStore("ai", () => {
     if (!lastAssistantMsg) return null;
     try {
       const parsed = JSON.parse(lastAssistantMsg.content);
-      return (parsed.recommendedWorkout as Array<{ exerciseName: string; restSeconds?: number }>) || null;
+      return (
+        (parsed.recommendedWorkout as Array<{ exerciseName: string; restSeconds?: number }>) || null
+      );
     } catch {
       return null;
     }
