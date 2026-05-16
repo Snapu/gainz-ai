@@ -9,7 +9,7 @@ import {
   useTrainingSummaryStore,
   useUserProgressStore,
 } from "@/modules/platform/presentation";
-import { useUserProfileStore, WIZARD_STEPS } from "@/modules/profile/presentation";
+import { WIZARD_STEPS } from "@/modules/profile/presentation";
 import { localeDateString } from "@/modules/sharedKernel/presentation";
 import { useTrainingInsightsStore } from "@/modules/trainingInsights/presentation";
 import type { ExerciseLog } from "@/modules/trainingLogs/presentation";
@@ -30,7 +30,6 @@ interface GroupedSession {
 
 export function useExerciseLogsPageViewModel() {
   const router = useRouter();
-  const profileStore = useUserProfileStore();
   const deloadStore = useDeloadStore();
   const trainingInsightsStore = useTrainingInsightsStore();
   const logsStore = useExerciseLogsStore();
@@ -52,7 +51,7 @@ export function useExerciseLogsPageViewModel() {
   const formWeight = ref<number | null>(null);
   const formDistance = ref<number | null>(null);
   const formDuration = ref<number | null>(null);
-  const formRpe = ref<number>(10);
+  const formRpe = ref<number>(deloadStore.active ? 6.5 : 9.5);
   const skipHistoryAutoFill = ref(false);
 
   const isDumbbellExercise = computed(() => /kurzhantel|dumbbell/i.test(formExerciseName.value));
@@ -215,7 +214,7 @@ export function useExerciseLogsPageViewModel() {
     formWeight.value = null;
     formDistance.value = null;
     formDuration.value = null;
-    formRpe.value = 10;
+    formRpe.value = deloadStore.active ? 6.5 : 9.5;
     isLogFormOpen.value = true;
   }
 
