@@ -225,6 +225,9 @@ const {
             max="10" 
             step="0.5" 
             v-model.number="formRpe"
+            @pointerdown.stop
+            @touchstart.stop
+            @touchmove.stop
             class="w-full h-2 bg-white/5 rounded-lg appearance-none cursor-pointer accent-primary"
           />
         </div>
