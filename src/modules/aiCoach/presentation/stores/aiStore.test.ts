@@ -152,3 +152,72 @@ describe("useAiStore initialization", () => {
     expect("hasInitialized" in store).toBe(true);
   });
 });
+
+describe("useAiStore currentWorkoutPlan", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+  });
+
+  it("extracts current workout plan from last assistant message", () => {
+    const store = useAiStore();
+    store.messages = [
+      {
+        id: "msg-1",
+        role: "user" as const,
+        content: "hi",
+        timestamp: new Date(),
+        sessionDate: "2026-01-01",
+        logsCount: 0,
+      },
+      {
+        id: "msg-2",
+        role: "assistant" as const,
+        content: JSON.stringify({
+          recommendedWorkout: [
+            { exerciseName: "Bench Press", restSeconds: 120 },
+          ],
+        }),
+        timestamp: new Date(),
+        sessionDate: "2026-01-01",
+        logsCount: 0,
+      },
+    ];
+
+    expect(store.currentWorkoutPlan).toEqual([
+      { exerciseName: "Bench Press", restSeconds: 120 },
+    ]);
+  });
+
+  it("returns null if no assistant message", () => {
+    const store = useAiStore();
+    store.messages = [
+      {
+        id: "msg-1",
+        role: "user" as const,
+        content: "hi",
+        timestamp: new Date(),
+        sessionDate: "2026-01-01",
+        logsCount: 0,
+      },
+    ];
+
+    expect(store.currentWorkoutPlan).toBeNull();
+  });
+
+  it("returns null if JSON parsing fails", () => {
+    const store = useAiStore();
+    store.messages = [
+      {
+        id: "msg-2",
+        role: "assistant" as const,
+        content: "not json",
+        timestamp: new Date(),
+        sessionDate: "2026-01-01",
+        logsCount: 0,
+      },
+    ];
+
+    expect(store.currentWorkoutPlan).toBeNull();
+  });
+});

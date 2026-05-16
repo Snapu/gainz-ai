@@ -1,0 +1,1 @@
+System.register(["./UiButton-legacy-DvHoKGVR.js","./index-legacy-Dec6_R7Q.js"],function(t,e){var n,i,s,u,c;return{setters:[function(t){n=t.H,i=t.O,s=t.S,u=t.xt},function(t){c=t.m}],execute:function(){t("default",i({__name:"TrainingInsights",setup:t=>(t,e)=>(n(),s(u(c)))}))}}});

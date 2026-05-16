@@ -1,10 +1,11 @@
-import { useDocumentVisibility, useIntervalFn, useLocalStorage } from "@vueuse/core";
+import { useDocumentVisibility, useIntervalFn, useLocalStorage, useWebNotification } from "@vueuse/core";
 import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
 
 export const useRestTimerStore = defineStore("restTimer", () => {
   const restStartTime = useLocalStorage<number | null>("gainz:restStartTime", null);
   const restElapsed = ref(0);
+  const targetRestSeconds = ref<number | null>(null);
   const visibility = useDocumentVisibility();
 
   function updateRestElapsed() {
@@ -51,21 +52,49 @@ export const useRestTimerStore = defineStore("restTimer", () => {
     return `${m}:${s}`;
   });
 
-  function start() {
+  const isOvertime = computed(() => {
+    return targetRestSeconds.value !== null && restElapsed.value >= targetRestSeconds.value;
+  });
+
+  const { show, onClick, close } = useWebNotification();
+
+  watch(isOvertime, (overtime) => {
+    if (overtime) {
+      show({
+        title: "Rest Complete!",
+        body: "Time to start your next set.",
+        tag: "rest-timer-complete",
+        silent: false,
+      });
+    }
+  });
+
+  onClick(() => {
+    window.focus();
+    close();
+  });
+
+  function start(duration?: number) {
     restStartTime.value = Date.now();
+    if (duration) {
+      targetRestSeconds.value = duration;
+    }
   }
 
   function reset() {
     restStartTime.value = null;
+    targetRestSeconds.value = null;
   }
 
   return {
     // Returned for Pinia setup-store compatibility (DevTools/SSR/plugins).
     restStartTime,
     restElapsed,
+    targetRestSeconds,
     visibility,
     isResting,
     formattedTime,
+    isOvertime,
     start,
     reset,
   };

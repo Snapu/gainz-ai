@@ -264,6 +264,16 @@ export const useAiStore = defineStore("ai", () => {
         return okAsync(undefined);
       });
   }
+  const currentWorkoutPlan = computed(() => {
+    const lastAssistantMsg = [...messages.value].reverse().find((m) => m.role === "assistant");
+    if (!lastAssistantMsg) return null;
+    try {
+      const parsed = JSON.parse(lastAssistantMsg.content);
+      return (parsed.recommendedWorkout as Array<{ exerciseName: string; restSeconds?: number }>) || null;
+    } catch {
+      return null;
+    }
+  });
 
   function clearMessages() {
     ensureInitialized();
@@ -280,5 +290,6 @@ export const useAiStore = defineStore("ai", () => {
     messages,
     hasInitialized,
     _todaySessionDate: todaySessionDate,
+    currentWorkoutPlan,
   };
 });

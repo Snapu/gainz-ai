@@ -11,6 +11,7 @@ import {
 } from "@/modules/platform/presentation";
 import { WIZARD_STEPS } from "@/modules/profile/presentation";
 import { localeDateString } from "@/modules/sharedKernel/presentation";
+import { useAiStore } from "@/modules/aiCoach/presentation";
 import { useTrainingInsightsStore } from "@/modules/trainingInsights/presentation";
 import type { ExerciseLog } from "@/modules/trainingLogs/presentation";
 import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
@@ -37,6 +38,7 @@ export function useExerciseLogsPageViewModel() {
   const userProgressStore = useUserProgressStore();
   const spreadsheetStore = useSpreadsheetStore();
   const restTimerStore = useRestTimerStore();
+  const aiStore = useAiStore();
   const { toast } = useToast();
 
   const { isResting, formattedTime: formattedRestTime } = storeToRefs(restTimerStore);
@@ -313,8 +315,12 @@ export function useExerciseLogsPageViewModel() {
 
     await logsStore.addExerciseLog(log);
 
+    const plannedExercise = aiStore.currentWorkoutPlan?.find(
+      (ex) => ex.exerciseName === formExerciseName.value
+    );
+
     restTimerStore.reset();
-    restTimerStore.start();
+    restTimerStore.start(plannedExercise?.restSeconds);
 
     isLogFormOpen.value = false;
   }
