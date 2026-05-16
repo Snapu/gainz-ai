@@ -225,13 +225,19 @@ export function useExerciseLogsPageViewModel() {
     openLogForm();
   }
 
-  function prefillFromAi(data: { exerciseName: string; reps?: number; weight?: number }) {
+  function prefillFromAi(data: {
+    exerciseName: string;
+    reps?: number;
+    weight?: number;
+    rpe?: number;
+  }) {
     skipHistoryAutoFill.value = true;
     formExerciseName.value = data.exerciseName;
     formReps.value = data.reps ?? null;
     formWeight.value = data.weight ?? null;
     formDistance.value = null;
     formDuration.value = null;
+    formRpe.value = data.rpe ?? (deloadStore.active ? 6.5 : 9.5);
     isLogFormOpen.value = true;
   }
 

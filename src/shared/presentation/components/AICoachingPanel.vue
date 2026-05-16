@@ -18,7 +18,10 @@ import { cn } from "@/shared/presentation/lib/utils";
 const props = defineProps<{ open: boolean }>();
 const emit = defineEmits<{
   (e: "update:open", val: boolean): void;
-  (e: "log-exercise", data: { exerciseName: string; reps?: number; weight?: number }): void;
+  (
+    e: "log-exercise",
+    data: { exerciseName: string; reps?: number; weight?: number; rpe?: number },
+  ): void;
 }>();
 
 const aiStore = useAiStore();
@@ -78,6 +81,7 @@ interface DisplayExercise {
   targetSets: number;
   targetReps: string;
   targetWeight?: string;
+  targetRpe?: number;
   notes?: string;
   supersetId?: string;
 }
@@ -209,6 +213,7 @@ function handleLogExercise(exercise: DisplayExercise) {
     exerciseName: exercise.exerciseName,
     reps: parseFirstRep(exercise.targetReps),
     weight: parseWeight(exercise.targetWeight),
+    rpe: exercise.targetRpe,
   });
   emit("update:open", false);
 }

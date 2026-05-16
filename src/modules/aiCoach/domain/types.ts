@@ -40,6 +40,7 @@ export interface AiResponseData {
     targetSets: number;
     targetReps: string;
     targetWeight?: string;
+    targetRpe?: number;
     restSeconds?: number;
     notes?: string;
     supersetId?: string;
@@ -87,6 +88,11 @@ export function createAiResponseSchema(muscleGroupsList: string[]): Schema {
               type: Type.STRING,
               description:
                 "Exact numeric weight only (e.g. '60kg', 'Bodyweight'). Keep it extremely concise (1-2 words). Do not explain logic.",
+            },
+            targetRpe: {
+              type: Type.NUMBER,
+              description:
+                "Optional Target RPE (Rate of Perceived Exertion) from 6.0 to 10.0 (e.g. 8.5).",
             },
             notes: {
               type: Type.STRING,
