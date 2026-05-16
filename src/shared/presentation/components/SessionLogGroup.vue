@@ -43,17 +43,13 @@ defineEmits<{
           <div v-if="stats.durationMinutes > 0" class="h-5 w-px bg-border/50 mx-0.5 shrink-0"></div>
           
           <!-- Quick Stats -->
-          <div class="grid grid-cols-3 gap-2 sm:gap-3 flex-1 min-w-0">
+          <div class="flex justify-end gap-6 sm:gap-8 flex-1 min-w-0">
             <div class="flex min-w-0 flex-col items-start gap-0.5">
               <span class="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Volume</span>
               <span class="text-sm font-bold text-foreground flex items-baseline gap-1 min-w-0">
                 <span class="truncate">{{ stats.sets }}</span>
                 <span class="text-xs font-semibold text-muted-foreground uppercase">Sets</span>
               </span>
-            </div>
-            <div class="flex min-w-0 flex-col items-start gap-0.5">
-              <span class="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Exercises</span>
-              <span class="text-sm font-bold text-foreground truncate">{{ stats.exerciseCount }}</span>
             </div>
             <div class="flex min-w-0 flex-col items-start gap-0.5">
               <span class="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Tonnage</span>
