@@ -5,6 +5,7 @@ import DOMPurify from "dompurify";
 import { computed, onMounted, ref, watch } from "vue";
 import type { AiResponseData } from "@/modules/aiCoach/presentation";
 import { useAiStore } from "@/modules/aiCoach/presentation";
+import { resolveCurrentSession, useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
 import {
   uiIconButtonClass,
   uiSelectableItemClass,
@@ -21,6 +22,7 @@ const emit = defineEmits<{
 }>();
 
 const aiStore = useAiStore();
+const exerciseLogsStore = useExerciseLogsStore();
 const { toast } = useToast();
 
 const internalOpen = computed({
@@ -115,7 +117,6 @@ interface DisplayInsight {
   requestPayload: string | null;
 }
 
-// All AI responses, newest first
 const allInsights = computed<DisplayInsight[]>(() => {
   const allMessages = aiStore.messages;
   const indexById = new Map(allMessages.map((m, i) => [m.id, i]));
@@ -123,6 +124,15 @@ const allInsights = computed<DisplayInsight[]>(() => {
     .filter((m) => m.role === "assistant")
     .slice()
     .reverse();
+
+  const currentLogs = resolveCurrentSession(exerciseLogsStore.exerciseLogs)?.logs || [];
+  const completedSetsByExercise = new Map<string, number>();
+  for (const log of currentLogs) {
+    completedSetsByExercise.set(
+      log.exerciseName,
+      (completedSetsByExercise.get(log.exerciseName) || 0) + 1,
+    );
+  }
 
   return reversed.map((msg, idx) => {
     const parsedData = tryParseAiResponse(msg.content);
@@ -134,15 +144,29 @@ const allInsights = computed<DisplayInsight[]>(() => {
         ? previous.content
         : null;
 
+    let filteredWorkout: DisplayExercise[] | undefined;
+    if (parsedData?.recommendedWorkout) {
+      const workout = parsedData.recommendedWorkout as DisplayExercise[];
+      if (idx === 0) {
+        // Only dynamically filter completed exercises for the latest message (active to-do list)
+        filteredWorkout = workout.filter((ex) => {
+          const done = completedSetsByExercise.get(ex.exerciseName) || 0;
+          return done < ex.targetSets;
+        });
+      } else {
+        // For older messages, display the full historical workout that was prescribed at the time
+        filteredWorkout = workout;
+      }
+    }
+
     return {
       id: msg.id,
       timestamp: msg.timestamp,
       isLatest: idx === 0,
       rawContent: msg.content,
       parsedData,
-      groupedWorkout: parsedData?.recommendedWorkout
-        ? groupWorkout(parsedData.recommendedWorkout as DisplayExercise[])
-        : null,
+      groupedWorkout:
+        filteredWorkout && filteredWorkout.length > 0 ? groupWorkout(filteredWorkout) : null,
       requestPayload,
     };
   });

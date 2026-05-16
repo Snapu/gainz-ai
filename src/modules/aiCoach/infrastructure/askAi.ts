@@ -135,19 +135,23 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
 
 4. MID-WORKOUT BEHAVIOR (CRITICAL):
 - Phase is explicitly provided as 'mid-workout'.
-- You receive 'Today's session so far' (full cumulative log), 'New since last update' (delta since last AI call), and 'Last plan status' showing done/pending per prescribed exercise.
+- You receive 'Today's session so far' (full cumulative log), 'New since last update' (which sets were just added), and 'Current progress against last plan' (which ALREADY includes the new sets). Do NOT double-count the new sets.
 - Your ONLY job: give a quick 1-2 sentence reaction to the latest set(s) and smoothly present the next exercises. Be a trainer standing right next to them — fluent, conversational, no filler.
 - Do NOT repeat the workout's overarching goal or weekly volume analysis.
 - If the user logged exercises NOT in your last plan, acknowledge them positively and factor them into volume accounting. Adjust remaining recommendations to avoid over-training those muscles.
+- IMPORTANT: You MUST include a full, updated 'recommendedWorkout' array in every mid-workout response. It must contain BOTH the exercises already completed today and the remaining exercises, updated to reflect any deviations the user made. Keep 'targetSets' as the total sets intended for the entire session.
+- BINDING RULE: Do NOT change the 'targetSets', 'targetReps', 'targetWeight', or 'restSeconds' of the previously planned exercises UNLESS the user explicitly deviated from the plan (e.g. they logged an alternative exercise). Do NOT recalculate volume landmarks (MEV/MAV) mid-workout. Copy the parameters exactly as they appear in the 'Current progress against last plan'.
 
-5. POST-WORKOUT BEHAVIOR:
-- If the phase is 'post-workout' (last log was >45 min ago today): (1) give a 1–2 sentence session recap noting any PRs or volume milestones; (2) briefly mention which muscles need recovery (use recoveryReady from trainingInsights); Keep the total message to 2–3 sentences. Do NOT include recommendedWorkout.
+5. POST-WORKOUT BEHAVIOR (CRITICAL):
+- Phase is explicitly provided as 'post-workout' (the user just finished training).
+- (1) give a 1–2 sentence session recap noting any PRs or volume milestones; (2) briefly mention which muscles need recovery (use recoveryReady from trainingInsights); Keep the total message to 2–3 sentences.
+- BINDING RULE: Do NOT include a 'recommendedWorkout' array. The user is done for the day.
 
 You may receive:
 - A 'userProfile' JSON (first message only)
 - 'Today's session so far' — full cumulative log in compact format
 - 'New since last update' — sets logged since last AI response (mid-workout only)
-- 'Last plan status' — done/pending per prescribed exercise (mid-workout only)
+- 'Current progress against last plan' — done/pending per prescribed exercise (mid-workout only)
 - A 'trainingInsights' JSON (planning/post-workout) or compact 'e1RM' line (mid-workout)
 - An 'events' array
 - User's preferred language/locale
@@ -293,16 +297,29 @@ function buildPriorPlanSummary(
   previousMessages: PreviousAiMessage[],
   todayLogs: ExerciseLog[],
 ): string | null {
-  const lastAssistant = previousMessages.filter((m) => m.role === "assistant").slice(-1)[0];
-  if (!lastAssistant) return null;
+  const assistantMsgs = previousMessages.filter((m) => m.role === "assistant");
 
-  const parsed = Result.fromThrowable(
-    () => JSON.parse(lastAssistant.content),
-    () => null,
-  )().unwrapOr(null);
-  if (!parsed) return null;
+  let parsedPlan: Record<string, unknown> | null = null;
+  for (let i = assistantMsgs.length - 1; i >= 0; i--) {
+    const msg = assistantMsgs[i];
+    const parsed = Result.fromThrowable(
+      () => JSON.parse(msg.content),
+      () => null,
+    )().unwrapOr(null);
 
-  if (!Array.isArray(parsed.recommendedWorkout) || parsed.recommendedWorkout.length === 0) {
+    if (
+      parsed &&
+      Array.isArray(parsed.recommendedWorkout) &&
+      parsed.recommendedWorkout.length > 0
+    ) {
+      parsedPlan = parsed;
+      break;
+    }
+  }
+
+  if (!parsedPlan) return null;
+
+  if (!Array.isArray(parsedPlan.recommendedWorkout) || parsedPlan.recommendedWorkout.length === 0) {
     return null;
   }
 
@@ -311,8 +328,14 @@ function buildPriorPlanSummary(
     todayExercises.set(log.exerciseName, (todayExercises.get(log.exerciseName) ?? 0) + 1);
   }
 
-  const lines = parsed.recommendedWorkout.map(
-    (ex: { exerciseName: string; targetSets: number; targetWeight?: string }) => {
+  const lines = parsedPlan.recommendedWorkout.map(
+    (ex: {
+      exerciseName: string;
+      targetSets: number;
+      targetWeight?: string;
+      targetReps?: string;
+      restSeconds?: number;
+    }) => {
       const done = todayExercises.get(ex.exerciseName) ?? 0;
       const target = ex.targetSets ?? 0;
       let status: string;
@@ -320,15 +343,22 @@ function buildPriorPlanSummary(
         status = "✓ done";
       } else if (done > 0) {
         status = `${done}/${target} sets`;
+      } else if (target > 0) {
+        status = `0/${target} sets pending`;
       } else {
         status = "pending";
       }
-      const weight = ex.targetWeight ? ` @${ex.targetWeight}` : "";
-      return `${ex.exerciseName}: ${status}${weight}`;
+
+      const parts = [status];
+      if (ex.targetReps) parts.push(`${ex.targetReps} reps`);
+      if (ex.targetWeight) parts.push(`@${ex.targetWeight}`);
+      if (ex.restSeconds) parts.push(`${ex.restSeconds}s rest`);
+
+      return `${ex.exerciseName}: ${parts.join(", ")}`;
     },
   );
 
-  return `Last plan status:\n${lines.join("\n")}`;
+  return `Current progress against last plan:\n${lines.join("\n")}`;
 }
 
 function buildCompactProfileContext(userProfile: UserProfile): Record<string, unknown> {
