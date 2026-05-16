@@ -79,6 +79,11 @@ export const useRestTimerStore = defineStore("restTimer", () => {
     if (duration) {
       targetRestSeconds.value = duration;
     }
+
+    // Request notification permission if not yet granted
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
   }
 
   function reset() {

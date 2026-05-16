@@ -149,6 +149,7 @@ const {
       <div v-if="isResting" class="fixed bottom-10 right-28 z-40 mb-safe pointer-events-auto">
         <RestTimerToast
           :formatted-time="formattedRestTime"
+          :is-overtime="restTimerStore.isOvertime"
           @dismiss="restTimerStore.reset()"
         />
       </div>

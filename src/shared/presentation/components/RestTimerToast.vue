@@ -4,6 +4,7 @@ import { uiIconButtonClass } from "@/shared/presentation/components/ui/styles";
 
 defineProps<{
   formattedTime: string;
+  isOvertime?: boolean;
 }>();
 
 defineEmits<(e: "dismiss") => void>();
@@ -22,7 +23,10 @@ defineEmits<(e: "dismiss") => void>();
         <h3 class="text-sm font-bold uppercase tracking-widest text-foreground/80 leading-none">Set Logged</h3>
         <div class="flex items-center gap-1.5">
           <span class="text-xs text-muted-foreground font-bold uppercase tracking-wider">Rest:</span>
-          <span class="font-mono text-sm font-bold italic tracking-tighter text-primary tabular-nums leading-none">
+          <span 
+            class="font-mono text-sm font-bold italic tracking-tighter tabular-nums leading-none"
+            :class="isOvertime ? 'text-destructive' : 'text-primary'"
+          >
             {{ formattedTime }}
           </span>
         </div>
