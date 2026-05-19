@@ -1,1 +1,0 @@
-System.register(["./index-legacy-L1A-1enC.js"],function(e,t){var n,i,s,r,u;return{setters:[function(e){n=e.Ft,i=e.Ht,s=e.en,r=e.h,u=e.kt}],execute:function(){e("default",n({__name:"TrainingInsights",setup:e=>(e,t)=>(i(),u(s(r)))}))}}});

@@ -1,0 +1,1 @@
+import{At as e,It as t,Ut as n,h as r,tn as i}from"./index-ji0lcUbI.js";var a=t({__name:`TrainingInsights`,setup(t){return(t,a)=>(n(),e(i(r)))}});export{a as default};

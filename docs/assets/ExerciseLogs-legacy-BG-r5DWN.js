@@ -1,1 +1,0 @@
-System.register(["./index-legacy-L1A-1enC.js"],function(e,t){var n,r,s,u,c;return{setters:[function(e){n=e.Ft,r=e.Ht,s=e.en,u=e.kt,c=e.r}],execute:function(){e("default",n({__name:"ExerciseLogs",setup:e=>(e,t)=>(r(),u(s(c)))}))}}});

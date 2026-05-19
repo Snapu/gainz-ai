@@ -1,1 +1,0 @@
-import{Ft as e,Ht as t,en as n,h as r,kt as i}from"./index-zv9V1xtB.js";var a=e({__name:`TrainingInsights`,setup(e){return(e,a)=>(t(),i(n(r)))}});export{a as default};
