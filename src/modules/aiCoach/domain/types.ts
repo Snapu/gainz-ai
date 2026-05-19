@@ -1,9 +1,25 @@
 import { type Schema, Type } from "@google/genai";
+import type { Event } from "@/modules/events/domain";
+import type { UserProfile } from "@/modules/profile/domain";
+import type { TrainingInsights } from "@/modules/trainingInsights/domain";
+import type { ExerciseLog } from "@/modules/trainingLogs/domain";
+import type { TrainingSummary } from "@/modules/trainingSummary/domain";
 
 /**
  * AI Coach domain types and contracts.
  * Framework-agnostic request/response models for coaching orchestration.
  */
+
+export interface AskAiOptions {
+  apiKey: string | undefined;
+  userProfile: UserProfile;
+  insights: TrainingInsights;
+  exerciseLogs: ExerciseLog[];
+  trainingSummaries: TrainingSummary[];
+  previousMessages: PreviousAiMessage[];
+  events?: Event[];
+  question?: string;
+}
 
 export type PreviousAiMessage = {
   role: "user" | "assistant";

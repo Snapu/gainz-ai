@@ -121,27 +121,26 @@ describe("AI application service port", () => {
       value: { responseText: "{}", requestPayload: "payload" },
     });
 
-    await askCoach(
-      aiService,
-      mockApiKey,
-      mockUserProfile,
-      createMockInsights(),
-      mockExerciseLogs,
-      mockTrainingSummaries,
-      mockPreviousMessages,
+    await askCoach(aiService, {
+      apiKey: mockApiKey,
+      userProfile: mockUserProfile,
+      insights: createMockInsights(),
+      exerciseLogs: mockExerciseLogs,
+      trainingSummaries: mockTrainingSummaries,
+      previousMessages: mockPreviousMessages,
       events,
-    );
+    });
 
     expect(askMock).toHaveBeenCalledTimes(1);
-    expect(askMock).toHaveBeenCalledWith(
-      mockApiKey,
-      mockUserProfile,
-      expect.objectContaining({ phase: "Maintain" }),
-      mockExerciseLogs,
-      mockTrainingSummaries,
-      mockPreviousMessages,
+    expect(askMock).toHaveBeenCalledWith({
+      apiKey: mockApiKey,
+      userProfile: mockUserProfile,
+      insights: expect.objectContaining({ phase: "Maintain" }),
+      exerciseLogs: mockExerciseLogs,
+      trainingSummaries: mockTrainingSummaries,
+      previousMessages: mockPreviousMessages,
       events,
-    );
+    });
   });
 
   it("forwards classify calls", async () => {

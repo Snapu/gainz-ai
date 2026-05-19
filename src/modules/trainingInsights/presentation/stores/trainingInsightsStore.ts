@@ -11,7 +11,7 @@ import {
   summaryToExerciseLogs,
   type TrainingInsights,
 } from "@/modules/trainingInsights/application";
-import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
+import { type ExerciseLog, useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
 
 /**
  * Cached training insights store.
@@ -29,12 +29,12 @@ export const useTrainingInsightsStore = defineStore("trainingInsights", () => {
   const deloadStore = useDeloadStore();
 
   /** Historical + current logs combined — same window used by all insight calculations. */
-  const allLogs = computed(() => {
+  const allLogs = computed<ExerciseLog[]>(() => {
     const historical = summaryToExerciseLogs(summaryStore.summaries);
     return [...historical, ...logsStore.exerciseLogs];
   });
 
-  const insights = computed(() =>
+  const insights = computed<TrainingInsights>(() =>
     calculateInsights(
       allLogs.value,
       new Date(),

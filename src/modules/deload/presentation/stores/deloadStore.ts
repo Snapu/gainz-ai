@@ -8,7 +8,7 @@
 import { useDebounceFn } from "@vueuse/core";
 import { okAsync, ResultAsync } from "neverthrow";
 import { defineStore } from "pinia";
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { loadDeloadPhase, saveDeloadPhase } from "@/modules/deload/application";
 import {
   createDeloadPhase,
@@ -43,6 +43,15 @@ export const useDeloadStore = defineStore("deload", () => {
     return [{ start: new Date(phase.value.startedAt), end: new Date(phase.value.endsAt) }];
   });
 
+  // Automatically load deload phase when spreadsheet document is loaded/ready
+  watch(
+    () => getDoc(),
+    () => {
+      void load();
+    },
+    { immediate: true },
+  );
+
   const debouncedSave = useDebounceFn(async () => {
     const repository = createRepository();
     if (!repository) return;
@@ -70,6 +79,7 @@ export const useDeloadStore = defineStore("deload", () => {
   function load(): ResultAsync<void, never> {
     const doc = getDoc();
     if (!doc) {
+      phase.value = null;
       isLoading.value = false;
       return okAsync(undefined);
     }
@@ -87,7 +97,7 @@ export const useDeloadStore = defineStore("deload", () => {
         if (result.isErr() && result.error === "auth-failed") {
           handleAuthError("deload-phase-load");
         }
-        if (result.isOk() && result.value) {
+        if (result.isOk()) {
           phase.value = result.value;
         }
         return okAsync(undefined);

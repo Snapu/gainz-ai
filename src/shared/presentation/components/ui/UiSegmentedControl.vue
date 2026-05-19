@@ -4,18 +4,17 @@ type Option = {
   label: string;
 };
 
+const modelValue = defineModel<T>({ required: true });
+
 const props = withDefaults(
   defineProps<{
     options: readonly Option[];
-    modelValue: T;
     variant?: "primary" | "secondary";
   }>(),
   {
     variant: "primary",
   },
 );
-
-defineEmits<(e: "update:modelValue", value: T) => void>();
 </script>
 
 <template>
@@ -35,7 +34,7 @@ defineEmits<(e: "update:modelValue", value: T) => void>();
         : (modelValue === option.id
             ? 'bg-white/10 text-foreground shadow-sm border border-white/10'
             : 'text-muted-foreground hover:bg-white/10 hover:text-foreground border border-transparent')"
-      @click="$emit('update:modelValue', option.id)"
+      @click="modelValue = option.id"
     >
       {{ option.label }}
     </button>

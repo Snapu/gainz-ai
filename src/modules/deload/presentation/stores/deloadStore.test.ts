@@ -60,8 +60,14 @@ describe("useDeloadStore", () => {
   it("loads phase and maps auth errors through handler", async () => {
     const doc = { id: "doc" };
     const repository = { id: "repo" };
-    getDocMock.mockReturnValue(doc);
     createRepositoryMock.mockReturnValue(repository);
+
+    // Prevent automatic load during store creation by mocking getDoc to return null initially
+    getDocMock.mockReturnValue(null);
+    const store = useDeloadStore();
+
+    // Now set up getDoc and load mock for the manual load test
+    getDocMock.mockReturnValue(doc);
     loadDeloadPhaseMock.mockResolvedValueOnce(
       ok({
         startedAt: "2026-01-01T00:00:00.000Z",
@@ -71,7 +77,6 @@ describe("useDeloadStore", () => {
       }),
     );
 
-    const store = useDeloadStore();
     await store.load();
 
     expect(loadDeloadPhaseMock).toHaveBeenCalledWith(repository);

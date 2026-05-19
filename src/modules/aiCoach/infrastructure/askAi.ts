@@ -6,28 +6,31 @@ import { createExerciseMuscleMapRepository } from "@/modules/platform/infrastruc
 import type { UserProfile } from "@/modules/profile/domain";
 import { learnFromAiResponse, VALID_MUSCLE_GROUPS } from "@/modules/sharedKernel/application";
 import { localeDateString } from "@/modules/sharedKernel/domain";
-import {
-  summarizeTrainingInsights,
-  type TrainingInsights,
-} from "@/modules/trainingInsights/domain";
+import type { TrainingInsights } from "@/modules/trainingInsights/domain";
 import {
   getSessionStartBoundary,
   resolveCurrentSession,
-  type WorkoutPhase,
   type WorkoutSession,
 } from "@/modules/trainingLogs/application";
-import type { ExerciseLog } from "@/modules/trainingLogs/domain";
-import type { TrainingSummary } from "@/modules/trainingSummary/application";
 import {
   type AskAiError,
+  type AskAiOptions,
   type AskAiResult,
   createAiResponseSchema,
-  type PreviousAiMessage,
 } from "../domain/types";
+import {
+  buildCompactProfileContext,
+  buildCompactTrainingContext,
+  buildPriorPlanSummary,
+  compactLogs,
+  getDaysSinceLastWorkout,
+  getInitialLogsWindow,
+  getRecentExerciseNames,
+  getTrainingPattern,
+  getWorkoutPhase,
+  getWorkoutStatus,
+} from "./promptBuilder";
 
-const INITIAL_LOG_WINDOW_DAYS = 14;
-const EXTENDED_LOG_WINDOW_DAYS = 28;
-const MIN_INITIAL_LOG_ENTRIES = 12;
 const MAX_SUMMARIES_IN_PROMPT = 6;
 const aiConfig: GenerateContentConfig = {
   responseMimeType: "application/json",
@@ -38,6 +41,7 @@ const aiConfig: GenerateContentConfig = {
 You are an elite AI personal trainer providing data-driven feedback and workout planning.
 
 1. CORE RESPONSIBILITIES:
+- If a 'User Question' is provided, answer it directly and concisely in the 'coachMessage'. Maintain the required JSON structure even if no workout changes are needed. You MUST preserve the existing workout plan (exercise selection, targetSets, targetReps, targetWeight, restSeconds, primaryMuscle, supersetId) exactly as provided in the prior plan ('Prior Recommended Workout JSON'), UNLESS the user's question explicitly requests a change, swap, or reduction. During a Q&A question response, ALL volume calculations, progressive overload protocols, weight calculation rules, rest period rules, MRV caps, above_MRV reductions, recoveryReady=false restrictions, ACWR adjustments, and fatigue adjustments are completely suspended and bypassed. You must copy the exerciseName, targetSets, targetReps, targetWeight, restSeconds, primaryMuscle, and supersetId exactly from the prior plan without any modification, recalculation, or adjustment, unless the question asks to modify them. Do NOT arbitrarily recalculate or modify other parts of the plan.
 - Analyze recent training, long-term progress, and detect the user's current split/phase.
 - Warn the user of overtraining, undertraining, or neglected muscle groups.
 - Generate a highly personalized workout plan for today based on goals, fitness level, available equipment, and time constraints.
@@ -59,9 +63,9 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
   - MAV = Maximum Adaptive Volume (optimal growth zone — 10-18 sets/week)
   - MRV = Maximum Recoverable Volume (too much — risk of overtraining)
   - Note: 'sets' reflects a rolling 7-day window, NOT the current calendar week. Early in the week, the count includes sessions from the previous 7 days — interpret landmarks accordingly and do not assume this week's work alone caused a high set count.
-  - BINDING: If any muscle shows landmark 'above_MRV', reduce its programmed sets to mavHigh equivalent this session, even if shouldDeload is false.
-  - BINDING: If any muscle shows landmark 'approaching_MRV', cap new primary sets for that muscle to ≤2 this session to prevent crossing into overtraining.
-  - BINDING: Never prescribe primary sets for a muscle where recoveryReady=false, unless no other muscle group needs work — in that case halve the set count and note the early re-stimulation in scratchpad.
+  - BINDING (BYPASSED DURING Q&A): If any muscle shows landmark 'above_MRV', reduce its programmed sets to mavHigh equivalent this session, even if shouldDeload is false. (Bypass this rule completely when a 'User Question' is provided).
+  - BINDING (BYPASSED DURING Q&A): If any muscle shows landmark 'approaching_MRV', cap new primary sets for that muscle to ≤2 this session to prevent crossing into overtraining. (Bypass this rule completely when a 'User Question' is provided).
+  - BINDING (BYPASSED DURING Q&A): Never prescribe primary sets for a muscle where recoveryReady=false, unless no other muscle group needs work — in that case halve the set count and note the early re-stimulation in scratchpad. (Bypass this rule completely when a 'User Question' is provided).
 - 'e1rm': Estimated 1-Rep Max per exercise with a 4-session trend and plateau detection. Use this to set precise targetWeight values.
   - The optional 'bestRPE' field is the effort rating (1–10) of the set that produced the e1RM estimate. If 'bestRPE' ≤ 7, the athlete still had reps in reserve and the estimate is conservative — increase the e1RM by 5% before applying the weight formula (e.g. reported e1RM 100kg + 5% = 105kg baseline).
   - If 'e1rm' = 0 for any exercise, treat it as no history — use the 60–70% same-group compound e1RM fallback. Never prescribe 0kg. Flag in scratchpad that e1RM is unavailable.
@@ -84,7 +88,7 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
   - 'fatigue.hasSufficientHistory': False means there are not enough weekly windows yet; treat trigger metrics as low-confidence and avoid aggressive deload decisions.
   - A 50%+ tonnage spike vs prior 3-week average is a red flag even when set count is stable (matches model threshold).
 - 'acwr': Acute:Chronic Workload Ratio (7-day tonnage ÷ avg weekly 28-day tonnage). Safe zone: 0.8–1.3. If > 1.3, reduce today’s volume by 15–20%. If > 1.5, strongly recommend rest or deload. If < 0.8, the athlete is undertraining — increase today's volume by 15–20% to rebuild the training stimulus. If null, insufficient history — proceed conservatively.
-- Exercise selection hierarchy (BINDING): First keep session coherence (inferred split/day intent), then apply recovery gates and equipment limits, then use MEV/MAV/MRV + ACWR to adjust set dose. Do NOT pick exercises only because a muscle is below_MEV.
+- Exercise selection hierarchy (BINDING - BYPASSED DURING Q&A): First keep session coherence (inferred split/day intent), then apply recovery gates and equipment limits, then use MEV/MAV/MRV + ACWR to adjust set dose. Do NOT pick exercises only because a muscle is below_MEV. (Bypass this rule completely when a 'User Question' is provided).
 - 'scratchpad' usage depends on phase:
   PLANNING / POST-WORKOUT: scratchpad MUST follow this structure BEFORE writing coachMessage:
     0. DATA VALIDATION: Sanity-check incoming metrics. Flag suspicious values (e.g. impossible e1RM, acwr < 0.3 or > 2.2, riskScore clearly inconsistent with triggers). State a fallback assumption for any suspicious value.
@@ -97,10 +101,11 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
 
 3. STRICT OUTPUT & TONAL RULES:
 - The user CANNOT reply. Do not ask questions or prompt for responses (e.g. never say "Let me know how it goes!").
-- Mobile-first brevity: Keep 'coachMessage' strictly to 2-3 short, punchy paragraphs. Avoid filler small talk.
-- Tone: Always use informal language (e.g. 'du' in German, 'tu' in French) matching the user's locale. Be constructive and critical when necessary.
+- Mobile-first brevity: Keep 'coachMessage' strictly to 2-3 short, punchy paragraphs. Avoid filler small talk. Briefly explain the rationale behind your exercise selections (e.g. why a specific compound was chosen, why an exercise was swapped due to a plateau, or why a posture opener was added), linking it directly to the user's explicit goals.
+- HIGH-PRIORITY USER CONSTRAINTS (MANDATORY): The user's explicit goals and constraints listed under 'User's Explicit Goals & Constraints' (such as time limits, chest specialization via Incline Press priority, posture opening via horizontal rows/face pulls, or low leg volume) are strict, non-negotiable architectural mandates. You MUST explicitly adhere to them when designing/modifying any workout plan, and your 'coachMessage' must reflect these adjustments with professional coaching authority.
+- Tone: Always use informal language (e.g. 'du' in German, 'tu' in French) matching the user's locale. Be constructive and critical when necessary. Be elite-coach-like: encouraging, direct, and authoritative yet friendly.
 - Confusing Jargon: Never use 'RPE' without explaining it. Speak in plain language (e.g. 'leave 2 reps in tank').
-- Auto-Regulation (RPE): If the user provides an RPE (e.g., @RPE8) for a set, use this to gauge proximity to failure. If RPE is low (<8) on a hypertrophy set, you MUST push the targetWeight or targetReps higher. Provide a 'targetRpe' (e.g. 8.5) for each exercise based on the goal: strength (8.5-9.5), hypertrophy (7.5-9.0), endurance (7.0-8.0). If in deload, drop targetRpe by 2-3 points (e.g. 6.5).
+- Auto-Regulation (RPE): If the user provides an RPE (e.g., @RPE8) for a set, use this to gauge proximity to failure. If RPE is low (<8) on a hypertrophy set, you MUST push the targetWeight or targetReps higher. Provide a 'targetRpe' (e.g. 8.5) for each exercise based on the goal: strength (8.5-9.5), hypertrophy (7.5-9.0), endurance (7.0-8.0). If in deload, drop targetRpe by 2-3 points (e.g. 6.0).
 - Weight Calculation (MANDATORY): Use e1RM data to set targetWeight according to rep range:
   Rep range 1–5   → 85–95% of e1RM (strength)
   Rep range 6–12  → 65–80% of e1RM (hypertrophy)
@@ -110,7 +115,7 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
   All logged weights are total load (e.g., for dumbbell exercises: combined weight of both dumbbells, not per-hand). When prescribing dumbbell exercises, targetWeight must also be total weight (both dumbbells combined). You may clarify per-hand weight in the 'notes' field (e.g., '35 kg per hand'). If user mentions a dumbbell limit like "45kg" without explicitly saying "per hand", interpret it as TOTAL combined load to match logging conventions.
   Always round to the nearest 2.5kg increment. Always give a single concrete number (e.g. "82.5kg"), never a range.
   If e1RM is unavailable for a newly introduced exercise (no history), estimate starting weight as 60–70% of the primary compound e1RM for the same muscle group, rounded to 2.5kg. Flag in scratchpad that this is an estimated first-session weight.
-  For 'increase_mobility' goal or any stretching/mobility movement (e.g. hip flexor stretch, dead hang, cat-cow): set targetWeight = 'bodyweight' and restSeconds = 30–60. Do not apply e1RM percentage rules to stretches or static holds.
+  For 'increase_mobility' goal or any stretching/mobility movement (e.g. hip flexor stretch, dead hang, cat-cow): set targetWeight = 'Bodyweight' and restSeconds = 30–60. Do not apply e1RM percentage rules to stretches or static holds.
   For bodyweight exercises (Pull-Ups, Chin-Ups, Dips): the user's bodyweightKg is provided in their profile. Calculate added weight = (e1RM × target%) − bodyweightKg. If the result is ≤ 0, prescribe 'Bodyweight'. Otherwise round to nearest 2.5kg and prescribe as added weight (e.g. '+10kg').
 - Progressive Overload Protocol (MANDATORY): Follow double-progression.
   Step 1 — if the user hit the TOP of the rep range on ALL sets in the previous session, increase targetWeight by the increment below and reset targetReps to the BOTTOM of the range:
@@ -158,261 +163,12 @@ You may receive:
 - Current date and phase
 
 Here are examples:
+<examples>
 EXAMPLE 1 (Volume): {"scratchpad": "Chest 6 below_MEV needs 8+. Bench plateau 85kg. 85*75%=63.75 round 65kg.", "coachMessage": "Bench stalled, Chest 2 sets short. Adding 4-set block with Flyes gets to 8 sets.", "recommendedWorkout": [{"exerciseName": "Bench Press", "targetSets": 4, "targetReps": "8-12", "targetWeight": "65kg", "restSeconds": 120, "primaryMuscle": "Chest", "supersetId": "A"}, {"exerciseName": "Incline Flyes", "targetSets": 4, "targetReps": "12-15", "targetWeight": "15kg", "restSeconds": 120, "primaryMuscle": "Chest", "supersetId": "A"}]}
 EXAMPLE 2 (Deload): {"scratchpad": "Deload triggered. 75%-12pp=63%. Bench 120*65%=78 round 77.5.", "coachMessage": "Four weeks climbing volume. Drop weight ~15%, cut to 2 sets. Come back stronger.", "recommendedWorkout": [{"exerciseName": "Bench Press", "targetSets": 2, "targetReps": "10-12", "targetWeight": "77.5kg", "restSeconds": 120}, {"exerciseName": "Barbell Row", "targetSets": 2, "targetReps": "10-12", "targetWeight": "65kg", "restSeconds": 120}]}
+</examples>
 `,
 };
-function getWorkoutStatus(session: WorkoutSession | null): string {
-  return session ? "I already started my workout today." : "I haven't worked out today yet.";
-}
-
-function getWorkoutPhase(session: WorkoutSession | null): WorkoutPhase {
-  return session?.phase ?? "planning";
-}
-
-function getDaysSinceLastWorkout(
-  exerciseLogs: ExerciseLog[],
-  session: WorkoutSession | null,
-): number | null {
-  const sessionBoundary = getSessionStartBoundary(session);
-  const pastLogs = exerciseLogs.filter((log) => log.loggedAt.getTime() < sessionBoundary);
-  if (pastLogs.length === 0) return null;
-  const lastLogTime = pastLogs.reduce((max, l) => Math.max(max, l.loggedAt.getTime()), 0);
-  const lastLogDate = new Date(lastLogTime);
-  const diffMs = sessionBoundary - lastLogDate.setHours(0, 0, 0, 0);
-  return Math.round(diffMs / 86400000);
-}
-
-function getTrainingPattern(exerciseLogs: ExerciseLog[]): string | null {
-  const fourWeeksAgo = new Date();
-  fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
-  const recentLogs = exerciseLogs.filter((l) => l.loggedAt.getTime() >= fourWeeksAgo.getTime());
-  if (recentLogs.length === 0) return null;
-
-  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const dayCounts = new Map<number, number>();
-  const seenDates = new Set<string>();
-  for (const log of recentLogs) {
-    const dateKey = log.loggedAt.toDateString();
-    if (seenDates.has(dateKey)) continue;
-    seenDates.add(dateKey);
-    const day = log.loggedAt.getDay();
-    dayCounts.set(day, (dayCounts.get(day) ?? 0) + 1);
-  }
-
-  const activeDays = [...dayCounts.entries()]
-    .filter(([, count]) => count >= 2)
-    .sort(([a], [b]) => a - b)
-    .map(([day]) => dayNames[day]);
-
-  return activeDays.length > 0 ? `Usual training days: ${activeDays.join(", ")}` : null;
-}
-
-function compactLogs(logs: ExerciseLog[]): string {
-  if (logs.length === 0) return "(none)";
-  const byDate = new Map<string, ExerciseLog[]>();
-  for (const log of logs) {
-    const dateKey = localeDateString(log.loggedAt);
-    const existing = byDate.get(dateKey) ?? [];
-    existing.push(log);
-    byDate.set(dateKey, existing);
-  }
-
-  const lines: string[] = [];
-  for (const [date, dayLogs] of byDate) {
-    const byExercise = new Map<string, ExerciseLog[]>();
-    for (const log of dayLogs) {
-      const existing = byExercise.get(log.exerciseName) ?? [];
-      existing.push(log);
-      byExercise.set(log.exerciseName, existing);
-    }
-
-    const parts: string[] = [];
-    for (const [name, sets] of byExercise) {
-      const reps = sets.map((s) => s.reps).filter((v): v is number => typeof v === "number");
-      const weights = sets.map((s) => s.weight).filter((v): v is number => typeof v === "number");
-      const rpes = sets.map((s) => s.rpe).filter((v): v is number => typeof v === "number");
-      const durations = sets
-        .map((s) => s.duration)
-        .filter((v): v is number => typeof v === "number");
-      const distances = sets
-        .map((s) => s.distance)
-        .filter((v): v is number => typeof v === "number");
-
-      const summaryParts = [`${sets.length} sets`];
-      if (reps.length > 0) {
-        const minReps = Math.min(...reps);
-        const maxReps = Math.max(...reps);
-        summaryParts.push(minReps === maxReps ? `${maxReps} reps` : `reps: ${reps.join(",")}`);
-      }
-      if (weights.length > 0) {
-        const minWeight = Math.min(...weights);
-        const maxWeight = Math.max(...weights);
-        summaryParts.push(
-          minWeight === maxWeight ? `${maxWeight}kg` : `${minWeight}-${maxWeight}kg`,
-        );
-      }
-      if (distances.length > 0) {
-        const totalDistance = Math.round(distances.reduce((acc, v) => acc + v, 0));
-        summaryParts.push(`${totalDistance}m total`);
-      }
-      if (durations.length > 0) {
-        const totalMinutes = Math.round(durations.reduce((acc, v) => acc + v, 0));
-        summaryParts.push(`${totalMinutes}min total`);
-      }
-      if (rpes.length > 0) {
-        const allSame = rpes.every((r) => r === rpes[0]);
-        summaryParts.push(allSame ? `@RPE${rpes[0]}` : `RPE: ${rpes.join(",")}`);
-      }
-
-      parts.push(`${name}: ${summaryParts.join(", ")}`);
-    }
-    lines.push(`${date}: ${parts.join(" | ")}`);
-  }
-  return lines.join("\n");
-}
-
-function getRecentLogs(exerciseLogs: ExerciseLog[], days: number): ExerciseLog[] {
-  const since = new Date();
-  since.setDate(since.getDate() - days);
-  return exerciseLogs.filter((log) => log.loggedAt.getTime() >= since.getTime());
-}
-
-function getInitialLogsWindow(exerciseLogs: ExerciseLog[]): { logs: ExerciseLog[]; label: string } {
-  const last2WeeksLogs = getRecentLogs(exerciseLogs, INITIAL_LOG_WINDOW_DAYS);
-  if (last2WeeksLogs.length >= MIN_INITIAL_LOG_ENTRIES) {
-    return {
-      logs: last2WeeksLogs,
-      label: `Recent logs (last ${INITIAL_LOG_WINDOW_DAYS / 7} weeks)`,
-    };
-  }
-
-  return {
-    logs: getRecentLogs(exerciseLogs, EXTENDED_LOG_WINDOW_DAYS),
-    label: `Recent logs (last ${EXTENDED_LOG_WINDOW_DAYS / 7} weeks)`,
-  };
-}
-
-function buildPriorPlanSummary(
-  previousMessages: PreviousAiMessage[],
-  todayLogs: ExerciseLog[],
-): string | null {
-  const assistantMsgs = previousMessages.filter((m) => m.role === "assistant");
-
-  let parsedPlan: Record<string, unknown> | null = null;
-  for (let i = assistantMsgs.length - 1; i >= 0; i--) {
-    const msg = assistantMsgs[i];
-    const parsed = Result.fromThrowable(
-      () => JSON.parse(msg.content),
-      () => null,
-    )().unwrapOr(null);
-
-    if (
-      parsed &&
-      Array.isArray(parsed.recommendedWorkout) &&
-      parsed.recommendedWorkout.length > 0
-    ) {
-      parsedPlan = parsed;
-      break;
-    }
-  }
-
-  if (!parsedPlan) return null;
-
-  if (!Array.isArray(parsedPlan.recommendedWorkout) || parsedPlan.recommendedWorkout.length === 0) {
-    return null;
-  }
-
-  const todayExercises = new Map<string, number>();
-  for (const log of todayLogs) {
-    todayExercises.set(log.exerciseName, (todayExercises.get(log.exerciseName) ?? 0) + 1);
-  }
-
-  const lines = parsedPlan.recommendedWorkout.map(
-    (ex: {
-      exerciseName: string;
-      targetSets: number;
-      targetWeight?: string;
-      targetReps?: string;
-      restSeconds?: number;
-    }) => {
-      const done = todayExercises.get(ex.exerciseName) ?? 0;
-      const target = ex.targetSets ?? 0;
-      let status: string;
-      if (target > 0 && done >= target) {
-        status = "✓ done";
-      } else if (done > 0) {
-        status = `${done}/${target} sets`;
-      } else if (target > 0) {
-        status = `0/${target} sets pending`;
-      } else {
-        status = "pending";
-      }
-
-      const parts = [status];
-      if (ex.targetReps) parts.push(`${ex.targetReps} reps`);
-      if (ex.targetWeight) parts.push(`@${ex.targetWeight}`);
-      if (ex.restSeconds) parts.push(`${ex.restSeconds}s rest`);
-
-      return `${ex.exerciseName}: ${parts.join(", ")}`;
-    },
-  );
-
-  return `Current progress against last plan:\n${lines.join("\n")}`;
-}
-
-function buildCompactProfileContext(userProfile: UserProfile): Record<string, unknown> {
-  return {
-    age: userProfile.age ?? null,
-    heightCm: userProfile.heightCm ?? null,
-    weightKg: userProfile.weightKg ?? null,
-    fitnessGoal: userProfile.fitnessGoal ?? [],
-    fitnessLevel: userProfile.fitnessLevel ?? null,
-    workoutDaysPerWeek: userProfile.workoutDaysPerWeek ?? null,
-    workoutLocation: userProfile.workoutLocation ?? null,
-    equipmentAccess: userProfile.equipmentAccess ?? [],
-  };
-}
-
-function buildCompactTrainingContext(insights: TrainingInsights): Record<string, unknown> {
-  const summary = summarizeTrainingInsights(insights);
-  const exerciseTrends = Object.fromEntries(
-    Object.entries(insights.e1rm).map(([name, data]) => [
-      name,
-      {
-        e1rm: data.e1rm,
-        plateau: data.plateau,
-        bestRPE: data.bestRPE ?? null,
-        recentTrend: data.trend.slice(-3),
-      },
-    ]),
-  );
-
-  return {
-    summary,
-    phase: insights.phase,
-    acwr: insights.acwr,
-    deloadStatus: insights.deloadStatus,
-    deloadEndsAt: insights.deloadEndsAt,
-    deloadTimeRemainingMs: insights.deloadTimeRemainingMs,
-    e1rmPaused: insights.e1rmPaused,
-    plateauPaused: insights.plateauPaused,
-    fatigue: {
-      shouldDeload: insights.fatigue.shouldDeload,
-      reason: insights.fatigue.reason ?? null,
-      riskScore: insights.fatigue.riskScore,
-      hasSufficientHistory: insights.fatigue.hasSufficientHistory,
-      decliningExercises: insights.fatigue.decliningExercises,
-      weeklyTotalSets: insights.fatigue.weeklyTotalSets,
-      weeklyTonnage: insights.fatigue.weeklyTonnage,
-      loadWindow: insights.fatigue.loadWindow,
-      triggeredBy: insights.fatigue.triggeredBy,
-    },
-    deloadTriggerSnapshot: insights.deloadTriggerSnapshot,
-    exerciseTrends,
-  };
-}
-
 function isServiceUnavailableError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const e = error as Record<string, unknown>;
@@ -432,15 +188,18 @@ export function getTodayLogsCount(session: WorkoutSession | null): number {
   return session?.logs.length ?? 0;
 }
 
-export function askAi(
-  apiKey: string | undefined,
-  userProfile: UserProfile,
-  insights: TrainingInsights,
-  exerciseLogs: ExerciseLog[],
-  trainingSummaries: TrainingSummary[],
-  previousMessages: PreviousAiMessage[],
-  events: Event[] = [],
-): ResultAsync<AskAiResult, AskAiError> {
+export function askAi(options: AskAiOptions): ResultAsync<AskAiResult, AskAiError> {
+  const {
+    apiKey,
+    userProfile,
+    insights,
+    exerciseLogs,
+    trainingSummaries,
+    previousMessages,
+    events = [],
+    question,
+  } = options;
+
   if (!apiKey) return errAsync("missing-api-key");
 
   return ResultAsync.fromPromise(
@@ -459,52 +218,89 @@ export function askAi(
         const isMidWorkout = phase === "mid-workout";
         const aiTimeoutMs = isFirstMessage || phase === "planning" ? 140_000 : 90_000;
 
+        const recentExerciseNames = getRecentExerciseNames(exerciseLogs, previousMessages, 90);
         const initialWindow = getInitialLogsWindow(exerciseLogs);
         const workoutStatus = getWorkoutStatus(session);
         const now = new Date();
         const currentTime = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
 
-        const sections: string[] = [
-          `Today is ${today} ${currentTime}, ${workoutStatus}\nPhase: ${phase}`,
+        const metadataLines = [
+          `- **Date & Time:** ${today} ${currentTime}`,
+          `- **Workout Status:** ${workoutStatus}`,
+          `- **Current Phase:** ${phase}`,
         ];
-
-        if (isFirstMessage) {
-          sections.push(`Profile:\n${JSON.stringify(buildCompactProfileContext(userProfile))}`);
-          if (userProfile.freeUserInput) {
-            sections.push(`User's own words about their goals:\n"${userProfile.freeUserInput}"`);
-          }
-        }
 
         const restDays = getDaysSinceLastWorkout(exerciseLogs, session);
         if (restDays !== null) {
-          sections.push(`Days since last workout: ${restDays}`);
+          metadataLines.push(`- **Days since last workout:** ${restDays}`);
         }
 
         if (isFirstMessage) {
           const pattern = getTrainingPattern(exerciseLogs);
-          if (pattern) sections.push(pattern);
+          if (pattern) {
+            metadataLines.push(`- **Usual Training Days:** ${pattern}`);
+          }
         }
 
-        if (isFirstMessage && trainingSummaries.length > 0) {
-          const summariesForPrompt = trainingSummaries.slice(-MAX_SUMMARIES_IN_PROMPT);
-          sections.push(`Historical training summary:\n${JSON.stringify(summariesForPrompt)}`);
+        const sections: string[] = [`## Session Metadata\n${metadataLines.join("\n")}`];
+
+        if (question) {
+          sections.push(`## User Question\n> ${question}`);
+        }
+
+        if (isFirstMessage || question) {
+          sections.push(
+            `## Profile\n\`\`\`json\n${JSON.stringify(buildCompactProfileContext(userProfile))}\n\`\`\``,
+          );
+          const freeInputClean = userProfile.freeUserInput?.trim();
+          if (freeInputClean) {
+            sections.push(
+              `## User's Explicit Goals & Constraints\n> ${freeInputClean.split("\n").join("\n> ")}`,
+            );
+          }
+        }
+
+        if ((isFirstMessage || question) && trainingSummaries.length > 0) {
+          const summariesForPrompt = trainingSummaries.slice(-MAX_SUMMARIES_IN_PROMPT).map((s) => {
+            const clean: Record<string, unknown> = {};
+            for (const [k, v] of Object.entries(s)) {
+              const isZero =
+                v === 0 ||
+                v === 0.0 ||
+                (typeof v === "string" &&
+                  (v.trim() === "0" || v.trim() === "0.00" || v.trim() === "0.0"));
+              if (!isZero && v !== null && v !== undefined && v !== "") {
+                clean[k] = v;
+              }
+            }
+            return clean;
+          });
+          sections.push(
+            `## Historical Training Summary\n\`\`\`json\n${JSON.stringify(summariesForPrompt)}\n\`\`\``,
+          );
         }
 
         if (todayLogs.length > 0) {
-          sections.push(`Today's session so far:\n${compactLogs(todayLogs)}`);
+          sections.push(`## Today's Session So Far\n\`\`\`\n${compactLogs(todayLogs)}\n\`\`\``);
         }
 
-        if (isMidWorkout && previousMessages.length > 0) {
-          const assistantMsgs = previousMessages.filter((m) => m.role === "assistant");
-          const lastAssistant = assistantMsgs[assistantMsgs.length - 1];
-          const cutoff = lastAssistant?.timestamp ? new Date(lastAssistant.timestamp).getTime() : 0;
-          const newLogs = todayLogs.filter((l) => l.loggedAt.getTime() > cutoff);
-          if (newLogs.length > 0) {
-            sections.push(`New since last update:\n${compactLogs(newLogs)}`);
+        if (previousMessages.length > 0) {
+          if (isMidWorkout) {
+            const assistantMsgs = previousMessages.filter((m) => m.role === "assistant");
+            const lastAssistant = assistantMsgs[assistantMsgs.length - 1];
+            const cutoff = lastAssistant?.timestamp
+              ? new Date(lastAssistant.timestamp).getTime()
+              : 0;
+            const newLogs = todayLogs.filter((l) => l.loggedAt.getTime() > cutoff);
+            if (newLogs.length > 0) {
+              sections.push(`## New Since Last Update\n\`\`\`\n${compactLogs(newLogs)}\n\`\`\``);
+            }
           }
 
           const planSummary = buildPriorPlanSummary(previousMessages, todayLogs);
-          if (planSummary) sections.push(planSummary);
+          if (planSummary) {
+            sections.push(`## Prior Workout Plan & Progress\n${planSummary}`);
+          }
         }
 
         if (isFirstMessage) {
@@ -513,16 +309,19 @@ export function askAi(
             (l) => l.loggedAt.getTime() < sessionBoundary,
           );
           if (historicalLogs.length > 0) {
-            sections.push(`${initialWindow.label}:\n${compactLogs(historicalLogs)}`);
+            sections.push(
+              `## ${initialWindow.label}\n\`\`\`\n${compactLogs(historicalLogs)}\n\`\`\``,
+            );
           }
         }
 
-        if (phase === "planning" || isFirstMessage) {
+        if (phase === "planning" || isFirstMessage || question) {
           sections.push(
-            `Training Context:\n${JSON.stringify(buildCompactTrainingContext(insights))}`,
+            `## Training Context\n\`\`\`json\n${JSON.stringify(buildCompactTrainingContext(insights, recentExerciseNames))}\n\`\`\``,
           );
         } else {
           const e1rmCompact = Object.entries(insights.e1rm)
+            .filter(([name]) => recentExerciseNames.has(name))
             .map(([name, d]) => {
               let s = `${name}: ${d.e1rm}kg`;
               if (d.plateau) s += " (plateau)";
@@ -530,17 +329,21 @@ export function askAi(
               return s;
             })
             .join(", ");
-          if (e1rmCompact) sections.push(`e1RM: ${e1rmCompact}`);
+          if (e1rmCompact) {
+            sections.push(`## e1RM List\n- ${e1rmCompact}`);
+          }
         }
 
         if (events.length > 0) {
           const eventsText = events
-            .map((event) => `- ${event.type}: ${event.dates.join(", ")}`)
+            .map((event) => `- **${event.type}:** ${event.dates.join(", ")}`)
             .join("\n");
-          sections.push(`Health/schedule events:\n${eventsText}`);
+          sections.push(`## Health/Schedule Events\n${eventsText}`);
         }
 
-        sections.push(`Units: kg, minutes, meters\nLanguage: "${navigator.language}"`);
+        sections.push(
+          `## Target Preferences\n- **Weight Unit:** kg\n- **Duration Unit:** minutes\n- **Distance Unit:** meters\n- **Target Language/Locale:** "${navigator.language}"`,
+        );
 
         const currentUserInput = sections.join("\n\n");
 

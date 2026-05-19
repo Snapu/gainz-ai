@@ -146,6 +146,28 @@ describe("useAiStore initialization", () => {
     expect(captureExceptionMock).toHaveBeenCalled();
   });
 
+  it("passes question to askCoachWithSingleRetry", async () => {
+    vi.mocked(useUserProfileStore).mockReturnValue({
+      apiKey: "test-key",
+      userProfile: {},
+    } as never);
+
+    const mockResult = { responseText: "{}", requestPayload: "AI request" };
+    vi.mocked(askCoachWithSingleRetry).mockResolvedValueOnce(ok(mockResult) as never);
+
+    const store = useAiStore();
+    const question = "Why deload?";
+    await store.askAi(question);
+
+    expect(askCoachWithSingleRetry).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        apiKey: "test-key",
+        question,
+      }),
+    );
+  });
+
   it("exposes setup store refs for devtools compatibility", () => {
     const store = useAiStore();
 

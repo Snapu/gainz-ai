@@ -45,10 +45,12 @@ const exerciseCleanupSchema: Schema = {
 };
 
 function isServiceUnavailableError(error: unknown): boolean {
-  if (typeof error !== "object" || error === null) return false;
-  if (!("status" in error)) return false;
-  const status = (error as { status?: unknown }).status;
-  return status === 503 || status === "UNAVAILABLE";
+  if (!error || typeof error !== "object") return false;
+  const e = error as Record<string, unknown>;
+  if ((e.error as Record<string, unknown> | undefined)?.code === 503) return true;
+  if (e.status === 503 || e.status === "UNAVAILABLE") return true;
+  if (typeof e.message === "string" && /high demand|503|unavailable/i.test(e.message)) return true;
+  return false;
 }
 
 /**

@@ -114,7 +114,7 @@ export const useSpreadsheetStore = defineStore("spreadsheet", () => {
     void init(accessToken);
   });
 
-  const spreadsheetUrl = computed(() => {
+  const spreadsheetUrl = computed<string | null>(() => {
     if (!doc.value?.spreadsheetId) return null;
     return `https://docs.google.com/spreadsheets/d/${doc.value.spreadsheetId}/edit`;
   });

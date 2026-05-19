@@ -36,7 +36,7 @@ export const useUserProfileStore = defineStore("userProfile", () => {
   const { createRepository, getDoc } = useSpreadsheetRepositoryFactory(createUserProfileRepository);
   const { handleAuthError } = useAuthErrorHandler();
 
-  const setupCompleted = computed(() => hasCompletedSetup.value);
+  const setupCompleted = computed<boolean>(() => hasCompletedSetup.value);
 
   function profileHasData(profile: UserProfile): boolean {
     return !!(

@@ -82,7 +82,7 @@ export const useAiStore = defineStore("ai", () => {
   const trainingInsightsStore = useTrainingInsightsStore();
   const aiCoachService = createAiCoachService();
 
-  const todaySessionDate = computed(
+  const todaySessionDate = computed<string>(
     () =>
       resolveCurrentSession(exerciseLogsStore.exerciseLogs)?.sessionDate ??
       localeDateString(new Date()),
@@ -122,7 +122,7 @@ export const useAiStore = defineStore("ai", () => {
     }
   }
 
-  function askAi(): ResultAsync<void, AskAiError> {
+  function askAi(question?: string): ResultAsync<void, AskAiError> {
     ensureInitialized();
 
     if (isLoading.value) {
@@ -130,10 +130,10 @@ export const useAiStore = defineStore("ai", () => {
       return okAsync(undefined);
     }
 
-    return runAskAi();
+    return runAskAi(question);
   }
 
-  function runAskAi(): ResultAsync<void, AskAiError> {
+  function runAskAi(question?: string): ResultAsync<void, AskAiError> {
     const apiKey = userProfileStore.apiKey;
     if (!apiKey) {
       return errAsync("missing-api-key");
@@ -149,7 +149,11 @@ export const useAiStore = defineStore("ai", () => {
         const todayLogsCount = getTodayLogsCount(aiCoachService, currentSession);
         const todayLogsChecksum = getTodayLogsChecksum(currentSession);
 
-        if (lastRequestLogsChecksum.value === todayLogsChecksum && messages.value.length > 0) {
+        if (
+          !question &&
+          lastRequestLogsChecksum.value === todayLogsChecksum &&
+          messages.value.length > 0
+        ) {
           return;
         }
 
@@ -161,20 +165,23 @@ export const useAiStore = defineStore("ai", () => {
           const previousMessages: PreviousAiMessage[] = toPreviousAiMessages(messages.value);
 
           const userMessage = createAiUserPlaceholder(today, todayLogsCount, todayLogsChecksum);
+          if (question) {
+            userMessage.content = question;
+          }
           userMessageId = userMessage.id;
           messages.value.push(userMessage);
           persistMessages(today);
 
-          const result = await askCoachWithSingleRetry(
-            aiCoachService,
+          const result = await askCoachWithSingleRetry(aiCoachService, {
             apiKey,
-            userProfileStore.userProfile,
-            trainingInsightsStore.insights,
-            exerciseLogsStore.exerciseLogs,
-            trainingSummaryStore.summaries,
+            userProfile: userProfileStore.userProfile,
+            insights: trainingInsightsStore.insights,
+            exerciseLogs: exerciseLogsStore.exerciseLogs,
+            trainingSummaries: trainingSummaryStore.summaries,
             previousMessages,
-            eventsStore.events,
-          );
+            events: eventsStore.events,
+            question,
+          });
 
           if (result.isErr()) {
             throw result.error;
@@ -264,18 +271,21 @@ export const useAiStore = defineStore("ai", () => {
         return okAsync(undefined);
       });
   }
-  const currentWorkoutPlan = computed(() => {
-    const lastAssistantMsg = [...messages.value].reverse().find((m) => m.role === "assistant");
-    if (!lastAssistantMsg) return null;
-    try {
-      const parsed = JSON.parse(lastAssistantMsg.content);
-      return (
-        (parsed.recommendedWorkout as Array<{ exerciseName: string; restSeconds?: number }>) || null
-      );
-    } catch {
-      return null;
-    }
-  });
+  const currentWorkoutPlan = computed<Array<{ exerciseName: string; restSeconds?: number }> | null>(
+    () => {
+      const lastAssistantMsg = [...messages.value].reverse().find((m) => m.role === "assistant");
+      if (!lastAssistantMsg) return null;
+      try {
+        const parsed = JSON.parse(lastAssistantMsg.content);
+        return (
+          (parsed.recommendedWorkout as Array<{ exerciseName: string; restSeconds?: number }>) ||
+          null
+        );
+      } catch {
+        return null;
+      }
+    },
+  );
 
   function clearMessages() {
     ensureInitialized();

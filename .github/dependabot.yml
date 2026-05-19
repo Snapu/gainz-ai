@@ -9,3 +9,12 @@ updates:
     directory: "/" # Location of package manifests
     schedule:
       interval: "weekly"
+    # Protect against supply chain attacks by requiring a minimum release age (cooldown period).
+    # This delays version updates until they have been tested and verified in the ecosystem,
+    # while critical security updates automatically bypass these cooldowns.
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 3
+

@@ -21,13 +21,16 @@ describe("aiCoach application use-cases", () => {
 
     const runPromise = askCoachWithSingleRetry(
       makeService(ask),
-      "api-key",
-      {} as never,
-      {} as never,
-      [],
-      [],
-      [],
-      [],
+      {
+        apiKey: "api-key",
+        userProfile: {} as never,
+        insights: {} as never,
+        exerciseLogs: [],
+        trainingSummaries: [],
+        previousMessages: [],
+        events: [],
+        question: undefined,
+      },
       10,
     );
 
@@ -43,15 +46,14 @@ describe("aiCoach application use-cases", () => {
   it("does not retry missing-api-key failures", async () => {
     const ask = vi.fn<AiCoachService["ask"]>().mockReturnValue(errAsync("missing-api-key"));
 
-    const result = await askCoachWithSingleRetry(
-      makeService(ask),
-      undefined,
-      {} as never,
-      {} as never,
-      [],
-      [],
-      [],
-    );
+    const result = await askCoachWithSingleRetry(makeService(ask), {
+      apiKey: undefined,
+      userProfile: {} as never,
+      insights: {} as never,
+      exerciseLogs: [],
+      trainingSummaries: [],
+      previousMessages: [],
+    });
 
     expect(ask).toHaveBeenCalledTimes(1);
     expect(result).toEqual(err("missing-api-key"));

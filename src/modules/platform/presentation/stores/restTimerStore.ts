@@ -42,9 +42,9 @@ export const useRestTimerStore = defineStore("restTimer", () => {
     { immediate: true },
   );
 
-  const isResting = computed(() => !!restStartTime.value);
+  const isResting = computed<boolean>(() => !!restStartTime.value);
 
-  const formattedTime = computed(() => {
+  const formattedTime = computed<string>(() => {
     const m = Math.floor(restElapsed.value / 60)
       .toString()
       .padStart(2, "0");
@@ -52,7 +52,7 @@ export const useRestTimerStore = defineStore("restTimer", () => {
     return `${m}:${s}`;
   });
 
-  const isOvertime = computed(() => {
+  const isOvertime = computed<boolean>(() => {
     return targetRestSeconds.value !== null && restElapsed.value >= targetRestSeconds.value;
   });
 

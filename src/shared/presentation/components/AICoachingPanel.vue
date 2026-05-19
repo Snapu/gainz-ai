@@ -2,7 +2,7 @@
 import { ChevronDown, Loader2, Search, Sparkles, Trash2, X } from "@lucide/vue";
 import { useDebounceFn, useTimeAgo } from "@vueuse/core";
 import DOMPurify from "dompurify";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import type { AiResponseData } from "@/modules/aiCoach/presentation";
 import { useAiStore } from "@/modules/aiCoach/presentation";
 import { resolveCurrentSession, useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
@@ -11,7 +11,9 @@ import {
   uiSelectableItemClass,
 } from "@/shared/presentation/components/ui/styles";
 import UiBottomSheet from "@/shared/presentation/components/ui/UiBottomSheet.vue";
+import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
+import UiInput from "@/shared/presentation/components/ui/UiInput.vue";
 import { useToast } from "@/shared/presentation/composables/useToast";
 import { cn } from "@/shared/presentation/lib/utils";
 
@@ -51,6 +53,8 @@ const debouncedAskAi = useDebounceFn(() => {
         description,
         variant: "destructive",
       });
+    } else {
+      scrollToTop();
     }
   });
 }, 500);
@@ -60,6 +64,7 @@ watch(
   (isOpen) => {
     if (isOpen) {
       debouncedAskAi();
+      scrollToTop();
     }
   },
 );
@@ -222,24 +227,55 @@ function clearAndReset() {
   aiStore.clearMessages();
   debouncedAskAi();
 }
+
+const scrollContainerRef = ref<HTMLDivElement | null>(null);
+
+function scrollToTop() {
+  nextTick(() => {
+    if (scrollContainerRef.value) {
+      scrollContainerRef.value.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  });
+}
+
+watch(
+  () => allInsights.value.length,
+  (newLength, oldLength) => {
+    if (newLength > oldLength) {
+      scrollToTop();
+    }
+  },
+);
+
+const userQuestion = ref("");
+
+function handleAskQuestion() {
+  const question = userQuestion.value.trim();
+  if (!question) return;
+
+  userQuestion.value = ""; // Clear immediately for responsive mobile UX
+
+  aiStore.askAi(question).then((result) => {
+    if (result.isErr()) {
+      userQuestion.value = question; // Restore on error so user doesn't lose typed text
+      toast({
+        title: "Error",
+        description: "Failed to send question.",
+        variant: "destructive",
+      });
+    } else {
+      scrollToTop();
+    }
+  });
+}
 </script>
 
 <template>
-  <UiBottomSheet v-model:open="internalOpen" title="AI Coach">
+  <UiBottomSheet v-model:open="internalOpen" title="AI Coach" content-class="p-0 gap-0 overflow-hidden flex flex-col max-h-[85vh]">
     <template #header>
-      <div class="flex items-center justify-between mb-2">
+      <div class="flex items-center justify-between p-6 pb-2">
         <span class="text-2xl font-bold tracking-tight">AI Coach</span>
         <div class="flex items-center gap-1">
-          <button
-            type="button"
-            v-if="allInsights.length > 0 && !aiStore.isLoading"
-            :class="uiIconButtonClass"
-            title="Clear chat history"
-            @click="clearAndReset"
-          >
-            <Trash2 class="w-4 h-4 text-muted-foreground" />
-            <span class="sr-only">Clear chat history</span>
-          </button>
           <button
             type="button"
             :class="uiIconButtonClass"
@@ -251,7 +287,7 @@ function clearAndReset() {
         </div>
       </div>
     </template>
-    <div class="flex flex-col gap-4 w-full max-h-[70vh] overflow-y-auto">
+    <div ref="scrollContainerRef" class="flex-1 overflow-y-auto px-6 pb-4 space-y-4 no-scrollbar">
 
       <!-- Loading State -->
       <div v-if="aiStore.isLoading" class="flex flex-col items-center justify-center py-10 text-center gap-3">
@@ -391,6 +427,19 @@ function clearAndReset() {
 
           <div v-if="idx < allInsights.length - 1" class="border-t border-white/5 mt-2" />
         </div>
+
+        <!-- Clear History Button at the bottom of the list -->
+        <div v-if="!aiStore.isLoading" class="pt-6 pb-2 flex justify-center">
+          <UiButton
+            variant="outline"
+            size="sm"
+            class="text-xs text-destructive border-destructive/20 hover:border-destructive hover:bg-destructive/10 gap-2 rounded-full px-4 active:scale-95 transition-all cursor-pointer"
+            @click="clearAndReset"
+          >
+            <Trash2 class="w-3.5 h-3.5" />
+            Clear Conversation History
+          </UiButton>
+        </div>
       </template>
 
       <!-- Empty Fallback (no insights and not loading) -->
@@ -400,6 +449,32 @@ function clearAndReset() {
         <p class="text-sm text-muted-foreground mt-1 max-w-[260px]">Log some exercises first, then come back for personalized coaching.</p>
       </div>
 
+      <!-- Inline Typing / Loading State (with existing insights) -->
+      <div v-if="aiStore.isLoading && allInsights.length > 0" class="flex items-center gap-2 text-xs text-muted-foreground/60 animate-pulse py-2">
+        <Loader2 class="w-3.5 h-3.5 animate-spin text-primary" />
+        <span>Coach is thinking...</span>
+      </div>
+
     </div>
+
+    <!-- Sticky Q&A Input Bar -->
+    <form
+      @submit.prevent="handleAskQuestion"
+      class="p-6 pt-4 border-t border-white/5 bg-background/95 backdrop-blur-xl flex gap-2 items-center shrink-0 pb-safe"
+    >
+      <UiInput
+        v-model="userQuestion"
+        placeholder="Ask a question..."
+        class="flex-1"
+      />
+      <UiButton
+        type="submit"
+        size="sm"
+        class="shrink-0"
+        :disabled="!userQuestion.trim() || aiStore.isLoading"
+      >
+        Send
+      </UiButton>
+    </form>
   </UiBottomSheet>
 </template>

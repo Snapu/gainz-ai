@@ -21,21 +21,14 @@ export type {
 
 import type {
   AskAiError,
+  AskAiOptions,
   AskAiResult,
   ExerciseCleanupResult,
   PreviousAiMessage,
 } from "../domain/types";
 
 export interface AiCoachService {
-  ask(
-    apiKey: string | undefined,
-    userProfile: UserProfile,
-    insights: TrainingInsights,
-    exerciseLogs: ExerciseLog[],
-    trainingSummaries: TrainingSummary[],
-    previousMessages: PreviousAiMessage[],
-    events?: Event[],
-  ): ResultAsync<AskAiResult, AskAiError>;
+  ask(options: AskAiOptions): ResultAsync<AskAiResult, AskAiError>;
   classifyExercises(
     exerciseNames: string[],
     apiKey: string | undefined,
@@ -45,23 +38,9 @@ export interface AiCoachService {
 
 export function askCoach(
   service: AiCoachService,
-  apiKey: string | undefined,
-  userProfile: UserProfile,
-  insights: TrainingInsights,
-  exerciseLogs: ExerciseLog[],
-  trainingSummaries: TrainingSummary[],
-  previousMessages: PreviousAiMessage[],
-  events?: Event[],
+  options: AskAiOptions,
 ): ResultAsync<AskAiResult, AskAiError> {
-  return service.ask(
-    apiKey,
-    userProfile,
-    insights,
-    exerciseLogs,
-    trainingSummaries,
-    previousMessages,
-    events,
-  );
+  return service.ask(options);
 }
 
 export function classifyExerciseNames(
@@ -82,26 +61,10 @@ function delay(ms: number): Promise<void> {
 
 export function askCoachWithSingleRetry(
   service: AiCoachService,
-  apiKey: string | undefined,
-  userProfile: UserProfile,
-  insights: TrainingInsights,
-  exerciseLogs: ExerciseLog[],
-  trainingSummaries: TrainingSummary[],
-  previousMessages: PreviousAiMessage[],
-  events?: Event[],
+  options: AskAiOptions,
   retryDelayMs = 2000,
 ): ResultAsync<AskAiResult, AskAiError> {
-  const askOnce = () =>
-    askCoach(
-      service,
-      apiKey,
-      userProfile,
-      insights,
-      exerciseLogs,
-      trainingSummaries,
-      previousMessages,
-      events,
-    );
+  const askOnce = () => askCoach(service, options);
 
   return askOnce().orElse((error) => {
     if (error === "missing-api-key") return errAsync(error);
