@@ -52,6 +52,11 @@ const router = createRouter({
       name: "training-insights",
       component: () => import("../views/TrainingInsights.vue"),
     },
+    {
+      path: "/ai-coach",
+      name: "ai-coach",
+      component: () => import("../views/AICoach.vue"),
+    },
   ],
 });
 

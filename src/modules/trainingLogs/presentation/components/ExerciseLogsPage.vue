@@ -1,19 +1,15 @@
 <script setup lang="ts">
 import { ChevronRight, ExternalLink, Menu, Moon, Plus, Sparkles } from "@lucide/vue";
-import AICoachingPanel from "@/shared/presentation/components/AICoachingPanel.vue";
 import AppHeader from "@/shared/presentation/components/AppHeader.vue";
 import EmptyState from "@/shared/presentation/components/EmptyState.vue";
-import ExerciseSelector from "@/shared/presentation/components/ExerciseSelector.vue";
 import RestTimerToast from "@/shared/presentation/components/RestTimerToast.vue";
 import SessionLogGroup from "@/shared/presentation/components/SessionLogGroup.vue";
 import UserProgressCard from "@/shared/presentation/components/UserProgressCard.vue";
-import UiBottomSheet from "@/shared/presentation/components/ui/UiBottomSheet.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiDropdownMenu from "@/shared/presentation/components/ui/UiDropdownMenu.vue";
 import UiDropdownMenuItem from "@/shared/presentation/components/ui/UiDropdownMenuItem.vue";
-import UiNumberField from "@/shared/presentation/components/ui/UiNumberField.vue";
-import UiSparkline from "@/shared/presentation/components/ui/UiSparkline.vue";
 import { useExerciseLogsPageViewModel } from "../composables/useExerciseLogsPageViewModel";
+import LogExerciseSheet from "./LogExerciseSheet.vue";
 
 const {
   router,
@@ -29,22 +25,8 @@ const {
   toggleSession,
   isResting,
   formattedRestTime,
-  isAIPanelOpen,
   handleFabClick,
   isLogFormOpen,
-  exerciseOptions,
-  exerciseOptionDetails,
-  exerciseStats,
-  isDumbbellExercise,
-  formExerciseName,
-  formReps,
-  formWeight,
-  formDistance,
-  formDuration,
-  formRpe,
-  rpeLabel,
-  saveLog,
-  prefillFromAi,
 } = useExerciseLogsPageViewModel();
 </script>
 
@@ -58,7 +40,7 @@ const {
         <h1 class="text-2xl font-black italic tracking-tighter">Gainz<span class="text-primary">AI</span></h1>
       </div>
       <div class="flex gap-2">
-        <UiButton variant="ghost" size="icon" @click="isAIPanelOpen = true">
+        <UiButton variant="ghost" size="icon" @click="router.push('/ai-coach')">
           <Sparkles class="w-5 h-5 text-primary" />
         </UiButton>
         <UiButton variant="ghost" size="icon" @click="router.push('/rest-recovery')">
@@ -150,6 +132,8 @@ const {
         <RestTimerToast
           :formatted-time="formattedRestTime"
           :is-overtime="restTimerStore.isOvertime"
+          :target-rest-seconds="restTimerStore.targetRestSeconds"
+          :rest-elapsed="restTimerStore.restElapsed"
           @dismiss="restTimerStore.reset()"
         />
       </div>
@@ -166,80 +150,8 @@ const {
       </UiButton>
     </div>
 
-    <!-- Bottom Sheet Form -->
-    <UiBottomSheet v-model:open="isLogFormOpen" title="Log Exercise">
-      <div class="flex flex-col gap-6 w-full">
-        <!-- Optimized Exercise Selection -->
-        <ExerciseSelector
-          v-model="formExerciseName"
-          :options="exerciseOptions"
-          :option-details="exerciseOptionDetails"
-          placeholder="Select or Search Exercise..."
-          class="bg-card"
-        />
-
-        <!-- Exercise Stats -->
-        <div
-          v-if="exerciseStats && (exerciseStats.weightHistory.length >= 2 || exerciseStats.repsHistory.length >= 2)"
-          class="flex gap-3 p-3 rounded-xl bg-card/40 border border-white/5 backdrop-blur-sm"
-        >
-          <UiSparkline
-            v-if="exerciseStats.weightHistory.length >= 2"
-            :values="exerciseStats.weightHistory"
-            :max-value="exerciseStats.max.weight"
-            label="Weight (kg)"
-            :width="140"
-            :height="48"
-            class="flex-1"
-          />
-          <UiSparkline
-            v-if="exerciseStats.repsHistory.length >= 2"
-            :values="exerciseStats.repsHistory"
-            :max-value="exerciseStats.max.reps"
-            label="Reps"
-            :width="140"
-            :height="48"
-            color="oklch(0.7 0.15 250)"
-            fill-color="oklch(0.7 0.15 250 / 0.1)"
-            class="flex-1"
-          />
-        </div>
-        
-        <!-- Metrics -->
-        <div class="grid grid-cols-2 gap-4">
-          <UiNumberField v-model="formReps" label="Reps" :min="0" :step="1" />
-          <UiNumberField v-model="formWeight" label="Weight (kg)" :min="0" :step="0.5" :description="isDumbbellExercise ? 'Total (both hands)' : undefined" />
-          <UiNumberField v-model="formDistance" label="Distance (m)" :min="0" :step="10" />
-          <UiNumberField v-model="formDuration" label="Duration (min)" :min="0" :step="0.5" />
-        </div>
-
-        <!-- Stopwatch -->
-        <!-- RPE Slider -->
-        <div class="space-y-3 px-1 mt-2">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-bold uppercase tracking-widest text-muted-foreground/60">Effort (RPE)</span>
-            <span class="text-xs font-bold text-primary">{{ rpeLabel }}</span>
-          </div>
-          <input 
-            type="range" 
-            min="6" 
-            max="10" 
-            step="0.5" 
-            v-model.number="formRpe"
-            @pointerdown.stop
-            @touchstart.stop
-            @touchmove.stop
-            class="w-full h-2 bg-white/5 rounded-lg appearance-none cursor-pointer accent-primary"
-          />
-        </div>
-
-        <UiButton class="w-full h-16 rounded-xl text-lg mt-4" @click="saveLog">
-          Save Set
-        </UiButton>
-      </div>
-    </UiBottomSheet>
-
-    <AICoachingPanel v-model:open="isAIPanelOpen" @log-exercise="prefillFromAi" />
+    <!-- Reusable Bottom Sheet Form -->
+    <LogExerciseSheet v-model:open="isLogFormOpen" />
   </div>
 </template>
 
@@ -262,5 +174,4 @@ const {
   transform: translateX(10px);
   opacity: 0;
 }
-
 </style>

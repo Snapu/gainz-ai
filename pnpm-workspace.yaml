@@ -1,0 +1,9 @@
+allowBuilds:
+  '@google/genai': true
+  core-js: true
+  esbuild: true
+  protobufjs: true
+  vue-demi: true
+minimumReleaseAge: 1440
+minimumReleaseAgeExclude:
+  - postcss

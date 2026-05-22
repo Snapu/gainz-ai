@@ -74,6 +74,7 @@ vi.mock("./aiMessageStorage", () => ({
 
 import { askCoachWithSingleRetry } from "@/modules/aiCoach/application";
 import { useUserProfileStore } from "@/modules/profile/presentation";
+import { resolveCurrentSession } from "@/modules/trainingLogs/presentation";
 import { useAiStore } from "./aiStore";
 
 describe("useAiStore initialization", () => {
@@ -173,6 +174,25 @@ describe("useAiStore initialization", () => {
 
     expect("hasInitialized" in store).toBe(true);
   });
+
+  it("clears messages on calling clearMessages", () => {
+    const store = useAiStore();
+    store.messages = [
+      {
+        id: "msg-1",
+        role: "assistant",
+        content: "hello",
+        timestamp: new Date("2026-01-01T10:00:00.000Z"),
+        sessionDate: "2026-01-01",
+        logsCount: 1,
+      },
+    ];
+
+    store.clearMessages();
+
+    expect(store.messages).toEqual([]);
+    expect(removeAiMessagesFromStorageMock).toHaveBeenCalledWith(store._todaySessionDate);
+  });
 });
 
 describe("useAiStore currentWorkoutPlan", () => {
@@ -237,5 +257,56 @@ describe("useAiStore currentWorkoutPlan", () => {
     ];
 
     expect(store.currentWorkoutPlan).toBeNull();
+  });
+});
+
+describe("useAiStore isNewDataAvailable", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+  });
+
+  it("returns true if no messages", () => {
+    const store = useAiStore();
+    store.messages = [];
+    expect(store.isNewDataAvailable).toBe(true);
+  });
+
+  it("returns false if messages exist and checksum matches", () => {
+    const store = useAiStore();
+    store.messages = [
+      {
+        id: "msg-1",
+        role: "assistant",
+        content: "hello",
+        timestamp: new Date(),
+        sessionDate: "2026-01-01",
+        logsCount: 1,
+      },
+    ];
+    store.lastRequestLogsChecksum = "";
+    expect(store.isNewDataAvailable).toBe(false);
+  });
+
+  it("returns true if messages exist but checksum is different", () => {
+    const store = useAiStore();
+    store.messages = [
+      {
+        id: "msg-1",
+        role: "assistant",
+        content: "hello",
+        timestamp: new Date(),
+        sessionDate: "2026-01-01",
+        logsCount: 1,
+      },
+    ];
+
+    vi.mocked(resolveCurrentSession).mockReturnValueOnce({
+      sessionDate: "2026-01-01",
+      logs: [{ id: "log-1", reps: 10, weight: 100 }],
+    } as any);
+
+    store.lastRequestLogsChecksum = "";
+    expect(store.isNewDataAvailable).toBe(true);
   });
 });

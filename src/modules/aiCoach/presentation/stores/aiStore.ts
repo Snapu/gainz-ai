@@ -293,6 +293,12 @@ export const useAiStore = defineStore("ai", () => {
     messages.value = [];
   }
 
+  const isNewDataAvailable = computed<boolean>(() => {
+    const currentSession = resolveCurrentSession(exerciseLogsStore.exerciseLogs);
+    const todayLogsChecksum = getTodayLogsChecksum(currentSession);
+    return messages.value.length === 0 || lastRequestLogsChecksum.value !== todayLogsChecksum;
+  });
+
   return {
     initialize,
     askAi,
@@ -303,5 +309,7 @@ export const useAiStore = defineStore("ai", () => {
     hasInitialized,
     _todaySessionDate: todaySessionDate,
     currentWorkoutPlan,
+    isNewDataAvailable,
+    lastRequestLogsChecksum,
   };
 });

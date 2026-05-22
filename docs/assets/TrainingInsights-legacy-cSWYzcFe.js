@@ -1,1 +1,0 @@
-System.register(["./index-legacy-CXL-Io1x.js"],function(t,e){var n,i,s,r,u;return{setters:[function(t){n=t.At,i=t.It,s=t.Ut,r=t.h,u=t.tn}],execute:function(){t("default",i({__name:"TrainingInsights",setup:t=>(t,e)=>(s(),n(u(r)))}))}}});
