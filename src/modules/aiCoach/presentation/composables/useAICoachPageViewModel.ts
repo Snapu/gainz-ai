@@ -148,6 +148,7 @@ export function useAICoachPageViewModel() {
   }
 
   function isHighlighted(gIndex: number, exIndex: number) {
+    if (restTimerStore.isResting) return false;
     return gIndex === 0 && exIndex === 0;
   }
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronRight, Dumbbell, Gauge, Repeat, Search, Sparkles } from "@lucide/vue";
+import { ChevronRight, Dumbbell, Gauge, Repeat, Search } from "@lucide/vue";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 import type { DisplayExercise } from "../helpers/aiCoachPageHelpers";
@@ -66,13 +66,13 @@ const emit = defineEmits<{
         <div class="flex flex-wrap items-center gap-2">
           <UiBadge
             variant="outline"
-            class="gap-2 px-2 py-0.5 bg-muted/10 border-muted/10 text-xs font-semibold text-foreground/90 shrink-0"
+            class="gap-2 px-3 py-1 bg-muted/10 border-muted/10 text-xs text-foreground/90 shrink-0"
           >
             <Repeat class="w-3.5 h-3.5 text-muted-foreground/60 shrink-0" />
             <span>
-              {{ exercise.targetSets }}
+              <span class="text-lg font-bold tabular-nums">{{ exercise.targetSets }}</span>
               <span class="text-muted-foreground/50 font-medium mx-0.5">×</span>
-              {{ exercise.targetReps }}
+              <span class="text-lg font-bold tabular-nums">{{ exercise.targetReps }}</span>
               <span class="text-muted-foreground/50 font-medium ml-1">reps</span>
             </span>
           </UiBadge>
@@ -80,11 +80,11 @@ const emit = defineEmits<{
           <UiBadge
             v-if="exercise.targetWeight"
             variant="outline"
-            class="gap-2 px-2 py-0.5 bg-muted/10 border-muted/10 text-xs font-semibold text-foreground/90 shrink-0"
+            class="gap-2 px-3 py-1 bg-muted/10 border-muted/10 text-xs text-foreground/90 shrink-0"
           >
             <Dumbbell class="w-3.5 h-3.5 text-primary/70 shrink-0" />
             <span>
-              {{ splitWeight(exercise.targetWeight).value }}
+              <span class="text-lg font-bold tabular-nums">{{ splitWeight(exercise.targetWeight).value }}</span>
               <span class="text-muted-foreground/50 font-medium ml-0.5">
                 {{ splitWeight(exercise.targetWeight).unit }}
               </span>
@@ -94,12 +94,12 @@ const emit = defineEmits<{
           <UiBadge
             v-if="exercise.targetRpe"
             variant="outline"
-            class="gap-2 px-2 py-0.5 bg-muted/10 border-muted/10 text-xs font-semibold text-foreground/90 shrink-0"
+            class="gap-2 px-3 py-1 bg-muted/10 border-muted/10 text-xs text-foreground/90 shrink-0"
           >
             <Gauge class="w-3.5 h-3.5 text-amber-500/70 shrink-0" />
             <span>
               <span class="text-muted-foreground/50 font-medium mr-1">RPE</span>
-              {{ exercise.targetRpe }}
+              <span class="text-lg font-bold tabular-nums">{{ exercise.targetRpe }}</span>
             </span>
           </UiBadge>
         </div>
@@ -113,9 +113,8 @@ const emit = defineEmits<{
     <!-- Coach notes (only shown when highlighted) -->
     <div
       v-if="exercise.notes && isHighlighted"
-      class="text-xs text-muted-foreground font-medium italic leading-relaxed bg-muted/10 border border-muted/10 px-3 py-2 rounded-xl w-full flex items-start gap-2"
+      class="text-xs text-muted-foreground font-medium italic leading-relaxed bg-muted/10 border border-muted/10 px-3 py-2 rounded-xl w-full"
     >
-      <Sparkles class="w-4 h-4 text-primary shrink-0 mt-0.5" />
       <span>{{ exercise.notes }}</span>
     </div>
 

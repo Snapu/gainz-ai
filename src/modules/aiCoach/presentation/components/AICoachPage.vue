@@ -16,7 +16,6 @@ import AppHeader from "@/shared/presentation/components/AppHeader.vue";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiBottomSheet from "@/shared/presentation/components/ui/UiBottomSheet.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
-import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 import UiTextarea from "@/shared/presentation/components/ui/UiTextarea.vue";
 import { useAICoachPageViewModel } from "../composables/useAICoachPageViewModel";
 import WorkoutExerciseCard from "./WorkoutExerciseCard.vue";
@@ -90,95 +89,90 @@ const {
   <!-- Content Area -->
   <div ref="scrollContainerRef" class="flex-1 overflow-y-auto px-5 pt-4 pb-16 space-y-4 no-scrollbar">
 
-   <!-- 1. AI Coach Insight Card -->
-   <UiCard v-if="assistantMessages.length > 0" class="p-5 flex flex-col gap-3 relative overflow-hidden bg-primary/5 border-primary/10">
-    <!-- Header: timestamp + pager -->
-    <div class="flex items-center justify-between gap-3 border-b border-muted/10 pb-2">
-     <span class="text-xs font-medium text-muted-foreground/60 shrink-0">
-      {{ formatTime(assistantMessages[currentPageIndex].timestamp) }}
-     </span>
-     <div v-if="assistantMessages.length > 1" class="flex items-center gap-2 bg-muted/10 px-2.5 py-0.5 rounded-full border border-muted/10 shrink-0">
-      <button
-       type="button"
-       class="text-muted-foreground hover:text-primary transition-colors disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed p-0.5 active:scale-95 cursor-pointer rounded-full hover:bg-muted/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary shrink-0"
-       :disabled="currentPageIndex === 0"
-       @click="currentPageIndex--"
-      >
-       <ChevronLeft class="w-3.5 h-3.5 shrink-0" />
-      </button>
-      <span class="text-xs font-bold text-muted-foreground min-w-[28px] text-center select-none shrink-0">
-       {{ currentPageIndex + 1 }} / {{ assistantMessages.length }}
+    <!-- 1. AI Coach Insight Section -->
+    <div v-if="assistantMessages.length > 0" class="flex flex-col gap-3 relative px-1">
+     <!-- Header: timestamp + pager -->
+     <div class="flex items-center justify-between gap-3 pb-1">
+      <span class="text-xs font-medium text-muted-foreground/60 shrink-0">
+       {{ formatTime(assistantMessages[currentPageIndex].timestamp) }}
       </span>
-      <button
-       type="button"
-       class="text-muted-foreground hover:text-primary transition-colors disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed p-0.5 active:scale-95 cursor-pointer rounded-full hover:bg-muted/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary shrink-0"
-       :disabled="currentPageIndex === assistantMessages.length - 1"
-       @click="currentPageIndex++"
-      >
-       <ChevronRight class="w-3.5 h-3.5 shrink-0" />
-      </button>
-     </div>
-    </div>
-
-    <!-- Message body -->
-    <div class="flex flex-col gap-2">
-     <div class="flex items-start gap-2">
-      <Sparkles class="w-4 h-4 text-primary shrink-0 mt-1" />
-      <div class="flex-1">
-       <template v-if="assistantMessages[currentPageIndex].parsedData">
-        <div
-         class="text-base leading-relaxed [&_strong]:text-primary [&_strong]:font-bold text-foreground/90 font-medium"
-         v-html="renderMarkdown(assistantMessages[currentPageIndex].parsedData?.coachMessage ?? '')"
-        />
-       </template>
-       <template v-else>
-        <div
-         class="text-base leading-relaxed [&_strong]:text-primary [&_strong]:font-bold text-foreground/90 font-medium"
-         v-html="renderMarkdown(assistantMessages[currentPageIndex].rawContent)"
-        />
-       </template>
+      <div v-if="assistantMessages.length > 1" class="flex items-center gap-2 bg-muted/10 px-2.5 py-0.5 rounded-full border border-muted/10 shrink-0">
+       <button
+        type="button"
+        class="text-muted-foreground hover:text-primary transition-colors disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed p-0.5 active:scale-95 cursor-pointer rounded-full hover:bg-muted/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary shrink-0"
+        :disabled="currentPageIndex === 0"
+        @click="currentPageIndex--"
+       >
+        <ChevronLeft class="w-3.5 h-3.5 shrink-0" />
+       </button>
+       <span class="text-xs font-bold text-muted-foreground min-w-[28px] text-center select-none shrink-0">
+        {{ currentPageIndex + 1 }} / {{ assistantMessages.length }}
+       </span>
+       <button
+        type="button"
+        class="text-muted-foreground hover:text-primary transition-colors disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed p-0.5 active:scale-95 cursor-pointer rounded-full hover:bg-muted/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary shrink-0"
+        :disabled="currentPageIndex === assistantMessages.length - 1"
+        @click="currentPageIndex++"
+       >
+        <ChevronRight class="w-3.5 h-3.5 shrink-0" />
+       </button>
       </div>
      </div>
 
-     <!-- Sent data collapsible -->
-     <div v-if="assistantMessages[currentPageIndex].requestPayload" class="mt-1">
-      <button
-       type="button"
-       class="flex items-center gap-2 text-xs text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-xl"
-       @click="openRequestPayloads = openRequestPayloads.includes(assistantMessages[currentPageIndex].id) ? openRequestPayloads.filter(id => id !== assistantMessages[currentPageIndex].id) : [...openRequestPayloads, assistantMessages[currentPageIndex].id]"
-      >
-       <ChevronDown
-        class="w-3 h-3 transition-transform"
-        :class="openRequestPayloads.includes(assistantMessages[currentPageIndex].id) ? 'rotate-180' : ''"
+     <!-- Message body -->
+     <div class="flex flex-col gap-2">
+      <template v-if="assistantMessages[currentPageIndex].parsedData">
+       <div
+        class="text-sm leading-relaxed [&_strong]:text-primary [&_strong]:font-bold text-foreground/90 font-medium"
+        v-html="renderMarkdown(assistantMessages[currentPageIndex].parsedData?.coachMessage ?? '')"
        />
-       Sent Data
-      </button>
-      <pre
-       v-if="openRequestPayloads.includes(assistantMessages[currentPageIndex].id)"
-       class="font-mono font-medium text-xs text-muted-foreground/50 bg-muted/20 rounded-xl p-2 overflow-x-auto whitespace-pre-wrap break-all mt-2"
-      >{{ assistantMessages[currentPageIndex].requestPayload }}</pre>
-     </div>
+      </template>
+      <template v-else>
+       <div
+        class="text-sm leading-relaxed [&_strong]:text-primary [&_strong]:font-bold text-foreground/90 font-medium"
+        v-html="renderMarkdown(assistantMessages[currentPageIndex].rawContent)"
+       />
+      </template>
 
-     <!-- Scratchpad / Reasoning collapsible -->
-     <div v-if="assistantMessages[currentPageIndex].parsedData?.scratchpad" class="mt-1">
-      <button
-       type="button"
-       class="flex items-center gap-2 text-xs text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-xl"
-       @click="openScratchpads = openScratchpads.includes(assistantMessages[currentPageIndex].id) ? openScratchpads.filter(id => id !== assistantMessages[currentPageIndex].id) : [...openScratchpads, assistantMessages[currentPageIndex].id]"
-      >
-       <ChevronDown
-        class="w-3 h-3 transition-transform"
-        :class="openScratchpads.includes(assistantMessages[currentPageIndex].id) ? 'rotate-180' : ''"
-       />
-       Reasoning
-      </button>
-      <pre
-       v-if="openScratchpads.includes(assistantMessages[currentPageIndex].id)"
-       class="font-mono font-medium text-xs text-muted-foreground/50 bg-muted/20 rounded-xl p-2 overflow-x-auto whitespace-pre-wrap break-all mt-2"
-      >{{ assistantMessages[currentPageIndex].parsedData?.scratchpad }}</pre>
+      <!-- Sent data collapsible -->
+      <div v-if="assistantMessages[currentPageIndex].requestPayload" class="mt-1">
+       <button
+        type="button"
+        class="flex items-center gap-2 text-xs text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-xl"
+        @click="openRequestPayloads = openRequestPayloads.includes(assistantMessages[currentPageIndex].id) ? openRequestPayloads.filter(id => id !== assistantMessages[currentPageIndex].id) : [...openRequestPayloads, assistantMessages[currentPageIndex].id]"
+       >
+        <ChevronDown
+         class="w-3 h-3 transition-transform"
+         :class="openRequestPayloads.includes(assistantMessages[currentPageIndex].id) ? 'rotate-180' : ''"
+        />
+        Sent Data
+       </button>
+       <pre
+        v-if="openRequestPayloads.includes(assistantMessages[currentPageIndex].id)"
+        class="font-mono font-medium text-xs text-muted-foreground/50 bg-muted/20 rounded-xl p-2 overflow-x-auto whitespace-pre-wrap break-all mt-2"
+       >{{ assistantMessages[currentPageIndex].requestPayload }}</pre>
+      </div>
+
+      <!-- Scratchpad / Reasoning collapsible -->
+      <div v-if="assistantMessages[currentPageIndex].parsedData?.scratchpad" class="mt-1">
+       <button
+        type="button"
+        class="flex items-center gap-2 text-xs text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-xl"
+        @click="openScratchpads = openScratchpads.includes(assistantMessages[currentPageIndex].id) ? openScratchpads.filter(id => id !== assistantMessages[currentPageIndex].id) : [...openScratchpads, assistantMessages[currentPageIndex].id]"
+       >
+        <ChevronDown
+         class="w-3 h-3 transition-transform"
+         :class="openScratchpads.includes(assistantMessages[currentPageIndex].id) ? 'rotate-180' : ''"
+        />
+        Reasoning
+       </button>
+       <pre
+        v-if="openScratchpads.includes(assistantMessages[currentPageIndex].id)"
+        class="font-mono font-medium text-xs text-muted-foreground/50 bg-muted/20 rounded-xl p-2 overflow-x-auto whitespace-pre-wrap break-all mt-2"
+       >{{ assistantMessages[currentPageIndex].parsedData?.scratchpad }}</pre>
+      </div>
      </div>
     </div>
-   </UiCard>
 
    <!-- 2. Workout Plan heading -->
    <div v-if="activeWorkoutGroups?.length" class="mt-1 flex items-center justify-between">
@@ -189,7 +183,7 @@ const {
    <Transition name="slide-down">
     <div
      v-if="restTimerStore.isResting"
-     class="relative w-full overflow-hidden rounded-xl border border-muted/10 bg-card/85 backdrop-blur-md px-4 py-3 flex items-center justify-between gap-4 transition-all duration-200 z-10 shadow-sm"
+     class="relative w-full overflow-hidden rounded-xl border border-primary bg-card/85 backdrop-blur-md px-4 py-3 flex items-center justify-between gap-4 transition-all duration-200 z-10 shadow-sm ring-2 ring-primary/20"
     >
      <div class="flex items-center gap-3 min-w-0">
       <div class="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
