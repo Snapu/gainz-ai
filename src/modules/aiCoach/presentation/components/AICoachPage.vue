@@ -9,7 +9,6 @@ import {
   MessageSquare,
   RotateCw,
   Sparkles,
-  Timer,
 } from "@lucide/vue";
 import { LogExerciseSheet } from "@/modules/trainingLogs/presentation";
 import AppHeader from "@/shared/presentation/components/AppHeader.vue";
@@ -179,63 +178,94 @@ const {
     <h2 class="text-lg font-bold text-foreground">Workout Plan</h2>
    </div>
 
-   <!-- Inline Rest Cooldown Bar -->
+   <!-- Completed exercises strip -->
+   <div v-if="completedExercises.length" class="mt-1 flex flex-col gap-3">
+    <div
+     v-for="(ex, idx) in completedExercises"
+     :key="ex.exerciseName || idx"
+     class="relative w-full rounded-xl border border-border/40 bg-card opacity-60 p-3 pl-4 flex items-center justify-between gap-4 shadow-sm"
+    >
+     <div class="flex items-center gap-4 min-w-0">
+      <div class="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
+       <CheckCircle2 class="w-4 h-4 text-emerald-500 shrink-0" />
+      </div>
+      <span class="text-base font-bold text-muted-foreground truncate leading-none mt-0.5">{{ ex.exerciseName }}</span>
+     </div>
+    </div>
+   </div>
+
+   <!-- Radial Hero Rest Cooldown -->
    <Transition name="slide-down">
     <div
      v-if="restTimerStore.isResting"
-     class="relative w-full overflow-hidden rounded-xl border border-primary bg-card/85 backdrop-blur-md px-4 py-3 flex items-center justify-between gap-4 transition-all duration-200 z-10 shadow-sm ring-2 ring-primary/20"
+     class="relative w-full rounded-xl border p-4 flex items-center justify-between gap-4 transition-colors duration-300 z-10 shadow-sm"
+     :class="restTimerStore.isOvertime ? 'bg-destructive/[0.05] border-destructive/30' : 'bg-primary/[0.02] border-primary/40'"
     >
-     <div class="flex items-center gap-3 min-w-0">
-      <div class="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-       <Timer class="w-4 h-4 text-primary shrink-0" :class="{ 'animate-pulse': !restTimerStore.isOvertime }" />
+     <!-- Animated highlight layer -->
+     <div 
+       class="absolute inset-0 rounded-xl border-2 ring-4 animate-pulse pointer-events-none transition-colors duration-300"
+       :class="restTimerStore.isOvertime ? 'border-destructive/50 ring-destructive/20' : 'border-primary/60 ring-primary/20'"
+     />
+
+     <div class="relative flex items-center gap-4 z-10 min-w-0">
+      <!-- Radial Progress Ring -->
+      <div class="relative w-16 h-16 shrink-0 flex items-center justify-center">
+       <svg class="w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
+        <!-- Track -->
+        <circle cx="50" cy="50" r="45" class="stroke-muted/20" stroke-width="6" fill="none" />
+        <!-- Progress -->
+        <circle
+         cx="50"
+         cy="50"
+         r="45"
+         class="transition-all duration-1000 ease-linear"
+         :class="restTimerStore.isOvertime ? 'stroke-destructive' : 'stroke-primary'"
+         stroke-width="6"
+         fill="none"
+         stroke-linecap="round"
+         :stroke-dasharray="283"
+         :stroke-dashoffset="283 - (283 * Math.max(0, 100 - cooldownProgressPercent)) / 100"
+        />
+       </svg>
+       <!-- Center Time -->
+       <div class="absolute inset-0 flex items-center justify-center">
+        <span 
+          class="text-base font-bold tabular-nums tracking-tight"
+          :class="restTimerStore.isOvertime ? 'text-destructive' : 'text-primary'"
+        >
+         {{ restTimerStore.formattedTime }}
+        </span>
+       </div>
       </div>
-      <div class="flex flex-col min-w-0">
-       <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 leading-none">Rest Cooldown</span>
-       <span class="text-sm font-bold text-foreground mt-0.5 truncate">
+
+      <!-- Text Content -->
+      <div class="flex flex-col min-w-0 gap-0.5">
+       <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 leading-none">Rest Cooldown</span>
+       <span 
+        class="text-base font-bold truncate mt-0.5 transition-colors duration-300"
+        :class="restTimerStore.isOvertime ? 'text-destructive' : 'text-foreground'"
+       >
         {{ restTimerStore.isOvertime ? 'Ready to go!' : 'Catch your breath...' }}
+       </span>
+       <span class="text-xs font-medium text-muted-foreground/50 truncate">
+        Target: {{ formatRestDuration(restTimerStore.targetRestSeconds) }}
        </span>
       </div>
      </div>
-     <div class="flex items-center gap-3 shrink-0">
-      <span
-       class="font-mono text-xs font-bold tracking-tight tabular-nums"
-       :class="restTimerStore.isOvertime ? 'text-destructive' : 'text-primary'"
-      >
-       {{ restTimerStore.formattedTime }} <span class="text-muted-foreground/40 font-medium">/</span> {{ formatRestDuration(restTimerStore.targetRestSeconds) }}
-      </span>
+     
+     <!-- Action -->
+     <div class="relative z-10 shrink-0">
       <button
        type="button"
-       class="text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-primary active:scale-95 duration-200 p-1 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
+       class="text-xs font-semibold uppercase tracking-wider hover:text-primary active:scale-95 transition-all duration-200 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-full px-4 py-2 border border-white/5 bg-white/5"
+       :class="restTimerStore.isOvertime ? 'text-destructive-foreground hover:bg-destructive/10 border-destructive/20' : 'text-foreground hover:bg-white/10'"
        @click="restTimerStore.reset()"
       >
        Skip
       </button>
      </div>
-     <!-- Progress bar line -->
-     <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-muted/10 overflow-hidden">
-      <div
-       class="h-full bg-primary transition-all duration-1000 ease-linear"
-       :style="{ width: `${cooldownProgressPercent}%` }"
-      />
-     </div>
     </div>
    </Transition>
-
-   <!-- Completed exercises strip -->
-   <div v-if="completedExercises.length" class="mt-1 flex flex-col gap-2">
-    <div
-     v-for="(ex, idx) in completedExercises"
-     :key="ex.exerciseName || idx"
-     class="relative w-full overflow-hidden rounded-xl border border-muted/5 bg-muted/5 opacity-60 px-4 py-3 flex items-center justify-between gap-4 shadow-sm"
-    >
-     <div class="flex items-center gap-3 min-w-0">
-      <div class="w-7 h-7 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
-       <CheckCircle2 class="w-4 h-4 text-emerald-400 shrink-0" />
-      </div>
-      <span class="text-sm font-bold text-muted-foreground truncate leading-none mt-0.5">{{ ex.exerciseName }}</span>
-     </div>
-    </div>
-   </div>
 
    <!-- 3. Remaining workout exercise cards -->
    <div v-if="activeWorkoutGroups?.length" class="flex flex-col gap-3">
