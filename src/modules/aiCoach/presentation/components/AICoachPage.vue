@@ -15,6 +15,7 @@ import AppHeader from "@/shared/presentation/components/AppHeader.vue";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiBottomSheet from "@/shared/presentation/components/ui/UiBottomSheet.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
+import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 import UiTextarea from "@/shared/presentation/components/ui/UiTextarea.vue";
 import { useAICoachPageViewModel } from "../composables/useAICoachPageViewModel";
 import WorkoutExerciseCard from "./WorkoutExerciseCard.vue";
@@ -179,20 +180,20 @@ const {
    </div>
 
    <!-- Completed exercises strip -->
-   <div v-if="completedExercises.length" class="mt-1 flex flex-col gap-3">
+   <UiCard v-if="completedExercises.length" variant="list" class="mt-1 shadow-sm opacity-60">
     <div
      v-for="(ex, idx) in completedExercises"
      :key="ex.exerciseName || idx"
-     class="relative w-full rounded-xl border border-border/40 bg-card opacity-60 p-3 pl-4 flex items-center justify-between gap-4 shadow-sm"
+     class="relative w-full p-3 pl-4 flex items-center justify-between gap-4 border-b border-border/40 last:border-0"
     >
      <div class="flex items-center gap-4 min-w-0">
       <div class="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
        <CheckCircle2 class="w-4 h-4 text-emerald-500 shrink-0" />
       </div>
-      <span class="text-base font-bold text-muted-foreground truncate leading-none mt-0.5">{{ ex.exerciseName }}</span>
+      <span class="text-sm font-semibold text-foreground tracking-tight truncate leading-none mt-0.5">{{ ex.exerciseName }}</span>
      </div>
     </div>
-   </div>
+   </UiCard>
 
    <!-- Radial Hero Rest Cooldown -->
    <Transition name="slide-down">

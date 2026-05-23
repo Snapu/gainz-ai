@@ -126,28 +126,29 @@ const {
       />
     </main>
 
-    <!-- Rest Timer Toast (Independent Fixed Layer) -->
-    <Transition name="fade-slide">
-      <div v-if="isResting" class="fixed bottom-10 right-28 z-40 mb-safe pointer-events-auto">
+    <!-- FAB & Timer Container -->
+    <div class="fixed bottom-10 right-10 z-40 pb-safe pointer-events-none flex flex-row-reverse items-center gap-4">
+      <!-- Primary FAB -->
+      <UiButton 
+        class="relative w-16 h-16 shrink-0 rounded-full shadow-2xl active:scale-95 transition-all z-10 pointer-events-auto" 
+        size="icon" 
+        @click="handleFabClick"
+      >
+        <Plus class="w-8 h-8" />
+      </UiButton>
+
+      <!-- Rest Timer Toast -->
+      <Transition name="fade-slide">
         <RestTimerToast
+          v-if="isResting"
+          class="pointer-events-auto"
           :formatted-time="formattedRestTime"
           :is-overtime="restTimerStore.isOvertime"
           :target-rest-seconds="restTimerStore.targetRestSeconds"
           :rest-elapsed="restTimerStore.restElapsed"
           @dismiss="restTimerStore.reset()"
         />
-      </div>
-    </Transition>
-
-    <!-- Primary FAB -->
-    <div class="fixed bottom-10 right-10 z-30 pb-safe pointer-events-auto">
-      <UiButton 
-        class="relative w-16 h-16 rounded-full shadow-2xl active:scale-95 transition-all z-10" 
-        size="icon" 
-        @click="handleFabClick"
-      >
-        <Plus class="w-8 h-8" />
-      </UiButton>
+      </Transition>
     </div>
 
     <!-- Reusable Bottom Sheet Form -->

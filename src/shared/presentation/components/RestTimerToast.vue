@@ -1,8 +1,5 @@
 <script setup lang="ts">
-import { Timer, X } from "@lucide/vue";
 import { computed } from "vue";
-import { formatRestDuration } from "@/modules/sharedKernel/presentation";
-import { uiIconButtonClass } from "@/shared/presentation/components/ui/styles";
 
 const props = defineProps<{
   formattedTime: string;
@@ -21,45 +18,63 @@ const progressPercent = computed(() => {
 
 <template>
   <div 
-    class="group pointer-events-auto relative flex w-full max-w-[280px] items-center justify-between space-x-4 overflow-hidden rounded-xl border border-muted/10 bg-card/85 p-4 shadow-2xl backdrop-blur-md transition-all duration-200"
+    class="pointer-events-auto relative flex items-center gap-3 overflow-hidden rounded-full border p-2 pr-3 shadow-2xl transition-colors duration-300 bg-card/95 backdrop-blur-md"
+    :class="isOvertime ? 'border-destructive shadow-destructive/20' : 'border-primary/40'"
   >
-    <div class="flex items-center gap-3 min-w-0 pb-1">
-      <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-        <Timer class="h-4 w-4" :class="{ 'animate-pulse': !isOvertime }" />
-      </div>
-      
-      <div class="grid gap-0.5 min-w-0">
-        <h3 class="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60 leading-none">Rest Cooldown</h3>
-        <span class="text-xs font-bold text-foreground mt-0.5 truncate">
-          {{ isOvertime ? 'Ready to go!' : 'Catch your breath...' }}
+    <!-- Animated highlight layer -->
+    <div 
+      class="absolute inset-0 rounded-full border ring-2 animate-pulse pointer-events-none transition-colors duration-300"
+      :class="isOvertime ? 'border-destructive/50 ring-destructive/20' : 'border-primary/60 ring-primary/20'"
+    />
+
+    <!-- Radial Progress Ring -->
+    <div class="relative w-12 h-12 shrink-0 flex items-center justify-center">
+      <svg class="w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
+        <!-- Track -->
+        <circle cx="50" cy="50" r="45" class="stroke-muted/20" stroke-width="8" fill="none" />
+        <!-- Progress -->
+        <circle
+          cx="50"
+          cy="50"
+          r="45"
+          class="transition-all duration-1000 ease-linear"
+          :class="isOvertime ? 'stroke-destructive' : 'stroke-primary'"
+          stroke-width="8"
+          fill="none"
+          stroke-linecap="round"
+          :stroke-dasharray="283"
+          :stroke-dashoffset="(283 * progressPercent) / 100"
+        />
+      </svg>
+      <!-- Center Time -->
+      <div class="absolute inset-0 flex items-center justify-center">
+        <span 
+          class="text-xs font-bold tabular-nums tracking-tight"
+          :class="isOvertime ? 'text-destructive' : 'text-primary'"
+        >
+          {{ formattedTime }}
         </span>
-        <div class="flex items-center gap-1.5 mt-1">
-          <span 
-            class="font-mono text-xs font-bold tracking-tight tabular-nums leading-none"
-            :class="isOvertime ? 'text-destructive' : 'text-primary'"
-          >
-            {{ formattedTime }}
-          </span>
-          <span v-if="targetRestSeconds" class="text-[10px] text-muted-foreground/40 font-medium">/ {{ formatRestDuration(targetRestSeconds) }}</span>
-        </div>
       </div>
     </div>
 
-    <!-- Close Button -->
-    <button type="button" 
-      @click="$emit('dismiss')"
-      :class="uiIconButtonClass"
-      title="Skip rest"
-    >
-      <X class="h-4 w-4 text-muted-foreground hover:text-primary transition-colors" />
-    </button>
-
-    <!-- Bottom visual progress bar line -->
-    <div v-if="targetRestSeconds" class="absolute bottom-0 left-0 right-0 h-0.5 bg-muted/10 overflow-hidden">
-      <div
-        class="h-full bg-primary transition-all duration-1000 ease-linear"
-        :style="{ width: `${progressPercent}%` }"
-      />
+    <!-- Text & Action -->
+    <div class="flex items-center gap-3 z-10">
+      <div class="flex flex-col justify-center">
+        <span 
+          class="text-sm font-bold truncate transition-colors duration-300"
+          :class="isOvertime ? 'text-destructive' : 'text-foreground'"
+        >
+          {{ isOvertime ? 'Overtime!' : 'Resting' }}
+        </span>
+      </div>
+      <button 
+        type="button" 
+        @click="$emit('dismiss')"
+        class="text-xs font-semibold uppercase tracking-wider hover:text-primary active:scale-95 transition-all duration-200 cursor-pointer outline-none rounded-full px-3 py-1.5 border border-white/5 bg-white/5"
+        :class="isOvertime ? 'text-destructive-foreground hover:bg-destructive/10 border-destructive/20' : 'text-foreground hover:bg-white/10'"
+      >
+        Skip
+      </button>
     </div>
   </div>
 </template>

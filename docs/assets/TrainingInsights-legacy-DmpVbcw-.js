@@ -1,1 +1,0 @@
-System.register(["./index-legacy-C9tcKJNs.js"],function(t,e){var n,i,s,r,u;return{setters:[function(t){n=t.Lt,i=t.Wt,s=t.c,r=t.jt,u=t.nn}],execute:function(){t("default",n({__name:"TrainingInsights",setup:t=>(t,e)=>(i(),r(u(s)))}))}}});
