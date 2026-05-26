@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ChevronRight, Search } from "@lucide/vue";
+import { uiChevronCircleClass } from "@/shared/presentation/components/ui/styles";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 import type { DisplayExercise } from "../helpers/aiCoachPageHelpers";
 import { setSegments, splitWeight, titleClass } from "../helpers/aiCoachPageHelpers";
@@ -114,7 +115,7 @@ const emit = defineEmits<{
         </div>
 
         <!-- Action Chevron -->
-        <div class="flex items-center justify-center shrink-0 w-8 h-8 rounded-full bg-white/5 border border-white/5 text-muted-foreground group-hover:text-primary transition-colors duration-200">
+        <div :class="[uiChevronCircleClass, 'group-hover:bg-primary/10 group-hover:text-primary']">
           <ChevronRight class="w-4 h-4" />
         </div>
       </div>

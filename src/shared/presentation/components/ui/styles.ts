@@ -7,6 +7,11 @@ export const uiPressClass = "active:scale-95";
 export const uiIconButtonClass =
   "rounded-full cursor-pointer p-2.5 bg-white/5 hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-95";
 
+// ─── Chevron Circle (card action indicator) ──────────────────────────────────
+export const uiChevronCircleClass =
+  "flex items-center justify-center shrink-0 w-8 h-8 rounded-full bg-muted/50 text-muted-foreground transition-colors duration-200";
+export const uiChevronCircleHoverClass = "group-hover:bg-primary/10 group-hover:text-primary";
+
 // ─── Field (Input / Textarea / NumberField / Autocomplete) ──────────────────
 export const uiFieldClass =
   "flex w-full rounded-xl border border-input/50 bg-white/5 px-4 py-3 text-base font-medium shadow-sm backdrop-blur-md ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary hover:border-primary/50 disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200";

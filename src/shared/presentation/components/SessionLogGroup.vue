@@ -2,6 +2,10 @@
 import { ChevronDown } from "@lucide/vue";
 import type { ExerciseLog } from "@/modules/trainingLogs/presentation";
 import ExerciseLogItem from "@/shared/presentation/components/ExerciseLogItem.vue";
+import {
+  uiChevronCircleClass,
+  uiChevronCircleHoverClass,
+} from "@/shared/presentation/components/ui/styles";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 
 defineProps<{
@@ -64,9 +68,9 @@ defineEmits<{
       
       <!-- Chevron -->
       <div class="flex items-center justify-center shrink-0 ml-2 relative z-10">
-        <div class="w-8 h-8 rounded-full bg-muted/50 flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+        <div :class="[uiChevronCircleClass, uiChevronCircleHoverClass]">
           <ChevronDown 
-            class="w-4 h-4 text-muted-foreground group-hover:text-primary transition-all duration-300"
+            class="w-4 h-4 transition-all duration-300"
             :class="{ '-rotate-180': !isCollapsed }"
           />
         </div>
