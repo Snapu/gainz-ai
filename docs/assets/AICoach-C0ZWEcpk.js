@@ -1,1 +1,0 @@
-import{Lt as e,Wt as t,h as n,jt as r,nn as i}from"./index-Yvz6hBlf.js";var a=e({__name:`AICoach`,setup(e){return(e,a)=>(t(),r(i(n)))}});export{a as default};

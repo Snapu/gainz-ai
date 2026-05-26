@@ -211,11 +211,15 @@ export function useAICoachPageViewModel() {
 
   const forceRefreshAi = useDebounceFn(() => {
     if (!aiStore.isNewDataAvailable) {
-      toast({
-        title: "Coaching Up to Date",
-        description: "No new workout data available to analyze. Log a new exercise set first!",
-      });
-      return;
+      if (assistantMessages.value.length === 1) {
+        aiStore.clearMessages();
+      } else {
+        toast({
+          title: "Coaching Up to Date",
+          description: "No new workout data available to analyze. Log a new exercise set first!",
+        });
+        return;
+      }
     }
     aiStore.askAi().then((result) => {
       if (result.isErr()) {
