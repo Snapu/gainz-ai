@@ -125,6 +125,72 @@ describe("calculateTrainingInsights", () => {
       );
     });
 
+    it("excludes completed and canceled deload window logs from e1RM trend", () => {
+      // Deload started 14 days ago, ended 7 days ago (completed)
+      const deloadStart = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+      const deloadEnd = new Date(deloadStart.getTime() + DELOAD_DURATION_MS);
+      const completedPhase: import("./deloadPhase").DeloadPhase = {
+        startedAt: deloadStart.toISOString(),
+        endsAt: deloadEnd.toISOString(),
+        fatigueRiskScore: 4,
+        triggeredBy: ["volumeSpike"],
+      };
+
+      // Canceled deload: ended after 3 days
+      const canceledPhase: import("./deloadPhase").DeloadPhase = {
+        ...completedPhase,
+        canceledAt: new Date(deloadStart.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+      };
+
+      // Pre-deload: heavy
+      const preLogs = [
+        makeLog("Squat", new Date(now.getTime() - 21 * 24 * 60 * 60 * 1000), 120, 5),
+      ];
+      // Deload logs: light (should be excluded)
+      const deloadLogs = [
+        makeLog("Squat", new Date(deloadStart.getTime() + 2 * 24 * 60 * 60 * 1000), 60, 10),
+      ];
+      // Post-deload: heavy again
+      const postLogs = [
+        makeLog("Squat", new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000), 125, 5),
+      ];
+
+      const allLogs = [...preLogs, ...deloadLogs, ...postLogs];
+      const noDeloadLogs = [...preLogs, ...postLogs];
+
+      const withCompletedDeload = calculateTrainingInsights(
+        allLogs,
+        now,
+        undefined,
+        undefined,
+        completedPhase,
+      );
+      const withCanceledDeload = calculateTrainingInsights(
+        allLogs,
+        now,
+        undefined,
+        undefined,
+        canceledPhase,
+      );
+      const withoutDeloadPhase = calculateTrainingInsights(
+        noDeloadLogs,
+        now,
+        undefined,
+        undefined,
+        undefined,
+      );
+
+      // Both completed and canceled should exclude the light deload logs and match the pure trend
+      expect(withCompletedDeload.e1rm["Squat"]?.e1rm).toBeCloseTo(
+        withoutDeloadPhase.e1rm["Squat"]?.e1rm ?? 0,
+        0,
+      );
+      expect(withCanceledDeload.e1rm["Squat"]?.e1rm).toBeCloseTo(
+        withoutDeloadPhase.e1rm["Squat"]?.e1rm ?? 0,
+        0,
+      );
+    });
+
     it("deloadEndsAt and deloadTimeRemainingMs are set during active deload", () => {
       const deloadPhase = createDeloadPhase(
         4,

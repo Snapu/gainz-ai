@@ -38,11 +38,6 @@ export const useDeloadStore = defineStore("deload", () => {
   const daysRemaining = computed(() => deloadDaysRemaining(phase.value));
   const progressPercent = computed(() => deloadProgressPercent(phase.value));
 
-  const e1rmExcludeRange = computed(() => {
-    if (!phase.value || !active.value) return [];
-    return [{ start: new Date(phase.value.startedAt), end: new Date(phase.value.endsAt) }];
-  });
-
   // Automatically load deload phase when spreadsheet document is loaded/ready
   watch(
     () => getDoc(),
@@ -114,7 +109,6 @@ export const useDeloadStore = defineStore("deload", () => {
     active,
     daysRemaining,
     progressPercent,
-    e1rmExcludeRange,
     startDeload,
     cancelDeload,
     load,

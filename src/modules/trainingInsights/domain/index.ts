@@ -107,10 +107,11 @@ export function calculateTrainingInsights(
   const deloadStatus = getDeloadStatus(phase, targetDate);
 
   // Exclude the deload window from e1RM so reduced loads don't warp strength trends.
-  const excludeRanges =
-    deloadActive && phase
-      ? [{ start: new Date(phase.startedAt), end: new Date(phase.endsAt) }]
-      : undefined;
+  // We must exclude it even if the deload is completed, otherwise the recently
+  // finished light workouts will flood into the 8-session trend and crash the e1RM.
+  const excludeRanges = phase
+    ? [{ start: new Date(phase.startedAt), end: new Date(phase.canceledAt ?? phase.endsAt) }]
+    : undefined;
 
   const e1rm = calculateE1RMInsights(logs, excludeRanges, targetDate);
 
