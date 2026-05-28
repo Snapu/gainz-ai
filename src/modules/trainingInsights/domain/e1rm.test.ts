@@ -27,8 +27,11 @@ function daysLater(n: number) {
 
 describe("calculateE1RM", () => {
   describe("guard conditions", () => {
-    it("returns null for weight = 0", () => {
-      expect(calculateE1RM(0, 5)).toBeNull();
+    it("returns eMaxReps for weight = 0 (unweighted exercise)", () => {
+      // 5 reps, no RPE -> assumed RPE 10 (0 RIR) -> eMaxReps = 5
+      expect(calculateE1RM(0, 5)).toBe(5);
+      // 5 reps, RPE 8 -> 2 RIR -> eMaxReps = 7
+      expect(calculateE1RM(0, 5, 8)).toBe(7);
     });
 
     it("returns null for reps = 0", () => {
@@ -481,6 +484,37 @@ describe("calculateE1RMInsights", () => {
     const withoutDeload = calculateE1RMInsights(logs, undefined, daysLater(30));
     expect(withDeload["OHP"]!.trend).toHaveLength(3);
     expect(withDeload["OHP"]!.e1rm).toBeGreaterThanOrEqual(withoutDeload["OHP"]!.e1rm);
+  });
+
+  it("excludes synthetic logs from trend (Flaw 7 fix)", () => {
+    const logs: ExerciseLog[] = [
+      createLog("Squat", daysLater(0), 100, 5),
+      createLog("Squat", daysLater(7), 105, 5),
+      // Synthetic log from training summary (inflated by maxWeight * avgReps @ RPE 8)
+      { ...createLog("Squat", daysLater(14), 140, 5, 8), synthetic: true },
+      createLog("Squat", daysLater(21), 110, 5),
+    ];
+    const result = calculateE1RMInsights(logs, undefined, daysLater(30));
+    // The synthetic log should not be in the trend, length should be 3
+    expect(result["Squat"]!.trend).toHaveLength(3);
+    // The e1rm should not be inflated by the 140kg synthetic log
+    const expectedMax = Math.max(
+      calculateE1RM(100, 5)!,
+      calculateE1RM(105, 5)!,
+      calculateE1RM(110, 5)!,
+    );
+    // Allowing for decay over a few sessions
+    expect(result["Squat"]!.e1rm).toBeLessThan(calculateE1RM(140, 5, 8)!);
+    expect(result["Squat"]!.e1rm).toBeCloseTo(expectedMax, 0);
+  });
+
+  it("synthetic logs in the same session as real logs don't contaminate the best-set selection", () => {
+    const logs: ExerciseLog[] = [
+      createLog("Bench", daysLater(0), 100, 5), // real
+      { ...createLog("Bench", daysLater(0), 150, 5), synthetic: true }, // synthetic in same session
+    ];
+    const result = calculateE1RMInsights(logs, undefined, daysLater(10));
+    expect(result["Bench"]!.e1rm).toBeCloseTo(calculateE1RM(100, 5)!, 1);
   });
 
   it("includes trendDates corresponding to the sessions in the trend array", () => {

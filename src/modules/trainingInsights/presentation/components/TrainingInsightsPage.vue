@@ -5,6 +5,7 @@ import MuscleActivationMap from "@/shared/presentation/components/MuscleActivati
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 import UiSegmentedControl from "@/shared/presentation/components/ui/UiSegmentedControl.vue";
+import UiSparkline from "@/shared/presentation/components/ui/UiSparkline.vue";
 import { useTrainingInsightsPageViewModel } from "../composables/useTrainingInsightsPageViewModel";
 
 const {
@@ -69,7 +70,7 @@ const {
           <div class="flex items-start justify-between gap-2 mb-4">
             <div>
               <p class="text-xs font-bold uppercase tracking-wide text-foreground/90 whitespace-nowrap">Training Phase</p>
-              <p class="text-[10px] sm:text-xs text-foreground/60 mt-0.5">Systemic state overview</p>
+              <p class="text-[10px] sm:text-xs text-foreground/60 mt-0.5">Overall recovery and readiness</p>
             </div>
             <div class="flex flex-col items-end gap-1.5">
               <span
@@ -120,7 +121,7 @@ const {
             <div class="rounded-lg border border-white/10 bg-white/[0.03] p-2.5 flex flex-col justify-between">
               <div>
                 <div class="flex justify-between items-start">
-                  <p class="text-xs uppercase tracking-wide text-foreground/50">ACWR Zone</p>
+                  <p class="text-xs uppercase tracking-wide text-foreground/50">Workload Trend (ACWR)</p>
                   <span class="text-xs px-1.5 py-0.5 rounded border uppercase font-bold" :class="acwrZone.toneClass">
                     {{ acwrZone.label }}
                   </span>
@@ -143,7 +144,7 @@ const {
                 <div class="flex justify-between items-start">
                   <p class="text-xs uppercase tracking-wide text-foreground/50">Risk Score</p>
                   <span class="text-xs px-1.5 py-0.5 rounded border uppercase font-bold text-foreground/60" :class="{ 'text-orange-300 border-orange-500/30 bg-orange-500/10': insights.fatigue.shouldDeload, 'border-white/10': !insights.fatigue.shouldDeload }">
-                    {{ insights.fatigue.shouldDeload ? 'DELOAD REC' : 'NO DELOAD' }}
+                    {{ insights.fatigue.shouldDeload ? 'DELOAD ADVISED' : 'NO DELOAD' }}
                   </span>
                 </div>
                 <p class="text-sm font-bold mt-1" :class="fatigueRiskToneClass">
@@ -160,39 +161,42 @@ const {
           <div class="rounded-lg border border-white/10 bg-white/[0.03] p-2.5 mb-4">
             <div class="flex items-center justify-between mb-3">
               <p class="text-[10px] uppercase tracking-wide text-foreground/50">Weekly Load Window</p>
-              <span class="text-[9px] px-1.5 py-0.5 rounded-full border font-semibold uppercase tracking-wider text-foreground/60" :class="{ 'border-emerald-500/20 bg-emerald-500/5 text-emerald-400/80': insights.fatigue.hasSufficientHistory, 'border-white/10': !insights.fatigue.hasSufficientHistory }">
-                {{ insights.fatigue.hasSufficientHistory ? "4-Wk History Ready" : "Need Data" }}
+              <span v-if="!insights.fatigue.hasSufficientHistory" class="text-[9px] px-1.5 py-0.5 rounded-full border font-semibold uppercase tracking-wider text-foreground/60 border-white/10">
+                Not enough data
               </span>
             </div>
             
-            <div class="grid grid-cols-4 gap-1">
-              <div v-for="row in fatigueWeekRows" :key="row.key" class="flex flex-col items-center">
-                <div class="flex justify-center gap-0.5 sm:gap-1 w-full">
-                  <!-- Sets Column -->
-                  <div class="flex-1 max-w-[12px] flex flex-col items-center">
-                    <div class="h-8 w-full flex items-end">
-                      <div class="w-full bg-cyan-500/70 rounded-t-[2px] transition-all duration-500" :style="{ height: `${Math.max(4, (row.sets / maxSets) * 100)}%` }"></div>
-                    </div>
-                    <p class="text-[8px] sm:text-[9px] text-center text-foreground/60 mt-0.5">{{ row.sets }}</p>
-                  </div>
-                  <!-- Tonnage Column -->
-                  <div class="flex-1 max-w-[12px] flex flex-col items-center">
-                    <div class="h-8 w-full flex items-end">
-                      <div class="w-full bg-amber-500/70 rounded-t-[2px] transition-all duration-500" :style="{ height: `${Math.max(4, (row.tonnage / maxTonnage) * 100)}%` }"></div>
-                    </div>
-                    <p class="text-[8px] sm:text-[9px] text-center text-foreground/60 mt-0.5">{{ (row.tonnage / 1000).toFixed(1) }}k</p>
-                  </div>
-                </div>
-                <p class="text-[9px] sm:text-[10px] font-semibold text-foreground/70 text-center truncate border-t border-white/10 w-full pt-1 mt-1">
-                  {{ row.label.replace('Week ', 'W') }}
-                </p>
-              </div>
+            <div class="relative w-full h-[64px] mt-2 mb-2 group">
+              <!-- Sets Line -->
+              <UiSparkline
+                :values="fatigueWeekRows.map(r => r.sets)"
+                :width="300"
+                :height="64"
+                color="oklch(0.8 0.1 230)"
+                fillColor="oklch(0.8 0.1 230 / 0.1)"
+                class="absolute inset-0 w-full h-full opacity-90 transition-opacity duration-300"
+              />
+              <!-- Tonnage Line (No fill) -->
+              <UiSparkline
+                :values="fatigueWeekRows.map(r => r.tonnage)"
+                :width="300"
+                :height="64"
+                color="oklch(0.8 0.15 60)"
+                fillColor="transparent"
+                class="absolute inset-0 w-full h-full opacity-90 transition-opacity duration-300"
+              />
+            </div>
+            
+            <div class="flex justify-between px-2">
+              <span v-for="row in fatigueWeekRows" :key="row.key" class="text-[9px] font-semibold text-foreground/50 truncate w-1/4 text-center">
+                {{ row.label.replace('Week ', 'W') }}
+              </span>
             </div>
 
             <!-- Load Deltas -->
-            <div class="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-white/5">
+            <div class="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-white/5">
               <div class="flex flex-col">
-                <p class="text-[9px] uppercase text-cyan-300/70">Sets vs Avg</p>
+                <p class="text-[9px] uppercase text-cyan-300/70">Volume vs Avg</p>
                 <p class="text-xs font-semibold text-foreground/80 mt-0.5">{{ weeklyDeltaLabel }} <span class="text-[10px] text-foreground/50 font-normal">({{ insights.fatigue.loadWindow.sets.ratioVsPriorAvg ?? "-" }}x)</span></p>
               </div>
               <div class="flex flex-col">
@@ -305,10 +309,15 @@ const {
 
                 <div class="shrink-0 flex items-center gap-2 sm:gap-3">
                   <div class="text-right hidden sm:block">
-                    <p class="text-xs uppercase tracking-wide text-foreground/45">e1RM</p>
+                    <p class="text-xs uppercase tracking-wide text-foreground/45">
+                      {{ metric.unit === 'reps' ? 'eMax' : 'e1RM' }}
+                    </p>
                   </div>
-                  <p class="text-sm font-bold text-foreground/90 w-[40px] sm:w-[48px] text-right">
-                    {{ metric.e1rm.toFixed(1) }}
+                  <p 
+                    class="text-sm font-bold text-foreground/90 w-[40px] sm:w-[48px] text-right"
+                    :title="metric.unit === 'reps' ? 'Estimated Max Reps' : 'Estimated 1RM (kg)'"
+                  >
+                    {{ metric.unit === 'reps' ? Math.round(metric.e1rm) : metric.e1rm.toFixed(1) }}
                   </p>
                   <!-- Delta Pill -->
                   <div 

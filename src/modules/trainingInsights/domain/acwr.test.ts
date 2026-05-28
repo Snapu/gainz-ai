@@ -76,10 +76,10 @@ describe("computeACWR (rolling average)", () => {
   it("returns < 1.0 when acute load is below chronic weekly average (deload)", () => {
     // Heavy chronic training, light acute week
     const logs = [
-      createLog(10, 100, 10), // pre-acute, high load
-      createLog(12, 100, 10),
-      createLog(14, 100, 10),
-      createLog(3, 100, 1), // acute, very light
+      createLog(10, 100, 10, 8), // pre-acute, high load
+      createLog(12, 100, 10, 8),
+      createLog(14, 100, 10, 8),
+      createLog(3, 100, 1, 1), // acute, very light
     ];
     const acwr = computeACWR(logs, BASE_DATE);
     expect(acwr).not.toBeNull();
@@ -112,11 +112,14 @@ describe("computeACWR (rolling average)", () => {
     );
   });
 
-  it("RPE on a log does not affect volume load calculation", () => {
-    // Both logs have the same weight/reps — different RPE must not change the result
+  it("RPE on a log correctly overrides the default volume load calculation", () => {
+    // Both logs have the same weight/reps — different RPE must change the result
     const withRPE = [createLog(15, 100, 5, 10), createLog(4, 100, 5, 6)];
     const withoutRPE = [createLog(15, 100, 5), createLog(4, 100, 5)];
-    expect(computeACWR(withRPE, BASE_DATE)).toBeCloseTo(computeACWR(withoutRPE, BASE_DATE)!, 2);
+    // withRPE: pre-acute=10, acute=6. ChronicTotal=16. ChronicWeekly=4. ACWR=6/4=1.5
+    expect(computeACWR(withRPE, BASE_DATE)).toBeCloseTo(1.5, 2);
+    // withoutRPE: pre-acute=8, acute=8. ChronicTotal=16. ChronicWeekly=4. ACWR=8/4=2.0
+    expect(computeACWR(withoutRPE, BASE_DATE)).toBeCloseTo(2.0, 2);
   });
 
   it("rounds result to 2 decimal places", () => {
@@ -127,7 +130,7 @@ describe("computeACWR (rolling average)", () => {
     expect(decimalPart.length).toBeLessThanOrEqual(2);
   });
 
-  it("handles logs with missing weight or reps (treats as 0)", () => {
+  it("handles logs with missing RPE (treats as 8)", () => {
     const logs: ExerciseLog[] = [
       {
         id: crypto.randomUUID(),
@@ -140,8 +143,8 @@ describe("computeACWR (rolling average)", () => {
         loggedAt: new Date(BASE_DATE.getTime() - 4 * 86_400_000),
       },
     ];
-    // Both loads are 0 → chronic = 0 → null
-    expect(computeACWR(logs, BASE_DATE)).toBeNull();
+    // Acute = 8, Chronic = 16/4 = 4.0. acwr = 8 / 4 = 2.0
+    expect(computeACWR(logs, BASE_DATE)).toBeCloseTo(2.0, 2);
   });
 });
 
@@ -219,11 +222,12 @@ describe("computeEWMAACWR (EWMA)", () => {
   });
 
   it("returns null when EWMAchronic is 0 (no load ever recorded)", () => {
-    // All logs have weight/reps undefined → load = 0 → both EWMAs stay at 0
+    // All logs have RPE 0 → load = 0 → both EWMAs stay at 0
     const logs: ExerciseLog[] = Array.from({ length: 5 }, (_, i) => ({
       id: crypto.randomUUID(),
       exerciseName: "Walk",
       loggedAt: new Date(BASE_DATE.getTime() - (i + 1) * 7 * 86_400_000),
+      rpe: 0,
     }));
     expect(computeEWMAACWR(logs, BASE_DATE)).toBeNull();
   });

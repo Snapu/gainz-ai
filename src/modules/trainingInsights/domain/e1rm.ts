@@ -24,6 +24,8 @@ export interface ExerciseE1RM {
    * the field was permanently locked and the AI's +5% adjustment became dead code.
    */
   bestRPE?: number;
+  /** Whether the metric represents weight (kg) or estimated max reps (reps) */
+  unit: "kg" | "reps";
 }
 
 // ---------------------------------------------------------------------------
@@ -185,7 +187,18 @@ function mayhew(weight: number, reps: number): number {
  * - Helms ER et al. (2017). J Strength Cond Res, 31(12), 3463-3470.
  */
 export function calculateE1RM(weight: number, reps: number, rpe?: number): number | null {
-  if (reps <= 0 || weight <= 0) return null;
+  if (reps <= 0) return null;
+
+  if (weight === 0 || !weight) {
+    // Bodyweight / unweighted exercises: calculate eMaxReps instead of a kg e1RM
+    // eMaxReps = reps completed + reps in reserve (10 - RPE)
+    // Derived from the Repetitions in Reserve (RIR) based RPE scale
+    // (Zourdos et al., 2016, J Strength Cond Res 30(1))
+    const rir = 10 - (rpe ?? 10);
+    return reps + Math.max(0, rir);
+  }
+
+  if (weight < 0) return null;
   if (reps > 20) return null;
 
   // --- Singles ---
@@ -274,9 +287,10 @@ export function calculateE1RMInsights(
     excludeRanges && excludeRanges.length > 0
       ? logs.filter(
           (log) =>
+            !log.synthetic &&
             !excludeRanges.some((range) => log.loggedAt > range.start && log.loggedAt <= range.end),
         )
-      : logs;
+      : logs.filter((log) => !log.synthetic);
 
   const byExercise = new Map<string, Map<string, ExerciseLog[]>>();
   const displayNames = new Map<string, string>();
@@ -326,7 +340,7 @@ export function calculateE1RMInsights(
       if (bestE1RM === null) return [];
       // Carry the date alongside the estimate so trendDates stays in sync
       // with trend even when some sessions are filtered out (e.g. reps > 20).
-      return [{ e1rm: bestE1RM, rpe: bestSetRPE, date: new Date(day) }];
+      return [{ e1rm: bestE1RM, rpe: bestSetRPE, date: new Date(day), logs: logsForDay }];
     });
 
     if (sessionData.length === 0) continue;
@@ -419,12 +433,14 @@ export function calculateE1RMInsights(
 
     const displayName = displayNames.get(canonical);
     if (displayName) {
+      const isUnweighted = latestSessionData?.logs.every((l: any) => !l.weight || l.weight === 0);
       result[displayName] = {
         e1rm: currentE1RM,
         trend,
         trendDates,
         plateau,
         bestRPE,
+        unit: isUnweighted ? "reps" : "kg",
       };
     }
   }

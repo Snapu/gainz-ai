@@ -176,13 +176,14 @@ const selectedDetail = computed(() => {
   const name = selectedMuscle.value;
   const status = props.muscleGroups[name];
   const targets = VOLUME_LANDMARKS[name];
-  const recoveryHours = RECOVERY_HOURS[name];
+  const recoveryHours = status?.recoveryHours ?? RECOVERY_HOURS[name];
   const maxDisplay = targets.mrv * 1.15;
   const sets = status?.sets ?? 0;
   return {
     name,
     landmark: status?.landmark,
     sets,
+    isoWeekSets: status?.isoWeekSets ?? 0,
     frequencyPerWeek: status?.frequencyPerWeek ?? 0,
     hoursSinceLastTrained: status?.hoursSinceLastTrained ?? null,
     recoveryReady: status?.recoveryReady ?? true,
@@ -322,7 +323,7 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
                 <CheckCircle2 v-else-if="muscle.status && muscle.status.recoveryReady" class="w-3 h-3 text-emerald-500/80" />
               </div>
               <span class="text-xs sm:text-sm font-mono font-bold whitespace-nowrap opacity-90 mt-[2px]" :style="{ color: getLineColor(muscle.status?.landmark) }">
-                {{ muscle.status?.sets != null ? muscle.status.sets.toFixed(1) : '0' }} <span class="opacity-50 font-sans text-[10px] sm:text-xs font-medium tracking-wide">SETS/WK</span>
+                {{ muscle.status?.isoWeekSets != null ? muscle.status.isoWeekSets.toFixed(0) : '0' }} <span class="opacity-50 font-sans text-[10px] sm:text-xs font-medium tracking-wide">SETS/WK</span>
               </span>
            </div>
 
@@ -353,7 +354,7 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
                 <span>Volume</span>
               </div>
               <span class="text-xs font-bold font-mono" :style="{ color: getLineColor(selectedDetail.landmark) }">
-                {{ selectedDetail.sets.toFixed(1) }} sets/wk
+                {{ selectedDetail.isoWeekSets.toFixed(0) }} sets/wk
               </span>
             </div>
 
@@ -406,8 +407,14 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
                 ></div>
               </div>
               <div class="flex justify-between text-xs text-muted-foreground/50 font-mono mt-1">
-                <span>{{ Math.round(selectedDetail.hoursSinceLastTrained) }}h elapsed</span>
-                <span>{{ selectedDetail.recoveryHours }}h needed</span>
+                <template v-if="!selectedDetail.recoveryReady">
+                  <span class="text-yellow-400/80">{{ Math.max(0, Math.round(selectedDetail.recoveryHours - selectedDetail.hoursSinceLastTrained)) }}h remaining</span>
+                  <span>{{ Math.round(selectedDetail.recoveryHours) }}h target</span>
+                </template>
+                <template v-else>
+                  <span class="text-green-400/80">Recovered</span>
+                  <span>{{ Math.round(selectedDetail.hoursSinceLastTrained) }}h elapsed</span>
+                </template>
               </div>
             </template>
             <p v-else class="text-xs text-muted-foreground/40 italic">Not trained recently</p>

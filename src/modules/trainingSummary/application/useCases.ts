@@ -219,6 +219,7 @@ export function summaryToExerciseLogs(summaries: TrainingSummary[]): ExerciseLog
           weight: summary.maxWeight,
           reps: summary.totalReps ? Math.floor(summary.totalReps / summary.sets) : 10,
           rpe: 8,
+          synthetic: true,
         });
         setsRemaining--;
       }

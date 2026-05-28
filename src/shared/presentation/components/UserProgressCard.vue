@@ -89,7 +89,7 @@ const phaseTheme = computed(() => PHASE_THEME[props.insights.phase]);
                    v-if="deloadStore.active"
                    class="text-xs uppercase tracking-wider px-1.5 py-0 text-orange-400 border border-orange-500/30 bg-orange-500/10"
                  >
-                   Recovery · {{ deloadStore.daysRemaining }}d
+                   Deload · {{ deloadStore.daysRemaining }}d
                  </UiBadge>
                  <UiBadge v-else :class="phaseTheme" class="text-xs uppercase tracking-wider px-1.5 py-0">
                    {{ insights.phase }}
@@ -98,9 +98,9 @@ const phaseTheme = computed(() => PHASE_THEME[props.insights.phase]);
             </div>
             
             <div class="flex flex-col gap-0.5">
-              <span class="text-xs font-bold tracking-widest text-muted-foreground uppercase">Weekly Sets</span>
+              <span class="text-xs font-bold tracking-widest text-muted-foreground uppercase">Weekly Volume</span>
               <span class="text-lg font-bold text-foreground leading-none">
-                {{ insights.fatigue.weeklyTotalSets[3] || 0 }}
+                {{ Math.round(insights.fatigue.weeklyTotalSets[3] || 0) }}
               </span>
             </div>
           </div>

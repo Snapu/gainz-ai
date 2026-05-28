@@ -2,7 +2,9 @@ import {
   type FatigueTriggerId,
   isFatigueTriggerId as isSharedFatigueTriggerId,
 } from "@/modules/sharedKernel/domain";
+import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 import type { ExerciseE1RM } from "./e1rm";
+import { computeEwma } from "./ewma";
 
 export type { FatigueTriggerId } from "@/modules/sharedKernel/domain";
 
@@ -13,9 +15,9 @@ export interface FatigueInsight {
   reason?: string;
   /** True when at least 4 weekly windows are available for robust triggering. */
   hasSufficientHistory: boolean;
-  /** Weekly arrays are oldest -> newest; index 3 is current week. */
+  /** Weekly rolling arrays are oldest -> newest; index 3 is current week (last 7 days). */
   weeklyTotalSets: number[];
-  /** Weekly tonnage in kg; same ordering as weeklyTotalSets. */
+  /** Weekly rolling tonnage in kg; same ordering as weeklyTotalSets. */
   weeklyTonnage: number[];
   /** AI-oriented explicit load context to avoid positional-index ambiguity. */
   loadWindow: {
@@ -46,6 +48,7 @@ export interface FatigueInsight {
 
 const VOLUME_SPIKE_MIN_BASELINE = 12;
 const VOLUME_SPIKE_MULTIPLIER = 1.25;
+const VOLUME_RAMP_MIN_MULTIPLIER = 1.2;
 const TONNAGE_SPIKE_MULTIPLIER = 1.5;
 const DECLINE_THRESHOLD = 0.95;
 const MIN_DECLINING_EXERCISES = 2;
@@ -78,10 +81,6 @@ const TRIGGER_REASON: Record<FatigueTriggerId, string> = {
   volumeIncreasing: "4-week progressive volume ramp",
 };
 
-function toFourWeekWindow(values: number[]): [number, number, number, number] {
-  return [values[0] ?? 0, values[1] ?? 0, values[2] ?? 0, values[3] ?? 0];
-}
-
 export function isFatigueTriggerId(value: string): value is FatigueTriggerId {
   return isSharedFatigueTriggerId(value);
 }
@@ -95,37 +94,12 @@ function getPrimaryFatigueReason(triggeredBy: FatigueTriggerId[]): string | unde
   return topTrigger ? TRIGGER_REASON[topTrigger] : undefined;
 }
 
-function buildFatigueLoadWindow(
-  weeklyTotalSets: number[],
-  weeklyTonnage: number[],
-): FatigueInsight["loadWindow"] {
-  const [setsMinus3, setsMinus2, setsMinus1, setsCurrent] = toFourWeekWindow(weeklyTotalSets);
-  const [tonnageMinus3, tonnageMinus2, tonnageMinus1, tonnageCurrent] =
-    toFourWeekWindow(weeklyTonnage);
-
-  const priorSetsAvg = (setsMinus3 + setsMinus2 + setsMinus1) / 3;
-  const priorTonnageAvg = (tonnageMinus3 + tonnageMinus2 + tonnageMinus1) / 3;
-
-  return {
-    sets: {
-      weekMinus3: setsMinus3,
-      weekMinus2: setsMinus2,
-      weekMinus1: setsMinus1,
-      current: setsCurrent,
-      prior3WeekAvg: Math.round(priorSetsAvg * 100) / 100,
-      ratioVsPriorAvg:
-        priorSetsAvg > 0 ? Math.round((setsCurrent / priorSetsAvg) * 100) / 100 : null,
-    },
-    tonnage: {
-      weekMinus3: tonnageMinus3,
-      weekMinus2: tonnageMinus2,
-      weekMinus1: tonnageMinus1,
-      current: tonnageCurrent,
-      prior3WeekAvg: Math.round(priorTonnageAvg * 100) / 100,
-      ratioVsPriorAvg:
-        priorTonnageAvg > 0 ? Math.round((tonnageCurrent / priorTonnageAvg) * 100) / 100 : null,
-    },
-  };
+function getRollingSum(map: Map<number, number>, endDay: number): number {
+  let sum = 0;
+  for (let i = 0; i < 7; i++) {
+    sum += map.get(endDay - i) ?? 0;
+  }
+  return sum;
 }
 
 /**
@@ -147,43 +121,120 @@ function buildFatigueLoadWindow(
  *   b) current week is not already a deload week.
  */
 export function calculateFatigueInsight(
-  weeklyTotalSets: number[],
-  weeklyTonnage: number[],
+  logs: ExerciseLog[],
   e1rmData: Record<string, ExerciseE1RM>,
   isCurrentWeekDeload = false,
   targetDate: Date = new Date(),
+  excludeRanges?: { start: Date; end: Date }[],
 ): FatigueInsight {
-  if (weeklyTotalSets.length < 4 || weeklyTonnage.length < 4) {
+  const targetDay = Math.floor(targetDate.getTime() / MS_PER_DAY);
+
+  const dailySets = new Map<number, number>();
+  const dailyTonnage = new Map<number, number>();
+
+  for (const log of logs) {
+    if (log.synthetic) continue;
+    const dayKey = Math.floor(log.loggedAt.getTime() / MS_PER_DAY);
+    if (dayKey > targetDay) continue;
+
+    dailySets.set(dayKey, (dailySets.get(dayKey) ?? 0) + 1);
+    dailyTonnage.set(dayKey, (dailyTonnage.get(dayKey) ?? 0) + (log.weight ?? 0) * (log.reps ?? 0));
+  }
+
+  // If there are excluded ranges (e.g., past deloads), we fill those days
+  // with the average daily load of the 21 days prior to the deload.
+  // This prevents a completed deload from artificially depressing the chronic baseline
+  // and triggering a false volume spike when normal training resumes.
+  if (excludeRanges) {
+    for (const range of excludeRanges) {
+      const rangeStartDay = Math.floor(range.start.getTime() / MS_PER_DAY);
+      const rangeEndDay = Math.floor(range.end.getTime() / MS_PER_DAY);
+
+      if (rangeEndDay < targetDay - 28) continue; // Too old to affect current EWMA
+
+      let preDeloadSetsSum = 0;
+      let preDeloadTonnageSum = 0;
+      let preDeloadDays = 0;
+
+      for (let d = rangeStartDay - 21; d < rangeStartDay; d++) {
+        preDeloadSetsSum += dailySets.get(d) ?? 0;
+        preDeloadTonnageSum += dailyTonnage.get(d) ?? 0;
+        preDeloadDays++;
+      }
+
+      const avgSets = preDeloadDays > 0 ? preDeloadSetsSum / preDeloadDays : 0;
+      const avgTonnage = preDeloadDays > 0 ? preDeloadTonnageSum / preDeloadDays : 0;
+
+      for (let d = rangeStartDay; d <= rangeEndDay; d++) {
+        // Only fill if it's in the past or today
+        if (d <= targetDay) {
+          dailySets.set(d, avgSets);
+          dailyTonnage.set(d, avgTonnage);
+        }
+      }
+    }
+  }
+
+  const setsEwma = computeEwma(dailySets, targetDay);
+  const tonnageEwma = computeEwma(dailyTonnage, targetDay);
+
+  const sets0 = getRollingSum(dailySets, targetDay);
+  const sets1 = getRollingSum(dailySets, targetDay - 7);
+  const sets2 = getRollingSum(dailySets, targetDay - 14);
+  const sets3 = getRollingSum(dailySets, targetDay - 21);
+  const weeklyTotalSets = [sets3, sets2, sets1, sets0];
+
+  const tonnage0 = getRollingSum(dailyTonnage, targetDay);
+  const tonnage1 = getRollingSum(dailyTonnage, targetDay - 7);
+  const tonnage2 = getRollingSum(dailyTonnage, targetDay - 14);
+  const tonnage3 = getRollingSum(dailyTonnage, targetDay - 21);
+  const weeklyTonnage = [tonnage3, tonnage2, tonnage1, tonnage0];
+
+  const hasSufficientHistory = setsEwma !== null && tonnageEwma !== null;
+
+  if (!hasSufficientHistory) {
     return {
       shouldDeload: false,
       reason: undefined,
       hasSufficientHistory: false,
       weeklyTotalSets,
       weeklyTonnage,
-      loadWindow: buildFatigueLoadWindow(weeklyTotalSets, weeklyTonnage),
+      loadWindow: {
+        sets: {
+          weekMinus3: sets3,
+          weekMinus2: sets2,
+          weekMinus1: sets1,
+          current: sets0,
+          prior3WeekAvg: 0,
+          ratioVsPriorAvg: null,
+        },
+        tonnage: {
+          weekMinus3: tonnage3,
+          weekMinus2: tonnage2,
+          weekMinus1: tonnage1,
+          current: tonnage0,
+          prior3WeekAvg: 0,
+          ratioVsPriorAvg: null,
+        },
+      },
       triggeredBy: [],
       decliningExercises: 0,
       riskScore: 0,
     };
   }
 
-  const priorSetsAvg = (weeklyTotalSets[0]! + weeklyTotalSets[1]! + weeklyTotalSets[2]!) / 3;
-  const currentSets = weeklyTotalSets[3]!;
-
-  const priorTonnageAvg = (weeklyTonnage[0]! + weeklyTonnage[1]! + weeklyTonnage[2]!) / 3;
-  const currentTonnage = weeklyTonnage[3]!;
-
   // Keep id name volumeIncreasing for backward compatibility in snapshot/history.
   const volumeIncreasing =
-    weeklyTotalSets[1]! > weeklyTotalSets[0]! &&
-    weeklyTotalSets[2]! > weeklyTotalSets[1]! &&
-    weeklyTotalSets[3]! >= weeklyTotalSets[2]! &&
-    currentSets >= VOLUME_SPIKE_MIN_BASELINE;
+    sets2 > sets3 &&
+    sets1 > sets2 &&
+    sets0 >= sets1 &&
+    sets0 >= sets3 * VOLUME_RAMP_MIN_MULTIPLIER &&
+    sets0 >= VOLUME_SPIKE_MIN_BASELINE;
 
   let decliningExercises = 0;
   if (!isCurrentWeekDeload) {
     for (const data of Object.values(e1rmData)) {
-      if (data.trend.length < 3) continue;
+      if (data.trend.length < 4) continue;
 
       const lastLogDate = data.trendDates[data.trendDates.length - 1]!;
       const daysSinceLastLog = (targetDate.getTime() - lastLogDate.getTime()) / MS_PER_DAY;
@@ -192,22 +243,29 @@ export function calculateFatigueInsight(
       // any drop is likely detraining or an old drop, not a current fatigue indicator.
       if (daysSinceLastLog > ACUTE_FATIGUE_RECENCY_DAYS) continue;
 
-      const current = data.trend[data.trend.length - 1]!;
-      const prior2Avg =
-        ((data.trend[data.trend.length - 2] ?? 0) + (data.trend[data.trend.length - 3] ?? 0)) / 2;
-      if (prior2Avg > 0 && current < prior2Avg * DECLINE_THRESHOLD) {
+      const d2 = data.trend[data.trend.length - 1]!; // current
+      const d1 = data.trend[data.trend.length - 2]!; // previous
+      const b2 = data.trend[data.trend.length - 3]!; // baseline 2
+      const b1 = data.trend[data.trend.length - 4]!; // baseline 1
+
+      const baselineAvg = (b1 + b2) / 2;
+      if (
+        baselineAvg > 0 &&
+        d1 < baselineAvg * DECLINE_THRESHOLD &&
+        d2 < baselineAvg * DECLINE_THRESHOLD
+      ) {
         decliningExercises++;
       }
     }
   }
   const performanceDecline = decliningExercises >= MIN_DECLINING_EXERCISES;
 
+  // EWMA values are daily averages. Multiply by 7 for weekly equivalent comparisons.
+  const chronicWeeklySets = setsEwma.chronic * 7;
   const volumeSpike =
-    priorSetsAvg >= VOLUME_SPIKE_MIN_BASELINE &&
-    currentSets > priorSetsAvg * VOLUME_SPIKE_MULTIPLIER;
+    chronicWeeklySets >= VOLUME_SPIKE_MIN_BASELINE && setsEwma.ratio > VOLUME_SPIKE_MULTIPLIER;
 
-  const tonnageSpike =
-    priorTonnageAvg > 0 && currentTonnage > priorTonnageAvg * TONNAGE_SPIKE_MULTIPLIER;
+  const tonnageSpike = tonnageEwma.chronic > 0 && tonnageEwma.ratio > TONNAGE_SPIKE_MULTIPLIER;
 
   const triggeredBy: FatigueTriggerId[] = [];
 
@@ -226,7 +284,24 @@ export function calculateFatigueInsight(
     hasSufficientHistory: true,
     weeklyTotalSets,
     weeklyTonnage,
-    loadWindow: buildFatigueLoadWindow(weeklyTotalSets, weeklyTonnage),
+    loadWindow: {
+      sets: {
+        weekMinus3: sets3,
+        weekMinus2: sets2,
+        weekMinus1: sets1,
+        current: sets0,
+        prior3WeekAvg: Math.round(chronicWeeklySets * 10) / 10,
+        ratioVsPriorAvg: setsEwma.ratio,
+      },
+      tonnage: {
+        weekMinus3: tonnage3,
+        weekMinus2: tonnage2,
+        weekMinus1: tonnage1,
+        current: tonnage0,
+        prior3WeekAvg: Math.round(tonnageEwma.chronic * 7 * 10) / 10,
+        ratioVsPriorAvg: tonnageEwma.ratio,
+      },
+    },
     triggeredBy,
     decliningExercises,
     riskScore,

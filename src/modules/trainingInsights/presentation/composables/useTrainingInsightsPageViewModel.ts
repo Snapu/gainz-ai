@@ -31,6 +31,7 @@ type ExerciseMetric = {
   lastLoggedAt: Date;
   lastTrainedLabel: string;
   isStale: boolean;
+  unit: "kg" | "reps";
 };
 
 type MuscleGroupWithKey = MuscleGroupInsight & { muscleGroup: string };
@@ -119,17 +120,24 @@ export function useTrainingInsightsPageViewModel() {
     }
 
     if (acwr < 0.6) {
+      const now = new Date().getTime();
+      const hasRecentLogs = trainingInsightsStore.allLogs.some(
+        (log) => (now - log.loggedAt.getTime()) / (1000 * 60 * 60 * 24) <= 7,
+      );
+
       return {
-        label: "Underloaded",
+        label: "Low",
         range: "< 0.60",
-        detail: "Training load is low relative to your baseline. You may be detraining.",
+        detail: hasRecentLogs
+          ? "Low relative load — this is common when switching training phases or reducing volume."
+          : "Training load is low relative to your recent baseline. Normal during deload weeks or rest periods.",
         toneClass: "bg-slate-400/10 text-slate-300 border-slate-400/30",
       };
     }
 
     if (acwr <= 1.3) {
       return {
-        label: "Balanced",
+        label: "Optimal",
         range: "0.60 - 1.30",
         detail: "Workload is in the productive range for build/maintain progression.",
         toneClass: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30",
@@ -137,9 +145,10 @@ export function useTrainingInsightsPageViewModel() {
     }
 
     return {
-      label: "High ramp",
+      label: "Elevated",
       range: "> 1.30",
-      detail: "Acute load is rising quickly vs baseline. Fatigue and injury risk increase.",
+      detail:
+        "Acute load is rising quickly vs your baseline. Normal during planned overreach — monitor recovery if unintentional.",
       toneClass: "bg-orange-500/10 text-orange-300 border-orange-500/30",
     };
   });
@@ -200,7 +209,7 @@ export function useTrainingInsightsPageViewModel() {
 
   const deloadStatusNote = computed(() => {
     if (insights.value.deloadStatus === "active") {
-      return `${deloadStore.daysRemaining ?? 0}d remaining in recovery week.`;
+      return `${deloadStore.daysRemaining ?? 0}d remaining in deload.`;
     }
     if (insights.value.deloadStatus === "completed") {
       return "Latest deload has completed. Fatigue detection is active again.";
@@ -216,25 +225,25 @@ export function useTrainingInsightsPageViewModel() {
     return [
       {
         key: "weekMinus3",
-        label: "Week -3",
+        label: "3 Wks Ago",
         sets: loadWindow.sets.weekMinus3,
         tonnage: loadWindow.tonnage.weekMinus3,
       },
       {
         key: "weekMinus2",
-        label: "Week -2",
+        label: "2 Wks Ago",
         sets: loadWindow.sets.weekMinus2,
         tonnage: loadWindow.tonnage.weekMinus2,
       },
       {
         key: "weekMinus1",
-        label: "Week -1",
+        label: "1 Wk Ago",
         sets: loadWindow.sets.weekMinus1,
         tonnage: loadWindow.tonnage.weekMinus1,
       },
       {
         key: "current",
-        label: "Current",
+        label: "Past 7 Days",
         sets: loadWindow.sets.current,
         tonnage: loadWindow.tonnage.current,
       },
@@ -329,6 +338,7 @@ export function useTrainingInsightsPageViewModel() {
           lastLoggedAt: new Date(lastLogTime),
           lastTrainedLabel,
           isStale: daysAgo >= 28,
+          unit: data.unit,
         };
       })
       .sort((a, b) => {
@@ -363,7 +373,7 @@ export function useTrainingInsightsPageViewModel() {
       plateauExerciseCount: activeExerciseMetrics.value.filter((m) => m.status === "plateau")
         .length,
     };
-    if (plateauPaused) return "Plateau & drop detection paused during recovery week.";
+    if (plateauPaused) return "Plateau & drop detection paused during deload.";
     const plateaus = activeExerciseMetrics.value.filter((m) => m.status === "plateau").length;
     const improving = activeExerciseMetrics.value.filter((m) => m.status === "improving").length;
     if (plateaus === 0 && improving === 0) return "No significant strength trends detected yet.";

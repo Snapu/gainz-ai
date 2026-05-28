@@ -110,4 +110,10 @@ describe("summaryToExerciseLogs", () => {
     const logs = summaryToExerciseLogs([makeSummary({ sets: 40, workoutDays: 20 })]);
     expect(logs.every((l) => l.loggedAt.getDate() <= 28)).toBe(true);
   });
+
+  it("sets synthetic flag to true for all generated logs", () => {
+    const logs = summaryToExerciseLogs([makeSummary({ sets: 4, workoutDays: 2 })]);
+    expect(logs.length).toBe(4);
+    expect(logs.every((l) => l.synthetic === true)).toBe(true);
+  });
 });

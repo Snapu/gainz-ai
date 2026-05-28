@@ -1,33 +1,21 @@
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
-
-/**
- * Default EWMA decay constants recommended by Murray et al. (2017).
- *
- * Acute  λ = 0.28  ≈ 2/(7+1)  — 7-day exponential window
- * Chronic λ = 0.10  ≈ 2/(28+1) — 28-day exponential window
- *
- * Reference: Murray NB et al. (2017). Calculating acute:chronic workload ratios using
- * exponentially weighted moving averages: a practical guide for clinicians.
- * Br J Sports Med, 51(3), 209-210.
- */
-const DEFAULT_EWMA_LAMBDA_ACUTE = 0.28;
-const DEFAULT_EWMA_LAMBDA_CHRONIC = 0.1;
+import { computeEwma, DEFAULT_EWMA_LAMBDA_ACUTE, DEFAULT_EWMA_LAMBDA_CHRONIC } from "./ewma";
 
 const MS_PER_DAY = 86_400_000;
 
 /**
- * Returns the raw volume load for a single set: weight (kg) × reps.
+ * Calculates the internal load of a single set for ACWR purposes.
+ * Previously used Tonnage (weight * reps), which incorrectly tracked phase
+ * transitions (Flaw 2A in academic review) and broke calisthenics tracking.
+ * Now uses RPE-Weighted Sets (Internal Load proxy), where each set contributes
+ * its RPE to the total load. Default RPE 8 assumes a "hard working set".
  *
- * RPE is deliberately excluded here. Applying RPE as a simple linear multiplier
- * (e.g. rpe/10) has no established evidence base and distorts tonnage comparisons
- * across different athletes and exercises. Raw volume load is the most widely
- * validated load metric for ACWR in resistance-training research.
- *
- * Reference: Haff GG & Triplett NT (2003). Essentials of Strength Training and
- * Conditioning (3rd ed.). Human Kinetics.
+ * Reference:
+ * - Foster C et al. (2001). A new approach to monitoring exercise training.
+ *   J Strength Cond Res, 15(1), 109-115. (Pioneered Session-RPE internal load)
  */
-function calculateSetLoad(weight: number, reps: number): number {
-  return weight * reps;
+function calculateSetLoad(log: ExerciseLog): number {
+  return log.rpe ?? 8;
 }
 
 /**
@@ -42,10 +30,7 @@ function buildDailyLoadMap(logs: ExerciseLog[], targetDate: Date): Map<number, n
   for (const log of logs) {
     const dayKey = Math.floor(log.loggedAt.getTime() / MS_PER_DAY);
     if (dayKey > targetDay) continue; // Ignore future logs
-    dailyLoads.set(
-      dayKey,
-      (dailyLoads.get(dayKey) ?? 0) + calculateSetLoad(log.weight ?? 0, log.reps ?? 0),
-    );
+    dailyLoads.set(dayKey, (dailyLoads.get(dayKey) ?? 0) + calculateSetLoad(log));
   }
 
   return dailyLoads;
@@ -94,14 +79,14 @@ export function computeACWR(logs: ExerciseLog[], targetDate: Date): number | nul
       const age = now - l.loggedAt.getTime();
       return age >= 0 && age <= 7 * MS_PER_DAY;
     })
-    .reduce((s, l) => s + calculateSetLoad(l.weight ?? 0, l.reps ?? 0), 0);
+    .reduce((s, l) => s + calculateSetLoad(l), 0);
 
   const chronicTotal = logs
     .filter((l) => {
       const age = now - l.loggedAt.getTime();
       return age >= 0 && age <= 28 * MS_PER_DAY;
     })
-    .reduce((s, l) => s + calculateSetLoad(l.weight ?? 0, l.reps ?? 0), 0);
+    .reduce((s, l) => s + calculateSetLoad(l), 0);
 
   // Always divide by 4 weeks — see JSDoc above.
   const chronicWeekly = chronicTotal / 4;
@@ -152,31 +137,8 @@ export function computeEWMAACWR(
   if (logs.length === 0) return null;
 
   const targetDay = Math.floor(targetDate.getTime() / MS_PER_DAY);
+  const dailyLoads = buildDailyLoadMap(logs, targetDate);
 
-  // Only consider logs on or before targetDate
-  const validLogs = logs.filter((l) => Math.floor(l.loggedAt.getTime() / MS_PER_DAY) <= targetDay);
-  if (validLogs.length === 0) return null;
-
-  const earliestDay = validLogs.reduce(
-    (min, l) => Math.min(min, Math.floor(l.loggedAt.getTime() / MS_PER_DAY)),
-    targetDay,
-  );
-
-  // Require at least 7 days of history for a meaningful EWMA warm-up.
-  if (targetDay - earliestDay < 7) return null;
-
-  const dailyLoads = buildDailyLoadMap(validLogs, targetDate);
-
-  let ewmaAcute = 0;
-  let ewmaChronic = 0;
-
-  for (let day = earliestDay; day <= targetDay; day++) {
-    const load = dailyLoads.get(day) ?? 0;
-    ewmaAcute = lambdaAcute * load + (1 - lambdaAcute) * ewmaAcute;
-    ewmaChronic = lambdaChronic * load + (1 - lambdaChronic) * ewmaChronic;
-  }
-
-  if (ewmaChronic === 0) return null;
-
-  return Math.round((ewmaAcute / ewmaChronic) * 100) / 100;
+  const ewmaResult = computeEwma(dailyLoads, targetDay, lambdaAcute, lambdaChronic, 7);
+  return ewmaResult?.ratio ?? null;
 }

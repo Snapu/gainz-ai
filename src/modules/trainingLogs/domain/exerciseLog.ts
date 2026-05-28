@@ -22,6 +22,7 @@ export const ExerciseLogSchema = z.object({
   duration: optionalNumberSchema,
   rpe: optionalNumberSchema,
   loggedAt: z.coerce.date(),
+  synthetic: z.boolean().optional(),
 });
 
 export type ExerciseLog = z.infer<typeof ExerciseLogSchema>;
