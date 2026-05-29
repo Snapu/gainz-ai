@@ -1,7 +1,7 @@
 // src/composables/useAuthExpirationWatcher.ts
 
 import * as Sentry from "@sentry/vue";
-import { onUnmounted, ref } from "vue";
+import { onUnmounted, ref, watch } from "vue";
 import { useAuthStore } from "@/modules/auth/presentation";
 import { useToast } from "@/shared/presentation/composables/useToast";
 
@@ -10,9 +10,10 @@ const CHECK_INTERVAL = 30 * 1000; // 30 seconds
 
 export function useAuthExpirationWatcher() {
   const authStore = useAuthStore();
-  const { toast } = useToast();
+  const { toast, dismiss } = useToast();
   const warningActive = ref(false);
   let intervalId: ReturnType<typeof setInterval> | null = null;
+  let currentToastId: string | undefined;
 
   function checkExpiration() {
     // If no expiresAt or no access token, nothing to check
@@ -26,9 +27,14 @@ export function useAuthExpirationWatcher() {
         level: "warning",
         tags: { category: "auth-expiration" },
       });
-      cleanup();
+      clearWarningState();
       authStore.logout();
       return;
+    }
+
+    // If token was refreshed (e.g. in another tab), dismiss active warning
+    if (timeRemaining >= WARNING_THRESHOLD && warningActive.value) {
+      clearWarningState();
     }
 
     // Trigger warning at 5-minute threshold
@@ -47,7 +53,7 @@ export function useAuthExpirationWatcher() {
 
     const seconds = Math.floor(timeRemaining / 1000);
 
-    toast({
+    currentToastId = toast({
       title: "Session Expiring Soon",
       description: "Please log in again",
       variant: "default",
@@ -64,22 +70,41 @@ export function useAuthExpirationWatcher() {
   }
 
   function handleLogout() {
-    warningActive.value = false;
-    cleanup();
+    clearWarningState();
     authStore.logout();
   }
 
-  function cleanup() {
-    if (intervalId) {
-      clearInterval(intervalId);
-      intervalId = null;
+  function clearWarningState() {
+    if (currentToastId) {
+      dismiss(currentToastId);
+      currentToastId = undefined;
     }
+    warningActive.value = false;
   }
 
-  // Start checking immediately and then every 30 seconds
+  // If the user is logged out (e.g. manually or due to 401 API error),
+  // dismiss the warning toast and reset the state.
+  watch(
+    () => authStore.isLoggedIn,
+    (isLoggedIn) => {
+      if (!isLoggedIn) {
+        clearWarningState();
+      }
+    },
+  );
+
+  // Start checking immediately and then every 30 seconds.
+  // The interval keeps running for the lifetime of the composable (which in App.vue is the lifetime of the app).
+  // It naturally no-ops when logged out due to the early return in checkExpiration.
   checkExpiration();
   intervalId = setInterval(checkExpiration, CHECK_INTERVAL);
 
   // Cleanup on unmount
-  onUnmounted(cleanup);
+  onUnmounted(() => {
+    if (intervalId) {
+      clearInterval(intervalId);
+      intervalId = null;
+    }
+    clearWarningState();
+  });
 }
