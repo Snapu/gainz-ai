@@ -30,6 +30,27 @@ describe("Volume Landmarks", () => {
       expect(classifyLandmark(4, "Biceps")).toBe("at_MEV");
       expect(classifyLandmark(4, "Chest")).toBe("below_MEV");
     });
+
+    describe("Empirical Overrides", () => {
+      it("forces at_MAV when improving regardless of high volume", () => {
+        expect(classifyLandmark(30, "Chest", "improving")).toBe("at_MAV");
+      });
+      it("forces at_MEV when improving but below table MEV", () => {
+        expect(classifyLandmark(5, "Chest", "improving")).toBe("at_MEV"); // Chest MEV = 8
+      });
+      it("forces above_MRV when dropping and volume is high", () => {
+        expect(classifyLandmark(12, "Chest", "dropping")).toBe("above_MRV"); // Chest mavLow = 12
+      });
+      it("forces below_MEV when dropping and volume is low (detraining)", () => {
+        expect(classifyLandmark(10, "Chest", "dropping")).toBe("below_MEV"); // Chest mavLow = 12
+      });
+      it("forces approaching_MRV when plateauing at high volume", () => {
+        expect(classifyLandmark(18, "Chest", "plateau")).toBe("approaching_MRV"); // Chest mavHigh = 18
+      });
+      it("forces below_MEV when plateauing at low volume", () => {
+        expect(classifyLandmark(10, "Chest", "plateau")).toBe("below_MEV"); // Chest mavLow = 12
+      });
+    });
   });
 
   describe("isRecovered", () => {

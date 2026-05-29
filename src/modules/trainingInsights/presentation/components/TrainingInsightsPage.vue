@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowLeft } from "@lucide/vue";
+import { ArrowLeft, TrendingDown, TrendingUp } from "@lucide/vue";
 import AppHeader from "@/shared/presentation/components/AppHeader.vue";
 import MuscleActivationMap from "@/shared/presentation/components/MuscleActivationMap.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
@@ -27,6 +27,7 @@ const {
   maxSets,
   maxTonnage,
   weeklyDeltaLabel,
+  setsDeltaPct,
   tonnageDeltaPct,
   allExerciseMetrics,
   totalExerciseCount,
@@ -120,13 +121,13 @@ const {
             <!-- ACWR Gauge -->
             <div class="rounded-lg border border-white/10 bg-white/[0.03] p-2.5 flex flex-col justify-between">
               <div>
-                <div class="flex justify-between items-start">
-                  <p class="text-xs uppercase tracking-wide text-foreground/50">Workload Trend (ACWR)</p>
-                  <span class="text-xs px-1.5 py-0.5 rounded border uppercase font-bold" :class="acwrZone.toneClass">
+                <div class="flex flex-col items-start gap-1.5">
+                  <p class="text-[10px] xl:text-xs uppercase tracking-wide text-foreground/50 leading-tight">Workload (ACWR)</p>
+                  <span class="text-[9px] xl:text-xs px-1.5 py-0.5 rounded border uppercase font-bold" :class="acwrZone.toneClass">
                     {{ acwrZone.label }}
                   </span>
                 </div>
-                <p class="text-sm font-bold text-foreground/90 mt-1">
+                <p class="text-sm font-bold text-foreground/90 mt-1.5">
                   {{ acwrValueLabel }}
                 </p>
               </div>
@@ -141,14 +142,14 @@ const {
             <!-- Risk Score Gauge -->
             <div class="rounded-lg border border-white/10 bg-white/[0.03] p-2.5 flex flex-col justify-between">
               <div>
-                <div class="flex justify-between items-start">
-                  <p class="text-xs uppercase tracking-wide text-foreground/50">Risk Score</p>
-                  <span class="text-xs px-1.5 py-0.5 rounded border uppercase font-bold text-foreground/60" :class="{ 'text-orange-300 border-orange-500/30 bg-orange-500/10': insights.fatigue.shouldDeload, 'border-white/10': !insights.fatigue.shouldDeload }">
+                <div class="flex flex-col items-start gap-1.5">
+                  <p class="text-[10px] xl:text-xs uppercase tracking-wide text-foreground/50 leading-tight">Risk Score</p>
+                  <span class="text-[9px] xl:text-[10px] px-1.5 py-0.5 rounded border uppercase font-bold text-foreground/60" :class="{ 'text-orange-300 border-orange-500/30 bg-orange-500/10': insights.fatigue.shouldDeload, 'border-white/10': !insights.fatigue.shouldDeload }">
                     {{ insights.fatigue.shouldDeload ? 'DELOAD ADVISED' : 'NO DELOAD' }}
                   </span>
                 </div>
-                <p class="text-sm font-bold mt-1" :class="fatigueRiskToneClass">
-                  {{ fatigueRiskPercent }}% <span class="text-xs font-normal text-foreground/60">({{ fatigueRiskLabel }})</span>
+                <p class="text-sm font-bold mt-1.5" :class="fatigueRiskToneClass">
+                  {{ fatigueRiskLabel }} <span class="text-foreground/50 font-normal">({{ fatigueRiskPercent }}%)</span>
                 </p>
               </div>
               <div class="mt-3 relative h-1.5 rounded-full bg-white/10 overflow-hidden">
@@ -168,23 +169,30 @@ const {
             
             <div class="relative w-full h-[64px] mt-2 mb-2 group">
               <!-- Sets Line -->
-              <UiSparkline
-                :values="fatigueWeekRows.map(r => r.sets)"
-                :width="300"
-                :height="64"
-                color="oklch(0.8 0.1 230)"
-                fillColor="oklch(0.8 0.1 230 / 0.1)"
-                class="absolute inset-0 w-full h-full opacity-90 transition-opacity duration-300"
-              />
+              <div class="absolute inset-0 w-full h-full">
+                <UiSparkline
+                  :values="fatigueWeekRows.map(r => r.sets)"
+                  :reference-value="insights.fatigue.loadWindow.sets.prior3WeekAvg"
+                  reference-label="AVG"
+                  reference-label-align="left"
+                  :width="300"
+                  :height="64"
+                  color="oklch(0.8 0.1 230)"
+                  fillColor="oklch(0.8 0.1 230 / 0.1)"
+                />
+              </div>
               <!-- Tonnage Line (No fill) -->
-              <UiSparkline
-                :values="fatigueWeekRows.map(r => r.tonnage)"
-                :width="300"
-                :height="64"
-                color="oklch(0.8 0.15 60)"
-                fillColor="transparent"
-                class="absolute inset-0 w-full h-full opacity-90 transition-opacity duration-300"
-              />
+              <div class="absolute inset-0 w-full h-full">
+                <UiSparkline
+                  :values="fatigueWeekRows.map(r => r.tonnage)"
+                  :reference-value="insights.fatigue.loadWindow.tonnage.prior3WeekAvg"
+                  reference-label="AVG"
+                  :width="300"
+                  :height="64"
+                  color="oklch(0.8 0.15 60)"
+                  fillColor="transparent"
+                />
+              </div>
             </div>
             
             <div class="flex justify-between px-2">
@@ -196,12 +204,26 @@ const {
             <!-- Load Deltas -->
             <div class="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-white/5">
               <div class="flex flex-col">
-                <p class="text-[9px] uppercase text-cyan-300/70">Volume vs Avg</p>
-                <p class="text-xs font-semibold text-foreground/80 mt-0.5">{{ weeklyDeltaLabel }} <span class="text-[10px] text-foreground/50 font-normal">({{ insights.fatigue.loadWindow.sets.ratioVsPriorAvg ?? "-" }}x)</span></p>
+                <p class="text-[9px] uppercase font-bold" style="color: oklch(0.8 0.1 230); opacity: 0.8;">Current Volume</p>
+                <div class="flex items-center gap-1.5 mt-0.5">
+                  <span class="text-sm font-bold text-foreground">{{ Math.round(insights.fatigue.loadWindow.sets.current) }} <span class="text-[10px] font-normal text-foreground/50">sets</span></span>
+                  <span class="text-[10px] font-semibold flex items-center gap-0.5" :class="setsDeltaPct === null ? 'text-foreground/70' : setsDeltaPct >= 30 ? 'text-orange-400' : setsDeltaPct <= -20 ? 'text-foreground/50' : 'text-emerald-400'">
+                    <TrendingUp v-if="setsDeltaPct !== null && setsDeltaPct > 0" class="w-3 h-3" />
+                    <TrendingDown v-else-if="setsDeltaPct !== null && setsDeltaPct < 0" class="w-3 h-3" />
+                    {{ weeklyDeltaLabel.replace('+', '').replace('-', '') }}
+                  </span>
+                </div>
               </div>
               <div class="flex flex-col">
-                <p class="text-[9px] uppercase text-amber-300/70">Tonnage vs Avg</p>
-                <p class="text-xs font-semibold text-foreground/80 mt-0.5">{{ tonnageDeltaPct === null ? "-" : `${tonnageDeltaPct > 0 ? "+" : ""}${tonnageDeltaPct}%` }} <span class="text-[10px] text-foreground/50 font-normal">({{ insights.fatigue.loadWindow.tonnage.ratioVsPriorAvg ?? "-" }}x)</span></p>
+                <p class="text-[9px] uppercase font-bold" style="color: oklch(0.8 0.15 60); opacity: 0.8;">Current Tonnage</p>
+                <div class="flex items-center gap-1.5 mt-0.5">
+                  <span class="text-sm font-bold text-foreground">{{ Math.round(insights.fatigue.loadWindow.tonnage.current) }} <span class="text-[10px] font-normal text-foreground/50">kg</span></span>
+                  <span class="text-[10px] font-semibold flex items-center gap-0.5" :class="tonnageDeltaPct === null ? 'text-foreground/70' : tonnageDeltaPct >= 30 ? 'text-orange-400' : tonnageDeltaPct <= -20 ? 'text-foreground/50' : 'text-emerald-400'">
+                    <TrendingUp v-if="tonnageDeltaPct !== null && tonnageDeltaPct > 0" class="w-3 h-3" />
+                    <TrendingDown v-else-if="tonnageDeltaPct !== null && tonnageDeltaPct < 0" class="w-3 h-3" />
+                    {{ tonnageDeltaPct === null ? "-" : `${Math.abs(tonnageDeltaPct)}%` }}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -209,7 +231,7 @@ const {
           <!-- 4. Footer Section: Reasons & Triggers -->
           <div class="grid grid-cols-2 gap-2 sm:gap-3 mb-2">
             <div class="rounded-lg border border-white/10 bg-white/[0.03] p-2.5">
-              <p class="text-[10px] uppercase tracking-wide text-foreground/50">Declining Lifts</p>
+              <p class="text-[10px] uppercase tracking-wide text-foreground/50">Sustained Declines</p>
               <p class="text-xs font-bold text-foreground/85 mt-0.5">{{ insights.fatigue.decliningExercises }} <span class="text-[10px] font-normal text-foreground/50">detected</span></p>
             </div>
             <div class="rounded-lg border border-white/10 bg-white/[0.03] p-2.5">
@@ -220,13 +242,13 @@ const {
             </div>
           </div>
 
-          <div class="rounded-lg border border-white/10 bg-white/[0.03] p-2.5" v-if="insights.fatigue.triggeredBy.length > 0 || insights.deloadTriggerSnapshot">
+          <div class="rounded-lg border border-white/10 bg-white/[0.03] p-2.5" v-if="insights.fatigue.triggeredBy.length > 0 || (insights.deloadStatus === 'active' && insights.deloadTriggerSnapshot)">
             <p class="text-[10px] uppercase tracking-wide text-foreground/50 mb-1.5">Active Triggers</p>
             <div class="flex flex-wrap gap-1">
               <span v-for="trigger in insights.fatigue.triggeredBy" :key="`fatigue-${trigger}`" class="text-[9px] px-1.5 py-0.5 rounded border border-orange-500/20 bg-orange-500/10 text-orange-300 uppercase">
                 {{ formatTriggerLabel(trigger) }}
               </span>
-              <span v-for="trigger in insights.deloadTriggerSnapshot?.triggeredBy || []" :key="`deload-${trigger}`" class="text-[9px] px-1.5 py-0.5 rounded border border-amber-500/20 bg-amber-500/10 text-amber-300 uppercase">
+              <span v-for="trigger in (insights.deloadStatus === 'active' ? insights.deloadTriggerSnapshot?.triggeredBy : []) || []" :key="`deload-${trigger}`" class="text-[9px] px-1.5 py-0.5 rounded border border-amber-500/20 bg-amber-500/10 text-amber-300 uppercase">
                 {{ formatTriggerLabel(trigger) }} (Snapshot)
               </span>
             </div>

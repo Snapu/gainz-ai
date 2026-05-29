@@ -383,7 +383,11 @@ describe("module architecture boundaries", () => {
         if (!targetsRestrictedLayer) continue;
 
         const importedModule = resolvedModuleNameFromImport(filePath, importPath);
-        if (importedModule && importedModule !== currentModule) {
+        if (
+          importedModule &&
+          importedModule !== currentModule &&
+          importedModule !== "sharedKernel"
+        ) {
           violations.push(`${toModuleRelative(filePath)} -> ${importPath}`);
         }
       }

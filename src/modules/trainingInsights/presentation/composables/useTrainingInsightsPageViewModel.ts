@@ -1,9 +1,11 @@
 import { storeToRefs } from "pinia";
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useAiStore } from "@/modules/aiCoach/presentation";
 import { useDeloadStore } from "@/modules/deload/presentation";
 import { useExerciseMuscleMapStore } from "@/modules/platform/presentation";
+import { useMetricsStore } from "@/modules/profile/presentation";
+import type { MuscleGroup } from "@/modules/sharedKernel/domain";
 import {
   MAX_FATIGUE_RISK_SCORE,
   type MuscleGroupInsight,
@@ -46,11 +48,31 @@ export function useTrainingInsightsPageViewModel() {
   const deloadStore = useDeloadStore();
   const aiStore = useAiStore();
   const trainingInsightsStore = useTrainingInsightsStore();
+  const metricsStore = useMetricsStore();
   const { insights } = storeToRefs(trainingInsightsStore);
 
   onMounted(() => {
     void aiStore.classifyExercisesIfNeeded();
   });
+
+  watch(
+    () => insights.value.muscleGroups,
+    (muscleGroups: Record<string, MuscleGroupInsight | undefined>) => {
+      for (const [group, insight] of Object.entries(muscleGroups)) {
+        if (!insight) continue;
+        const muscle = group as MuscleGroup;
+
+        // Pass the insight data to the Application layer (Store) to orchestrate
+        // the domain policy evaluation and persistence.
+        metricsStore.evaluateInsight(muscle, {
+          sets: insight.sets, // Use EWMA sets for discovery
+          landmark: insight.landmark,
+          trendStatus: insight.trendStatus,
+        });
+      }
+    },
+    { deep: true },
+  );
 
   const activeTab = ref<TrainingInsightsTab>("map");
   const tabOptions = [
@@ -126,7 +148,7 @@ export function useTrainingInsightsPageViewModel() {
       );
 
       return {
-        label: "Low",
+        label: "Low Load",
         range: "< 0.60",
         detail: hasRecentLogs
           ? "Low relative load — this is common when switching training phases or reducing volume."
@@ -137,7 +159,7 @@ export function useTrainingInsightsPageViewModel() {
 
     if (acwr <= 1.3) {
       return {
-        label: "Optimal",
+        label: "Optimal Load",
         range: "0.60 - 1.30",
         detail: "Workload is in the productive range for build/maintain progression.",
         toneClass: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30",
@@ -145,7 +167,7 @@ export function useTrainingInsightsPageViewModel() {
     }
 
     return {
-      label: "Elevated",
+      label: "Elevated Load",
       range: "> 1.30",
       detail:
         "Acute load is rising quickly vs your baseline. Normal during planned overreach — monitor recovery if unintentional.",
@@ -260,23 +282,23 @@ export function useTrainingInsightsPageViewModel() {
     return max > 0 ? max : 1;
   });
 
+  const setsDeltaPct = computed(() => {
+    const sets = insights.value.fatigue.loadWindow.sets;
+    if (!sets.prior3WeekAvg) return null;
+    return Math.round(((sets.current - sets.prior3WeekAvg) / sets.prior3WeekAvg) * 100);
+  });
+
   const weeklyDeltaLabel = computed(() => {
-    const pct = weeklySetSummary.value.deltaPct;
+    const pct = setsDeltaPct.value;
     if (pct === null) return "Not enough history";
     if (pct > 0) return `+${pct}%`;
     return `${pct}%`;
   });
 
   const tonnageDeltaPct = computed(() => {
-    const weeklyTonnage = insights.value.fatigue.weeklyTonnage;
-    if (weeklyTonnage.length < 4) return null;
-
-    const priorAvg =
-      ((weeklyTonnage[0] ?? 0) + (weeklyTonnage[1] ?? 0) + (weeklyTonnage[2] ?? 0)) / 3;
-    if (priorAvg <= 0) return null;
-
-    const delta = (((weeklyTonnage[3] ?? 0) - priorAvg) / priorAvg) * 100;
-    return Math.round(delta);
+    const tonnage = insights.value.fatigue.loadWindow.tonnage;
+    if (!tonnage.prior3WeekAvg) return null;
+    return Math.round(((tonnage.current - tonnage.prior3WeekAvg) / tonnage.prior3WeekAvg) * 100);
   });
 
   const allExerciseMetrics = computed((): ExerciseMetric[] => {
@@ -406,6 +428,7 @@ export function useTrainingInsightsPageViewModel() {
     maxSets,
     maxTonnage,
     weeklyDeltaLabel,
+    setsDeltaPct,
     tonnageDeltaPct,
     activeExerciseMetrics,
     staleExerciseMetrics,

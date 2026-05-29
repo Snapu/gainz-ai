@@ -276,7 +276,8 @@ async function saveLog() {
         <UiSparkline
           v-if="exerciseStats.weightHistory.length >= 2"
           :values="exerciseStats.weightHistory"
-          :max-value="exerciseStats.max.weight"
+          :reference-value="exerciseStats.max.weight"
+          reference-label="MAX"
           label="Weight (kg)"
           :width="140"
           :height="48"
@@ -285,7 +286,8 @@ async function saveLog() {
         <UiSparkline
           v-if="exerciseStats.repsHistory.length >= 2"
           :values="exerciseStats.repsHistory"
-          :max-value="exerciseStats.max.reps"
+          :reference-value="exerciseStats.max.reps"
+          reference-label="MAX"
           label="Reps"
           :width="140"
           :height="48"

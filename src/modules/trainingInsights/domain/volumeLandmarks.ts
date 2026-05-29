@@ -1,5 +1,6 @@
 import { VALID_MUSCLE_GROUPS } from "@/modules/sharedKernel/domain";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
+import type { ExerciseE1RM } from "./e1rm";
 import { getMuscleActivation, type MuscleActivation, type MuscleGroup } from "./exerciseMuscleMap";
 
 /** Volume landmarks relative to MEV/MAV/MRV */
@@ -53,6 +54,7 @@ export interface MuscleGroupInsight {
   hoursSinceLastTrained: number | null;
   recoveryHours: number;
   recoveryReady: boolean;
+  trendStatus?: "improving" | "plateau" | "dropping" | "stable";
 }
 
 /**
@@ -106,9 +108,39 @@ export const RECOVERY_HOURS: Record<MuscleGroup, number> = {
   Glutes: 72,
 };
 
-export function classifyLandmark(sets: number, muscleGroup: MuscleGroup): VolumeLandmark {
+/**
+ * Classifies weekly set volume into a Volume Landmark tier.
+ *
+ * Implements the Empirical Override Model:
+ * Static tables (Israetel) have low individual predictive validity (Baz-Valle et al., 2022).
+ * If empirical performance trend data is available, it completely overrides the static table:
+ * - Improving: The athlete is adapting, therefore they are at MAV regardless of set count.
+ * - Dropping: The athlete is failing to recover. If volume is high, they are >MRV. If low, they are <MEV.
+ */
+export function classifyLandmark(
+  sets: number,
+  muscleGroup: MuscleGroup,
+  trendStatus?: "improving" | "plateau" | "dropping" | "stable",
+): VolumeLandmark {
   const { mev, mavLow, mavHigh, mrv } = VOLUME_LANDMARKS[muscleGroup];
 
+  if (trendStatus === "improving") {
+    if (sets < mev) return "at_MEV";
+    return "at_MAV";
+  }
+
+  if (trendStatus === "dropping") {
+    if (sets < mavLow) return "below_MEV"; // Detraining or severe cut
+    return "above_MRV"; // Overreaching / under-recovering
+  }
+
+  if (trendStatus === "plateau") {
+    if (sets < mavLow) return "below_MEV"; // Needs more stimulus to progress
+    if (sets >= mavHigh) return "approaching_MRV"; // Nudge toward deload/resensitization
+    return "at_MAV"; // Adapted, but holding steady
+  }
+
+  // Fallback to static population averages
   if (sets >= mrv) return "above_MRV";
   if (sets >= mavHigh) return "approaching_MRV";
   if (sets >= mavLow) return "at_MAV";
@@ -349,13 +381,74 @@ export function calculateMuscleGroupInsights(
   logs: ExerciseLog[],
   targetDate: Date = new Date(),
   overrideMap?: Record<string, MuscleActivation>,
+  e1rmData?: Record<string, ExerciseE1RM>,
 ): Partial<Record<MuscleGroup, MuscleGroupInsight>> {
   const weeklyVolumes = calculateWeeklyVolume(logs, targetDate, overrideMap);
   const result: Partial<Record<MuscleGroup, MuscleGroupInsight>> = {};
 
+  // Aggregate e1rm trends per muscle group
+  const muscleTrends = new Map<
+    MuscleGroup,
+    { improving: number; dropping: number; plateau: number; stable: number }
+  >();
+  if (e1rmData) {
+    for (const [exerciseName, e1rm] of Object.entries(e1rmData)) {
+      const activation = getMuscleActivation(exerciseName, overrideMap);
+      if (!activation) continue;
+
+      // We only consider the primary muscle group for trend aggregation
+      const primaryMuscle = activation.primaryMuscle;
+      if (!muscleTrends.has(primaryMuscle)) {
+        muscleTrends.set(primaryMuscle, { improving: 0, dropping: 0, plateau: 0, stable: 0 });
+      }
+      const counts = muscleTrends.get(primaryMuscle)!;
+
+      const trend = e1rm.trend;
+      const current = trend[trend.length - 1] ?? e1rm.e1rm;
+      const previous = trend.length >= 2 ? (trend[trend.length - 2] ?? null) : null;
+      const deltaPct =
+        previous && previous > 0 ? Math.round(((current - previous) / previous) * 100) : null;
+
+      let status: "plateau" | "improving" | "dropping" | "stable" = "stable";
+      if (e1rm.plateau) {
+        status = "plateau";
+      } else if (deltaPct !== null && deltaPct >= 2) {
+        status = "improving";
+      } else if (deltaPct !== null && deltaPct <= -2) {
+        status = "dropping";
+      }
+
+      counts[status]++;
+    }
+  }
+
   for (const volume of weeklyVolumes) {
+    let trendStatus: "improving" | "plateau" | "dropping" | "stable" | undefined;
+
+    if (e1rmData) {
+      const counts = muscleTrends.get(volume.muscleGroup) ?? {
+        improving: 0,
+        dropping: 0,
+        plateau: 0,
+        stable: 0,
+      };
+      const totalTrained = counts.improving + counts.dropping + counts.plateau + counts.stable;
+
+      if (totalTrained > 0) {
+        if (counts.improving > 0) {
+          trendStatus = "improving";
+        } else if (counts.dropping === totalTrained) {
+          trendStatus = "dropping";
+        } else if (counts.plateau > 0) {
+          trendStatus = "plateau";
+        } else {
+          trendStatus = "stable";
+        }
+      }
+    }
+
     // Landmark classification uses the EWMA-smoothed value — stable against jitter.
-    const landmark = classifyLandmark(volume.sets, volume.muscleGroup);
+    const landmark = classifyLandmark(volume.sets, volume.muscleGroup, trendStatus);
     const recovered = isRecovered(volume.hoursSinceLastTrained, volume.recoveryHours);
 
     result[volume.muscleGroup] = {
@@ -368,6 +461,7 @@ export function calculateMuscleGroupInsights(
       hoursSinceLastTrained: volume.hoursSinceLastTrained,
       recoveryHours: volume.recoveryHours,
       recoveryReady: recovered,
+      trendStatus,
     };
   }
 

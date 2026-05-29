@@ -1,1 +1,0 @@
-System.register(["./index-legacy-Z7NVgdIa.js"],function(e,t){var n,u,c,r,s;return{setters:[function(e){n=e.Lt,u=e.Wt,c=e.h,r=e.jt,s=e.nn}],execute:function(){e("default",n({__name:"AICoach",setup:e=>(e,t)=>(u(),r(s(c)))}))}}});

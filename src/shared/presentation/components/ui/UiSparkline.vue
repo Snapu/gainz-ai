@@ -3,7 +3,9 @@ import { computed } from "vue";
 
 interface Props {
   values: number[];
-  maxValue?: number | null;
+  referenceValue?: number | null;
+  referenceLabel?: string;
+  referenceLabelAlign?: "left" | "right";
   label?: string;
   width?: number;
   height?: number;
@@ -12,7 +14,9 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  maxValue: null,
+  referenceValue: null,
+  referenceLabel: "AVG",
+  referenceLabelAlign: "right",
   label: "",
   width: 140,
   height: 44,
@@ -26,11 +30,11 @@ const chartData = computed(() => {
   const vals = props.values;
   if (vals.length < 2) return null;
 
-  // Include maxValue in the range calculation so the dashed line fits
+  // Include referenceValue in the range calculation so the dashed line fits
   const dataMin = Math.min(...vals);
   const dataMax = Math.max(...vals);
-  const rangeMin = props.maxValue != null ? Math.min(dataMin, props.maxValue) : dataMin;
-  const rangeMax = props.maxValue != null ? Math.max(dataMax, props.maxValue) : dataMax;
+  const rangeMin = props.referenceValue != null ? Math.min(dataMin, props.referenceValue) : dataMin;
+  const rangeMax = props.referenceValue != null ? Math.max(dataMax, props.referenceValue) : dataMax;
   const range = rangeMax - rangeMin || 1;
 
   const w = props.width - padding.left - padding.right;
@@ -53,80 +57,86 @@ const chartData = computed(() => {
     linePath,
     fillPath,
     lastPoint: last,
-    maxLineY: props.maxValue != null ? toY(props.maxValue) : null,
+    maxLineY: props.referenceValue != null ? toY(props.referenceValue) : null,
   };
 });
 </script>
 
 <template>
-  <svg
-    :width="width"
-    :height="height"
-    :viewBox="`0 0 ${width} ${height}`"
-    class="overflow-visible"
-  >
-    <template v-if="chartData">
-      <!-- Max reference dashed line -->
-      <template v-if="chartData.maxLineY != null && maxValue != null">
-        <line
-          :x1="padding.left"
-          :y1="chartData.maxLineY"
-          :x2="width - padding.right"
-          :y2="chartData.maxLineY"
-          stroke="oklch(0.7 0.05 60)"
-          stroke-width="1"
-          stroke-dasharray="3 3"
-          opacity="0.6"
+  <div class="relative w-full" :style="{ aspectRatio: `${width} / ${height}` }">
+    <svg
+      :viewBox="`0 0 ${width} ${height}`"
+      class="overflow-visible absolute inset-0 w-full h-full opacity-90 transition-opacity duration-300"
+    >
+      <template v-if="chartData">
+        <!-- Area fill -->
+        <path :d="chartData.fillPath" :fill="fillColor" />
+
+        <!-- Trend line -->
+        <path
+          :d="chartData.linePath"
+          fill="none"
+          :stroke="color"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
         />
-        <text
-          :x="width - padding.right"
-          :y="chartData.maxLineY - 3"
-          text-anchor="end"
-          class="text-xs font-bold"
-          fill="oklch(0.7 0.05 60)"
-        >
-          MAX {{ maxValue }}
-        </text>
+
+        <!-- Last point dot -->
+        <circle :cx="chartData.lastPoint.x" :cy="chartData.lastPoint.y" r="3" :fill="color" />
+
+        <!-- Reference dashed line -->
+        <template v-if="chartData.maxLineY != null && referenceValue != null">
+          <line
+            :x1="padding.left"
+            :y1="chartData.maxLineY"
+            :x2="width - padding.right"
+            :y2="chartData.maxLineY"
+            :stroke="color"
+            stroke-width="1"
+            stroke-dasharray="3 3"
+            opacity="0.6"
+          />
+        </template>
       </template>
 
-      <!-- Area fill -->
-      <path :d="chartData.fillPath" :fill="fillColor" />
-
-      <!-- Trend line -->
-      <path
-        :d="chartData.linePath"
-        fill="none"
-        :stroke="color"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      />
-
-      <!-- Last point dot -->
-      <circle :cx="chartData.lastPoint.x" :cy="chartData.lastPoint.y" r="3" :fill="color" />
-
-      <!-- Label -->
+      <!-- Fallback for insufficient data -->
       <text
+        v-else
+        :x="width / 2"
+        :y="height / 2"
+        text-anchor="middle"
+        dominant-baseline="central"
+        class="text-xs fill-muted-foreground"
+      >
+        —
+      </text>
+    </svg>
+
+    <!-- HTML Text Overlays for absolute foreground stacking -->
+    <template v-if="chartData">
+      <div
+        v-if="chartData.maxLineY != null && referenceValue != null"
+        class="absolute z-50 text-[9px] font-bold pointer-events-none"
+        :style="{
+          top: `${chartData.maxLineY - 12}px`,
+          left: referenceLabelAlign === 'left' ? `${padding.left}px` : 'auto',
+          right: referenceLabelAlign === 'right' ? `${padding.right}px` : 'auto',
+          color: color,
+          textShadow: '0 0 4px var(--background), 0 0 2px var(--background)'
+        }"
+      >
+        {{ referenceLabel }} {{ typeof referenceValue === 'number' ? Math.round(referenceValue) : referenceValue }}
+      </div>
+
+      <div
         v-if="label"
-        :x="padding.left"
-        :y="padding.top - 2"
-        class="text-xs font-bold uppercase"
-        fill="oklch(0.55 0 0)"
+        class="absolute z-50 text-xs font-bold uppercase pointer-events-none"
+        style="color: oklch(0.55 0 0);"
+        :style="{ top: `${padding.top - 12}px`, left: `${padding.left}px` }"
       >
         {{ label }}
-      </text>
+      </div>
     </template>
-
-    <!-- Fallback for insufficient data -->
-    <text
-      v-else
-      :x="width / 2"
-      :y="height / 2"
-      text-anchor="middle"
-      dominant-baseline="central"
-      class="text-xs fill-muted-foreground"
-    >
-      —
-    </text>
-  </svg>
+  </div>
 </template>

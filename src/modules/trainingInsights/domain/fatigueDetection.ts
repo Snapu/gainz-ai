@@ -223,13 +223,26 @@ export function calculateFatigueInsight(
     };
   }
 
+  // EWMA Snapshots for robust 4-week ramp detection (prevents rest-day jitter)
+  // We use the 'acute' (7-day) EWMA, not the chronic (28-day) EWMA, because we want
+  // to compare the weekly volume at these 4 distinct checkpoints.
+  const ewma1 = computeEwma(dailySets, targetDay - 7);
+  const ewma2 = computeEwma(dailySets, targetDay - 14);
+  const ewma3 = computeEwma(dailySets, targetDay - 21);
+
+  const ewmaSets0 = setsEwma.acute * 7;
+  const ewmaSets1 = ewma1 ? ewma1.acute * 7 : 0;
+  const ewmaSets2 = ewma2 ? ewma2.acute * 7 : 0;
+  const ewmaSets3 = ewma3 ? ewma3.acute * 7 : 0;
+
   // Keep id name volumeIncreasing for backward compatibility in snapshot/history.
   const volumeIncreasing =
-    sets2 > sets3 &&
-    sets1 > sets2 &&
-    sets0 >= sets1 &&
-    sets0 >= sets3 * VOLUME_RAMP_MIN_MULTIPLIER &&
-    sets0 >= VOLUME_SPIKE_MIN_BASELINE;
+    ewma3 !== null &&
+    ewmaSets2 > ewmaSets3 &&
+    ewmaSets1 > ewmaSets2 &&
+    ewmaSets0 >= ewmaSets1 &&
+    ewmaSets0 >= ewmaSets3 * VOLUME_RAMP_MIN_MULTIPLIER &&
+    ewmaSets0 >= VOLUME_SPIKE_MIN_BASELINE;
 
   let decliningExercises = 0;
   if (!isCurrentWeekDeload) {

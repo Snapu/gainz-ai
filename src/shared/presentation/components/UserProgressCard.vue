@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronRight } from "@lucide/vue";
+import { ChevronRight, TrendingDown, TrendingUp } from "@lucide/vue";
 import { computed } from "vue";
 import { useDeloadStore } from "@/modules/deload/presentation";
 import type { UserProgress } from "@/modules/sharedKernel/presentation";
@@ -25,6 +25,12 @@ const PHASE_THEME: Record<SystemicPhase, string> = {
 };
 
 const phaseTheme = computed(() => PHASE_THEME[props.insights.phase]);
+
+const weeklyVolumeDeltaPct = computed(() => {
+  const sets = props.insights.fatigue.loadWindow.sets;
+  if (!sets.prior3WeekAvg) return null;
+  return Math.round(((sets.current - sets.prior3WeekAvg) / sets.prior3WeekAvg) * 100);
+});
 </script>
 
 <template>
@@ -99,9 +105,13 @@ const phaseTheme = computed(() => PHASE_THEME[props.insights.phase]);
             
             <div class="flex flex-col gap-0.5">
               <span class="text-xs font-bold tracking-widest text-muted-foreground uppercase">Weekly Volume</span>
-              <span class="text-lg font-bold text-foreground leading-none">
-                {{ Math.round(insights.fatigue.weeklyTotalSets[3] || 0) }}
-              </span>
+              <div class="flex items-center gap-1.5">
+                <span class="text-lg font-bold text-foreground leading-none mt-0.5">
+                  {{ Math.round(insights.fatigue.loadWindow.sets.current) }}
+                </span>
+                <TrendingUp v-if="weeklyVolumeDeltaPct !== null && (insights.fatigue.loadWindow.sets.current - insights.fatigue.loadWindow.sets.prior3WeekAvg) >= 0.5" class="w-3.5 h-3.5" :class="weeklyVolumeDeltaPct >= 30 ? 'text-orange-400' : 'text-emerald-400'" />
+                <TrendingDown v-else-if="weeklyVolumeDeltaPct !== null && (insights.fatigue.loadWindow.sets.prior3WeekAvg - insights.fatigue.loadWindow.sets.current) >= 0.5" class="w-3.5 h-3.5" :class="weeklyVolumeDeltaPct <= -20 ? 'text-foreground/50' : 'text-emerald-400'" />
+              </div>
             </div>
           </div>
           

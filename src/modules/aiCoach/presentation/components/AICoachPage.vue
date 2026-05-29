@@ -280,12 +280,10 @@ const {
       v-if="group.isSuperset"
       class="relative rounded-xl p-4 flex flex-col gap-3 shadow-sm bg-card border border-border/40"
      >
-      <div class="px-1 flex">
-       <UiBadge variant="default" class="gap-2 px-2.5 py-0.5 text-xs font-semibold tracking-wider uppercase">
-        <Sparkles class="w-3.5 h-3.5 text-primary-foreground animate-pulse" />
-        Superset Link
-       </UiBadge>
-      </div>
+       <div class="px-1 flex items-center gap-3 opacity-60">
+        <span class="text-xs font-bold uppercase tracking-widest text-muted-foreground">Superset</span>
+        <div class="h-px flex-1 bg-border/50"></div>
+       </div>
       <div class="flex flex-col gap-3">
        <WorkoutExerciseCard
         v-for="(exercise, exIndex) in group.exercises"

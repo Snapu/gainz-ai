@@ -1,6 +1,15 @@
 <script setup lang="ts">
-import { BarChart2, CalendarDays, CheckCircle2, Hourglass, Timer } from "@lucide/vue";
+import {
+  BarChart2,
+  CalendarDays,
+  CheckCircle2,
+  Flame,
+  Hourglass,
+  Sparkles,
+  Timer,
+} from "@lucide/vue";
 import { computed, ref } from "vue";
+import { useMetricsStore } from "@/modules/profile/presentation";
 import {
   type MuscleGroup,
   type MuscleGroupInsight,
@@ -14,6 +23,8 @@ import UiSegmentedControl from "./ui/UiSegmentedControl.vue";
 const props = defineProps<{
   muscleGroups: Partial<Record<MuscleGroup, MuscleGroupInsight>>;
 }>();
+
+const metricsStore = useMetricsStore();
 
 const BASE = import.meta.env.BASE_URL.endsWith("/")
   ? import.meta.env.BASE_URL.slice(0, -1)
@@ -176,9 +187,18 @@ const selectedDetail = computed(() => {
   const name = selectedMuscle.value;
   const status = props.muscleGroups[name];
   const targets = VOLUME_LANDMARKS[name];
+  const metric = metricsStore.metrics[name];
   const recoveryHours = status?.recoveryHours ?? RECOVERY_HOURS[name];
   const maxDisplay = targets.mrv * 1.15;
   const sets = status?.sets ?? 0;
+
+  const personalMAVPct = metric?.personalMAV
+    ? Math.min((metric.personalMAV / maxDisplay) * 100, 100)
+    : null;
+  const personalMRVPct = metric?.personalMRV
+    ? Math.min((metric.personalMRV / maxDisplay) * 100, 100)
+    : null;
+
   return {
     name,
     landmark: status?.landmark,
@@ -189,6 +209,12 @@ const selectedDetail = computed(() => {
     recoveryReady: status?.recoveryReady ?? true,
     targets,
     recoveryHours,
+    flags: {
+      personalMAV: metric?.personalMAV ?? null,
+      personalMRV: metric?.personalMRV ?? null,
+      personalMAVPct,
+      personalMRVPct,
+    },
     bar: {
       mevPct: (targets.mev / maxDisplay) * 100,
       mavLowPct: (targets.mavLow / maxDisplay) * 100,
@@ -319,8 +345,9 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
                 <span class="text-[9px] sm:text-[10px] font-mono text-muted-foreground uppercase tracking-wider bg-white/5 border border-white/10 px-1.5 py-[2px] rounded">
                   {{ getJargon(muscle.status?.landmark) }}
                 </span>
-                <Hourglass v-if="muscle.status && !muscle.status.recoveryReady" class="w-3 h-3 text-yellow-500" />
-                <CheckCircle2 v-else-if="muscle.status && muscle.status.recoveryReady" class="w-3 h-3 text-emerald-500/80" />
+                <div v-if="muscle.status" class="absolute -top-1 -right-4 translate-x-1 -translate-y-1 drop-shadow-md">
+                  <Hourglass v-if="!muscle.status.recoveryReady" class="w-3 h-3 text-yellow-500" />
+                </div>
               </div>
               <span class="text-xs sm:text-sm font-mono font-bold whitespace-nowrap opacity-90 mt-[2px]" :style="{ color: getLineColor(muscle.status?.landmark) }">
                 {{ muscle.status?.isoWeekSets != null ? muscle.status.isoWeekSets.toFixed(0) : '0' }} <span class="opacity-50 font-sans text-[10px] sm:text-xs font-medium tracking-wide">SETS/WK</span>
@@ -370,11 +397,25 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
               <div class="h-full bg-orange-400/30 shadow-[inset_0_0_8px_rgba(251,146,60,0.4)] border-r border-orange-400/20" :style="{ width: (selectedDetail.bar.mrvPct - selectedDetail.bar.mavHighPct) + '%' }"></div>
               <!-- Zone: above MRV -->
               <div class="h-full bg-red-500/30 shadow-[inset_0_0_8px_rgba(239,68,68,0.4)]" :style="{ width: (100 - selectedDetail.bar.mrvPct) + '%' }"></div>
+              
+              <!-- Personal Growth Zone Illumination -->
+              <div v-if="selectedDetail.flags.personalMAVPct !== null" class="absolute top-0 bottom-0 bg-cyan-400/20 shadow-[inset_0_0_10px_rgba(34,211,238,0.6)] z-[5]" :style="{ left: selectedDetail.flags.personalMAVPct + '%', right: (100 - (selectedDetail.flags.personalMRVPct ?? 100)) + '%' }"></div>
+              
               <!-- Current position needle -->
               <div
                 class="absolute top-0 h-full w-[2px] bg-white shadow-[0_0_5px_rgba(255,255,255,0.9)] transition-all duration-300 z-10"
                 :style="{ left: selectedDetail.bar.currentPct + '%' }"
               ></div>
+              
+              <!-- Personal MAV Flag -->
+              <div v-if="selectedDetail.flags.personalMAVPct !== null" class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-20 pointer-events-none" :style="{ left: selectedDetail.flags.personalMAVPct + '%' }">
+                <Sparkles class="w-3.5 h-3.5 text-cyan-400 drop-shadow-[0_0_4px_rgba(34,211,238,0.8)] fill-cyan-400/20" />
+              </div>
+              
+              <!-- Personal MRV Flag -->
+              <div v-if="selectedDetail.flags.personalMRVPct !== null" class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-20 pointer-events-none" :style="{ left: selectedDetail.flags.personalMRVPct + '%' }">
+                <Flame class="w-3.5 h-3.5 text-red-500 drop-shadow-[0_0_4px_rgba(239,68,68,0.8)] animate-pulse fill-red-500/20" />
+              </div>
             </div>
 
             <!-- Bar axis labels -->

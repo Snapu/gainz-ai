@@ -149,7 +149,23 @@ export function useAICoachPageViewModel() {
 
   function isHighlighted(gIndex: number, exIndex: number) {
     if (restTimerStore.isResting) return false;
-    return gIndex === 0 && exIndex === 0;
+    if (gIndex !== 0) return false;
+
+    const group = activeWorkoutGroups.value?.[gIndex];
+    if (!group) return false;
+
+    let minDone = Infinity;
+    for (const ex of group.exercises) {
+      const { done } = getExerciseProgress(ex.exerciseName, ex.targetSets);
+      if (done < minDone) minDone = done;
+    }
+
+    const nextExIndex = group.exercises.findIndex((ex) => {
+      const { done } = getExerciseProgress(ex.exerciseName, ex.targetSets);
+      return done === minDone;
+    });
+
+    return exIndex === nextExIndex;
   }
 
   // ---------------------------------------------------------------------------

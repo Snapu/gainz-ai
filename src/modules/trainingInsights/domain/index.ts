@@ -125,7 +125,7 @@ export function calculateTrainingInsights(
   // preventing a false volume spike when training resumes.
   const fatigue = calculateFatigueInsight(logs, e1rm, deloadActive, targetDate, excludeRanges);
   const acwr = computeEWMAACWR(logs, targetDate);
-  const muscleGroups = calculateMuscleGroupInsights(logs, targetDate, overrideMap);
+  const muscleGroups = calculateMuscleGroupInsights(logs, targetDate, overrideMap, e1rm);
   const systemicPhase = derivePhase(acwr, fatigue.shouldDeload, deloadStatus, muscleGroups);
 
   const deloadEndsAt = phase?.endsAt ?? null;
