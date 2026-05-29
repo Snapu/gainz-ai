@@ -335,19 +335,19 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
              :style="getAnchorStyle(muscle.node)"
              @click.stop="toggleMuscle(muscle.name)"
            >
-              <span
-                class="text-xs sm:text-sm font-bold uppercase tracking-widest leading-none mb-1 sm:mb-1.5 transition-colors duration-200"
-                :class="selectedMuscle === muscle.name ? 'text-white' : 'text-foreground/90'"
-              >
-                {{ muscle.name }}
-              </span>
+              <div class="flex items-center gap-1.5 mb-1 sm:mb-1.5">
+                <span
+                  class="text-xs sm:text-sm font-bold uppercase tracking-widest leading-none transition-colors duration-200"
+                  :class="selectedMuscle === muscle.name ? 'text-white' : 'text-foreground/90'"
+                >
+                  {{ muscle.name }}
+                </span>
+                <Hourglass v-if="muscle.status && !muscle.status.recoveryReady" class="w-3 h-3 text-yellow-500 drop-shadow-md" />
+              </div>
               <div class="flex items-center gap-1.5 mb-1 whitespace-nowrap">
                 <span class="text-[9px] sm:text-[10px] font-mono text-muted-foreground uppercase tracking-wider bg-white/5 border border-white/10 px-1.5 py-[2px] rounded">
                   {{ getJargon(muscle.status?.landmark) }}
                 </span>
-                <div v-if="muscle.status" class="absolute -top-1 -right-4 translate-x-1 -translate-y-1 drop-shadow-md">
-                  <Hourglass v-if="!muscle.status.recoveryReady" class="w-3 h-3 text-yellow-500" />
-                </div>
               </div>
               <span class="text-xs sm:text-sm font-mono font-bold whitespace-nowrap opacity-90 mt-[2px]" :style="{ color: getLineColor(muscle.status?.landmark) }">
                 {{ muscle.status?.isoWeekSets != null ? muscle.status.isoWeekSets.toFixed(0) : '0' }} <span class="opacity-50 font-sans text-[10px] sm:text-xs font-medium tracking-wide">SETS/WK</span>
