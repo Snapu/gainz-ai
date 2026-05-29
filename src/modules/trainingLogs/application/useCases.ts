@@ -9,11 +9,13 @@ import type { ExerciseLog } from "../domain/exerciseLog";
 type ExerciseLogLoadError = "load-failed" | "parse-data-failed" | "auth-failed";
 type ExerciseLogAddError = "add-failed" | "auth-failed";
 type ExerciseLogDeleteError = "delete-failed" | "auth-failed";
+type ExerciseLogUpdateError = "update-failed" | "auth-failed";
 type ExerciseLogYearLoadError = "load-failed" | "parse-data-failed" | "sheet-not-found";
 
 export interface ExerciseLogRepository {
   loadCurrentYear: () => ResultAsync<ExerciseLog[], ExerciseLogLoadError>;
   addLog: (log: ExerciseLog) => ResultAsync<void, ExerciseLogAddError>;
+  updateLog: (log: ExerciseLog) => ResultAsync<void, ExerciseLogUpdateError>;
   deleteLog: (log: ExerciseLog) => ResultAsync<void, ExerciseLogDeleteError>;
   findPastYearSheets: () => number[];
   loadYear: (year: number) => ResultAsync<ExerciseLog[], ExerciseLogYearLoadError>;
@@ -30,6 +32,13 @@ export function addExerciseLog(
   repository: ExerciseLogRepository,
 ): ResultAsync<void, ExerciseLogAddError> {
   return repository.addLog(log);
+}
+
+export function updateExerciseLog(
+  log: ExerciseLog,
+  repository: ExerciseLogRepository,
+): ResultAsync<void, ExerciseLogUpdateError> {
+  return repository.updateLog(log);
 }
 
 export function deleteExerciseLog(

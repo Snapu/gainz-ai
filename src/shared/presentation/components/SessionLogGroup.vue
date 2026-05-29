@@ -23,6 +23,7 @@ defineProps<{
 defineEmits<{
   (e: "toggle"): void;
   (e: "deleteLog", log: ExerciseLog): void;
+  (e: "editLog", log: ExerciseLog): void;
 }>();
 </script>
 
@@ -89,6 +90,7 @@ defineEmits<{
         :log="log"
         variant="inset"
         @delete="$emit('deleteLog', $event)"
+        @edit="$emit('editLog', $event)"
       />
     </UiCard>
   </div>

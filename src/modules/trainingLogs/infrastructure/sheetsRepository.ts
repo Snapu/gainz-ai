@@ -143,6 +143,35 @@ export class ExerciseLogsSheetsRepository {
     )();
   }
 
+  updateLog(log: ExerciseLog): ResultAsync<void, "update-failed" | "auth-failed"> {
+    const sheet = this.getSheet();
+    if (!sheet) {
+      console.error("Failed to update exercise log. Sheet does not exist.");
+      return errAsync("update-failed" as const);
+    }
+    return ResultAsync.fromThrowable(
+      async () => {
+        const rows = await sheet.getRows<ExerciseLog>();
+        const rowToUpdate = rows.find((row) => row.get("id") === log.id);
+        if (!rowToUpdate) {
+          throw new Error("Row not found");
+        }
+        console.debug("Updating row:", rowToUpdate, "with new log:", log);
+        rowToUpdate.assign(ExerciseLogSchema.parse(log));
+        await rowToUpdate.save();
+      },
+      (error) => {
+        if (isAuthError(error)) {
+          console.error("Auth failed during update. Error:", error);
+          return "auth-failed" as const;
+        }
+        console.error("Failed to update exercise log. Error:", error);
+        if (error instanceof ZodError) console.error(z.prettifyError(error));
+        return "update-failed" as const;
+      },
+    )();
+  }
+
   findPastYearSheets(): number[] {
     const currentYear = new Date().getFullYear();
     const pastYears: number[] = [];
@@ -193,6 +222,7 @@ export function createExerciseLogRepository(doc: GoogleSpreadsheet): ExerciseLog
   return {
     loadCurrentYear: () => repository.loadCurrentYear(),
     addLog: (log) => repository.addLog(log),
+    updateLog: (log) => repository.updateLog(log),
     deleteLog: (log) => repository.deleteLog(log),
     findPastYearSheets: () => repository.findPastYearSheets(),
     loadYear: (year) => repository.loadYear(year),

@@ -26,7 +26,9 @@ const {
   isResting,
   formattedRestTime,
   handleFabClick,
+  editLog,
   isLogFormOpen,
+  logToEdit,
 } = useExerciseLogsPageViewModel();
 </script>
 
@@ -116,6 +118,7 @@ const {
         :is-collapsed="!!collapsedSessions[session.date]"
         @toggle="toggleSession(session.date)"
         @delete-log="logsStore.removeExerciseLog"
+        @edit-log="editLog"
       />
       
       <EmptyState 
@@ -152,7 +155,7 @@ const {
     </div>
 
     <!-- Reusable Bottom Sheet Form -->
-    <LogExerciseSheet v-model:open="isLogFormOpen" />
+    <LogExerciseSheet v-model:open="isLogFormOpen" :log-to-edit="logToEdit" />
   </div>
 </template>
 

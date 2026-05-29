@@ -22,6 +22,7 @@ const props = defineProps<{
     weight?: number;
     rpe?: number;
   } | null;
+  logToEdit?: ExerciseLog | null;
   /** Rest duration in seconds to start after saving a set. Provided by the caller. */
   restSeconds?: number | null;
 }>();
@@ -58,7 +59,15 @@ watch(
   () => props.open,
   (isOpen) => {
     if (isOpen) {
-      if (props.prefillData) {
+      if (props.logToEdit) {
+        skipHistoryAutoFill.value = true;
+        formExerciseName.value = props.logToEdit.exerciseName;
+        formReps.value = props.logToEdit.reps ?? null;
+        formWeight.value = props.logToEdit.weight ?? null;
+        formDistance.value = props.logToEdit.distance ?? null;
+        formDuration.value = props.logToEdit.duration ?? null;
+        formRpe.value = props.logToEdit.rpe ?? (deloadStore.active ? 6 : 8.5);
+      } else if (props.prefillData) {
         skipHistoryAutoFill.value = true;
         formExerciseName.value = props.prefillData.exerciseName;
         formReps.value = props.prefillData.reps ?? null;
@@ -234,17 +243,21 @@ async function saveLog() {
   haptic.confirm();
 
   const log: ExerciseLog = {
-    id: crypto.randomUUID(),
+    id: props.logToEdit?.id || crypto.randomUUID(),
     exerciseName: formExerciseName.value,
     reps: formReps.value ?? undefined,
     weight: formWeight.value ?? undefined,
     distance: formDistance.value ?? undefined,
     duration: formDuration.value ?? undefined,
     rpe: formRpe.value,
-    loggedAt: new Date(),
+    loggedAt: props.logToEdit?.loggedAt || new Date(),
   };
 
-  await logsStore.addExerciseLog(log);
+  if (props.logToEdit) {
+    logsStore.updateExerciseLog(log);
+  } else {
+    logsStore.addExerciseLog(log);
+  }
 
   const DEFAULT_REST_SECONDS = 120; // 2 minutes generic fallback
 
@@ -257,7 +270,7 @@ async function saveLog() {
 </script>
 
 <template>
-  <UiBottomSheet v-model:open="internalOpen" title="Log Exercise">
+  <UiBottomSheet v-model:open="internalOpen" :title="props.logToEdit ? 'Edit Exercise' : 'Log Exercise'">
     <div class="flex flex-col gap-6 w-full">
       <!-- Optimized Exercise Selection -->
       <ExerciseSelector
@@ -325,7 +338,7 @@ async function saveLog() {
       </div>
 
       <UiButton class="w-full h-16 rounded-xl text-lg mt-4" @click="saveLog">
-        Save Set
+        {{ props.logToEdit ? 'Save Changes' : 'Save Set' }}
       </UiButton>
     </div>
   </UiBottomSheet>

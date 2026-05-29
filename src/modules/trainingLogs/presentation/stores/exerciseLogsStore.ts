@@ -9,6 +9,7 @@ import {
   addExerciseLog as addExerciseLog_,
   deleteExerciseLog as deleteExerciseLog_,
   loadExerciseLogs,
+  updateExerciseLog as updateExerciseLog_,
 } from "@/modules/trainingLogs/application";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 import { createExerciseLogRepository } from "@/modules/trainingLogs/infrastructure";
@@ -25,12 +26,14 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
     isRefreshing,
     add,
     remove,
+    update,
     refresh,
   } = useOfflineSyncedStore<
     ExerciseLog,
     "load-failed" | "parse-data-failed" | "auth-failed",
     "add-failed" | "auth-failed",
-    "delete-failed" | "auth-failed"
+    "delete-failed" | "auth-failed",
+    "update-failed" | "auth-failed"
   >({
     getId: (log) => log.id,
     fetchRemote: () => {
@@ -47,6 +50,11 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
       const repository = createRepository();
       if (!repository) return errAsync("delete-failed");
       return deleteExerciseLog_(item, repository);
+    },
+    updateRemote: (item) => {
+      const repository = createRepository();
+      if (!repository) return errAsync("update-failed");
+      return updateExerciseLog_(item, repository);
     },
   });
 
@@ -84,6 +92,16 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
     });
   };
 
+  const updateExerciseLog: typeof update = (exerciseLog) => {
+    console.log("Updating exercise log", exerciseLog);
+    return update(exerciseLog).mapErr((error) => {
+      if (error === "auth-failed") {
+        handleAuthError("exercise-log-update");
+      }
+      return error;
+    });
+  };
+
   function lastLogForExercise(exerciseName: string) {
     return exerciseLogs.value
       .filter((log) => exerciseName === log.exerciseName)
@@ -96,6 +114,7 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
     isRefreshing,
     addExerciseLog,
     removeExerciseLog,
+    updateExerciseLog,
     lastLogForExercise,
     refresh,
   };

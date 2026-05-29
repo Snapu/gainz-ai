@@ -86,12 +86,21 @@ export function useOfflineSyncedStore<T, FetchE, AddE, RemoveE, UpdateE = never>
   }
 
   function remove(item: T): ResultAsync<void, RemoveE> {
-    const originalItems = [...items.value];
     const itemId = getId(item);
-    items.value = items.value.filter((i) => getId(i) !== itemId);
+    const index = items.value.findIndex((i) => getId(i) === itemId);
+    let originalItem: T | undefined;
+
+    if (index !== -1) {
+      originalItem = items.value[index];
+      items.value = items.value.filter((i) => getId(i) !== itemId);
+    }
 
     return unwrapAwaitedResult(removeRemote(item), (error) => error as RemoveE).orElse((error) => {
-      items.value = originalItems;
+      if (originalItem !== undefined) {
+        const newItems = [...items.value];
+        newItems.splice(index, 0, originalItem);
+        items.value = newItems;
+      }
       return errAsync(error);
     });
   }
@@ -104,7 +113,10 @@ export function useOfflineSyncedStore<T, FetchE, AddE, RemoveE, UpdateE = never>
 
     const itemId = getId(item);
     const index = items.value.findIndex((i) => getId(i) === itemId);
+    let originalItem: T | undefined;
+
     if (index !== -1) {
+      originalItem = items.value[index];
       const newItems = [...items.value];
       newItems[index] = item;
       items.value = newItems;
@@ -113,7 +125,17 @@ export function useOfflineSyncedStore<T, FetchE, AddE, RemoveE, UpdateE = never>
     return unwrapAwaitedResult(
       updateRemote(item),
       (error) => error as UpdateE | "no-update-handler",
-    );
+    ).orElse((error) => {
+      if (originalItem !== undefined) {
+        const revertIndex = items.value.findIndex((i) => getId(i) === itemId);
+        if (revertIndex !== -1) {
+          const newItems = [...items.value];
+          newItems[revertIndex] = originalItem;
+          items.value = newItems;
+        }
+      }
+      return errAsync(error);
+    });
   }
 
   return { items, isLoading, isOnline, isRefreshing, add, remove, update, refresh };

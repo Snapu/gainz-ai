@@ -7,12 +7,18 @@ const props = defineProps<{
   variant?: "card" | "inset";
 }>();
 
-const emit = defineEmits<(e: "delete", log: ExerciseLog) => void>();
+const emit = defineEmits<{
+  (e: "delete", log: ExerciseLog): void;
+  (e: "edit", log: ExerciseLog): void;
+}>();
 </script>
 
 <template>
   <UiSwipeToDeleteItem :variant="props.variant ?? 'card'" @delete="emit('delete', props.log)">
-    <div class="flex justify-between items-center">
+    <div 
+      class="flex justify-between items-center w-full cursor-pointer transition-opacity active:opacity-70"
+      @click="emit('edit', props.log)"
+    >
       <h3 class="font-semibold text-sm text-foreground tracking-tight leading-none">{{ log.exerciseName }}</h3>
       <div class="flex gap-4 items-center">
         <div v-if="log.weight" class="flex items-baseline gap-0.5">

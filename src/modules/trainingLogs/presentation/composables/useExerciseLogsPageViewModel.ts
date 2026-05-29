@@ -39,6 +39,7 @@ export function useExerciseLogsPageViewModel() {
 
   const collapsedSessions = ref<Record<string, boolean>>({});
   const isLogFormOpen = ref(false);
+  const logToEdit = ref<ExerciseLog | null>(null);
 
   const userProgress = computed(() => userProgressStore.userProgress);
   const trainingInsights = computed(() => trainingInsightsStore.insights);
@@ -104,6 +105,15 @@ export function useExerciseLogsPageViewModel() {
     if (isResting.value) {
       restTimerStore.reset();
     }
+    logToEdit.value = null;
+    isLogFormOpen.value = true;
+  }
+
+  function editLog(log: ExerciseLog) {
+    if (isResting.value) {
+      restTimerStore.reset();
+    }
+    logToEdit.value = log;
     isLogFormOpen.value = true;
   }
 
@@ -122,6 +132,8 @@ export function useExerciseLogsPageViewModel() {
     isResting,
     formattedRestTime,
     handleFabClick,
+    editLog,
     isLogFormOpen,
+    logToEdit,
   };
 }
