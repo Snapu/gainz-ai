@@ -5,7 +5,7 @@ interface AiMessageLike {
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
-  sessionDate: string;
+  sessionId: string;
   logsCount: number;
   logsChecksum?: string;
 }
@@ -14,7 +14,7 @@ export function toPreviousAiMessages(messages: AiMessageLike[]): PreviousAiMessa
   return messages.map((message) => ({
     role: message.role,
     content: message.content,
-    sessionDate: message.sessionDate,
+    sessionId: message.sessionId,
     timestamp: message.timestamp.toISOString(),
     logsCount: message.logsCount,
     logsChecksum: message.logsChecksum,
@@ -22,7 +22,7 @@ export function toPreviousAiMessages(messages: AiMessageLike[]): PreviousAiMessa
 }
 
 export function createAiUserPlaceholder(
-  sessionDate: string,
+  sessionId: string,
   logsCount: number,
   logsChecksum?: string,
 ): AiMessageLike {
@@ -31,14 +31,14 @@ export function createAiUserPlaceholder(
     role: "user",
     content: "AI request",
     timestamp: new Date(),
-    sessionDate,
+    sessionId,
     logsCount,
     logsChecksum,
   };
 }
 
 export function createAiAssistantMessage(
-  sessionDate: string,
+  sessionId: string,
   logsCount: number,
   responseText: string,
   logsChecksum?: string,
@@ -48,7 +48,7 @@ export function createAiAssistantMessage(
     role: "assistant",
     content: responseText,
     timestamp: new Date(),
-    sessionDate,
+    sessionId,
     logsCount,
     logsChecksum,
   };

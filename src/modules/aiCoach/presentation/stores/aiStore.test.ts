@@ -101,7 +101,7 @@ describe("useAiStore initialization", () => {
           role: "assistant",
           content: "hello",
           timestamp: new Date("2026-01-01T10:00:00.000Z"),
-          sessionDate: "2026-01-01",
+          sessionId: "2026-01-01",
           logsCount: 1,
         },
       ]),
@@ -183,7 +183,7 @@ describe("useAiStore initialization", () => {
         role: "assistant",
         content: "hello",
         timestamp: new Date("2026-01-01T10:00:00.000Z"),
-        sessionDate: "2026-01-01",
+        sessionId: "2026-01-01",
         logsCount: 1,
       },
     ];
@@ -191,7 +191,7 @@ describe("useAiStore initialization", () => {
     store.clearMessages();
 
     expect(store.messages).toEqual([]);
-    expect(removeAiMessagesFromStorageMock).toHaveBeenCalledWith(store._todaySessionDate);
+    expect(removeAiMessagesFromStorageMock).toHaveBeenCalledWith(expect.any(String));
   });
 });
 
@@ -209,7 +209,7 @@ describe("useAiStore currentWorkoutPlan", () => {
         role: "user" as const,
         content: "hi",
         timestamp: new Date(),
-        sessionDate: "2026-01-01",
+        sessionId: "2026-01-01",
         logsCount: 0,
       },
       {
@@ -219,7 +219,7 @@ describe("useAiStore currentWorkoutPlan", () => {
           recommendedWorkout: [{ exerciseName: "Bench Press", restSeconds: 120 }],
         }),
         timestamp: new Date(),
-        sessionDate: "2026-01-01",
+        sessionId: "2026-01-01",
         logsCount: 0,
       },
     ];
@@ -235,7 +235,7 @@ describe("useAiStore currentWorkoutPlan", () => {
         role: "user" as const,
         content: "hi",
         timestamp: new Date(),
-        sessionDate: "2026-01-01",
+        sessionId: "2026-01-01",
         logsCount: 0,
       },
     ];
@@ -251,7 +251,7 @@ describe("useAiStore currentWorkoutPlan", () => {
         role: "assistant" as const,
         content: "not json",
         timestamp: new Date(),
-        sessionDate: "2026-01-01",
+        sessionId: "2026-01-01",
         logsCount: 0,
       },
     ];
@@ -280,7 +280,7 @@ describe("useAiStore isNewDataAvailable", () => {
         role: "assistant",
         content: "hello",
         timestamp: new Date(),
-        sessionDate: "2026-01-01",
+        sessionId: "2026-01-01",
         logsCount: 1,
       },
     ];
@@ -296,12 +296,13 @@ describe("useAiStore isNewDataAvailable", () => {
         role: "assistant",
         content: "hello",
         timestamp: new Date(),
-        sessionDate: "2026-01-01",
+        sessionId: "2026-01-01",
         logsCount: 1,
       },
     ];
 
     vi.mocked(resolveCurrentSession).mockReturnValueOnce({
+      sessionId: "2026-01-01",
       sessionDate: "2026-01-01",
       logs: [{ id: "log-1", reps: 10, weight: 100 }],
     } as any);

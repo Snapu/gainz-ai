@@ -15,7 +15,7 @@ describe("aiMessageHelpers", () => {
         role: "assistant",
         content: "coach",
         timestamp: new Date("2026-01-01T00:00:00.000Z"),
-        sessionDate: "2026-01-01",
+        sessionId: "2026-01-01",
         logsCount: 4,
       },
     ]);
@@ -25,7 +25,7 @@ describe("aiMessageHelpers", () => {
         role: "assistant",
         content: "coach",
         timestamp: "2026-01-01T00:00:00.000Z",
-        sessionDate: "2026-01-01",
+        sessionId: "2026-01-01",
         logsCount: 4,
         logsChecksum: undefined,
       },

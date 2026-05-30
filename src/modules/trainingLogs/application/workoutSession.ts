@@ -1,9 +1,10 @@
-import { localeDateString } from "@/modules/sharedKernel/domain";
+import { isoDateString, localeDateString } from "@/modules/sharedKernel/domain";
 import type { ExerciseLog } from "../domain/exerciseLog";
 
 export type WorkoutPhase = "planning" | "mid-workout" | "post-workout";
 
 export interface WorkoutSession {
+  sessionId: string;
   sessionDate: string;
   startTime: Date;
   logs: ExerciseLog[];
@@ -33,6 +34,7 @@ export function resolveCurrentSession(
   const startTime = recentLogs[0]!.loggedAt;
 
   return {
+    sessionId: isoDateString(startTime),
     sessionDate: localeDateString(startTime),
     startTime,
     logs: recentLogs,

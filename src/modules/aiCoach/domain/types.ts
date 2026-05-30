@@ -24,7 +24,7 @@ export interface AskAiOptions {
 export type PreviousAiMessage = {
   role: "user" | "assistant";
   content: string;
-  sessionDate: string;
+  sessionId: string;
   /** ISO timestamp of when this message was created. Used to find new sets since last AI response. */
   timestamp: string;
   logsCount: number;
