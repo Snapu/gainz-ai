@@ -278,7 +278,7 @@ const {
      <!-- Superset Group -->
      <div
       v-if="group.isSuperset"
-      class="relative rounded-xl p-4 flex flex-col gap-3 shadow-sm bg-card border border-border/40"
+      class="relative flex flex-col gap-3"
      >
        <div class="px-1 flex items-center gap-3 opacity-60">
         <span class="text-xs font-bold uppercase tracking-widest text-muted-foreground">Superset</span>

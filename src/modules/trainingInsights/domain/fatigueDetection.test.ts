@@ -56,6 +56,7 @@ describe("calculateFatigueInsight", () => {
       trend: [112, 115, 118, 120],
       trendDates: [now, now, now, now],
       plateau: false,
+      rpeOverloadReady: false,
       unit: "kg",
       targetWeightHyp: null,
       targetWeightStr: null,
@@ -66,6 +67,7 @@ describe("calculateFatigueInsight", () => {
       trend: [170, 174, 177, 180],
       trendDates: [now, now, now, now],
       plateau: false,
+      rpeOverloadReady: false,
       unit: "kg",
       targetWeightHyp: null,
       targetWeightStr: null,
@@ -79,6 +81,7 @@ describe("calculateFatigueInsight", () => {
       trend: [120, 120, 110, 100], // baseline=120, drop=110,100 (< 114 threshold)
       trendDates: [now, now, now, now],
       plateau: false,
+      rpeOverloadReady: false,
       unit: "kg",
       targetWeightHyp: null,
       targetWeightStr: null,
@@ -89,6 +92,7 @@ describe("calculateFatigueInsight", () => {
       trend: [170, 170, 150, 140], // baseline=170, drop=150,140 (< 161.5 threshold)
       trendDates: [now, now, now, now],
       plateau: false,
+      rpeOverloadReady: false,
       unit: "kg",
       targetWeightHyp: null,
       targetWeightStr: null,
@@ -151,6 +155,7 @@ describe("calculateFatigueInsight", () => {
         trend: [120, 120, 110, 100],
         trendDates: [oldDate, oldDate, oldDate, oldDate],
         plateau: false,
+        rpeOverloadReady: false,
         unit: "kg",
         targetWeightHyp: null,
         targetWeightStr: null,
@@ -161,6 +166,7 @@ describe("calculateFatigueInsight", () => {
         trend: [170, 170, 150, 140],
         trendDates: [oldDate, oldDate, oldDate, oldDate],
         plateau: false,
+        rpeOverloadReady: false,
         unit: "kg",
         targetWeightHyp: null,
         targetWeightStr: null,
@@ -193,6 +199,7 @@ describe("calculateFatigueInsight", () => {
         trend: [120, 120, 120, 104], // Only the last session dropped
         trendDates: [now, now, now, now],
         plateau: false,
+        rpeOverloadReady: false,
         unit: "kg",
         targetWeightHyp: null,
         targetWeightStr: null,
@@ -203,6 +210,7 @@ describe("calculateFatigueInsight", () => {
         trend: [150, 150, 150, 140], // Only the last session dropped
         trendDates: [now, now, now, now],
         plateau: false,
+        rpeOverloadReady: false,
         unit: "kg",
         targetWeightHyp: null,
         targetWeightStr: null,
