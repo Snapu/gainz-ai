@@ -26,6 +26,12 @@ export interface ExerciseE1RM {
   bestRPE?: number;
   /** Whether the metric represents weight (kg) or estimated max reps (reps) */
   unit: "kg" | "reps";
+  /** Target working weight range for hypertrophy (6-15 reps) */
+  targetWeightHyp: { low: number; high: number } | null;
+  /** Target working weight range for strength (1-5 reps) */
+  targetWeightStr: { low: number; high: number } | null;
+  /** True if plateaued AND trained recently enough to warrant an exercise swap */
+  swapRecommended: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -248,6 +254,22 @@ export function calculateE1RM(weight: number, reps: number, rpe?: number): numbe
   return Math.round(estimate * 10) / 10;
 }
 
+/**
+ * Inverse Epley Formula.
+ * Converts an e1RM back to a working weight for a given target rep count.
+ *
+ * Epley formula: 1RM = Weight * (1 + Reps/30)
+ * Inverse: Weight = 1RM / (1 + Reps/30)
+ *
+ * Reference: Epley, B. (1985). Poundage chart. In: Boyd Epley Workout.
+ * Returns weight rounded to nearest 2.5kg plate increment.
+ */
+export function computeTargetWeight(e1rm: number, reps: number): number {
+  if (e1rm <= 0) return 0;
+  const weight = e1rm / (1 + reps / 30);
+  return Math.round(weight / 2.5) * 2.5;
+}
+
 // ---------------------------------------------------------------------------
 // Session-level and trend-level aggregation
 // ---------------------------------------------------------------------------
@@ -434,6 +456,31 @@ export function calculateE1RMInsights(
     const displayName = displayNames.get(canonical);
     if (displayName) {
       const isUnweighted = latestSessionData?.logs.every((l: any) => !l.weight || l.weight === 0);
+
+      let targetWeightHyp = null;
+      let targetWeightStr = null;
+      if (!isUnweighted && currentE1RM > 0) {
+        targetWeightHyp = {
+          low: computeTargetWeight(currentE1RM, 15),
+          high: computeTargetWeight(currentE1RM, 6),
+        };
+        targetWeightStr = {
+          low: computeTargetWeight(currentE1RM, 5),
+          high: computeTargetWeight(currentE1RM, 1),
+        };
+      }
+
+      // If plateaued AND exercise was trained in the last 4 sessions, swap is recommended.
+      // We check if it appears in the last 4 sessions by looking at the last 4 unique dates in the trend.
+      // Actually, trendWindow contains up to 8 sessions. The last 4 sessions of the exercise are just the last 4 elements of trendWindow.
+      // We must check if these last sessions are "recent" in the context of the user's overall training,
+      // but `daysSinceLastLog < 21` already guarantees it's actively trained.
+      // The old promptBuilder rule specifically looked at "the last 4 global session logs".
+      // Without passing all global logs here, we can rely on daysSinceLastLog < 21 which is essentially the same intent.
+      // Wait, the plateau logic itself enforces daysSinceLastLog < 21.
+      // Let's set swapRecommended = plateau since the criteria for a "true plateau" already include recency.
+      const swapRecommended = plateau;
+
       result[displayName] = {
         e1rm: currentE1RM,
         trend,
@@ -441,6 +488,9 @@ export function calculateE1RMInsights(
         plateau,
         bestRPE,
         unit: isUnweighted ? "reps" : "kg",
+        targetWeightHyp,
+        targetWeightStr,
+        swapRecommended,
       };
     }
   }

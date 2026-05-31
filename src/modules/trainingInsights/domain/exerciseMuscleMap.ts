@@ -25,6 +25,50 @@ export function normalizeExerciseName(name: string): string {
   return exerciseNameKey(name);
 }
 
+/** The functional category of an exercise, determining progressive overload rates. */
+export type ExerciseCategory = "lower-compound" | "upper-compound" | "isolation";
+
+/**
+ * Classify an exercise based on its muscle activation profile.
+ *
+ * Compounds involve multi-joint movements (secondary muscles). Isolations involve single joints.
+ * Lower-body compounds permit faster absolute weight progression due to larger muscle mass involved.
+ *
+ * Reference: ACSM (2009). Progression Models in Resistance Training for Healthy Adults.
+ */
+export function classifyExercise(
+  exerciseName: string,
+  overrideMap?: Record<string, MuscleActivation>,
+): ExerciseCategory {
+  const activation = getMuscleActivation(exerciseName, overrideMap);
+  if (!activation) return "isolation"; // Conservative fallback
+
+  const isCompound = activation.secondaryMuscles.length > 0;
+  if (!isCompound) return "isolation";
+
+  const hasLowerInvolvement =
+    ["Quads", "Hamstrings", "Glutes"].includes(activation.primaryMuscle) ||
+    activation.secondaryMuscles.some(
+      (s) => ["Quads", "Hamstrings", "Glutes"].includes(s.muscleGroup) && s.contribution >= 0.5,
+    );
+
+  return hasLowerInvolvement ? "lower-compound" : "upper-compound";
+}
+
+/**
+ * Returns the recommended progressive overload increment (in kg) for a given category.
+ */
+export function getProgressionIncrement(category: ExerciseCategory): number {
+  switch (category) {
+    case "lower-compound":
+      return 5;
+    case "upper-compound":
+      return 2.5;
+    case "isolation":
+      return 1.25;
+  }
+}
+
 /** Helper to build a MuscleActivation entry concisely. */
 function act(primary: MuscleGroup, ...secondaries: [MuscleGroup, number][]): MuscleActivation {
   return {

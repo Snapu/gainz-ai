@@ -57,6 +57,9 @@ describe("calculateFatigueInsight", () => {
       trendDates: [now, now, now, now],
       plateau: false,
       unit: "kg",
+      targetWeightHyp: null,
+      targetWeightStr: null,
+      swapRecommended: false,
     },
     Squat: {
       e1rm: 180,
@@ -64,6 +67,9 @@ describe("calculateFatigueInsight", () => {
       trendDates: [now, now, now, now],
       plateau: false,
       unit: "kg",
+      targetWeightHyp: null,
+      targetWeightStr: null,
+      swapRecommended: false,
     },
   };
 
@@ -74,6 +80,9 @@ describe("calculateFatigueInsight", () => {
       trendDates: [now, now, now, now],
       plateau: false,
       unit: "kg",
+      targetWeightHyp: null,
+      targetWeightStr: null,
+      swapRecommended: false,
     },
     Squat: {
       e1rm: 150,
@@ -81,6 +90,9 @@ describe("calculateFatigueInsight", () => {
       trendDates: [now, now, now, now],
       plateau: false,
       unit: "kg",
+      targetWeightHyp: null,
+      targetWeightStr: null,
+      swapRecommended: false,
     },
   };
 
@@ -140,6 +152,9 @@ describe("calculateFatigueInsight", () => {
         trendDates: [oldDate, oldDate, oldDate, oldDate],
         plateau: false,
         unit: "kg",
+        targetWeightHyp: null,
+        targetWeightStr: null,
+        swapRecommended: false,
       },
       Squat: {
         e1rm: 150,
@@ -147,6 +162,9 @@ describe("calculateFatigueInsight", () => {
         trendDates: [oldDate, oldDate, oldDate, oldDate],
         plateau: false,
         unit: "kg",
+        targetWeightHyp: null,
+        targetWeightStr: null,
+        swapRecommended: false,
       },
     };
     const logs = buildMockLogs([14, 14, 14, 14], [900, 900, 900, 900], now);
@@ -176,6 +194,9 @@ describe("calculateFatigueInsight", () => {
         trendDates: [now, now, now, now],
         plateau: false,
         unit: "kg",
+        targetWeightHyp: null,
+        targetWeightStr: null,
+        swapRecommended: false,
       },
       Squat: {
         e1rm: 150,
@@ -183,6 +204,9 @@ describe("calculateFatigueInsight", () => {
         trendDates: [now, now, now, now],
         plateau: false,
         unit: "kg",
+        targetWeightHyp: null,
+        targetWeightStr: null,
+        swapRecommended: false,
       },
     };
     const logs = buildMockLogs([14, 14, 14, 14], [900, 900, 900, 900], now);

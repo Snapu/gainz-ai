@@ -1,6 +1,11 @@
 import { Result } from "neverthrow";
 import { isoDateString } from "@/modules/sharedKernel/domain";
-import { getMuscleActivation, type TrainingInsights } from "@/modules/trainingInsights/domain";
+import {
+  classifyExercise,
+  getMuscleActivation,
+  getProgressionIncrement,
+  type TrainingInsights,
+} from "@/modules/trainingInsights/domain";
 import {
   getSessionStartBoundary,
   resolveCurrentSession,
@@ -404,9 +409,7 @@ export function formatMuscles(insights: TrainingInsights): string {
  * Formats exercise trend data as compact inline entries.
  *
  * Example:
- *   Bankdrücken: e1rm:79.9 muscle:Chest trend:04-17→80.4 04-22→78.6 04-23→79.9
- *   Schrägbankdrücken KH: e1rm:74.6 wk:9 rpe:8.5 trend:05-15→67.9 05-26→71.4 05-29→74.6
- *   Klimmzüge: e1rm:12.5 muscle:Back rpe:9.5 PLATEAU trend:04-17→11 04-23→11 05-03→12.5
+ *   Bankdrücken: e1rm:79.9 muscle:Chest hyp:40-65 str:67.5-77.5 SWAP trend:04-17→80.4 04-22→78.6 04-23→79.9
  */
 export function formatExercises(
   insights: TrainingInsights,
@@ -425,7 +428,22 @@ export function formatExercises(
     if (activation?.primaryMuscle) parts.push(`muscle:${activation.primaryMuscle}`);
     if (weeklySetCount) parts.push(`wk:${weeklySetCount}`);
     if (data.bestRPE != null) parts.push(`rpe:${data.bestRPE}`);
-    if (data.plateau) parts.push("PLATEAU");
+
+    if (data.swapRecommended) {
+      parts.push("SWAP");
+    } else if (data.plateau) {
+      parts.push("PLATEAU");
+    }
+
+    if (data.targetWeightHyp) {
+      parts.push(`hyp:${data.targetWeightHyp.low}-${data.targetWeightHyp.high}`);
+    }
+    if (data.targetWeightStr) {
+      parts.push(`str:${data.targetWeightStr.low}-${data.targetWeightStr.high}`);
+    }
+    if (data.e1rm > 0) {
+      parts.push(`inc:+${getProgressionIncrement(classifyExercise(name))}kg`);
+    }
 
     // Trend: last 3 sessions as MM-DD→value pairs
     const trendSlice = data.trend.slice(-3);

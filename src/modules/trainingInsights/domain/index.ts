@@ -34,11 +34,13 @@ import {
 } from "./volumeLandmarks";
 
 export * from "./acwr";
+export * from "./deloadPhase";
 export * from "./e1rm";
 // Re-export sub-modules so consumers can import types from the barrel.
 export * from "./ewma";
 export * from "./exerciseMuscleMap";
 export * from "./fatigueDetection";
+export * from "./restPeriods";
 export * from "./volumeLandmarks";
 
 /** High-level training phase shown in the UI. */
