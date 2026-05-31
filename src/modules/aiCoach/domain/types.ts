@@ -92,7 +92,8 @@ export function createAiResponseSchema(muscleGroupsList: string[]): Schema {
       },
       recommendedWorkout: {
         type: Type.ARRAY,
-        description: "Optional recommended exercises to add to today's workout.",
+        description:
+          "Optional recommended exercises to add to today's workout. OMIT this entirely during mid-workout conversational Q&A to preserve the existing plan.",
         items: {
           type: Type.OBJECT,
           required: ["exerciseName", "targetSets", "targetReps", "restSeconds"],

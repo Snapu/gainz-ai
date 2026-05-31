@@ -427,7 +427,11 @@ export function formatExercises(
     const parts: string[] = [`e1rm:${data.e1rm}`];
     if (activation?.primaryMuscle) parts.push(`muscle:${activation.primaryMuscle}`);
     if (weeklySetCount) parts.push(`wk:${weeklySetCount}`);
-    if (data.bestRPE != null) parts.push(`rpe:${data.bestRPE}`);
+    if (data.rpeOverloadReady) {
+      parts.push("rpe_trigger:overload_ready");
+    } else if (data.bestRPE != null) {
+      parts.push(`rpe:${data.bestRPE}`);
+    }
 
     if (data.swapRecommended) {
       parts.push("SWAP");

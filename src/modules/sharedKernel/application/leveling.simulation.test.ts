@@ -1,4 +1,4 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 describe("Leveling Simulation", () => {
   it("should verify the 10-year curve", () => {
@@ -61,5 +61,9 @@ describe("Leveling Simulation", () => {
         `${year.toString().padStart(4)} | ${level.toString().padStart(5)} | ${Math.floor(totalXP).toString().padStart(8)} | ${Math.floor(yearlyXP).toString().padStart(7)}`,
       );
     }
+
+    // Verify the simulation produces expected growth
+    expect(level).toBeGreaterThan(50);
+    expect(totalXP).toBeGreaterThan(10000);
   });
 });

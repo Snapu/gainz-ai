@@ -524,4 +524,65 @@ describe("calculateE1RMInsights", () => {
     expect(result["Row"]!.trendDates[0].toDateString()).toBe(daysLater(0).toDateString());
     expect(result["Row"]!.trendDates[1].toDateString()).toBe(daysLater(7).toDateString());
   });
+
+  // -------------------------------------------------------------------------
+  // rpeOverloadReady fix
+  // -------------------------------------------------------------------------
+
+  describe("rpeOverloadReady calculates correctly", () => {
+    it("is false when exercise is not established (>14 days)", () => {
+      const logs = [
+        createLog("Bench", daysLater(0), 100, 5, 7),
+        createLog("Bench", daysLater(7), 100, 5, 7), // 7 days history, not 14
+      ];
+      const result = calculateE1RMInsights(logs, undefined, daysLater(10));
+      expect(result["Bench"]!.rpeOverloadReady).toBe(false);
+    });
+
+    it("is true when exercise is established (>14 days) and last session best set RPE < 8", () => {
+      const logs = [
+        createLog("Bench", daysLater(0), 100, 5, 7),
+        createLog("Bench", daysLater(7), 100, 5, 7),
+        createLog("Bench", daysLater(14), 100, 5, 7), // exactly 14 days
+      ];
+      const result = calculateE1RMInsights(logs, undefined, daysLater(15));
+      expect(result["Bench"]!.rpeOverloadReady).toBe(true);
+    });
+
+    it("is false when exercise is established but last session best set RPE is >= 8", () => {
+      const logs = [
+        createLog("Bench", daysLater(0), 100, 5, 7),
+        createLog("Bench", daysLater(7), 100, 5, 7),
+        createLog("Bench", daysLater(14), 100, 5, 8.5), // RPE >= 8
+      ];
+      const result = calculateE1RMInsights(logs, undefined, daysLater(15));
+      expect(result["Bench"]!.rpeOverloadReady).toBe(false);
+    });
+
+    it("is false when RPE is missing from the last session", () => {
+      const logs = [
+        createLog("Bench", daysLater(0), 100, 5, 7),
+        createLog("Bench", daysLater(7), 100, 5, 7),
+        createLog("Bench", daysLater(14), 100, 5), // Missing RPE
+      ];
+      const result = calculateE1RMInsights(logs, undefined, daysLater(15));
+      expect(result["Bench"]!.rpeOverloadReady).toBe(false);
+    });
+
+    it("uses full history for established check, not just truncated trend window", () => {
+      // Create 10 logs spaced 2 days apart (total 18 days span).
+      // The trend window only holds the last 8 logs (which span 14 days).
+      // Wait, let's space them 1 day apart.
+      // 20 logs, 1 day apart. First log is day 0, last is day 19 (19 days span).
+      // Trend window (last 8 logs) spans from day 12 to day 19 (7 days span).
+      // If we only looked at trend window, it would seem unestablished (7 < 14).
+      const logs: ExerciseLog[] = [];
+      for (let i = 0; i <= 19; i++) {
+        logs.push(createLog("Bench", daysLater(i), 100, 5, 7));
+      }
+      const result = calculateE1RMInsights(logs, undefined, daysLater(20));
+      // Should correctly see it as established because full history is 19 days
+      expect(result["Bench"]!.rpeOverloadReady).toBe(true);
+    });
+  });
 });

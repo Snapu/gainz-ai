@@ -24,6 +24,8 @@ export interface ExerciseE1RM {
    * the field was permanently locked and the AI's +5% adjustment became dead code.
    */
   bestRPE?: number;
+  /** True if the exercise has been tracked for >2 weeks and the last session had an RPE < 8 */
+  rpeOverloadReady: boolean;
   /** Whether the metric represents weight (kg) or estimated max reps (reps) */
   unit: "kg" | "reps";
   /** Target working weight range for hypertrophy (6-15 reps) */
@@ -481,12 +483,20 @@ export function calculateE1RMInsights(
       // Let's set swapRecommended = plateau since the criteria for a "true plateau" already include recency.
       const swapRecommended = plateau;
 
+      const firstEverDate = new Date(sortedDays[0]!);
+      const lastEverDate = new Date(sortedDays[sortedDays.length - 1]!);
+      const isEstablished =
+        sortedDays.length >= 2 &&
+        lastEverDate.getTime() - firstEverDate.getTime() >= 14 * MS_PER_DAY;
+      const rpeOverloadReady = bestRPE != null && bestRPE < 8 && isEstablished;
+
       result[displayName] = {
         e1rm: currentE1RM,
         trend,
         trendDates,
         plateau,
         bestRPE,
+        rpeOverloadReady,
         unit: isUnweighted ? "reps" : "kg",
         targetWeightHyp,
         targetWeightStr,
