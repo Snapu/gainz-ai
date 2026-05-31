@@ -1,10 +1,6 @@
 import { Result } from "neverthrow";
-import type { UserProfile } from "@/modules/profile/domain";
-import { localeDateString } from "@/modules/sharedKernel/domain";
-import {
-  summarizeTrainingInsights,
-  type TrainingInsights,
-} from "@/modules/trainingInsights/domain";
+import { isoDateString } from "@/modules/sharedKernel/domain";
+import { getMuscleActivation, type TrainingInsights } from "@/modules/trainingInsights/domain";
 import {
   getSessionStartBoundary,
   resolveCurrentSession,
@@ -62,14 +58,26 @@ export function getTrainingPattern(exerciseLogs: ExerciseLog[]): string | null {
     .sort(([a], [b]) => a - b)
     .map(([day]) => dayNames[day]);
 
-  return activeDays.length > 0 ? activeDays.join(", ") : null;
+  return activeDays.length > 0 ? activeDays.join(",") : null;
 }
 
+/**
+ * Renders exercise logs as ultra-compact text.
+ *
+ * Format per day:
+ *   2026-05-17:
+ *     Exercise Name: reps×kg@rpe, reps×kg@rpe
+ *
+ * Set notation: `reps×kg@rpe` — fields are omitted when absent.
+ * Examples: `10×50@8.5`, `10×50` (no RPE), `10r` (bodyweight), `500m`, `30min`
+ */
 export function compactLogs(logs: ExerciseLog[]): string {
   if (logs.length === 0) return "(none)";
+
+  // Group by ISO date for stable ordering regardless of locale
   const byDate = new Map<string, ExerciseLog[]>();
   for (const log of logs) {
-    const dateKey = localeDateString(log.loggedAt);
+    const dateKey = isoDateString(log.loggedAt);
     const existing = byDate.get(dateKey) ?? [];
     existing.push(log);
     byDate.set(dateKey, existing);
@@ -77,6 +85,9 @@ export function compactLogs(logs: ExerciseLog[]): string {
 
   const lines: string[] = [];
   for (const [date, dayLogs] of byDate) {
+    lines.push(`${date}:`);
+
+    // Group by exercise name within the day
     const byExercise = new Map<string, ExerciseLog[]>();
     for (const log of dayLogs) {
       const existing = byExercise.get(log.exerciseName) ?? [];
@@ -84,52 +95,34 @@ export function compactLogs(logs: ExerciseLog[]): string {
       byExercise.set(log.exerciseName, existing);
     }
 
-    const parts: string[] = [];
     for (const [name, sets] of byExercise) {
-      const reps = sets.map((s) => s.reps).filter((v): v is number => typeof v === "number");
-      const weights = sets.map((s) => s.weight).filter((v): v is number => typeof v === "number");
-      const rpes = sets.map((s) => s.rpe).filter((v): v is number => typeof v === "number");
-      const durations = sets
-        .map((s) => s.duration)
-        .filter((v): v is number => typeof v === "number");
-      const distances = sets
-        .map((s) => s.distance)
-        .filter((v): v is number => typeof v === "number");
-
-      const summaryParts = [`${sets.length} sets`];
-      if (reps.length > 0) {
-        const minReps = Math.min(...reps);
-        const maxReps = Math.max(...reps);
-        summaryParts.push(minReps === maxReps ? `${maxReps} reps` : `reps: ${reps.join(",")}`);
-      }
-      if (weights.length > 0) {
-        const minWeight = Math.min(...weights);
-        const maxWeight = Math.max(...weights);
-        summaryParts.push(
-          minWeight === maxWeight ? `${maxWeight}kg` : `${minWeight}-${maxWeight}kg`,
-        );
-      }
-      if (distances.length > 0) {
-        const totalDistance = Math.round(distances.reduce((acc, v) => acc + v, 0));
-        summaryParts.push(`${totalDistance}m total`);
-      }
-      if (durations.length > 0) {
-        const totalMinutes = Math.round(durations.reduce((acc, v) => acc + v, 0));
-        summaryParts.push(`${totalMinutes}min total`);
-      }
-      if (rpes.length > 0) {
-        const allSame = rpes.every((r) => r === rpes[0]);
-        summaryParts.push(allSame ? `@RPE${rpes[0]}` : `RPE: ${rpes.join(",")}`);
-      }
-
-      parts.push(`${name}: ${summaryParts.join(", ")}`);
+      const setEntries = sets.map((s) => {
+        // Distance-only: 500m
+        if (typeof s.distance === "number" && typeof s.reps !== "number") {
+          const rpe = typeof s.rpe === "number" ? `@${s.rpe}` : "";
+          return `${s.distance}m${rpe}`;
+        }
+        // Duration-only: 30min
+        if (typeof s.duration === "number" && typeof s.reps !== "number") {
+          const rpe = typeof s.rpe === "number" ? `@${s.rpe}` : "";
+          return `${s.duration}min${rpe}`;
+        }
+        // Standard: reps×kg@rpe (each field optional)
+        const reps = typeof s.reps === "number" ? `${s.reps}` : "";
+        const weight = typeof s.weight === "number" ? `×${s.weight}` : "";
+        const rpe = typeof s.rpe === "number" ? `@${s.rpe}` : "";
+        // Bodyweight: no weight field → append 'r' suffix for clarity
+        const suffix = typeof s.weight !== "number" && typeof s.reps === "number" ? "r" : "";
+        return `${reps}${suffix}${weight}${rpe}`;
+      });
+      lines.push(`  ${name}: ${setEntries.join(", ")}`);
     }
-    lines.push(`${date}: ${parts.join(" | ")}`);
   }
+
   return lines.join("\n");
 }
 
-export function getRecentLogs(exerciseLogs: ExerciseLog[], days: number): ExerciseLog[] {
+function getRecentLogs(exerciseLogs: ExerciseLog[], days: number): ExerciseLog[] {
   const since = new Date();
   since.setDate(since.getDate() - days);
   return exerciseLogs.filter((log) => log.loggedAt.getTime() >= since.getTime());
@@ -143,7 +136,7 @@ export function getInitialLogsWindow(exerciseLogs: ExerciseLog[]): {
   if (last2WeeksLogs.length >= MIN_INITIAL_LOG_ENTRIES) {
     return {
       logs: last2WeeksLogs,
-      label: `Recent logs (last ${INITIAL_LOG_WINDOW_DAYS / 7} weeks)`,
+      label: `logs (last ${INITIAL_LOG_WINDOW_DAYS / 7} weeks)`,
     };
   }
 
@@ -154,13 +147,13 @@ export function getInitialLogsWindow(exerciseLogs: ExerciseLog[]): {
   ) {
     return {
       logs: last4WeeksLogs,
-      label: `Recent logs (last ${EXTENDED_LOG_WINDOW_DAYS / 7} weeks)`,
+      label: `logs (last ${EXTENDED_LOG_WINDOW_DAYS / 7} weeks)`,
     };
   }
 
   return {
     logs: getRecentLogs(exerciseLogs, 90),
-    label: "Recent logs (last 13 weeks)",
+    label: "logs (last 13 weeks)",
   };
 }
 
@@ -211,43 +204,30 @@ export function buildPriorPlanSummary(
       const target = ex.targetSets ?? 0;
       let status: string;
       if (target > 0 && done >= target) {
-        status = "✓ done";
+        status = "✓";
       } else if (done > 0) {
-        status = `${done}/${target} sets`;
+        status = `${done}/${target}`;
       } else if (target > 0) {
-        status = `0/${target} sets pending`;
+        status = `0/${target}`;
       } else {
         status = "pending";
       }
 
       const parts = [status];
-      if (ex.targetReps) parts.push(`${ex.targetReps} reps`);
+      if (ex.targetReps) parts.push(`${ex.targetReps}r`);
       if (ex.targetWeight) parts.push(`@${ex.targetWeight}`);
-      if (ex.restSeconds) parts.push(`${ex.restSeconds}s rest`);
+      if (ex.restSeconds) parts.push(`${ex.restSeconds}s`);
 
-      return `${ex.exerciseName}: ${parts.join(", ")}`;
+      return `  ${ex.exerciseName}: ${parts.join(" ")}`;
     },
   );
 
-  const jsonText = `Prior Recommended Workout JSON:\n\`\`\`json\n${JSON.stringify(parsedPlan.recommendedWorkout)}\n\`\`\``;
+  const jsonText = `prior plan:\n\`\`\`json\n${JSON.stringify(parsedPlan.recommendedWorkout)}\n\`\`\``;
   if (todayLogs.length === 0) {
     return jsonText;
   }
-  const progressText = `Current progress against last plan:\n\`\`\`\n${lines.join("\n")}\n\`\`\``;
+  const progressText = `progress:\n${lines.join("\n")}`;
   return `${progressText}\n\n${jsonText}`;
-}
-
-export function buildCompactProfileContext(userProfile: UserProfile): Record<string, unknown> {
-  return {
-    age: userProfile.age ?? undefined,
-    heightCm: userProfile.heightCm ?? undefined,
-    weightKg: userProfile.weightKg ?? undefined,
-    fitnessGoal: userProfile.fitnessGoal?.length ? userProfile.fitnessGoal : undefined,
-    fitnessLevel: userProfile.fitnessLevel ?? undefined,
-    workoutDaysPerWeek: userProfile.workoutDaysPerWeek ?? undefined,
-    workoutLocation: userProfile.workoutLocation ?? undefined,
-    equipmentAccess: userProfile.equipmentAccess?.length ? userProfile.equipmentAccess : undefined,
-  };
 }
 
 export function getRecentExerciseNames(
@@ -302,48 +282,164 @@ export function getRecentExerciseNames(
   return names;
 }
 
-export function buildCompactTrainingContext(
-  insights: TrainingInsights,
-  recentExerciseNames?: Set<string>,
-): Record<string, unknown> {
-  const summary = summarizeTrainingInsights(insights);
-  const exerciseTrends = Object.fromEntries(
-    Object.entries(insights.e1rm)
-      .filter(([name]) => !recentExerciseNames || recentExerciseNames.has(name))
-      .map(([name, data]) => [
-        name,
-        {
-          e1rm: data.e1rm,
-          plateau: data.plateau || undefined,
-          bestRPE: data.bestRPE ?? undefined,
-          recentTrend: data.trend.slice(-3),
-        },
-      ]),
-  );
+/**
+ * Count how many sets of a given exercise appear in the trailing `days` window.
+ * Used to give the AI per-exercise weekly set volume context.
+ */
+function countRecentSets(exerciseName: string, exerciseLogs: ExerciseLog[], days: number): number {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const cutoffMs = cutoff.getTime();
+  return exerciseLogs.filter(
+    (l) => l.exerciseName === exerciseName && l.loggedAt.getTime() >= cutoffMs,
+  ).length;
+}
 
-  return {
-    summary,
-    phase: insights.phase,
-    acwr: insights.acwr ?? undefined,
-    deloadStatus: insights.deloadStatus,
-    deloadEndsAt: insights.deloadEndsAt ?? undefined,
-    e1rmPaused: insights.e1rmPaused || undefined,
-    plateauPaused: insights.plateauPaused || undefined,
-    fatigue: {
-      shouldDeload: insights.fatigue.shouldDeload || undefined,
-      reason: insights.fatigue.reason ?? undefined,
-      riskScore: insights.fatigue.riskScore || undefined,
-      hasSufficientHistory: insights.fatigue.hasSufficientHistory || undefined,
-      decliningExercises: insights.fatigue.decliningExercises || undefined,
-      weeklyTotalSets:
-        insights.fatigue.weeklyTotalSets.length > 0 ? insights.fatigue.weeklyTotalSets : undefined,
-      weeklyTonnage:
-        insights.fatigue.weeklyTonnage.length > 0 ? insights.fatigue.weeklyTonnage : undefined,
-      loadWindow: insights.fatigue.hasSufficientHistory ? insights.fatigue.loadWindow : undefined,
-      triggeredBy:
-        insights.fatigue.triggeredBy.length > 0 ? insights.fatigue.triggeredBy : undefined,
-    },
-    deloadTriggerSnapshot: insights.deloadTriggerSnapshot ?? undefined,
-    exerciseTrends,
+const TREND_SYMBOL: Record<string, string> = {
+  improving: "↑",
+  stable: "→",
+  plateau: "→",
+  dropping: "↓",
+};
+
+/**
+ * Formats workload regulation data as compact YAML.
+ *
+ * Output:
+ *   acwr: 0.94
+ *   fatigue: {risk: 0, deload: false, declining: 1, sufficient: true}
+ *   load:
+ *     sets: {w-3: 24, w-2: 45, w-1: 30, now: 31, avg: 31.2, ratio: 0.93}
+ *     tonnage: {w-3: 8228, w-2: 18289, w-1: 12074, now: 11517, avg: 11954, ratio: 0.92}
+ *   deload: {status: completed, ended: 2026-05-24, triggers: [volumeSpike,...], risk: 6}
+ */
+export function formatWorkload(insights: TrainingInsights): string {
+  const { fatigue } = insights;
+  const lw = fatigue.loadWindow;
+
+  const lines: string[] = [];
+
+  if (insights.acwr !== null) lines.push(`acwr: ${insights.acwr.toFixed(2)}`);
+
+  const fatigueParts = [`risk: ${fatigue.riskScore}`, `deload: ${fatigue.shouldDeload}`];
+  if (fatigue.decliningExercises) fatigueParts.push(`declining: ${fatigue.decliningExercises}`);
+  if (fatigue.hasSufficientHistory) fatigueParts.push("sufficient: true");
+  if (fatigue.reason) fatigueParts.push(`reason: ${fatigue.reason}`);
+  lines.push(`fatigue: {${fatigueParts.join(", ")}}`);
+
+  if (fatigue.hasSufficientHistory) {
+    const s = lw.sets;
+    const t = lw.tonnage;
+    const sRatio = s.ratioVsPriorAvg !== null ? `, ratio: ${s.ratioVsPriorAvg.toFixed(2)}` : "";
+    const tRatio = t.ratioVsPriorAvg !== null ? `, ratio: ${t.ratioVsPriorAvg.toFixed(2)}` : "";
+    lines.push("load:");
+    lines.push(
+      `  sets: {w-3: ${Math.round(s.weekMinus3)}, w-2: ${Math.round(s.weekMinus2)}, w-1: ${Math.round(s.weekMinus1)}, now: ${Math.round(s.current)}, avg: ${Math.round(s.prior3WeekAvg)}${sRatio}}`,
+    );
+    lines.push(
+      `  tonnage: {w-3: ${Math.round(t.weekMinus3)}, w-2: ${Math.round(t.weekMinus2)}, w-1: ${Math.round(t.weekMinus1)}, now: ${Math.round(t.current)}, avg: ${Math.round(t.prior3WeekAvg)}${tRatio}}`,
+    );
+  }
+
+  const deload = insights.deloadStatus;
+  if (deload !== "none") {
+    const parts = [`status: ${deload}`];
+    if (insights.deloadEndsAt) {
+      parts.push(`ended: ${isoDateString(new Date(insights.deloadEndsAt))}`);
+    }
+    if (insights.deloadTriggerSnapshot) {
+      parts.push(`triggers: [${insights.deloadTriggerSnapshot.triggeredBy.join(",")}]`);
+      parts.push(`risk: ${insights.deloadTriggerSnapshot.riskScore}`);
+    }
+    if (insights.deloadStatus === "active" && insights.deloadTimeRemainingMs !== null) {
+      const daysLeft = Math.ceil(insights.deloadTimeRemainingMs / 86400000);
+      parts.push(`daysLeft: ${daysLeft}`);
+    }
+    lines.push(`deload: {${parts.join(", ")}}`);
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * Formats muscle group data as a compact pipe-delimited table.
+ *
+ * Header comment: # sets/direct | landmark | freq | hours | ready | trend
+ * Example row:   Chest: 7.3/7.3 | MEV | 3x | 23h | ✓ | ↑
+ *
+ * Landmarks are shortened: below_MEV→bMEV, at_MEV→MEV, at_MAV→MAV,
+ *   approaching_MRV→→MRV, above_MRV→>MRV
+ */
+export function formatMuscles(insights: TrainingInsights): string {
+  const LANDMARK_SHORT: Record<string, string> = {
+    below_MEV: "bMEV",
+    at_MEV: "MEV",
+    at_MAV: "MAV",
+    approaching_MRV: "→MRV",
+    above_MRV: ">MRV",
   };
+
+  const lines = ["# sets/direct | landmark | freq | hours | ready | trend"];
+  for (const [name, data] of Object.entries(insights.muscleGroups)) {
+    if (!data) continue;
+    const hours =
+      data.hoursSinceLastTrained !== null ? `${Math.round(data.hoursSinceLastTrained)}h` : "—";
+    const ready = data.recoveryReady ? "✓" : "✗";
+    const trend = data.trendStatus ? (TREND_SYMBOL[data.trendStatus] ?? "?") : "";
+    const landmark = LANDMARK_SHORT[data.landmark] ?? data.landmark;
+    const parts = [
+      `${data.sets}/${data.directSets}`,
+      landmark,
+      `${data.frequencyPerWeek}x`,
+      hours,
+      ready,
+    ];
+    if (trend) parts.push(trend);
+    lines.push(`${name}: ${parts.join(" | ")}`);
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Formats exercise trend data as compact inline entries.
+ *
+ * Example:
+ *   Bankdrücken: e1rm:79.9 muscle:Chest trend:04-17→80.4 04-22→78.6 04-23→79.9
+ *   Schrägbankdrücken KH: e1rm:74.6 wk:9 rpe:8.5 trend:05-15→67.9 05-26→71.4 05-29→74.6
+ *   Klimmzüge: e1rm:12.5 muscle:Back rpe:9.5 PLATEAU trend:04-17→11 04-23→11 05-03→12.5
+ */
+export function formatExercises(
+  insights: TrainingInsights,
+  exerciseLogs: ExerciseLog[],
+  recentExerciseNames?: Set<string>,
+): string {
+  const lines: string[] = [];
+
+  for (const [name, data] of Object.entries(insights.e1rm)) {
+    if (recentExerciseNames && !recentExerciseNames.has(name)) continue;
+
+    const activation = getMuscleActivation(name);
+    const weeklySetCount = countRecentSets(name, exerciseLogs, 7) || undefined;
+
+    const parts: string[] = [`e1rm:${data.e1rm}`];
+    if (activation?.primaryMuscle) parts.push(`muscle:${activation.primaryMuscle}`);
+    if (weeklySetCount) parts.push(`wk:${weeklySetCount}`);
+    if (data.bestRPE != null) parts.push(`rpe:${data.bestRPE}`);
+    if (data.plateau) parts.push("PLATEAU");
+
+    // Trend: last 3 sessions as MM-DD→value pairs
+    const trendSlice = data.trend.slice(-3);
+    const trendParts = trendSlice.map((e1rm, i) => {
+      const dateOffset = data.trendDates.length - trendSlice.length + i;
+      const trendDate = data.trendDates[dateOffset];
+      if (!trendDate) return `${e1rm}`;
+      const mmdd = isoDateString(trendDate).slice(5); // "MM-DD"
+      return `${mmdd}→${e1rm}`;
+    });
+    if (trendParts.length > 0) parts.push(`trend:${trendParts.join(" ")}`);
+
+    lines.push(`${name}: ${parts.join(" ")}`);
+  }
+
+  return lines.join("\n");
 }

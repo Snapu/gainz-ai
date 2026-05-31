@@ -5,11 +5,7 @@ import {
   summaryToExerciseLogs as summaryToExerciseLogsModule,
   type TrainingSummary,
 } from "@/modules/trainingSummary/application";
-import {
-  calculateTrainingInsights,
-  summarizeTrainingInsights,
-  type TrainingInsights,
-} from "../domain";
+import { calculateTrainingInsights, type TrainingInsights } from "../domain";
 
 /**
  * Application-level use-cases for training insights.
@@ -26,10 +22,6 @@ export function calculateInsights(
   deloadPhase?: DeloadPhase | null,
 ): TrainingInsights {
   return calculateTrainingInsights(logs, targetDate, overrideMap, bodyWeightKg, deloadPhase);
-}
-
-export function summarizeInsights(insights: TrainingInsights): string {
-  return summarizeTrainingInsights(insights);
 }
 
 export function summaryToExerciseLogs(summaries: TrainingSummary[]): ExerciseLog[] {

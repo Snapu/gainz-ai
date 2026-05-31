@@ -50,8 +50,7 @@ function createMockInsights(): TrainingInsights {
       shouldDeload: false,
       reason: undefined,
       hasSufficientHistory: false,
-      weeklyTotalSets: [],
-      weeklyTonnage: [],
+
       loadWindow: {
         sets: {
           weekMinus3: 0,

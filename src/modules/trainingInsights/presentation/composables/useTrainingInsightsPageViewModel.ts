@@ -104,28 +104,6 @@ export function useTrainingInsightsPageViewModel() {
     () => muscleInsightsList.value.filter((insight) => !insight.recoveryReady).length,
   );
 
-  const weeklySetSummary = computed(() => {
-    const weeklySets = insights.value.fatigue.weeklyTotalSets;
-    const thisWeekSets = weeklySets[3] ?? 0;
-    const previousWeekSets = weeklySets[2] ?? 0;
-    const priorThreeWeekAvg =
-      weeklySets.length >= 4
-        ? ((weeklySets[0] ?? 0) + (weeklySets[1] ?? 0) + (weeklySets[2] ?? 0)) / 3
-        : null;
-
-    const deltaPct =
-      priorThreeWeekAvg && priorThreeWeekAvg > 0
-        ? Math.round(((thisWeekSets - priorThreeWeekAvg) / priorThreeWeekAvg) * 100)
-        : null;
-
-    return {
-      thisWeekSets,
-      previousWeekSets,
-      priorThreeWeekAvg,
-      deltaPct,
-    };
-  });
-
   const acwrValueLabel = computed(() =>
     insights.value.acwr === null ? "No baseline" : insights.value.acwr.toFixed(2),
   );

@@ -1,6 +1,5 @@
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ref } from "vue";
 import { useAiStore } from "@/modules/aiCoach/presentation";
 import { useRestTimerStore } from "@/modules/platform/presentation";
 import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
@@ -55,7 +54,7 @@ describe("useAICoachPageViewModel", () => {
           id: "msg1",
           role: "assistant",
           timestamp: new Date(),
-          sessionDate: new Date().toISOString().split("T")[0] ?? "",
+          sessionId: new Date().toISOString().split("T")[0] ?? "",
           logsCount: 0,
           content: JSON.stringify({
             coachMessage: "Here is your workout",
@@ -85,7 +84,7 @@ describe("useAICoachPageViewModel", () => {
           id: "msg1",
           role: "assistant",
           timestamp: new Date(),
-          sessionDate: new Date().toISOString().split("T")[0] ?? "",
+          sessionId: new Date().toISOString().split("T")[0] ?? "",
           logsCount: 0,
           content: JSON.stringify({
             coachMessage: "Superset time",

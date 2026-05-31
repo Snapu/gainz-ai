@@ -153,34 +153,3 @@ export function calculateTrainingInsights(
     deloadTriggerSnapshot,
   };
 }
-
-/**
- * Summarise training insights to a compact string for the AI prompt.
- * Keeps the token footprint small while preserving all decision-critical signals.
- */
-export function summarizeTrainingInsights(insights: TrainingInsights): string {
-  const parts: string[] = [`Phase: ${insights.phase}`];
-
-  if (insights.acwr !== null) {
-    parts.push(`ACWR: ${insights.acwr.toFixed(2)}`);
-  }
-
-  const { fatigue } = insights;
-  parts.push(`FatigueRisk: ${fatigue.riskScore} (shouldDeload=${fatigue.shouldDeload})`);
-
-  if (insights.deloadStatus === "active" && insights.deloadEndsAt) {
-    const msLeft = insights.deloadTimeRemainingMs ?? 0;
-    const daysLeft = Math.ceil(msLeft / (24 * 60 * 60 * 1000));
-    parts.push(`DeloadActive: ends in ${daysLeft}d`);
-  }
-
-  const muscleEntries = Object.entries(insights.muscleGroups).filter(([, v]) => v !== undefined);
-  if (muscleEntries.length > 0) {
-    const muscleList = muscleEntries
-      .map(([group, m]) => `${group}:${m!.sets}sets(${m!.landmark})`)
-      .join(", ");
-    parts.push(`Muscles: ${muscleList}`);
-  }
-
-  return parts.join(" | ");
-}

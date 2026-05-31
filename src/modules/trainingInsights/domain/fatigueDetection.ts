@@ -15,10 +15,7 @@ export interface FatigueInsight {
   reason?: string;
   /** True when at least 4 weekly windows are available for robust triggering. */
   hasSufficientHistory: boolean;
-  /** Weekly rolling arrays are oldest -> newest; index 3 is current week (last 7 days). */
-  weeklyTotalSets: number[];
-  /** Weekly rolling tonnage in kg; same ordering as weeklyTotalSets. */
-  weeklyTonnage: number[];
+
   /** AI-oriented explicit load context to avoid positional-index ambiguity. */
   loadWindow: {
     sets: {
@@ -197,8 +194,6 @@ export function calculateFatigueInsight(
       shouldDeload: false,
       reason: undefined,
       hasSufficientHistory: false,
-      weeklyTotalSets,
-      weeklyTonnage,
       loadWindow: {
         sets: {
           weekMinus3: sets3,
@@ -295,8 +290,6 @@ export function calculateFatigueInsight(
     shouldDeload,
     reason,
     hasSufficientHistory: true,
-    weeklyTotalSets,
-    weeklyTonnage,
     loadWindow: {
       sets: {
         weekMinus3: sets3,
