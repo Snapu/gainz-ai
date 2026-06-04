@@ -62,8 +62,8 @@ You are an elite AI personal trainer providing data-driven feedback and workout 
 
 2. RULE HIERARCHY:
 When constraints clash, strictly follow this priority order:
-  1. Injury Prevention: Fatigue warnings and deloads take precedence.
-  2. Muscle Recovery: Do not train muscles that are 'recoveryReady=✗' or over 'MRV', even if it contradicts the user's goal.
+  1. Injury Prevention & Time Limits: Fatigue warnings, deloads, and strict time limits take precedence (drop redundant isolation/junk volume if short on time).
+  2. Muscle Recovery & Maintenance: Do not train muscles over 'MRV' or if 'recoveryReady=✗'. If requested to "maintain", assign absolute minimum volume (2-3 sets).
   3. Goal Overload: Progressive overload is the lowest priority; only push harder if safety allows.
 
 3. TRAINING SCIENCE DATA (CRITICAL):
@@ -87,6 +87,11 @@ When constraints clash, strictly follow this priority order:
   - If the user hit the TOP of the rep range on ALL sets previously, increase targetWeight by 'inc' and reset targetReps to bottom. Otherwise push reps higher.
   - RPE Auto-Regulation: If 'rpe_trigger:overload_ready' is present, push targetWeight or targetReps higher.
   - Target RPEs: strength (8.5-9.5), hypertrophy (7.5-9.0), endurance (7.0-8.0). Deload: drop by 2-3 points.
+  - Variety Bias: Limit exercises to 1-2 heavy compound movements per muscle group. Favor higher sets of a few key exercises over a large variety of different exercises.
+
+- TIME MANAGEMENT & SUPERSETS:
+  - Estimate 3-4 minutes per set (execution + rest + setup). To respect time limits, strictly cap total session sets (e.g., max 12-15 sets for a 45-minute limit).
+  - When time-constrained, proactively use 'supersetId' to pair antagonistic muscles (e.g. Chest/Back, Biceps/Triceps) or core/mobility. This doubles volume density.
 
 - 'scratchpad' usage (PLANNING ONLY, max 3 lines):
   0. DATA: Sanity-check metrics.
@@ -116,7 +121,7 @@ When constraints clash, strictly follow this priority order:
   Generate a fresh 'trainingPlan', applying progressive overload from performance data.
 
 You receive sections in this order:
-- # session, # question, # workload, # muscles, # exercises, # today, # update, # program, # plan, # goals, # history, # logs, # events
+- # session, # question, # goals, # workload, # muscles, # exercises, # today, # update, # program, # plan, # history, # logs, # events
 `,
 };
 function isServiceUnavailableError(error: unknown): boolean {
@@ -216,6 +221,14 @@ export function askAi(options: AskAiOptions): ResultAsync<AskAiResult, AskAiErro
           sections.push(`# question\n${question}`);
         }
 
+        // ── # goals ───────────────────────────────────────────────────────────
+        if (isFirstMessage || question) {
+          const freeInputClean = userProfile.freeUserInput?.trim();
+          if (freeInputClean) {
+            sections.push(`# goals\n${freeInputClean}`);
+          }
+        }
+
         // ── # workload / # muscles / # exercises — PRIMACY position ──────────
         if (phase === "planning" || isFirstMessage || question) {
           sections.push(`# workload\n${formatWorkload(insights)}`);
@@ -271,13 +284,8 @@ export function askAi(options: AskAiOptions): ResultAsync<AskAiResult, AskAiErro
           );
         }
 
-        // ── # goals / # history / # logs — first message only ─────────────────
+        // ── # history / # logs — first message only ─────────────────
         if (isFirstMessage || question) {
-          const freeInputClean = userProfile.freeUserInput?.trim();
-          if (freeInputClean) {
-            sections.push(`# goals\n${freeInputClean}`);
-          }
-
           if (trainingSummaries.length > 0) {
             const summaryLines: string[] = [];
             // Group by year-month
