@@ -3,7 +3,13 @@ import { ChevronRight, Search } from "@lucide/vue";
 import { uiChevronCircleClass } from "@/shared/presentation/components/ui/styles";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 import type { DisplayExercise } from "../helpers/aiCoachPageHelpers";
-import { setSegments, splitWeight, titleClass } from "../helpers/aiCoachPageHelpers";
+import {
+  isDuration,
+  setSegments,
+  splitReps,
+  splitWeight,
+  titleClass,
+} from "../helpers/aiCoachPageHelpers";
 
 interface ExerciseProgress {
   done: number;
@@ -76,13 +82,18 @@ const emit = defineEmits<{
       <div class="flex items-end justify-between w-full gap-4">
         <!-- 3-Column Micro-grid -->
         <div class="grid grid-cols-3 gap-3 flex-1">
-          <!-- Sets × Reps -->
+          <!-- Sets × Reps/Duration -->
           <div class="flex flex-col gap-0.5">
-            <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Sets × Reps</span>
+            <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
+              {{ isDuration(exercise.targetReps) ? 'Sets × Duration' : 'Sets × Reps' }}
+            </span>
             <div class="flex items-baseline">
               <span class="text-lg font-bold tabular-nums text-foreground">{{ exercise.targetSets }}</span>
               <span class="text-xs font-medium text-muted-foreground/50 mx-1">×</span>
-              <span class="text-lg font-bold tabular-nums text-foreground">{{ exercise.targetReps }}</span>
+              <span class="text-lg font-bold tabular-nums text-foreground">{{ splitReps(exercise.targetReps).value }}</span>
+              <span v-if="splitReps(exercise.targetReps).unit" class="text-xs font-medium text-muted-foreground/50 ml-0.5">
+                {{ splitReps(exercise.targetReps).unit }}
+              </span>
             </div>
           </div>
           

@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Loader2,
   Play,
+  RotateCw,
   Sparkles,
 } from "@lucide/vue";
 import { LogExerciseSheet } from "@/modules/trainingLogs/presentation";

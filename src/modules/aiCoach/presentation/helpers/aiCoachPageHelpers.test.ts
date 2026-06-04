@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   groupWorkout,
+  isDuration,
   parseFirstRep,
   parseWeight,
   renderMarkdown,
   setSegments,
+  splitReps,
   splitWeight,
   titleClass,
   tryParseAiResponse,
@@ -150,8 +152,52 @@ describe("splitWeight", () => {
     expect(splitWeight("80")).toEqual({ value: "80", unit: "kg" });
   });
 
+  it("handles pure bodyweight string gracefully", () => {
+    expect(splitWeight("bodyweight")).toEqual({ value: "BW", unit: "" });
+    expect(splitWeight("BW")).toEqual({ value: "BW", unit: "" });
+  });
+
+  it("handles bodyweight plus additional weight gracefully", () => {
+    expect(splitWeight("bodyweight + 10kg")).toEqual({ value: "BW + 10", unit: "kg" });
+    expect(splitWeight("BW + 20")).toEqual({ value: "BW + 20", unit: "kg" });
+    expect(splitWeight("bw+5.5 lbs")).toEqual({ value: "BW + 5.5", unit: "lbs" });
+  });
+
   it("returns empty strings for undefined", () => {
     expect(splitWeight(undefined)).toEqual({ value: "", unit: "" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isDuration & splitReps
+// ---------------------------------------------------------------------------
+describe("isDuration", () => {
+  it("returns true for duration keywords", () => {
+    expect(isDuration("30 secs")).toBe(true);
+    expect(isDuration("1 min")).toBe(true);
+    expect(isDuration("30 sec hold")).toBe(true);
+  });
+
+  it("returns false for standard rep formats", () => {
+    expect(isDuration("8-12")).toBe(false);
+    expect(isDuration("to failure")).toBe(false);
+    expect(isDuration(undefined)).toBe(false);
+  });
+});
+
+describe("splitReps", () => {
+  it("splits duration correctly", () => {
+    expect(splitReps("30 secs")).toEqual({ value: "30", unit: "secs" });
+    expect(splitReps("1 min")).toEqual({ value: "1", unit: "min" });
+  });
+
+  it("handles standard rep ranges", () => {
+    expect(splitReps("8-12")).toEqual({ value: "8-12", unit: "" });
+    expect(splitReps("10")).toEqual({ value: "10", unit: "" });
+  });
+
+  it("handles freeform text", () => {
+    expect(splitReps("to failure")).toEqual({ value: "to failure", unit: "" });
   });
 });
 

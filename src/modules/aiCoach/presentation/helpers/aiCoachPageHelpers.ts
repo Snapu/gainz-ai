@@ -94,14 +94,55 @@ export function parseFirstRep(targetReps?: string): number | undefined {
   return singleMatch?.[1] ? parseInt(singleMatch[1], 10) : undefined;
 }
 
-/** Splits a weight string like "80.5kg" into `{ value: "80.5", unit: "kg" }`. */
+/** Splits a weight string like "80.5kg" into `{ value: "80.5", unit: "kg" }`. Also handles "bodyweight" elegantly. */
 export function splitWeight(weightStr?: string): { value: string; unit: string } {
   if (!weightStr) return { value: "", unit: "" };
+
+  const lower = weightStr.toLowerCase().trim();
+
+  if (lower === "bodyweight" || lower === "bw") {
+    return { value: "BW", unit: "" };
+  }
+
+  const bwPlusMatch = lower.match(/^(?:bodyweight|bw)\s*\+\s*(\d+[.,]?\d*)\s*(.*)$/);
+  if (bwPlusMatch) {
+    return { value: `BW + ${bwPlusMatch[1]}`, unit: bwPlusMatch[2] || "kg" };
+  }
+
   const match = weightStr.match(/^(\d+[.,]?\d*)\s*(.*)$/);
   if (match) {
     return { value: match[1], unit: match[2] || "kg" };
   }
-  return { value: weightStr, unit: "kg" };
+  return { value: weightStr, unit: "" };
+}
+
+/** Determines if a reps string represents a duration (e.g. "30 secs", "1 min") */
+export function isDuration(reps?: string): boolean {
+  if (!reps) return false;
+  const lower = reps.toLowerCase();
+  return (
+    lower.includes("sec") ||
+    lower.includes("min") ||
+    lower.includes("hr") ||
+    lower.includes("time") ||
+    lower.includes("hold")
+  );
+}
+
+/** Splits a reps string like "30 secs" into `{ value: "30", unit: "secs" }`. Returns single value for simple ranges. */
+export function splitReps(reps?: string): { value: string; unit: string } {
+  if (!reps) return { value: "", unit: "" };
+
+  if (/^[\d\s-]+$/.test(reps)) {
+    return { value: reps.trim(), unit: "" };
+  }
+
+  const match = reps.match(/^([\d\s-]+)\s+(.*)$/);
+  if (match) {
+    return { value: match[1].trim(), unit: match[2].trim() };
+  }
+
+  return { value: reps, unit: "" };
 }
 
 // ---------------------------------------------------------------------------

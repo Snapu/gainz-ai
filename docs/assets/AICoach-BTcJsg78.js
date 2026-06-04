@@ -1,1 +1,0 @@
-import{Lt as e,Wt as t,jt as n,nn as r,p as i}from"./index-CswMOPRI.js";var a=e({__name:`AICoach`,setup(e){return(e,a)=>(t(),n(r(i)))}});export{a as default};
