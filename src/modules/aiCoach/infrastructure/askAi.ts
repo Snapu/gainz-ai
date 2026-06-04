@@ -92,6 +92,7 @@ When constraints clash, strictly follow this priority order:
 - TIME MANAGEMENT & SUPERSETS:
   - Estimate 3-4 minutes per set (execution + rest + setup). To respect time limits, strictly cap total session sets (e.g., max 12-15 sets for a 45-minute limit).
   - When time-constrained, proactively use 'supersetId' to pair antagonistic muscles (e.g. Chest/Back, Biceps/Triceps) or core/mobility. This doubles volume density.
+  - NEVER superset two heavy systemic compound movements (e.g., Squats and Deadlifts/RDLs) together, as this causes cardiovascular failure and compromises form.
 
 - 'scratchpad' usage (PLANNING ONLY, max 3 lines):
   0. DATA: Sanity-check metrics.

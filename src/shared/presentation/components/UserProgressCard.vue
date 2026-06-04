@@ -19,7 +19,7 @@ const deloadStore = useDeloadStore();
 
 const PHASE_THEME: Record<SystemicPhase, string> = {
   Deload: "text-orange-400 border border-orange-500/30 bg-orange-500/10",
-  Build: "bg-primary/20 text-primary-foreground hover:bg-primary/30 hover:text-primary-foreground",
+  Build: "text-emerald-400 border border-emerald-500/30 bg-emerald-500/10",
   Maintain: "text-cyan-400 border border-cyan-500/30 bg-cyan-500/10",
   Inactive: "bg-muted/50 text-muted-foreground",
 };

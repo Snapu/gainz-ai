@@ -1,0 +1,1 @@
+import{Lt as e,Wt as t,c as n,jt as r,nn as i}from"./index-CJNNzAJ7.js";var a=e({__name:`TrainingInsights`,setup(e){return(e,a)=>(t(),r(i(n)))}});export{a as default};
