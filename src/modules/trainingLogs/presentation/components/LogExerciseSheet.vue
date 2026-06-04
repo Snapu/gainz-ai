@@ -20,6 +20,7 @@ const props = defineProps<{
     exerciseName: string;
     reps?: number;
     weight?: number;
+    duration?: number;
     rpe?: number;
   } | null;
   logToEdit?: ExerciseLog | null;
@@ -50,6 +51,7 @@ const formWeight = ref<number | null>(null);
 const formDistance = ref<number | null>(null);
 const formDuration = ref<number | null>(null);
 const formRpe = ref<number>(deloadStore.active ? 6 : 8.5);
+const isRpeEnabled = ref(false);
 const skipHistoryAutoFill = ref(false);
 
 const isDumbbellExercise = computed(() => /kurzhantel|dumbbell/i.test(formExerciseName.value));
@@ -67,14 +69,16 @@ watch(
         formDistance.value = props.logToEdit.distance ?? null;
         formDuration.value = props.logToEdit.duration ?? null;
         formRpe.value = props.logToEdit.rpe ?? (deloadStore.active ? 6 : 8.5);
+        isRpeEnabled.value = props.logToEdit.rpe != null;
       } else if (props.prefillData) {
         skipHistoryAutoFill.value = true;
         formExerciseName.value = props.prefillData.exerciseName;
         formReps.value = props.prefillData.reps ?? null;
         formWeight.value = props.prefillData.weight ?? null;
         formDistance.value = null;
-        formDuration.value = null;
+        formDuration.value = props.prefillData.duration ?? null;
         formRpe.value = props.prefillData.rpe ?? (deloadStore.active ? 6 : 8.5);
+        isRpeEnabled.value = props.prefillData.rpe != null;
       } else {
         formExerciseName.value = "";
         formReps.value = null;
@@ -82,6 +86,7 @@ watch(
         formDistance.value = null;
         formDuration.value = null;
         formRpe.value = deloadStore.active ? 6 : 8.5;
+        isRpeEnabled.value = false;
         skipHistoryAutoFill.value = false;
       }
     }
@@ -104,6 +109,10 @@ watch(formExerciseName, (name) => {
     if (lastLog.weight) formWeight.value = lastLog.weight;
     if (lastLog.distance) formDistance.value = lastLog.distance;
     if (lastLog.duration) formDuration.value = lastLog.duration;
+    if (lastLog.rpe != null) {
+      formRpe.value = lastLog.rpe;
+      isRpeEnabled.value = true;
+    }
   }
 });
 
@@ -249,7 +258,7 @@ async function saveLog() {
     weight: formWeight.value ?? undefined,
     distance: formDistance.value ?? undefined,
     duration: formDuration.value ?? undefined,
-    rpe: formRpe.value,
+    rpe: isRpeEnabled.value ? formRpe.value : undefined,
     loggedAt: props.logToEdit?.loggedAt || new Date(),
   };
 
@@ -322,19 +331,31 @@ async function saveLog() {
       <div class="space-y-3 px-1 mt-2">
         <div class="flex items-center justify-between">
           <span class="text-xs font-bold uppercase tracking-widest text-muted-foreground/60">Effort (RPE)</span>
-          <span class="text-xs font-bold text-primary">{{ rpeLabel }}</span>
+          <span class="text-xs font-bold transition-opacity duration-200" :class="isRpeEnabled ? 'text-primary' : 'text-primary/50 opacity-50'">
+            {{ rpeLabel }}
+          </span>
         </div>
-        <input 
-          type="range" 
-          min="6" 
-          max="10" 
-          step="0.5" 
-          v-model.number="formRpe"
-          @pointerdown.stop
-          @touchstart.stop
-          @touchmove.stop
-          class="w-full h-2 bg-white/5 rounded-lg appearance-none cursor-pointer accent-primary"
-        />
+        
+        <div class="h-6 flex items-center gap-4">
+          <label class="relative inline-flex items-center cursor-pointer min-w-[36px] w-[36px] h-[20px]">
+            <input type="checkbox" v-model="isRpeEnabled" class="sr-only peer" />
+            <div class="w-full h-full bg-white/10 rounded-full peer peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-primary peer-checked:bg-primary transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-transform peer-checked:after:translate-x-[16px] shadow-sm"></div>
+          </label>
+          
+          <input 
+            type="range" 
+            min="6" 
+            max="10" 
+            step="0.5" 
+            :disabled="!isRpeEnabled"
+            v-model.number="formRpe"
+            @pointerdown.stop
+            @touchstart.stop
+            @touchmove.stop
+            class="w-full h-2 bg-white/5 rounded-lg appearance-none accent-primary transition-opacity duration-200"
+            :class="isRpeEnabled ? 'cursor-pointer opacity-100' : 'cursor-not-allowed opacity-30'"
+          />
+        </div>
       </div>
 
       <UiButton class="w-full h-16 rounded-xl text-lg mt-4" @click="saveLog">
