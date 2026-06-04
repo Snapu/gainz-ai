@@ -12,7 +12,13 @@ import {
   type PreviousAiMessage,
   responseStartsDeload,
 } from "@/modules/aiCoach/application";
-import { createAiCoachService } from "@/modules/aiCoach/infrastructure";
+import type { TrainingPlan } from "@/modules/aiCoach/domain";
+import {
+  clearPlan as clearStoragePlan,
+  createAiCoachService,
+  loadPlan,
+  savePlan,
+} from "@/modules/aiCoach/infrastructure";
 import { useDeloadStore } from "@/modules/deload/presentation";
 import { useEventsStore } from "@/modules/events/presentation";
 import {
@@ -72,6 +78,7 @@ export const useAiStore = defineStore("ai", () => {
   const hasInitialized = ref(false);
   const lastRequestLogsChecksum = ref<string>("");
   const needsRerun = ref(false);
+  const activePlan = ref<TrainingPlan | null>(null);
 
   const userProfileStore = useUserProfileStore();
   const exerciseLogsStore = useExerciseLogsStore();
@@ -89,6 +96,8 @@ export const useAiStore = defineStore("ai", () => {
 
   function initialize(): void {
     if (hasInitialized.value) return;
+
+    activePlan.value = loadPlan();
 
     const loadedMessagesResult = loadAiMessagesFromStorage<AiMessage>(currentSessionId.value);
     if (loadedMessagesResult.isErr()) {
@@ -132,7 +141,10 @@ export const useAiStore = defineStore("ai", () => {
     return runAskAi(question);
   }
 
-  function runAskAi(question?: string): ResultAsync<void, AskAiError> {
+  function runAskAi(
+    question?: string,
+    mode: "planning" | "execution" = "execution",
+  ): ResultAsync<void, AskAiError> {
     const apiKey = userProfileStore.apiKey;
     if (!apiKey) {
       return errAsync("missing-api-key");
@@ -180,10 +192,25 @@ export const useAiStore = defineStore("ai", () => {
             previousMessages,
             events: eventsStore.events,
             question,
+            mode,
           });
 
           if (result.isErr()) {
             throw result.error;
+          }
+
+          try {
+            const parsed = JSON.parse(result.value.responseText);
+            if (parsed.trainingPlan) {
+              const newPlan: TrainingPlan = {
+                ...parsed.trainingPlan,
+                createdAt: new Date().toISOString(),
+              };
+              savePlan(newPlan);
+              activePlan.value = newPlan;
+            }
+          } catch (e) {
+            Sentry.captureException(e, { tags: { scope: "ai-store", feature: "extract-plan" } });
           }
 
           exerciseMuscleMapStore.refresh();
@@ -230,14 +257,25 @@ export const useAiStore = defineStore("ai", () => {
     )
       .andThen((result) => {
         isLoading.value = false;
-        if (needsRerun.value) return runAskAi();
+        if (needsRerun.value) return runAskAi(question, mode);
         return okAsync(result);
       })
       .orElse((error) => {
         isLoading.value = false;
-        if (needsRerun.value) return runAskAi();
+        if (needsRerun.value) return runAskAi(question, mode);
         return errAsync(error);
       });
+  }
+
+  function generateNewPlan(): ResultAsync<void, AskAiError> {
+    ensureInitialized();
+
+    if (isLoading.value) {
+      needsRerun.value = true;
+      return okAsync(undefined);
+    }
+
+    return runAskAi("Please generate a new 2-week mesocycle plan.", "planning");
   }
 
   function classifyExercisesIfNeeded(): ResultAsync<void, never> {
@@ -292,6 +330,11 @@ export const useAiStore = defineStore("ai", () => {
     messages.value = [];
   }
 
+  function clearActivePlan() {
+    clearStoragePlan();
+    activePlan.value = null;
+  }
+
   const isNewDataAvailable = computed<boolean>(() => {
     const currentSession = resolveCurrentSession(exerciseLogsStore.exerciseLogs);
     const todayLogsChecksum = getTodayLogsChecksum(currentSession);
@@ -301,12 +344,15 @@ export const useAiStore = defineStore("ai", () => {
   return {
     initialize,
     askAi,
+    generateNewPlan,
     classifyExercisesIfNeeded,
     clearMessages,
+    clearActivePlan,
     isLoading,
     messages,
     hasInitialized,
     _currentSessionId: currentSessionId,
+    activePlan,
     currentWorkoutPlan,
     isNewDataAvailable,
     lastRequestLogsChecksum,

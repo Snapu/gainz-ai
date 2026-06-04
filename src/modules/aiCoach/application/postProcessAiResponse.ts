@@ -33,47 +33,26 @@ export function postProcessAiResponse(
       const updatedEx = { ...ex };
 
       // 3. Rest period clamping based on training science
-      if (updatedEx.targetReps) {
+      if (updatedEx.targetReps && !updatedEx.isMetabolicProtocol) {
         updatedEx.restSeconds = clampRestSeconds(updatedEx.targetReps, updatedEx.restSeconds);
       }
 
       return updatedEx;
     });
 
-    // 4. Stable sort: Compounds before Isolations
-    // Reference: Simão et al. (2012). Exercise order in resistance training. Sports Medicine.
-    // Multi-joint exercises should be performed before single-joint exercises to maximize
-    // total volume and strength gains in larger muscle groups.
-    // We group supersets together by giving all exercises in a superset
-    // the score of the most "compound" exercise in that superset.
-    const supersetScores = new Map<string, number>();
-    cleaned.recommendedWorkout.forEach((ex) => {
-      const cat = classifyExercise(ex.exerciseName);
-      const score = cat === "isolation" ? 1 : 0;
-      if (ex.supersetId) {
-        const current = supersetScores.get(ex.supersetId) ?? 1;
-        supersetScores.set(ex.supersetId, Math.min(current, score));
-      }
-    });
+    // Sorting has been removed as per user request to keep the natural ordering from the AI
+  }
 
-    cleaned.recommendedWorkout.sort((a, b) => {
-      // Keep supersets together in their original relative order
-      if (a.supersetId && a.supersetId === b.supersetId) return 0;
-
-      const scoreA = a.supersetId
-        ? supersetScores.get(a.supersetId)!
-        : classifyExercise(a.exerciseName) === "isolation"
-          ? 1
-          : 0;
-
-      const scoreB = b.supersetId
-        ? supersetScores.get(b.supersetId)!
-        : classifyExercise(b.exerciseName) === "isolation"
-          ? 1
-          : 0;
-
-      return scoreA - scoreB;
-    });
+  if (cleaned.trainingPlan?.sessions) {
+    cleaned.trainingPlan.sessions = cleaned.trainingPlan.sessions.map((session) => ({
+      ...session,
+      exercises: session.exercises.map((ex) => ({
+        ...ex,
+        restSeconds: ex.targetReps
+          ? clampRestSeconds(ex.targetReps, ex.restSeconds)
+          : ex.restSeconds,
+      })),
+    }));
   }
 
   return cleaned;

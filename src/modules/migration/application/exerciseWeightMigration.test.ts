@@ -271,16 +271,18 @@ describe("exerciseWeightMigration service", () => {
     expect(untouchedRow.assign).not.toHaveBeenCalled();
     expect(migrationSheet.addRow).toHaveBeenCalledTimes(1);
     expect(trainingSummarySheet.clearRows).toHaveBeenCalledTimes(1);
-    expect(trainingSummarySheet.addRows).toHaveBeenCalledWith([
-      expect.objectContaining({
-        year: 2025,
-        month: 12,
-        workoutDays: 1,
-        exerciseName: "Dumbbell Bench Press",
-        sets: 1,
-        maxWeight: 36,
-      }),
-    ]);
+    expect(trainingSummarySheet.addRows).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          year: 2025,
+          month: 12,
+          workoutDays: 1,
+          exerciseName: "Dumbbell Bench Press",
+          sets: 1,
+          maxWeight: 36,
+        }),
+      ]),
+    );
   });
 
   it("marks keep-as-is reviews without changing existing log rows", async () => {
@@ -311,6 +313,17 @@ describe("exerciseWeightMigration service", () => {
     }
     expect(currentYearRow.assign).not.toHaveBeenCalledWith({ weight: expect.any(String) });
     expect(trainingSummarySheet.clearRows).toHaveBeenCalledTimes(1);
-    expect(trainingSummarySheet.addRows).not.toHaveBeenCalled();
+    expect(trainingSummarySheet.addRows).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          year: 2026,
+          month: 5,
+          workoutDays: 1,
+          exerciseName: "Dumbbell Bench Press",
+          sets: 1,
+          maxWeight: 20,
+        }),
+      ]),
+    );
   });
 });

@@ -18,11 +18,13 @@ import {
   type AskAiResult,
   createAiResponseSchema,
 } from "../domain/types";
+import { loadPlan } from "./planStorage";
 import {
   buildPriorPlanSummary,
   compactLogs,
   formatExercises,
   formatMuscles,
+  formatPlanForPrompt,
   formatWorkload,
   getDaysSinceLastWorkout,
   getInitialLogsWindow,
@@ -43,7 +45,6 @@ const MAX_SUMMARIES_IN_PROMPT = 6;
  */
 const aiConfig: GenerateContentConfig = {
   responseMimeType: "application/json",
-  responseSchema: createAiResponseSchema([...VALID_MUSCLE_GROUPS]),
   temperature: 0.4,
   topP: 0.85,
   systemInstruction: `
@@ -102,8 +103,20 @@ When constraints clash, strictly follow this priority order:
 - Give a quick 1-2 sentence reaction to the latest set(s). No scratchpad needed.
 - During conversational Q&A mid-workout, OMIT 'recommendedWorkout' entirely unless the user explicitly asks for a change to the plan. This prevents accidental plan drift.
 
+6. MESOCYCLE PROGRAMMING:
+- When phase is "planning" AND no '# program' section is present:
+  Generate a 'trainingPlan' with a 2-week cycle matching the user's days/week and pattern.
+  Name sessions clearly. Distribute weekly volume across sessions respecting recovery.
+  ALSO output today's session as 'recommendedWorkout'.
+- When '# program' is present:
+  Use it to select today's session → output as 'recommendedWorkout'.
+  Adapt weights/reps based on actual performance in '# logs'.
+  Do NOT regenerate 'trainingPlan' unless the user explicitly asks.
+- When the user asks for a new plan (detected via '# question'):
+  Generate a fresh 'trainingPlan', applying progressive overload from performance data.
+
 You receive sections in this order:
-- # session, # question, # workload, # muscles, # exercises, # today, # update, # plan, # goals, # history, # logs, # events
+- # session, # question, # workload, # muscles, # exercises, # today, # update, # program, # plan, # goals, # history, # logs, # events
 `,
 };
 function isServiceUnavailableError(error: unknown): boolean {
@@ -251,6 +264,13 @@ export function askAi(options: AskAiOptions): ResultAsync<AskAiResult, AskAiErro
           }
         }
 
+        const activePlan = loadPlan();
+        if (activePlan && (isFirstMessage || phase === "planning")) {
+          sections.push(
+            `# program\n${formatPlanForPrompt(activePlan, options.mode || "execution")}`,
+          );
+        }
+
         // ── # goals / # history / # logs — first message only ─────────────────
         if (isFirstMessage || question) {
           const freeInputClean = userProfile.freeUserInput?.trim();
@@ -321,7 +341,13 @@ export function askAi(options: AskAiOptions): ResultAsync<AskAiResult, AskAiErro
             ai.models.generateContentStream({
               model,
               contents: conversationContents,
-              config: aiConfig,
+              config: {
+                ...aiConfig,
+                responseSchema: createAiResponseSchema(
+                  [...VALID_MUSCLE_GROUPS],
+                  options.mode || "execution",
+                ),
+              },
             }),
             timeoutPromise,
           ]);

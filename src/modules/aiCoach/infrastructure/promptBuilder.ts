@@ -13,7 +13,7 @@ import {
   type WorkoutSession,
 } from "@/modules/trainingLogs/application";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
-import type { PreviousAiMessage } from "../domain/types";
+import type { PreviousAiMessage, TrainingPlan } from "../domain/types";
 
 const INITIAL_LOG_WINDOW_DAYS = 14;
 const EXTENDED_LOG_WINDOW_DAYS = 28;
@@ -461,6 +461,50 @@ export function formatExercises(
     if (trendParts.length > 0) parts.push(`trend:${trendParts.join(" ")}`);
 
     lines.push(`${name}: ${parts.join(" ")}`);
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * Formats a multi-week training plan for the AI prompt.
+ *
+ * Example output:
+ * cycle: 2w, created: 2026-06-02
+ * W1-Mon Unit A (Push Focus):
+ *   Incline DB Press: 3×6-8 @8.5
+ *   ...
+ */
+export function formatPlanForPrompt(
+  plan: TrainingPlan,
+  mode: "planning" | "execution" = "execution",
+): string {
+  const lines: string[] = [];
+  const createdAtStr = isoDateString(new Date(plan.createdAt));
+  lines.push(`cycle: ${plan.cycleWeeks}w, created: ${createdAtStr}`);
+
+  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const currentDayOfWeek = new Date().getDay();
+
+  for (const session of plan.sessions) {
+    const dayStr = dayNames[session.dayOfWeek] ?? `Day${session.dayOfWeek}`;
+    lines.push(
+      `W${session.weekNumber}-${dayStr} ${session.sessionLabel} (${session.focusDescription}):`,
+    );
+
+    if (mode === "execution" && session.dayOfWeek !== currentDayOfWeek) {
+      continue;
+    }
+
+    for (const ex of session.exercises) {
+      const parts = [`${ex.targetSets}×${ex.targetReps}`];
+      if (ex.targetWeight) parts.push(`@${ex.targetWeight}`);
+      if (ex.targetRpe) parts.push(`@RPE${ex.targetRpe}`);
+      if (ex.restSeconds) parts.push(`${ex.restSeconds}s`);
+      if (ex.supersetId) parts.push(`[SS:${ex.supersetId}]`);
+      if (ex.notes) parts.push(`(${ex.notes})`);
+      lines.push(`  ${ex.exerciseName}: ${parts.join(" ")}`);
+    }
   }
 
   return lines.join("\n");

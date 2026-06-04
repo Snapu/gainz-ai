@@ -1,4 +1,4 @@
-import { useDebounceFn, useTimeAgo } from "@vueuse/core";
+import { useDebounceFn } from "@vueuse/core";
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import type { AiResponseData } from "@/modules/aiCoach/presentation";
@@ -15,9 +15,6 @@ import {
   parseFirstRep,
   parseWeight,
   renderMarkdown,
-  setSegments,
-  splitWeight,
-  titleClass,
   tryParseAiResponse,
 } from "../helpers/aiCoachPageHelpers";
 
@@ -42,10 +39,16 @@ export function useAICoachPageViewModel() {
   } | null>(null);
   const currentPageIndex = ref(0);
   const userQuestion = ref("");
-  const isAskSheetOpen = ref(false);
   const openScratchpads = ref<string[]>([]);
   const openRequestPayloads = ref<string[]>([]);
   const scrollContainerRef = ref<HTMLDivElement | null>(null);
+
+  const activeTab = ref<"messages" | "today" | "plan">("messages");
+  const tabOptions = [
+    { id: "messages", label: "Coach", value: "messages" },
+    { id: "today", label: "Today", value: "today" },
+    { id: "plan", label: "Plan", value: "plan" },
+  ];
 
   // ---------------------------------------------------------------------------
   // Derived data
@@ -116,6 +119,18 @@ export function useAICoachPageViewModel() {
     return groupWorkout(remainingExercises.value);
   });
 
+  const activeSessionIndex = computed<number>(() => {
+    if (!aiStore.activePlan) return -1;
+    const currentDay = new Date().getDay();
+    // Find the session matching today's day of week
+    const index = aiStore.activePlan.sessions.findIndex((s) => s.dayOfWeek === currentDay);
+    // If none matches today, default to the first session for now
+    // A more advanced heuristic could look for the next uncompleted session
+    return index >= 0 ? index : 0;
+  });
+
+  const activePlan = computed(() => aiStore.activePlan);
+
   /** Derives rest duration from the current workout plan for the selected exercise. */
   const selectedRestSeconds = computed<number | null>(() => {
     const name = prefillData.value?.exerciseName;
@@ -160,7 +175,7 @@ export function useAICoachPageViewModel() {
       if (done < minDone) minDone = done;
     }
 
-    const nextExIndex = group.exercises.findIndex((ex) => {
+    const nextExIndex = group.exercises.findIndex((ex: DisplayExercise) => {
       const { done } = getExerciseProgress(ex.exerciseName, ex.targetSets);
       return done === minDone;
     });
@@ -195,11 +210,9 @@ export function useAICoachPageViewModel() {
     const question = userQuestion.value.trim();
     if (!question) return;
     userQuestion.value = "";
-    isAskSheetOpen.value = false;
     aiStore.askAi(question).then((result) => {
       if (result.isErr()) {
         userQuestion.value = question;
-        isAskSheetOpen.value = true;
         toast({
           title: "Error",
           description: "Failed to send question.",
@@ -211,32 +224,29 @@ export function useAICoachPageViewModel() {
     });
   }
 
-  const debouncedAskAi = useDebounceFn(() => {
-    aiStore.askAi().then((result) => {
-      if (result.isErr()) {
-        const description =
-          result.error === "missing-api-key"
-            ? "No API Key configured! Please add one in your profile."
-            : "Failed to get AI response. Please try again.";
-        toast({ title: "AI Coaching Error", description, variant: "destructive" });
-      } else {
-        scrollToTop();
-      }
-    });
-  }, 500);
-
-  const forceRefreshAi = useDebounceFn(() => {
-    if (!aiStore.isNewDataAvailable) {
-      if (assistantMessages.value.length === 1) {
-        aiStore.clearMessages();
-      } else {
-        toast({
-          title: "Coaching Up to Date",
-          description: "No new workout data available to analyze. Log a new exercise set first!",
-        });
-        return;
-      }
+  async function regeneratePlan() {
+    const result = await aiStore.generateNewPlan();
+    if (result.isErr()) {
+      handleAiError(result.error);
+    } else {
+      toast({
+        title: "Plan Regenerated",
+        description: "Your training cycle has been updated.",
+        variant: "default",
+      });
+      scrollToTop();
     }
+  }
+
+  function handleAiError(error: string) {
+    const description =
+      error === "missing-api-key"
+        ? "No API Key configured! Please add one in your profile."
+        : "Failed to get AI response. Please try again.";
+    toast({ title: "AI Coaching Error", description, variant: "destructive" });
+  }
+
+  const debouncedAskAi = useDebounceFn(() => {
     aiStore.askAi().then((result) => {
       if (result.isErr()) {
         const description =
@@ -282,7 +292,7 @@ export function useAICoachPageViewModel() {
   // ---------------------------------------------------------------------------
 
   function formatTime(d: Date) {
-    return useTimeAgo(d).value;
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 
   // ---------------------------------------------------------------------------
@@ -293,6 +303,8 @@ export function useAICoachPageViewModel() {
     aiStore.initialize();
     if (assistantMessages.value.length === 0) {
       debouncedAskAi();
+    } else if (activeWorkout.value?.length) {
+      activeTab.value = "today";
     }
     scrollToTop();
     window.addEventListener("keydown", onCoachKeydown);
@@ -336,7 +348,8 @@ export function useAICoachPageViewModel() {
     selectedRestSeconds,
     currentPageIndex,
     userQuestion,
-    isAskSheetOpen,
+    activeTab,
+    tabOptions,
     openScratchpads,
     openRequestPayloads,
     scrollContainerRef,
@@ -344,24 +357,22 @@ export function useAICoachPageViewModel() {
     assistantMessages,
     activeWorkout,
     activeWorkoutGroups,
+    activePlan,
+    activeSessionIndex,
     completedExercises,
-    remainingExercises,
     cooldownProgressPercent,
     // Helpers
     getExerciseProgress,
     isExerciseCompleted,
     isHighlighted,
-    setSegments,
-    splitWeight,
-    titleClass,
     renderMarkdown,
     formatRestDuration,
     formatTime,
     // Actions
     debouncedAskAi,
-    forceRefreshAi,
     handleLogExercise,
     handleAskQuestion,
     openGoogleSearch,
+    regeneratePlan,
   };
 }

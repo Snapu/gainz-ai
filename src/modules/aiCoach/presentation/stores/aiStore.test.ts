@@ -29,6 +29,9 @@ vi.mock("@sentry/vue", () => ({
 
 vi.mock("@/modules/aiCoach/infrastructure", () => ({
   createAiCoachService: vi.fn(() => ({})),
+  loadPlan: vi.fn(() => null),
+  savePlan: vi.fn(),
+  clearPlan: vi.fn(),
 }));
 
 vi.mock("@/modules/deload/presentation", () => ({

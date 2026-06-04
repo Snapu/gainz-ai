@@ -58,28 +58,58 @@ describe("postProcessAiResponse", () => {
     expect(workout.find((e) => e.exerciseName === "Squat")?.restSeconds).toBe(180);
   });
 
-  it("sorts compounds before isolations but keeps supersets grouped", () => {
-    const responseWithSupersets: AiResponseData = {
-      coachMessage: "Supersets",
+  it("does not clamp rest periods for metabolic protocols", () => {
+    const responseWithMetabolic: AiResponseData = {
+      ...baseResponse,
       recommendedWorkout: [
-        { exerciseName: "Leg Extension", targetSets: 3, targetReps: "10", supersetId: "sup1" }, // Isolation
-        { exerciseName: "Squat", targetSets: 3, targetReps: "10", supersetId: "sup1" }, // Compound
-        { exerciseName: "Bicep Curls", targetSets: 3, targetReps: "10" }, // Isolation
-        { exerciseName: "Bench Press", targetSets: 3, targetReps: "10" }, // Compound
+        {
+          exerciseName: "Lateral Raises",
+          targetSets: 1,
+          targetReps: "15",
+          restSeconds: 15,
+          isMetabolicProtocol: true,
+        },
       ],
     };
+    const result = postProcessAiResponse(responseWithMetabolic, "planning", "none");
+    const workout = result.recommendedWorkout!;
+    expect(workout.find((e) => e.exerciseName === "Lateral Raises")?.restSeconds).toBe(15);
+  });
 
-    const result = postProcessAiResponse(responseWithSupersets, "planning", "none");
-    const names = result.recommendedWorkout!.map((e) => e.exerciseName);
+  it("clamps rest periods for exercises in the training plan", () => {
+    const responseWithPlan: AiResponseData = {
+      ...baseResponse,
+      trainingPlan: {
+        cycleWeeks: 1,
+        sessions: [
+          {
+            dayOfWeek: 1,
+            weekNumber: 1,
+            sessionLabel: "A",
+            focusDescription: "Push",
+            exercises: [
+              {
+                exerciseName: "Bicep Curls",
+                targetSets: 3,
+                targetReps: "10",
+                restSeconds: 60, // should clamp up to 120
+              },
+              {
+                exerciseName: "Bench Press",
+                targetSets: 3,
+                targetReps: "5",
+                restSeconds: 120, // should clamp up to 180
+              },
+            ],
+          },
+        ],
+      },
+    };
 
-    // Since Leg Extension and Squat are in sup1, they get the best score (compound)
-    // Thus sup1 and Bench Press should come before Bicep Curls.
-    // The relative order of Leg Extension and Squat within sup1 should remain stable.
-    expect(names.indexOf("Bench Press")).toBeLessThan(names.indexOf("Bicep Curls"));
-    expect(names.indexOf("Leg Extension")).toBeLessThan(names.indexOf("Bicep Curls"));
-    expect(names.indexOf("Squat")).toBeLessThan(names.indexOf("Bicep Curls"));
+    const result = postProcessAiResponse(responseWithPlan, "planning", "none");
+    const planExercises = result.trainingPlan!.sessions[0]!.exercises;
 
-    // Ensure superset members are adjacent and in original relative order
-    expect(names.indexOf("Leg Extension") + 1).toBe(names.indexOf("Squat"));
+    expect(planExercises.find((e) => e.exerciseName === "Bicep Curls")?.restSeconds).toBe(120);
+    expect(planExercises.find((e) => e.exerciseName === "Bench Press")?.restSeconds).toBe(180);
   });
 });
