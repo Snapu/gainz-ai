@@ -1,1 +1,0 @@
-System.register(["./index-legacy-BuLlyuhl.js"],function(e,t){var n,u,c,r,s;return{setters:[function(e){n=e.Lt,u=e.Wt,c=e.jt,r=e.nn,s=e.p}],execute:function(){e("default",n({__name:"AICoach",setup:e=>(e,t)=>(u(),c(r(s)))}))}}});
