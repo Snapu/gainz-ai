@@ -173,7 +173,10 @@ const timerProgressPercent = computed(() => {
         <!-- 3-Column Micro-grid -->
         <div class="grid grid-cols-3 gap-3 flex-1 min-w-0">
           <!-- Sets × Reps/Time -->
-          <div class="flex flex-col gap-0.5 min-w-0">
+          <div class="flex flex-col gap-0.5 min-w-0" :class="{
+            'col-span-3': (!exercise.targetWeight || splitWeight(exercise.targetWeight).value === 'BW') && !exercise.targetRpe,
+            'col-span-2': (!exercise.targetWeight || splitWeight(exercise.targetWeight).value === 'BW') && exercise.targetRpe
+          }">
             <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 whitespace-nowrap">
               {{ isDurationExercise ? 'Sets × Time' : 'Sets × Reps' }}
             </span>
@@ -188,17 +191,14 @@ const timerProgressPercent = computed(() => {
           </div>
           
           <!-- Weight -->
-          <div v-if="exercise.targetWeight" class="flex flex-col gap-0.5 min-w-0">
+          <div v-if="exercise.targetWeight && splitWeight(exercise.targetWeight).value !== 'BW'" class="flex flex-col gap-0.5 min-w-0" :class="{
+            'col-span-2': !exercise.targetRpe
+          }">
             <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 whitespace-nowrap">Weight</span>
             <div class="flex items-baseline min-w-0">
               <span class="text-lg font-bold tabular-nums text-primary/90 truncate">{{ splitWeight(exercise.targetWeight).value }}</span>
               <span class="text-xs font-semibold text-muted-foreground/50 ml-0.5 shrink-0">{{ splitWeight(exercise.targetWeight).unit }}</span>
             </div>
-          </div>
-          <div v-else class="flex flex-col gap-0.5 opacity-0 pointer-events-none select-none min-w-0">
-             <!-- Placeholder to keep grid stable -->
-             <span class="text-xs font-semibold uppercase tracking-wider">Weight</span>
-             <span class="text-lg font-bold tabular-nums">0</span>
           </div>
           
           <!-- RPE -->
@@ -207,11 +207,6 @@ const timerProgressPercent = computed(() => {
             <div class="flex items-baseline min-w-0">
               <span class="text-lg font-bold tabular-nums text-amber-500/90 truncate">{{ exercise.targetRpe }}</span>
             </div>
-          </div>
-          <div v-else class="flex flex-col gap-0.5 opacity-0 pointer-events-none select-none min-w-0">
-             <!-- Placeholder to keep grid stable -->
-             <span class="text-xs font-semibold uppercase tracking-wider">RPE</span>
-             <span class="text-lg font-bold tabular-nums">0</span>
           </div>
         </div>
 
@@ -262,7 +257,7 @@ const timerProgressPercent = computed(() => {
           </div>
           
           <div class="flex flex-col min-w-0 gap-0.5">
-            <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 leading-none">Exercise Timer</span>
+            <span class="text-xs font-bold uppercase tracking-wider text-muted-foreground/60 leading-none">Exercise Timer</span>
             <span class="text-sm font-bold text-foreground truncate mt-0.5 transition-colors duration-300" :class="isTimerRunning ? 'text-primary' : ''">
               {{ isTimerRunning ? 'In Progress' : (timerRemaining > 0 && timerRemaining < parsedDurationSeconds ? 'Paused' : 'Ready') }}
             </span>

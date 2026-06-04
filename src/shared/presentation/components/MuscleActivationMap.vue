@@ -17,6 +17,7 @@ import {
   VOLUME_LANDMARKS,
   type VolumeLandmark,
 } from "@/modules/trainingInsights/presentation";
+import UiBadge from "./ui/UiBadge.vue";
 import UiBottomSheet from "./ui/UiBottomSheet.vue";
 import UiSegmentedControl from "./ui/UiSegmentedControl.vue";
 
@@ -225,21 +226,21 @@ const selectedDetail = computed(() => {
   };
 });
 
-function getLandmarkBadge(landmark?: VolumeLandmark): string {
-  if (!landmark) return "bg-white/20 text-white/60";
+function getLandmarkBadgeVariant(landmark?: VolumeLandmark): string {
+  if (!landmark) return "surface";
   switch (landmark) {
     case "below_MEV":
-      return "bg-yellow-500/20 text-yellow-300";
+      return "neutral";
     case "at_MEV":
-      return "bg-emerald-500/20 text-emerald-300";
+      return "success";
     case "at_MAV":
-      return "bg-cyan-400/20 text-cyan-300";
+      return "info";
     case "approaching_MRV":
-      return "bg-orange-500/20 text-orange-300";
+      return "warning";
     case "above_MRV":
-      return "bg-red-500/20 text-red-300";
+      return "danger";
     default:
-      return "bg-white/20 text-white/60";
+      return "surface";
   }
 }
 </script>
@@ -345,9 +346,9 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
                 <Hourglass v-if="muscle.status && !muscle.status.recoveryReady" class="w-3 h-3 text-yellow-500 drop-shadow-md" />
               </div>
               <div class="flex items-center gap-1.5 mb-1 whitespace-nowrap">
-                <span class="text-[9px] sm:text-[10px] font-mono text-muted-foreground uppercase tracking-wider bg-white/5 border border-white/10 px-1.5 py-[2px] rounded">
+                <UiBadge :variant="getLandmarkBadgeVariant(muscle.status?.landmark) as any" class="font-mono uppercase tracking-wider">
                   {{ getJargon(muscle.status?.landmark) }}
-                </span>
+                </UiBadge>
               </div>
               <span class="text-xs sm:text-sm font-mono font-bold whitespace-nowrap opacity-90 mt-[2px]" :style="{ color: getLineColor(muscle.status?.landmark) }">
                 {{ muscle.status?.isoWeekSets != null ? muscle.status.isoWeekSets.toFixed(0) : '0' }} <span class="opacity-50 font-sans text-[10px] sm:text-xs font-medium tracking-wide">SETS/WK</span>
@@ -366,9 +367,9 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
           <!-- Header: name + landmark badge -->
           <div v-if="selectedDetail" class="flex items-center gap-2 px-5 pt-6 pb-4 border-b border-white/10">
             <span class="text-base font-bold uppercase tracking-widest flex-1">{{ selectedDetail.name }}</span>
-            <span :class="['text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full', getLandmarkBadge(selectedDetail.landmark)]">
+            <UiBadge class="uppercase tracking-wider" :variant="getLandmarkBadgeVariant(selectedDetail.landmark) as any">
               {{ getJargon(selectedDetail.landmark) }}
-            </span>
+            </UiBadge>
           </div>
         </template>
 
@@ -389,9 +390,9 @@ function getLandmarkBadge(landmark?: VolumeLandmark): string {
             <div class="relative h-2.5 rounded-full overflow-hidden flex bg-white/5 border border-white/5">
               <!-- Zone: below MEV -->
               <div class="h-full bg-white/10" :style="{ width: selectedDetail.bar.mevPct + '%' }"></div>
-              <!-- Zone: MEV → mavLow -->
+              <!-- Zone: MEV → mavLow (Maintenance/Minimum) -->
               <div class="h-full bg-emerald-500/30 shadow-[inset_0_0_8px_rgba(16,185,129,0.4)] border-r border-emerald-500/20" :style="{ width: (selectedDetail.bar.mavLowPct - selectedDetail.bar.mevPct) + '%' }"></div>
-              <!-- Zone: MAV range (optimal) -->
+              <!-- Zone: MAV range (optimal/build) -->
               <div class="h-full bg-cyan-400/30 shadow-[inset_0_0_8px_rgba(34,211,238,0.4)] border-r border-cyan-400/20" :style="{ width: (selectedDetail.bar.mavHighPct - selectedDetail.bar.mavLowPct) + '%' }"></div>
               <!-- Zone: approaching MRV -->
               <div class="h-full bg-orange-400/30 shadow-[inset_0_0_8px_rgba(251,146,60,0.4)] border-r border-orange-400/20" :style="{ width: (selectedDetail.bar.mrvPct - selectedDetail.bar.mavHighPct) + '%' }"></div>

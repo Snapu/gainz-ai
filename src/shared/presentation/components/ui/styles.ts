@@ -34,6 +34,13 @@ export const badgeVariants = cva(
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-secondary/80 hover:text-secondary-foreground",
         ghost: "hover:bg-accent hover:text-accent-foreground text-foreground",
+        // Tonal Status Variants
+        success: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30",
+        warning: "bg-orange-500/10 text-orange-400 border border-orange-500/30",
+        danger: "bg-red-500/10 text-red-400 border border-red-500/30",
+        info: "bg-cyan-500/10 text-cyan-400 border border-cyan-500/30",
+        neutral: "bg-muted/30 text-muted-foreground border border-white/10",
+        surface: "bg-white/5 text-foreground/60 border border-white/10",
       },
     },
     defaultVariants: {

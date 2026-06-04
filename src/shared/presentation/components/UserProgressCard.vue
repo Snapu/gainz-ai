@@ -17,14 +17,12 @@ defineEmits<(e: "click") => void>();
 
 const deloadStore = useDeloadStore();
 
-const PHASE_THEME: Record<SystemicPhase, string> = {
-  Deload: "text-orange-400 border border-orange-500/30 bg-orange-500/10",
-  Build: "text-emerald-400 border border-emerald-500/30 bg-emerald-500/10",
-  Maintain: "text-cyan-400 border border-cyan-500/30 bg-cyan-500/10",
-  Inactive: "bg-muted/50 text-muted-foreground",
-};
-
-const phaseTheme = computed(() => PHASE_THEME[props.insights.phase]);
+const phaseVariant = computed(() => {
+  if (props.insights.phase === "Deload") return "warning";
+  if (props.insights.phase === "Build") return "info";
+  if (props.insights.phase === "Maintain") return "success";
+  return "neutral";
+});
 
 const weeklyVolumeDeltaPct = computed(() => {
   const sets = props.insights.fatigue.loadWindow.sets;
@@ -93,11 +91,12 @@ const weeklyVolumeDeltaPct = computed(() => {
                  <!-- Recovery week pill when deload is active -->
                  <UiBadge
                    v-if="deloadStore.active"
-                   class="text-xs uppercase tracking-wider px-1.5 py-0 text-orange-400 border border-orange-500/30 bg-orange-500/10"
+                   variant="warning"
+                   class="uppercase tracking-wider"
                  >
                    Deload · {{ deloadStore.daysRemaining }}d
                  </UiBadge>
-                 <UiBadge v-else :class="phaseTheme" class="text-xs uppercase tracking-wider px-1.5 py-0">
+                 <UiBadge v-else :variant="phaseVariant" class="uppercase tracking-wider">
                    {{ insights.phase }}
                  </UiBadge>
                </div>

@@ -85,12 +85,32 @@ focus-visible:ring-primary
 
 ## Typography - Text Sizes (use exactly these 5)
 - `text-xs` — small labels, captions, granular info (replaces text-[9px], text-[10px])
-- `text-sm` — standard labels, buttons (replaces text-[11px], text-[12px])
+- `text-sm` — standard labels, buttons, card/tab structural headings
 - `text-base` — body text
-- `text-lg` — section headers, prominent text
+- `text-lg` — prominent page section headers, empty state titles
 - `text-xl` — page titles
 
 ❌ DO NOT: `text-[9px]`, `text-[10px]`, `text-[11px]`, `text-[12px]`, custom pixel sizes
+
+## Card / Tab Section Headings (canonical pattern)
+Use exactly this pattern for section, tab, and card headings (like "Workout Plan" or "Training Phase"):
+```html
+<h3 class="text-sm font-bold text-foreground">Heading</h3>
+```
+❌ DO NOT: Use `uppercase tracking-wide` or `text-xs` for main card/section structural headings.
+
+## Chips & Status Badges
+Always use the `<UiBadge>` component for status indicators, counts, and tags. Do not use custom `<span>` elements with inline border/color classes.
+
+Variants available in `badgeVariants`:
+- **Core**: `default`, `secondary`, `outline`, `ghost`
+- **Tonal Status**: `success` (emerald), `warning` (orange), `danger` (red), `info` (cyan)
+- **Tonal Layout**: `neutral` (muted background), `surface` (subtle white/5 background)
+
+Typography rule for chips/badges:
+Add `class="uppercase tracking-wider"` to the `<UiBadge>` if the text is a short status (e.g., "DELOAD ADVISED", "BUILD").
+
+❌ DO NOT: Manually style colors (e.g., `text-emerald-400 bg-emerald-500/10`) on custom spans.
 
 ## Shadows - Use Only These 2
 - `shadow-sm` — subtle depth (cards, light elevation)

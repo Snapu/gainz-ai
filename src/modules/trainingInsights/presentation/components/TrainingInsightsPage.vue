@@ -2,6 +2,7 @@
 import { ArrowLeft, TrendingDown, TrendingUp } from "@lucide/vue";
 import AppHeader from "@/shared/presentation/components/AppHeader.vue";
 import MuscleActivationMap from "@/shared/presentation/components/MuscleActivationMap.vue";
+import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 import UiSegmentedControl from "@/shared/presentation/components/ui/UiSegmentedControl.vue";
@@ -70,28 +71,23 @@ const {
           <!-- 1. Top Section: Core Status Banners -->
           <div class="flex items-start justify-between gap-2 mb-4">
             <div>
-              <p class="text-xs font-bold uppercase tracking-wide text-foreground/90 whitespace-nowrap">Training Phase</p>
+              <h3 class="text-sm font-bold text-foreground whitespace-nowrap">Training Phase</h3>
               <p class="text-[10px] sm:text-xs text-foreground/60 mt-0.5">Overall recovery and readiness</p>
             </div>
             <div class="flex flex-col items-end gap-1.5">
-              <span
-                class="text-xs px-2 py-0.5 rounded-full border font-semibold uppercase tracking-wider"
-                :class="{
-                  'text-orange-400 border-orange-500/30 bg-orange-500/10': insights.phase === 'Deload',
-                  'text-emerald-400 border-emerald-500/30 bg-emerald-500/10': insights.phase === 'Build',
-                  'text-cyan-400 border-cyan-500/30 bg-cyan-500/10': insights.phase === 'Maintain',
-                  'bg-muted/50 text-muted-foreground border-white/10': insights.phase === 'Inactive',
-                }"
+              <UiBadge
+                class="uppercase tracking-wider"
+                :variant="insights.phase === 'Deload' ? 'warning' : insights.phase === 'Build' ? 'info' : insights.phase === 'Maintain' ? 'success' : 'neutral'"
               >
                 {{ insights.phase }}
-              </span>
-              <span
+              </UiBadge>
+              <UiBadge
                 v-if="insights.phase !== 'Inactive' && deloadStatusLabel !== 'None'"
-                class="text-[10px] px-2 py-0.5 rounded-full border font-semibold uppercase tracking-wider"
-                :class="deloadStatusToneClass"
+                class="uppercase tracking-wider"
+                :variant="deloadStatusToneClass as any"
               >
                 Deload: {{ deloadStatusLabel }}
-              </span>
+              </UiBadge>
             </div>
           </div>
 
@@ -123,9 +119,9 @@ const {
               <div>
                 <div class="flex flex-col items-start gap-1.5">
                   <p class="text-[10px] xl:text-xs uppercase tracking-wide text-foreground/50 leading-tight">Workload (ACWR)</p>
-                  <span class="text-[9px] xl:text-xs px-1.5 py-0.5 rounded border uppercase font-bold" :class="acwrZone.toneClass">
+                  <UiBadge class="uppercase tracking-wider" :variant="acwrZone.toneClass as any">
                     {{ acwrZone.label }}
-                  </span>
+                  </UiBadge>
                 </div>
                 <p class="text-sm font-bold text-foreground/90 mt-1.5">
                   {{ acwrValueLabel }}
@@ -144,9 +140,9 @@ const {
               <div>
                 <div class="flex flex-col items-start gap-1.5">
                   <p class="text-[10px] xl:text-xs uppercase tracking-wide text-foreground/50 leading-tight">Risk Score</p>
-                  <span class="text-[9px] xl:text-[10px] px-1.5 py-0.5 rounded border uppercase font-bold text-foreground/60" :class="{ 'text-orange-300 border-orange-500/30 bg-orange-500/10': insights.fatigue.shouldDeload, 'border-white/10': !insights.fatigue.shouldDeload }">
+                  <UiBadge class="uppercase tracking-wider" :variant="insights.fatigue.shouldDeload ? 'warning' : 'surface'">
                     {{ insights.fatigue.shouldDeload ? 'DELOAD ADVISED' : 'NO DELOAD' }}
-                  </span>
+                  </UiBadge>
                 </div>
                 <p class="text-sm font-bold mt-1.5" :class="fatigueRiskToneClass">
                   {{ fatigueRiskLabel }} <span class="text-foreground/50 font-normal">({{ fatigueRiskPercent }}%)</span>
@@ -162,9 +158,9 @@ const {
           <div class="rounded-lg border border-white/10 bg-white/[0.03] p-2.5 mb-4">
             <div class="flex items-center justify-between mb-3">
               <p class="text-[10px] uppercase tracking-wide text-foreground/50">Weekly Load Window</p>
-              <span v-if="!insights.fatigue.hasSufficientHistory" class="text-[9px] px-1.5 py-0.5 rounded-full border font-semibold uppercase tracking-wider text-foreground/60 border-white/10">
+              <UiBadge v-if="!insights.fatigue.hasSufficientHistory" variant="surface" class="uppercase tracking-wider">
                 Not enough data
-              </span>
+              </UiBadge>
             </div>
             
             <div class="relative w-full h-[64px] mt-2 mb-2 group">
@@ -245,12 +241,12 @@ const {
           <div class="rounded-lg border border-white/10 bg-white/[0.03] p-2.5" v-if="insights.fatigue.triggeredBy.length > 0 || (insights.deloadStatus === 'active' && insights.deloadTriggerSnapshot)">
             <p class="text-[10px] uppercase tracking-wide text-foreground/50 mb-1.5">Active Triggers</p>
             <div class="flex flex-wrap gap-1">
-              <span v-for="trigger in insights.fatigue.triggeredBy" :key="`fatigue-${trigger}`" class="text-[9px] px-1.5 py-0.5 rounded border border-orange-500/20 bg-orange-500/10 text-orange-300 uppercase">
+              <UiBadge v-for="trigger in insights.fatigue.triggeredBy" :key="`fatigue-${trigger}`" variant="warning" class="uppercase tracking-wider">
                 {{ formatTriggerLabel(trigger) }}
-              </span>
-              <span v-for="trigger in (insights.deloadStatus === 'active' ? insights.deloadTriggerSnapshot?.triggeredBy : []) || []" :key="`deload-${trigger}`" class="text-[9px] px-1.5 py-0.5 rounded border border-amber-500/20 bg-amber-500/10 text-amber-300 uppercase">
+              </UiBadge>
+              <UiBadge v-for="trigger in (insights.deloadStatus === 'active' ? insights.deloadTriggerSnapshot?.triggeredBy : []) || []" :key="`deload-${trigger}`" variant="warning" class="uppercase tracking-wider opacity-80">
                 {{ formatTriggerLabel(trigger) }} (Snapshot)
-              </span>
+              </UiBadge>
             </div>
           </div>
 
@@ -262,12 +258,12 @@ const {
         <UiCard class="p-3 sm:p-4 overflow-visible">
           <div class="flex items-start justify-between gap-2 mb-3">
             <div>
-              <p class="text-xs font-bold uppercase tracking-wide text-foreground/90">Exercise Metrics</p>
+              <h3 class="text-sm font-bold text-foreground">Exercise Metrics</h3>
               <p class="text-[10px] sm:text-xs text-foreground/60 mt-0.5 line-clamp-1">{{ exerciseStatusNote }}</p>
             </div>
-            <span class="text-[10px] px-2 py-0.5 rounded-full border border-white/10 bg-white/5 font-semibold uppercase tracking-wider text-foreground/60 whitespace-nowrap">
+            <UiBadge variant="surface" class="uppercase tracking-wider whitespace-nowrap">
               {{ totalExerciseCount }} Tracked
-            </span>
+            </UiBadge>
           </div>
 
           <!-- Summary Grid -->
@@ -342,16 +338,12 @@ const {
                     {{ metric.unit === 'reps' ? Math.round(metric.e1rm) : metric.e1rm.toFixed(1) }}
                   </p>
                   <!-- Delta Pill -->
-                  <div 
-                    class="w-[42px] sm:w-[48px] py-1 rounded text-center text-xs font-bold shrink-0"
-                    :class="{
-                      'bg-emerald-500/15 text-emerald-400': metric.deltaPct !== null && metric.deltaPct > 0,
-                      'bg-red-500/15 text-red-400': metric.deltaPct !== null && metric.deltaPct < 0,
-                      'bg-white/5 text-foreground/45': metric.deltaPct === null || metric.deltaPct === 0,
-                    }"
+                  <UiBadge 
+                    class="w-[46px] sm:w-[50px] justify-center shrink-0"
+                    :variant="metric.deltaPct !== null && metric.deltaPct > 0 ? 'success' : metric.deltaPct !== null && metric.deltaPct < 0 ? 'danger' : 'surface'"
                   >
                     {{ metric.deltaPct === null ? "-" : `${metric.deltaPct > 0 ? "+" : ""}${metric.deltaPct}%` }}
-                  </div>
+                  </UiBadge>
                 </div>
               </div>
               </div>

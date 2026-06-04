@@ -181,6 +181,20 @@ const {
      <span>Coach is thinking...</span>
     </div>
 
+    <!-- View Today's Workout -->
+    <div v-if="activeWorkoutGroups?.length" class="flex items-center gap-2 mt-4">
+     <UiButton
+      type="button"
+      variant="default"
+      size="lg"
+      class="flex-1 bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20"
+      @click="activeTab = 'today'"
+     >
+      <Play class="w-4 h-4 mr-2" />
+      View Today's Workout
+     </UiButton>
+    </div>
+
     <!-- Inline Q&A and Actions -->
     <div class="mt-8 flex flex-col gap-4 border-t border-border/40 pt-6">
      <div class="flex flex-col gap-3">
@@ -200,27 +214,16 @@ const {
        <span v-else>Send Question</span>
       </UiButton>
      </div>
-     
-     <div class="flex items-center gap-2 mt-2">
-      <UiButton
-       v-if="activeWorkoutGroups?.length"
-       variant="default"
-       size="lg"
-       class="flex-1 bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20"
-       @click="activeTab = 'today'"
-      >
-       <Play class="w-4 h-4 mr-2" />
-       View Today's Workout
-      </UiButton>
-     </div>
     </div>
    </template>
 
    <!-- TAB: Today -->
    <template v-else-if="activeTab === 'today'">
     <!-- Workout Plan heading -->
-    <div v-if="activeWorkoutGroups?.length" class="mt-1 flex items-center justify-between">
-     <h2 class="text-lg font-bold text-foreground">Workout Plan</h2>
+    <div v-if="activeWorkoutGroups?.length" class="mt-1 flex items-center justify-between gap-4">
+     <div class="flex items-center gap-2">
+      <h3 class="text-sm font-bold text-foreground">Workout Plan</h3>
+     </div>
     </div>
 
     <!-- Completed exercises strip -->
@@ -234,7 +237,7 @@ const {
        <div class="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
         <CheckCircle2 class="w-4 h-4 text-emerald-500 shrink-0" />
        </div>
-       <span class="text-sm font-semibold text-foreground tracking-tight truncate leading-none mt-0.5">{{ ex.exerciseName }}</span>
+       <span class="text-sm font-medium text-foreground tracking-tight truncate leading-none mt-0.5">{{ ex.exerciseName }}</span>
       </div>
      </div>
     </UiCard>
@@ -378,7 +381,7 @@ const {
      <div class="flex items-center justify-between gap-4">
       <div class="flex items-center gap-2">
        <h3 class="text-sm font-bold text-foreground">Current Training Cycle</h3>
-       <UiBadge variant="secondary" class="text-[10px] uppercase tracking-wider py-0 leading-none h-4">{{ activePlan.cycleWeeks }} Week(s)</UiBadge>
+       <UiBadge variant="surface" class="uppercase tracking-wider whitespace-nowrap">{{ activePlan.cycleWeeks }} Week(s)</UiBadge>
       </div>
       <UiButton
        variant="outline"
@@ -397,8 +400,8 @@ const {
        <div class="p-3">
         <h4 class="font-bold text-sm text-foreground mb-0.5 flex items-center gap-2">
           {{ session.sessionLabel }} 
-          <span class="text-xs text-muted-foreground font-normal">Week {{ session.weekNumber }}</span>
-          <UiBadge v-if="sIdx === activeSessionIndex" variant="default" class="h-4 px-1.5 text-[9px] uppercase tracking-wider ml-auto">Today</UiBadge>
+          <span class="text-xs text-muted-foreground font-medium">Week {{ session.weekNumber }}</span>
+          <UiBadge v-if="sIdx === activeSessionIndex" variant="default" class="uppercase tracking-wider ml-auto">Today</UiBadge>
         </h4>
         <p class="text-xs text-muted-foreground mb-3 pb-1 border-b border-border/50">{{ session.focusDescription }}</p>
         <div class="w-full overflow-x-auto">
@@ -415,7 +418,7 @@ const {
           <tr v-for="(ex, exIdx) in session.exercises" :key="exIdx" class="text-foreground/90">
            <td class="py-2 pr-2 font-medium leading-tight">
             {{ ex.exerciseName }}
-            <span v-if="ex.supersetId" class="ml-1 text-[10px] uppercase text-primary border border-primary/20 bg-primary/10 px-1 py-0.5 rounded-sm">SS:{{ ex.supersetId }}</span>
+            <UiBadge v-if="ex.supersetId" variant="surface" class="ml-1 uppercase tracking-wider">SS:{{ ex.supersetId }}</UiBadge>
            </td>
            <td class="py-2 px-2 whitespace-nowrap text-center">{{ ex.targetSets }}</td>
            <td class="py-2 px-2 whitespace-nowrap text-center">{{ ex.targetReps }}</td>

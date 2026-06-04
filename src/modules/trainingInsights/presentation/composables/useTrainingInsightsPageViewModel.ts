@@ -115,7 +115,7 @@ export function useTrainingInsightsPageViewModel() {
         label: "No baseline",
         range: "Need 4-week history",
         detail: "Log more sessions to unlock ACWR trend and workload zone.",
-        toneClass: "bg-white/5 text-foreground/65 border-white/15",
+        toneClass: "surface",
       };
     }
 
@@ -131,7 +131,7 @@ export function useTrainingInsightsPageViewModel() {
         detail: hasRecentLogs
           ? "Low relative load — this is common when switching training phases or reducing volume."
           : "Training load is low relative to your recent baseline. Normal during deload weeks or rest periods.",
-        toneClass: "bg-slate-400/10 text-slate-300 border-slate-400/30",
+        toneClass: "neutral",
       };
     }
 
@@ -140,7 +140,7 @@ export function useTrainingInsightsPageViewModel() {
         label: "Optimal Load",
         range: "0.60 - 1.30",
         detail: "Workload is in the productive range for build/maintain progression.",
-        toneClass: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30",
+        toneClass: "success",
       };
     }
 
@@ -149,7 +149,7 @@ export function useTrainingInsightsPageViewModel() {
       range: "> 1.30",
       detail:
         "Acute load is rising quickly vs your baseline. Normal during planned overreach — monitor recovery if unintentional.",
-      toneClass: "bg-orange-500/10 text-orange-300 border-orange-500/30",
+      toneClass: "warning",
     };
   });
 
@@ -196,15 +196,15 @@ export function useTrainingInsightsPageViewModel() {
 
   const deloadStatusToneClass = computed(() => {
     if (insights.value.deloadStatus === "active") {
-      return "text-orange-300 border-orange-500/30 bg-orange-500/10";
+      return "warning";
     }
     if (insights.value.deloadStatus === "completed") {
-      return "text-emerald-300 border-emerald-500/30 bg-emerald-500/10";
+      return "success";
     }
     if (insights.value.deloadStatus === "canceled") {
-      return "text-amber-200 border-amber-400/30 bg-amber-500/10";
+      return "warning";
     }
-    return "bg-white/5 text-foreground/65 border-white/15";
+    return "surface";
   });
 
   const deloadStatusNote = computed(() => {
