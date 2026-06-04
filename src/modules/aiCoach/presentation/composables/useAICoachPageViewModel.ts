@@ -302,7 +302,14 @@ export function useAICoachPageViewModel() {
   onMounted(() => {
     aiStore.initialize();
     if (assistantMessages.value.length === 0) {
-      debouncedAskAi();
+      if (!aiStore.activePlan) {
+        aiStore.generateNewPlan().then((result) => {
+          if (result.isErr()) handleAiError(result.error);
+          else scrollToTop();
+        });
+      } else {
+        debouncedAskAi();
+      }
     } else if (activeWorkout.value?.length) {
       activeTab.value = "today";
     }
