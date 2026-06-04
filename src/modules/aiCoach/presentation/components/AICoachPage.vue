@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Copy,
   Loader2,
   Play,
   RotateCw,
@@ -51,6 +52,7 @@ const {
   handleAskQuestion,
   openGoogleSearch,
   regeneratePlan,
+  copyPlanJson,
 } = useAICoachPageViewModel();
 </script>
 
@@ -425,6 +427,17 @@ const {
        </div>
       </div>
      </div>
+
+     <!-- Debug Button -->
+     <UiButton
+      variant="ghost"
+      size="sm"
+      class="text-muted-foreground w-full mt-2 border border-border/40 border-dashed hover:bg-muted/30"
+      @click="copyPlanJson"
+     >
+      <Copy class="w-3.5 h-3.5 mr-2 opacity-70" />
+      Copy Plan JSON
+     </UiButton>
     </div>
     
     <div v-else class="flex flex-col items-center justify-center py-12 text-center opacity-50">

@@ -5,7 +5,7 @@ import type { AiResponseData } from "@/modules/aiCoach/presentation";
 import { useAiStore } from "@/modules/aiCoach/presentation";
 import { useRestTimerStore } from "@/modules/platform/presentation";
 import { formatRestDuration } from "@/modules/sharedKernel/presentation";
-import { resolveCurrentSession, useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
+import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
 import { useToast } from "@/shared/presentation/composables/useToast";
 import {
   type DisplayExercise,
@@ -82,9 +82,15 @@ export function useAICoachPageViewModel() {
   });
 
   const completedSetsMap = computed<Map<string, number>>(() => {
-    const currentLogs = resolveCurrentSession(exerciseLogsStore.exerciseLogs)?.logs || [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const todaysLogs = exerciseLogsStore.exerciseLogs.filter(
+      (log) => log.loggedAt.getTime() >= today.getTime(),
+    );
+
     const map = new Map<string, number>();
-    for (const log of currentLogs) {
+    for (const log of todaysLogs) {
       map.set(log.exerciseName, (map.get(log.exerciseName) || 0) + 1);
     }
     return map;
@@ -226,6 +232,25 @@ export function useAICoachPageViewModel() {
       "_blank",
       "noopener,noreferrer",
     );
+  }
+
+  function copyPlanJson() {
+    if (!aiStore.activePlan) return;
+    navigator.clipboard
+      .writeText(JSON.stringify(aiStore.activePlan, null, 2))
+      .then(() => {
+        toast({
+          title: "Copied!",
+          description: "Plan JSON copied to clipboard for debugging.",
+        });
+      })
+      .catch((err) => {
+        toast({
+          title: "Error",
+          description: "Failed to copy plan JSON.",
+          variant: "destructive",
+        });
+      });
   }
 
   function handleAskQuestion() {
@@ -371,7 +396,6 @@ export function useAICoachPageViewModel() {
     router,
     aiStore,
     restTimerStore,
-    // State
     isLogFormOpen,
     prefillData,
     selectedRestSeconds,
@@ -382,26 +406,24 @@ export function useAICoachPageViewModel() {
     openScratchpads,
     openRequestPayloads,
     scrollContainerRef,
-    // Computed
     assistantMessages,
-    activeWorkout,
     activeWorkoutGroups,
     activePlan,
     activeSessionIndex,
     completedExercises,
+    remainingExercises,
     cooldownProgressPercent,
-    // Helpers
     getExerciseProgress,
     isExerciseCompleted,
     isHighlighted,
     renderMarkdown,
     formatRestDuration,
     formatTime,
-    // Actions
     debouncedAskAi,
     handleLogExercise,
     handleAskQuestion,
     openGoogleSearch,
     regeneratePlan,
+    copyPlanJson,
   };
 }

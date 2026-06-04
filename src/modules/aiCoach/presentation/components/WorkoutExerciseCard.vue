@@ -168,50 +168,50 @@ const timerProgressPercent = computed(() => {
         <span>{{ exercise.notes }}</span>
       </div>
 
-      <!-- Metrics Dashboard Grid & Action -->
+        <!-- Metrics Dashboard Grid & Action -->
       <div class="flex items-end justify-between w-full gap-4">
         <!-- 3-Column Micro-grid -->
-        <div class="grid grid-cols-3 gap-3 flex-1">
-          <!-- Sets × Reps/Duration -->
-          <div class="flex flex-col gap-0.5">
-            <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
-              {{ isDuration(exercise.targetReps) ? 'Sets × Duration' : 'Sets × Reps' }}
+        <div class="grid grid-cols-3 gap-3 flex-1 min-w-0">
+          <!-- Sets × Reps/Time -->
+          <div class="flex flex-col gap-0.5 min-w-0">
+            <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 whitespace-nowrap">
+              {{ isDurationExercise ? 'Sets × Time' : 'Sets × Reps' }}
             </span>
-            <div class="flex items-baseline">
-              <span class="text-lg font-bold tabular-nums text-foreground">{{ exercise.targetSets }}</span>
-              <span class="text-xs font-medium text-muted-foreground/50 mx-1">×</span>
-              <span class="text-lg font-bold tabular-nums text-foreground">{{ splitReps(exercise.targetReps).value }}</span>
-              <span v-if="splitReps(exercise.targetReps).unit" class="text-xs font-medium text-muted-foreground/50 ml-0.5">
+            <div class="flex items-baseline min-w-0">
+              <span class="text-lg font-bold tabular-nums text-foreground shrink-0">{{ exercise.targetSets }}</span>
+              <span class="text-xs font-medium text-muted-foreground/50 mx-1 shrink-0">×</span>
+              <span class="text-lg font-bold tabular-nums text-foreground truncate">{{ splitReps(exercise.targetReps).value }}</span>
+              <span v-if="splitReps(exercise.targetReps).unit" class="text-xs font-semibold text-muted-foreground/50 ml-0.5 truncate">
                 {{ splitReps(exercise.targetReps).unit }}
               </span>
             </div>
           </div>
           
           <!-- Weight -->
-          <div v-if="exercise.targetWeight" class="flex flex-col gap-0.5">
-            <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Weight</span>
-            <div class="flex items-baseline">
-              <span class="text-lg font-bold tabular-nums text-primary/90">{{ splitWeight(exercise.targetWeight).value }}</span>
-              <span class="text-xs font-medium text-muted-foreground/50 ml-0.5">{{ splitWeight(exercise.targetWeight).unit }}</span>
+          <div v-if="exercise.targetWeight" class="flex flex-col gap-0.5 min-w-0">
+            <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 whitespace-nowrap">Weight</span>
+            <div class="flex items-baseline min-w-0">
+              <span class="text-lg font-bold tabular-nums text-primary/90 truncate">{{ splitWeight(exercise.targetWeight).value }}</span>
+              <span class="text-xs font-semibold text-muted-foreground/50 ml-0.5 shrink-0">{{ splitWeight(exercise.targetWeight).unit }}</span>
             </div>
           </div>
-          <div v-else class="flex flex-col gap-0.5 opacity-0 pointer-events-none select-none">
+          <div v-else class="flex flex-col gap-0.5 opacity-0 pointer-events-none select-none min-w-0">
              <!-- Placeholder to keep grid stable -->
-             <span class="text-xs font-semibold">Weight</span>
-             <span class="text-lg font-bold">0</span>
+             <span class="text-xs font-semibold uppercase tracking-wider">Weight</span>
+             <span class="text-lg font-bold tabular-nums">0</span>
           </div>
           
           <!-- RPE -->
-          <div v-if="exercise.targetRpe" class="flex flex-col gap-0.5">
-            <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">RPE</span>
-            <div class="flex items-baseline">
-              <span class="text-lg font-bold tabular-nums text-amber-500/90">{{ exercise.targetRpe }}</span>
+          <div v-if="exercise.targetRpe" class="flex flex-col gap-0.5 min-w-0">
+            <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 whitespace-nowrap">RPE</span>
+            <div class="flex items-baseline min-w-0">
+              <span class="text-lg font-bold tabular-nums text-amber-500/90 truncate">{{ exercise.targetRpe }}</span>
             </div>
           </div>
-          <div v-else class="flex flex-col gap-0.5 opacity-0 pointer-events-none select-none">
+          <div v-else class="flex flex-col gap-0.5 opacity-0 pointer-events-none select-none min-w-0">
              <!-- Placeholder to keep grid stable -->
-             <span class="text-xs font-semibold">RPE</span>
-             <span class="text-lg font-bold">0</span>
+             <span class="text-xs font-semibold uppercase tracking-wider">RPE</span>
+             <span class="text-lg font-bold tabular-nums">0</span>
           </div>
         </div>
 

@@ -133,12 +133,9 @@ export function isDuration(reps?: string): boolean {
 export function splitReps(reps?: string): { value: string; unit: string } {
   if (!reps) return { value: "", unit: "" };
 
-  if (/^[\d\s-]+$/.test(reps)) {
-    return { value: reps.trim(), unit: "" };
-  }
-
-  const match = reps.match(/^([\d\s-]+)\s+(.*)$/);
-  if (match) {
+  // Match leading numbers, dots, commas, hyphens and spaces
+  const match = reps.match(/^([\d\s.,-]+)(.*)$/);
+  if (match && match[1].trim() !== "") {
     return { value: match[1].trim(), unit: match[2].trim() };
   }
 
