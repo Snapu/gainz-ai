@@ -2,7 +2,7 @@ import { GoogleGenAI, type Schema, Type } from "@google/genai";
 import * as Sentry from "@sentry/vue";
 import { errAsync, okAsync, Result, ResultAsync } from "neverthrow";
 import { VALID_MUSCLE_GROUPS } from "@/modules/sharedKernel/application";
-import type { AskAiError, ExerciseCleanupResult } from "../domain/types";
+import type { CoachingAdviceError, ExerciseCleanupResult } from "../domain/types";
 
 const CLASSIFICATION_TEMPERATURE = 0.1;
 const MUSCLE_GROUPS_PROMPT_LIST = [...VALID_MUSCLE_GROUPS].join(", ");
@@ -62,7 +62,7 @@ function isServiceUnavailableError(error: unknown): boolean {
 export function classifyExercises(
   exerciseNames: string[],
   apiKey: string | undefined,
-): ResultAsync<ExerciseCleanupResult, AskAiError> {
+): ResultAsync<ExerciseCleanupResult, CoachingAdviceError> {
   if (!apiKey) return errAsync("missing-api-key");
   if (exerciseNames.length === 0) return okAsync({ classifications: [] });
 
@@ -130,7 +130,7 @@ Important rules:
         tags: { scope: "ai-service", feature: "exercise-classification" },
         extra: { exerciseCount: exerciseNames.length },
       });
-      return "ai-request-failed" as const;
+      return "coaching-request-failed" as const;
     })
     .andThen((response) => {
       const parseResult = Result.fromThrowable(
@@ -141,12 +141,14 @@ Important rules:
             tags: { scope: "ai-service", feature: "exercise-classification" },
             extra: { exerciseCount: exerciseNames.length },
           });
-          return "ai-request-failed" as const;
+          return "coaching-request-failed" as const;
         },
       )();
 
       if (parseResult.isErr()) {
-        return errAsync<ExerciseCleanupResult, AskAiError>(parseResult.error);
+        return errAsync<ExerciseCleanupResult, CoachingAdviceError>(
+          parseResult.error as CoachingAdviceError,
+        );
       }
 
       const parsed = parseResult.value;
@@ -156,9 +158,9 @@ Important rules:
           tags: { scope: "ai-service", feature: "exercise-classification" },
           extra: { exerciseCount: exerciseNames.length },
         });
-        return errAsync<ExerciseCleanupResult, AskAiError>("ai-request-failed");
+        return errAsync<ExerciseCleanupResult, CoachingAdviceError>("coaching-request-failed");
       }
 
-      return okAsync<ExerciseCleanupResult, AskAiError>(parsed);
+      return okAsync<ExerciseCleanupResult, CoachingAdviceError>(parsed);
     });
 }

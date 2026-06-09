@@ -1,24 +1,22 @@
 import * as Sentry from "@sentry/vue";
-import { errAsync, okAsync, ResultAsync } from "neverthrow";
+import { errAsync, okAsync, Result, ResultAsync } from "neverthrow";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 
 import {
-  type AskAiError,
-  askCoachWithSingleRetry,
+  adviceStartsDeload,
   classifyExerciseNames,
   getTodayLogsCount,
   mapTrainingFatigueTriggersToDeload,
-  type PreviousAiMessage,
-  responseStartsDeload,
+  requestAdviceWithSingleRetry,
 } from "@/modules/aiCoach/application";
-import type { TrainingPlan } from "@/modules/aiCoach/domain";
 import {
-  clearPlan as clearStoragePlan,
-  createAiCoachService,
-  loadPlan,
-  savePlan,
-} from "@/modules/aiCoach/infrastructure";
+  type CoachingAdvice,
+  type CoachingAdviceError,
+  type CoachingMessage,
+  TrainingPlan,
+} from "@/modules/aiCoach/domain";
+import { createAiCoachService, LocalStoragePlanRepository } from "@/modules/aiCoach/infrastructure";
 import { useDeloadStore } from "@/modules/deload/presentation";
 import { useEventsStore } from "@/modules/events/presentation";
 import {
@@ -33,34 +31,65 @@ import {
   useTrainingInsightsStore,
 } from "@/modules/trainingInsights/presentation";
 import { resolveCurrentSession, useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
-import {
-  createAiAssistantMessage,
-  createAiUserPlaceholder,
-  removeMessageById,
-  replaceMessageContentById,
-  toPreviousAiMessages,
-} from "./aiMessageHelpers";
-import {
-  cleanOldAiSessions,
-  loadAiMessagesFromStorage,
-  removeAiMessagesFromStorage,
-  saveAiMessagesToStorage,
-} from "./aiMessageStorage";
 
-interface AiMessage {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  timestamp: Date;
-  sessionId: string;
-  logsCount: number;
-  logsChecksum?: string;
+function createUserMessagePlaceholder(
+  sessionId: string,
+  logsCount: number,
+  logsChecksum?: string,
+): CoachingMessage {
+  return {
+    id: `${Date.now()}-user`,
+    role: "user",
+    content: "AI request",
+    timestamp: new Date().toISOString(),
+    sessionId,
+    logsCount,
+    logsChecksum,
+  };
 }
 
-function isAskAiError(value: unknown): value is AskAiError {
+function createCoachMessage(
+  sessionId: string,
+  logsCount: number,
+  responseText: string,
+  logsChecksum?: string,
+): CoachingMessage {
+  return {
+    id: `${Date.now()}-coach`,
+    role: "coach",
+    content: responseText,
+    timestamp: new Date().toISOString(),
+    sessionId,
+    logsCount,
+    logsChecksum,
+  };
+}
+
+function removeMessageById(messages: CoachingMessage[], messageId: string): CoachingMessage[] {
+  return messages.filter((msg) => msg.id !== messageId);
+}
+
+function replaceMessageContentById(
+  messages: CoachingMessage[],
+  messageId: string,
+  content: string,
+): CoachingMessage[] {
+  return messages.map((msg) => (msg.id === messageId ? { ...msg, content } : msg));
+}
+
+import {
+  cleanOldCoachingSessions,
+  createPlanSessionId,
+  extractDateFromSessionId,
+  loadMessagesFromStorage,
+  removeMessagesFromStorage,
+  saveMessagesToStorage,
+} from "@/modules/aiCoach/infrastructure/messageStorage";
+
+function isCoachingAdviceError(value: unknown): value is CoachingAdviceError {
   return (
     value === "missing-api-key" ||
-    value === "ai-request-failed" ||
+    value === "coaching-request-failed" ||
     value === "generate-content-stream-failed"
   );
 }
@@ -73,7 +102,7 @@ function getTodayLogsChecksum(
 }
 
 export const useAiStore = defineStore("ai", () => {
-  const messages = ref<AiMessage[]>([]);
+  const messages = ref<CoachingMessage[]>([]);
   const isLoading = ref(false);
   const hasInitialized = ref(false);
   const lastRequestLogsChecksum = ref<string>("");
@@ -88,20 +117,33 @@ export const useAiStore = defineStore("ai", () => {
   const deloadStore = useDeloadStore();
   const trainingInsightsStore = useTrainingInsightsStore();
   const aiCoachService = createAiCoachService();
+  const planRepository = new LocalStoragePlanRepository();
 
-  const currentSessionId = computed<string>(
-    () =>
-      resolveCurrentSession(exerciseLogsStore.exerciseLogs)?.sessionId ?? isoDateString(new Date()),
-  );
+  const currentSessionId = computed<string>(() => {
+    // Use the active plan's creation date as a stable conversation anchor.
+    // This ensures messages persist across the entire mesocycle (not just one day).
+    const plan = activePlan.value;
+    if (plan?.createdAt) {
+      return createPlanSessionId(isoDateString(new Date(plan.createdAt)));
+    }
+    // During a live workout session (no plan yet), use the workout session ID
+    const session = resolveCurrentSession(exerciseLogsStore.exerciseLogs);
+    if (session) return session.sessionId;
+    // Fallback: today's date (for users without a plan)
+    return isoDateString(new Date());
+  });
 
   function initialize(): void {
     if (hasInitialized.value) return;
+    hasInitialized.value = true;
+    const planResult = planRepository.loadPlan();
+    if (planResult.isOk() && planResult.value) {
+      activePlan.value = planResult.value;
+    }
 
-    activePlan.value = loadPlan();
-
-    const loadedMessagesResult = loadAiMessagesFromStorage<AiMessage>(currentSessionId.value);
+    const loadedMessagesResult = loadMessagesFromStorage<CoachingMessage>(currentSessionId.value);
     if (loadedMessagesResult.isErr()) {
-      Sentry.captureMessage("Failed to load AI messages from storage", {
+      Sentry.captureMessage("Failed to load messages from storage", {
         level: "warning",
         tags: { scope: "ai-store", feature: "storage-load" },
       });
@@ -110,7 +152,7 @@ export const useAiStore = defineStore("ai", () => {
       messages.value = loadedMessagesResult.value;
     }
 
-    cleanOldAiSessions();
+    cleanOldCoachingSessions();
     hasInitialized.value = true;
   }
 
@@ -121,16 +163,19 @@ export const useAiStore = defineStore("ai", () => {
   }
 
   function persistMessages(sessionId: string): void {
-    const saveResult = saveAiMessagesToStorage(sessionId, messages.value);
+    const saveResult = saveMessagesToStorage(sessionId, messages.value);
     if (saveResult.isErr()) {
-      Sentry.captureMessage("Failed to save AI messages to storage", {
+      Sentry.captureMessage("Failed to save messages to storage", {
         level: "warning",
         tags: { scope: "ai-store", feature: "storage-save" },
       });
     }
   }
 
-  function askAi(question?: string): ResultAsync<void, AskAiError> {
+  function requestAdvice(
+    question?: string,
+    mode: "planning" | "execution" = "execution",
+  ): ResultAsync<void, CoachingAdviceError> {
     ensureInitialized();
 
     if (isLoading.value) {
@@ -138,16 +183,16 @@ export const useAiStore = defineStore("ai", () => {
       return okAsync(undefined);
     }
 
-    return runAskAi(question);
+    return runCoachingRequest(question, mode);
   }
 
-  function runAskAi(
+  function runCoachingRequest(
     question?: string,
     mode: "planning" | "execution" = "execution",
-  ): ResultAsync<void, AskAiError> {
+  ): ResultAsync<void, CoachingAdviceError> {
     const apiKey = userProfileStore.apiKey;
     if (!apiKey) {
-      return errAsync("missing-api-key");
+      return errAsync("missing-api-key" as CoachingAdviceError);
     }
 
     isLoading.value = true;
@@ -155,7 +200,7 @@ export const useAiStore = defineStore("ai", () => {
 
     return ResultAsync.fromPromise(
       (async (): Promise<void> => {
-        const currentId = currentSessionId.value;
+        let currentId = currentSessionId.value;
         const currentSession = resolveCurrentSession(exerciseLogsStore.exerciseLogs);
         const todayLogsCount = getTodayLogsCount(aiCoachService, currentSession);
         const todayLogsChecksum = getTodayLogsChecksum(currentSession);
@@ -170,26 +215,29 @@ export const useAiStore = defineStore("ai", () => {
 
         await classifyExercisesIfNeeded();
 
-        let userMessageId = "";
+        const userMessage = createUserMessagePlaceholder(
+          currentId,
+          todayLogsCount,
+          todayLogsChecksum,
+        );
+        const userMessageId = userMessage.id;
 
         try {
-          const previousMessages: PreviousAiMessage[] = toPreviousAiMessages(messages.value);
+          const previousMessages = [...messages.value];
 
-          const userMessage = createAiUserPlaceholder(currentId, todayLogsCount, todayLogsChecksum);
           if (question) {
             userMessage.content = question;
           }
-          userMessageId = userMessage.id;
           messages.value.push(userMessage);
           persistMessages(currentId);
 
-          const result = await askCoachWithSingleRetry(aiCoachService, {
+          const result = await requestAdviceWithSingleRetry(aiCoachService, {
             apiKey,
             userProfile: userProfileStore.userProfile,
             insights: trainingInsightsStore.insights,
             exerciseLogs: exerciseLogsStore.exerciseLogs,
             trainingSummaries: trainingSummaryStore.summaries,
-            previousMessages,
+            previousMessages: previousMessages,
             events: eventsStore.events,
             question,
             mode,
@@ -200,14 +248,25 @@ export const useAiStore = defineStore("ai", () => {
           }
 
           try {
-            const parsed = JSON.parse(result.value.responseText);
-            if (parsed.trainingPlan) {
-              const newPlan: TrainingPlan = {
-                ...parsed.trainingPlan,
-                createdAt: new Date().toISOString(),
-              };
-              savePlan(newPlan);
+            const advice = result.value.advice;
+            if (advice.trainingPlan) {
+              const oldSessionId = currentId; // captured before plan changes session ID
+              const newPlan = TrainingPlan.create(
+                new Date().toISOString(),
+                advice.trainingPlan.cycleWeeks,
+                advice.trainingPlan.sessions,
+              );
+              planRepository.savePlan(newPlan);
               activePlan.value = newPlan;
+              const newSessionId = currentSessionId.value;
+              if (newSessionId !== oldSessionId) {
+                removeMessagesFromStorage(oldSessionId);
+                currentId = newSessionId;
+
+                // Atomically clear old messages now that the new plan is saved.
+                // We keep the user's request so the coach message can be appended to it.
+                messages.value = messages.value.filter((m) => m.id === userMessageId);
+              }
             }
           } catch (e) {
             Sentry.captureException(e, { tags: { scope: "ai-store", feature: "extract-plan" } });
@@ -215,7 +274,7 @@ export const useAiStore = defineStore("ai", () => {
 
           exerciseMuscleMapStore.refresh();
 
-          if (responseStartsDeload(result.value.responseText) && !deloadStore.active) {
+          if (adviceStartsDeload(result.value.advice) && !deloadStore.active) {
             const { riskScore, triggeredBy } = trainingInsightsStore.insights.fatigue;
             deloadStore.startDeload(riskScore, mapTrainingFatigueTriggersToDeload(triggeredBy));
           }
@@ -226,13 +285,13 @@ export const useAiStore = defineStore("ai", () => {
             result.value.requestPayload,
           );
 
-          const assistantMessage = createAiAssistantMessage(
+          const coachMessage = createCoachMessage(
             currentId,
             todayLogsCount,
-            result.value.responseText,
+            JSON.stringify(result.value.advice),
             todayLogsChecksum,
           );
-          messages.value.push(assistantMessage);
+          messages.value.push(coachMessage);
           persistMessages(currentId);
           lastRequestLogsChecksum.value = todayLogsChecksum;
         } catch (error) {
@@ -241,7 +300,7 @@ export const useAiStore = defineStore("ai", () => {
             persistMessages(currentId);
           }
 
-          if (isAskAiError(error)) {
+          if (isCoachingAdviceError(error)) {
             throw error;
           }
 
@@ -250,24 +309,24 @@ export const useAiStore = defineStore("ai", () => {
             tags: { scope: "ai-store", feature: "ask-ai" },
             extra: { hasPendingUserMessage: !!userMessageId },
           });
-          throw "ai-request-failed" as const;
+          throw "coaching-request-failed" as const;
         }
       })(),
-      (error) => (isAskAiError(error) ? error : "ai-request-failed"),
+      (error) => (isCoachingAdviceError(error) ? error : "coaching-request-failed"),
     )
       .andThen((result) => {
         isLoading.value = false;
-        if (needsRerun.value) return runAskAi(question, mode);
+        if (needsRerun.value) return runCoachingRequest(question, mode);
         return okAsync(result);
       })
       .orElse((error) => {
         isLoading.value = false;
-        if (needsRerun.value) return runAskAi(question, mode);
+        if (needsRerun.value) return runCoachingRequest(question, mode);
         return errAsync(error);
       });
   }
 
-  function generateNewPlan(): ResultAsync<void, AskAiError> {
+  function generateNewPlan(): ResultAsync<void, CoachingAdviceError> {
     ensureInitialized();
 
     if (isLoading.value) {
@@ -275,7 +334,7 @@ export const useAiStore = defineStore("ai", () => {
       return okAsync(undefined);
     }
 
-    return runAskAi("Please generate a new 2-week mesocycle plan.", "planning");
+    return runCoachingRequest("Please generate a new 2-week mesocycle plan.", "planning");
   }
 
   function classifyExercisesIfNeeded(): ResultAsync<void, never> {
@@ -310,28 +369,35 @@ export const useAiStore = defineStore("ai", () => {
   }
   const currentWorkoutPlan = computed<Array<{ exerciseName: string; restSeconds?: number }> | null>(
     () => {
-      const lastAssistantMsg = [...messages.value].reverse().find((m) => m.role === "assistant");
-      if (!lastAssistantMsg) return null;
-      try {
-        const parsed = JSON.parse(lastAssistantMsg.content);
-        return (
-          (parsed.recommendedWorkout as Array<{ exerciseName: string; restSeconds?: number }>) ||
-          null
-        );
-      } catch {
-        return null;
-      }
+      const lastCoachMessage = [...messages.value].reverse().find((m) => m.role === "coach");
+      if (!lastCoachMessage) return null;
+
+      const parsedResult = Result.fromThrowable(
+        (json: string) => JSON.parse(json) as CoachingAdvice,
+        () => new Error("Invalid json in coach message"),
+      )(lastCoachMessage.content);
+
+      if (parsedResult.isErr()) return null;
+      return parsedResult.value.recommendedWorkout ?? null;
     },
   );
 
   function clearMessages() {
-    ensureInitialized();
-    removeAiMessagesFromStorage(currentSessionId.value);
+    initialize();
+    removeMessagesFromStorage(currentSessionId.value);
     messages.value = [];
   }
 
+  function resetPlan(): void {
+    planRepository.clearPlan();
+    activePlan.value = null;
+    cleanOldCoachingSessions();
+    messages.value = [];
+    needsRerun.value = true;
+  }
+
   function clearActivePlan() {
-    clearStoragePlan();
+    planRepository.clearPlan();
     activePlan.value = null;
   }
 
@@ -343,7 +409,7 @@ export const useAiStore = defineStore("ai", () => {
 
   return {
     initialize,
-    askAi,
+    requestAdvice,
     generateNewPlan,
     classifyExercisesIfNeeded,
     clearMessages,

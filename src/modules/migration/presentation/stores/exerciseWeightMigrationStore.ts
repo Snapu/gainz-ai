@@ -1,5 +1,5 @@
 import type { GoogleSpreadsheet } from "google-spreadsheet";
-import { err, ok, ResultAsync } from "neverthrow";
+import { ResultAsync } from "neverthrow";
 import { defineStore } from "pinia";
 import { computed, ref, watchEffect } from "vue";
 

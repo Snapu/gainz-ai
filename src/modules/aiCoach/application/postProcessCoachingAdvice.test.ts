@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { AiResponseData } from "../domain/types";
-import { postProcessAiResponse } from "./postProcessAiResponse";
+import type { CoachingAdvice } from "../domain/types";
+import { postProcessCoachingAdvice } from "./postProcessCoachingAdvice";
 
-describe("postProcessAiResponse", () => {
-  const baseResponse: AiResponseData = {
+describe("postProcessCoachingAdvice", () => {
+  const baseResponse: CoachingAdvice = {
     coachMessage: "Here is your workout.",
     recommendedWorkout: [
       {
@@ -29,23 +29,23 @@ describe("postProcessAiResponse", () => {
   };
 
   it("removes recommendedWorkout during post-workout phase", () => {
-    const result = postProcessAiResponse(baseResponse, "post-workout", "none");
+    const result = postProcessCoachingAdvice(baseResponse, "post-workout", "none");
     expect(result.recommendedWorkout).toBeUndefined();
     expect(result.coachMessage).toBe("Here is your workout.");
   });
 
   it("removes startDeload when deload is active", () => {
-    const result = postProcessAiResponse(baseResponse, "planning", "active");
+    const result = postProcessCoachingAdvice(baseResponse, "planning", "active");
     expect(result.startDeload).toBeUndefined();
   });
 
   it("keeps startDeload when deload is not active", () => {
-    const result = postProcessAiResponse(baseResponse, "planning", "none");
+    const result = postProcessCoachingAdvice(baseResponse, "planning", "none");
     expect(result.startDeload).toBe(true);
   });
 
   it("clamps rest periods based on rep ranges", () => {
-    const result = postProcessAiResponse(baseResponse, "planning", "none");
+    const result = postProcessCoachingAdvice(baseResponse, "planning", "none");
     const workout = result.recommendedWorkout!;
 
     // Bicep Curls (10 reps -> 120-180s)
@@ -59,7 +59,7 @@ describe("postProcessAiResponse", () => {
   });
 
   it("does not clamp rest periods for metabolic protocols", () => {
-    const responseWithMetabolic: AiResponseData = {
+    const responseWithMetabolic: CoachingAdvice = {
       ...baseResponse,
       recommendedWorkout: [
         {
@@ -71,13 +71,13 @@ describe("postProcessAiResponse", () => {
         },
       ],
     };
-    const result = postProcessAiResponse(responseWithMetabolic, "planning", "none");
+    const result = postProcessCoachingAdvice(responseWithMetabolic, "planning", "none");
     const workout = result.recommendedWorkout!;
     expect(workout.find((e) => e.exerciseName === "Lateral Raises")?.restSeconds).toBe(15);
   });
 
   it("clamps rest periods for exercises in the training plan", () => {
-    const responseWithPlan: AiResponseData = {
+    const responseWithPlan: CoachingAdvice = {
       ...baseResponse,
       trainingPlan: {
         cycleWeeks: 1,
@@ -106,10 +106,10 @@ describe("postProcessAiResponse", () => {
       },
     };
 
-    const result = postProcessAiResponse(responseWithPlan, "planning", "none");
-    const planExercises = result.trainingPlan!.sessions[0]!.exercises;
+    const result = postProcessCoachingAdvice(responseWithPlan, "planning", "none");
+    const planExercises = result.trainingPlan?.sessions[0]?.exercises;
 
-    expect(planExercises.find((e) => e.exerciseName === "Bicep Curls")?.restSeconds).toBe(120);
-    expect(planExercises.find((e) => e.exerciseName === "Bench Press")?.restSeconds).toBe(180);
+    expect(planExercises?.find((e) => e.exerciseName === "Bicep Curls")?.restSeconds).toBe(120);
+    expect(planExercises?.find((e) => e.exerciseName === "Bench Press")?.restSeconds).toBe(180);
   });
 });

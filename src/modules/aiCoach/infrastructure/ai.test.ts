@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { AiCoachService, PreviousAiMessage } from "@/modules/aiCoach/application";
-import { askCoach, classifyExerciseNames, getTodayLogsCount } from "@/modules/aiCoach/application";
-import type { ExerciseCleanupResult } from "@/modules/aiCoach/domain";
+import type { AiCoachService } from "@/modules/aiCoach/application";
+import {
+  classifyExerciseNames,
+  getTodayLogsCount,
+  requestAdvice,
+} from "@/modules/aiCoach/application";
+import type { CoachingMessage, ExerciseCleanupResult } from "@/modules/aiCoach/domain";
 import type { Event } from "@/modules/events/domain";
 import type { UserProfile } from "@/modules/profile/domain";
 import type { TrainingInsights } from "@/modules/trainingInsights/domain";
@@ -104,7 +108,7 @@ describe("AI application service port", () => {
     }),
   ];
   const mockTrainingSummaries: TrainingSummary[] = [];
-  const mockPreviousMessages: PreviousAiMessage[] = [];
+  const mockPreviousMessages: CoachingMessage[] = [];
 
   beforeEach(() => {
     askMock.mockReset();
@@ -120,7 +124,7 @@ describe("AI application service port", () => {
       value: { responseText: "{}", requestPayload: "payload" },
     });
 
-    await askCoach(aiService, {
+    await requestAdvice(aiService, {
       apiKey: mockApiKey,
       userProfile: mockUserProfile,
       insights: createMockInsights(),

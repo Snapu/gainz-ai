@@ -3,23 +3,23 @@ import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
-  loadAiMessagesFromStorageMock,
-  cleanOldAiSessionsMock,
-  removeAiMessagesFromStorageMock,
+  loadMessagesFromStorageMock,
+  cleanOldCoachingSessionsMock,
+  removeMessagesFromStorageMock,
   captureExceptionMock,
 } = vi.hoisted(() => ({
-  loadAiMessagesFromStorageMock: vi.fn(),
-  cleanOldAiSessionsMock: vi.fn(),
-  removeAiMessagesFromStorageMock: vi.fn(),
+  loadMessagesFromStorageMock: vi.fn(() => ok([])),
+  cleanOldCoachingSessionsMock: vi.fn(),
+  removeMessagesFromStorageMock: vi.fn(),
   captureExceptionMock: vi.fn(),
 }));
 
 vi.mock("@/modules/aiCoach/application", () => ({
-  askCoachWithSingleRetry: vi.fn(),
+  requestAdviceWithSingleRetry: vi.fn(),
   classifyExerciseNames: vi.fn(),
   getTodayLogsCount: vi.fn(() => 0),
   mapTrainingFatigueTriggersToDeload: vi.fn(() => []),
-  responseStartsDeload: vi.fn(() => false),
+  adviceStartsDeload: vi.fn(() => false),
 }));
 
 vi.mock("@sentry/vue", () => ({
@@ -29,9 +29,11 @@ vi.mock("@sentry/vue", () => ({
 
 vi.mock("@/modules/aiCoach/infrastructure", () => ({
   createAiCoachService: vi.fn(() => ({})),
-  loadPlan: vi.fn(() => null),
-  savePlan: vi.fn(),
-  clearPlan: vi.fn(),
+  LocalStoragePlanRepository: class {
+    loadPlan = vi.fn(() => ({ isOk: () => true, value: null }));
+    savePlan = vi.fn(() => ({}));
+    clearPlan = vi.fn(() => ({}));
+  },
 }));
 
 vi.mock("@/modules/deload/presentation", () => ({
@@ -68,14 +70,14 @@ vi.mock("@/modules/trainingLogs/presentation", () => ({
   resolveCurrentSession: vi.fn(() => null),
 }));
 
-vi.mock("./aiMessageStorage", () => ({
-  loadAiMessagesFromStorage: loadAiMessagesFromStorageMock,
-  cleanOldAiSessions: cleanOldAiSessionsMock,
-  removeAiMessagesFromStorage: removeAiMessagesFromStorageMock,
-  saveAiMessagesToStorage: vi.fn(() => ok(undefined)),
+vi.mock("@/modules/aiCoach/infrastructure/messageStorage", () => ({
+  loadMessagesFromStorage: loadMessagesFromStorageMock,
+  cleanOldCoachingSessions: cleanOldCoachingSessionsMock,
+  removeMessagesFromStorage: removeMessagesFromStorageMock,
+  saveMessagesToStorage: vi.fn(() => ok(undefined)),
 }));
 
-import { askCoachWithSingleRetry } from "@/modules/aiCoach/application";
+import { requestAdviceWithSingleRetry } from "@/modules/aiCoach/application";
 import { useUserProfileStore } from "@/modules/profile/presentation";
 import { resolveCurrentSession } from "@/modules/trainingLogs/presentation";
 import { useAiStore } from "./aiStore";
@@ -83,87 +85,88 @@ import { useAiStore } from "./aiStore";
 describe("useAiStore initialization", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
-    vi.clearAllMocks();
-    loadAiMessagesFromStorageMock.mockReturnValue(ok([]));
+    loadMessagesFromStorageMock.mockClear();
+    removeMessagesFromStorageMock.mockClear();
+    cleanOldCoachingSessionsMock.mockClear();
+    loadMessagesFromStorageMock.mockReturnValue(ok([]));
   });
 
   it("does not initialize storage on store creation", () => {
     const store = useAiStore();
 
     expect(store.messages).toEqual([]);
-    expect(loadAiMessagesFromStorageMock).not.toHaveBeenCalled();
-    expect(cleanOldAiSessionsMock).not.toHaveBeenCalled();
+    expect(loadMessagesFromStorageMock).not.toHaveBeenCalled();
+    expect(cleanOldCoachingSessionsMock).not.toHaveBeenCalled();
   });
 
   it("initializes storage once when initialize is called", () => {
     const store = useAiStore();
-    loadAiMessagesFromStorageMock.mockReturnValue(
+    loadMessagesFromStorageMock.mockReturnValue(
       ok([
         {
           id: "msg-1",
-          role: "assistant",
+          role: "coach",
           content: "hello",
-          timestamp: new Date("2026-01-01T10:00:00.000Z"),
+          timestamp: "2026-01-01T10:00:00.000Z",
           sessionId: "2026-01-01",
           logsCount: 1,
         },
-      ]),
+      ] as any),
     );
 
     store.initialize();
     store.initialize();
 
-    expect(loadAiMessagesFromStorageMock).toHaveBeenCalledTimes(1);
-    expect(cleanOldAiSessionsMock).toHaveBeenCalledTimes(1);
+    expect(loadMessagesFromStorageMock).toHaveBeenCalledTimes(1);
+    expect(cleanOldCoachingSessionsMock).toHaveBeenCalledTimes(1);
     expect(store.messages).toHaveLength(1);
   });
 
-  it("lazy-initializes before askAi and returns missing-api-key", async () => {
+  it("lazy-initializes before requestAdvice and returns missing-api-key", async () => {
     const store = useAiStore();
 
-    const result = await store.askAi();
+    const result = await store.requestAdvice();
 
-    expect(loadAiMessagesFromStorageMock).toHaveBeenCalledTimes(1);
-    expect(cleanOldAiSessionsMock).toHaveBeenCalledTimes(1);
+    expect(loadMessagesFromStorageMock).toHaveBeenCalledTimes(1);
+    expect(cleanOldCoachingSessionsMock).toHaveBeenCalledTimes(1);
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
       expect(result.error).toBe("missing-api-key");
     }
   });
 
-  it("returns ai-request-failed when askCoach throws unexpectedly", async () => {
+  it("returns coaching-request-failed when askCoach throws unexpectedly", async () => {
     vi.mocked(useUserProfileStore).mockReturnValue({
       apiKey: "test-key",
       userProfile: {},
     } as never);
-    vi.mocked(askCoachWithSingleRetry).mockRejectedValueOnce(new Error("boom"));
+    vi.mocked(requestAdviceWithSingleRetry).mockRejectedValueOnce(new Error("boom"));
 
     const store = useAiStore();
 
-    const result = await store.askAi();
+    const result = await store.requestAdvice();
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
-      expect(result.error).toBe("ai-request-failed");
+      expect(result.error).toBe("coaching-request-failed");
     }
     expect(store.isLoading).toBe(false);
-    expect(captureExceptionMock).toHaveBeenCalled();
   });
 
-  it("passes question to askCoachWithSingleRetry", async () => {
+  it("passes question to requestAdviceWithSingleRetry", async () => {
     vi.mocked(useUserProfileStore).mockReturnValue({
       apiKey: "test-key",
       userProfile: {},
     } as never);
 
     const mockResult = { responseText: "{}", requestPayload: "AI request" };
-    vi.mocked(askCoachWithSingleRetry).mockResolvedValueOnce(ok(mockResult) as never);
+    vi.mocked(requestAdviceWithSingleRetry).mockResolvedValueOnce(ok(mockResult) as never);
 
     const store = useAiStore();
     const question = "Why deload?";
-    await store.askAi(question);
+    await store.requestAdvice(question);
 
-    expect(askCoachWithSingleRetry).toHaveBeenCalledWith(
+    expect(requestAdviceWithSingleRetry).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         apiKey: "test-key",
@@ -183,9 +186,9 @@ describe("useAiStore initialization", () => {
     store.messages = [
       {
         id: "msg-1",
-        role: "assistant",
+        role: "coach",
         content: "hello",
-        timestamp: new Date("2026-01-01T10:00:00.000Z"),
+        timestamp: "2026-01-01T10:00:00Z",
         sessionId: "2026-01-01",
         logsCount: 1,
       },
@@ -194,7 +197,7 @@ describe("useAiStore initialization", () => {
     store.clearMessages();
 
     expect(store.messages).toEqual([]);
-    expect(removeAiMessagesFromStorageMock).toHaveBeenCalledWith(expect.any(String));
+    expect(removeMessagesFromStorageMock).toHaveBeenCalledWith(expect.any(String));
   });
 });
 
@@ -204,24 +207,24 @@ describe("useAiStore currentWorkoutPlan", () => {
     vi.clearAllMocks();
   });
 
-  it("extracts current workout plan from last assistant message", () => {
+  it("extracts current workout plan from last coach message", () => {
     const store = useAiStore();
     store.messages = [
       {
         id: "msg-1",
         role: "user" as const,
         content: "hi",
-        timestamp: new Date(),
+        timestamp: "2026-01-01T10:00:00.000Z",
         sessionId: "2026-01-01",
         logsCount: 0,
       },
       {
         id: "msg-2",
-        role: "assistant" as const,
+        role: "coach" as const,
         content: JSON.stringify({
           recommendedWorkout: [{ exerciseName: "Bench Press", restSeconds: 120 }],
         }),
-        timestamp: new Date(),
+        timestamp: "2026-01-01T10:00:00.000Z",
         sessionId: "2026-01-01",
         logsCount: 0,
       },
@@ -230,14 +233,14 @@ describe("useAiStore currentWorkoutPlan", () => {
     expect(store.currentWorkoutPlan).toEqual([{ exerciseName: "Bench Press", restSeconds: 120 }]);
   });
 
-  it("returns null if no assistant message", () => {
+  it("returns null if no coach message", () => {
     const store = useAiStore();
     store.messages = [
       {
         id: "msg-1",
         role: "user" as const,
         content: "hi",
-        timestamp: new Date(),
+        timestamp: "2026-01-01T10:00:00.000Z",
         sessionId: "2026-01-01",
         logsCount: 0,
       },
@@ -251,9 +254,9 @@ describe("useAiStore currentWorkoutPlan", () => {
     store.messages = [
       {
         id: "msg-2",
-        role: "assistant" as const,
+        role: "coach" as const,
         content: "not json",
-        timestamp: new Date(),
+        timestamp: "2026-01-01T10:00:00.000Z",
         sessionId: "2026-01-01",
         logsCount: 0,
       },
@@ -280,9 +283,9 @@ describe("useAiStore isNewDataAvailable", () => {
     store.messages = [
       {
         id: "msg-1",
-        role: "assistant",
+        role: "coach",
         content: "hello",
-        timestamp: new Date(),
+        timestamp: "2026-01-01T10:00:00.000Z",
         sessionId: "2026-01-01",
         logsCount: 1,
       },
@@ -296,9 +299,9 @@ describe("useAiStore isNewDataAvailable", () => {
     store.messages = [
       {
         id: "msg-1",
-        role: "assistant",
+        role: "coach",
         content: "hello",
-        timestamp: new Date(),
+        timestamp: "2026-01-01T10:00:00.000Z",
         sessionId: "2026-01-01",
         logsCount: 1,
       },

@@ -35,7 +35,7 @@ const {
   openScratchpads,
   openRequestPayloads,
   scrollContainerRef,
-  assistantMessages,
+  coachMessages,
   activeWorkoutGroups,
   activePlan,
   activeSessionIndex,
@@ -47,7 +47,7 @@ const {
   renderMarkdown,
   formatRestDuration,
   formatTime,
-  debouncedAskAi,
+  debouncedRequestAdvice,
   handleLogExercise,
   handleAskQuestion,
   openGoogleSearch,
@@ -78,13 +78,13 @@ const {
    <!-- TAB: Messages -->
    <template v-if="activeTab === 'messages'">
     <!-- 1. AI Coach Insight Section -->
-    <div v-if="assistantMessages.length > 0" class="flex flex-col gap-3 relative px-1">
+    <div v-if="coachMessages.length > 0" class="flex flex-col gap-3 relative px-1">
      <!-- Header: timestamp + pager -->
      <div class="flex items-center justify-between gap-3 pb-1">
       <span class="text-xs font-medium text-muted-foreground/60 shrink-0">
-       {{ formatTime(assistantMessages[currentPageIndex].timestamp) }}
+       {{ formatTime(coachMessages[currentPageIndex].timestamp) }}
       </span>
-      <div v-if="assistantMessages.length > 1" class="flex items-center gap-2 bg-muted/10 px-2.5 py-0.5 rounded-full border border-muted/10 shrink-0">
+      <div v-if="coachMessages.length > 1" class="flex items-center gap-2 bg-muted/10 px-2.5 py-0.5 rounded-full border border-muted/10 shrink-0">
        <button
         type="button"
         class="text-muted-foreground hover:text-primary transition-colors disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed p-0.5 active:scale-95 cursor-pointer rounded-full hover:bg-muted/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary shrink-0"
@@ -94,12 +94,12 @@ const {
         <ChevronLeft class="w-3.5 h-3.5 shrink-0" />
        </button>
        <span class="text-xs font-bold text-muted-foreground min-w-[28px] text-center select-none shrink-0">
-        {{ currentPageIndex + 1 }} / {{ assistantMessages.length }}
+        {{ currentPageIndex + 1 }} / {{ coachMessages.length }}
        </span>
        <button
         type="button"
         class="text-muted-foreground hover:text-primary transition-colors disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed p-0.5 active:scale-95 cursor-pointer rounded-full hover:bg-muted/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary shrink-0"
-        :disabled="currentPageIndex === assistantMessages.length - 1"
+        :disabled="currentPageIndex === coachMessages.length - 1"
         @click="currentPageIndex++"
        >
         <ChevronRight class="w-3.5 h-3.5 shrink-0" />
@@ -109,74 +109,74 @@ const {
 
      <!-- Message body -->
      <div class="flex flex-col gap-2">
-      <template v-if="assistantMessages[currentPageIndex].parsedData">
+      <template v-if="coachMessages[currentPageIndex].parsedData">
        <div
         class="text-sm leading-relaxed [&_strong]:text-primary [&_strong]:font-bold text-foreground/90 font-medium"
-        v-html="renderMarkdown(assistantMessages[currentPageIndex].parsedData?.coachMessage ?? '')"
+        v-html="renderMarkdown(coachMessages[currentPageIndex].parsedData?.coachMessage ?? '')"
        />
       </template>
       <template v-else>
        <div
         class="text-sm leading-relaxed [&_strong]:text-primary [&_strong]:font-bold text-foreground/90 font-medium"
-        v-html="renderMarkdown(assistantMessages[currentPageIndex].rawContent)"
+        v-html="renderMarkdown(coachMessages[currentPageIndex].rawContent)"
        />
       </template>
 
       <!-- Sent data collapsible -->
-      <div v-if="assistantMessages[currentPageIndex].requestPayload" class="mt-1">
+      <div v-if="coachMessages[currentPageIndex].requestPayload" class="mt-1">
        <button
         type="button"
         class="flex items-center gap-2 text-xs text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-xl"
-        @click="openRequestPayloads = openRequestPayloads.includes(assistantMessages[currentPageIndex].id) ? openRequestPayloads.filter(id => id !== assistantMessages[currentPageIndex].id) : [...openRequestPayloads, assistantMessages[currentPageIndex].id]"
+        @click="openRequestPayloads = openRequestPayloads.includes(coachMessages[currentPageIndex].id) ? openRequestPayloads.filter(id => id !== coachMessages[currentPageIndex].id) : [...openRequestPayloads, coachMessages[currentPageIndex].id]"
        >
         <ChevronDown
          class="w-3 h-3 transition-transform"
-         :class="openRequestPayloads.includes(assistantMessages[currentPageIndex].id) ? 'rotate-180' : ''"
+         :class="openRequestPayloads.includes(coachMessages[currentPageIndex].id) ? 'rotate-180' : ''"
         />
         Sent Data
        </button>
        <pre
-        v-if="openRequestPayloads.includes(assistantMessages[currentPageIndex].id)"
+        v-if="openRequestPayloads.includes(coachMessages[currentPageIndex].id)"
         class="font-mono font-medium text-xs text-muted-foreground/50 bg-muted/20 rounded-xl p-2 overflow-x-auto whitespace-pre-wrap break-all mt-2"
-       >{{ assistantMessages[currentPageIndex].requestPayload }}</pre>
+       >{{ coachMessages[currentPageIndex].requestPayload }}</pre>
       </div>
 
       <!-- Scratchpad / Reasoning collapsible -->
-      <div v-if="assistantMessages[currentPageIndex].parsedData?.scratchpad" class="mt-1">
+      <div v-if="coachMessages[currentPageIndex].parsedData?.scratchpad" class="mt-1">
        <button
         type="button"
         class="flex items-center gap-2 text-xs text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-xl"
-        @click="openScratchpads = openScratchpads.includes(assistantMessages[currentPageIndex].id) ? openScratchpads.filter(id => id !== assistantMessages[currentPageIndex].id) : [...openScratchpads, assistantMessages[currentPageIndex].id]"
+        @click="openScratchpads = openScratchpads.includes(coachMessages[currentPageIndex].id) ? openScratchpads.filter(id => id !== coachMessages[currentPageIndex].id) : [...openScratchpads, coachMessages[currentPageIndex].id]"
        >
         <ChevronDown
          class="w-3 h-3 transition-transform"
-         :class="openScratchpads.includes(assistantMessages[currentPageIndex].id) ? 'rotate-180' : ''"
+         :class="openScratchpads.includes(coachMessages[currentPageIndex].id) ? 'rotate-180' : ''"
         />
         Reasoning
        </button>
        <pre
-        v-if="openScratchpads.includes(assistantMessages[currentPageIndex].id)"
+        v-if="openScratchpads.includes(coachMessages[currentPageIndex].id)"
         class="font-mono font-medium text-xs text-muted-foreground/50 bg-muted/20 rounded-xl p-2 overflow-x-auto whitespace-pre-wrap break-all mt-2"
-       >{{ assistantMessages[currentPageIndex].parsedData?.scratchpad }}</pre>
+       >{{ coachMessages[currentPageIndex].parsedData?.scratchpad }}</pre>
       </div>
      </div>
     </div>
 
     <!-- Loading State (initial) -->
-    <div v-if="aiStore.isLoading && assistantMessages.length === 0" class="flex flex-col items-center justify-center py-20 text-center gap-3">
+    <div v-if="aiStore.isLoading && coachMessages.length === 0" class="flex flex-col items-center justify-center py-20 text-center gap-3">
      <Loader2 class="w-8 h-8 animate-spin text-primary" />
      <p class="text-sm font-bold tracking-tight text-muted-foreground animate-pulse">Analyzing your workouts...</p>
     </div>
 
     <!-- Empty Fallback -->
-    <div v-else-if="!aiStore.isLoading && assistantMessages.length === 0" class="flex flex-col items-center justify-center py-12 text-center opacity-50">
+    <div v-else-if="!aiStore.isLoading && coachMessages.length === 0" class="flex flex-col items-center justify-center py-12 text-center opacity-50">
      <Sparkles class="w-10 h-10 mb-3 text-primary" />
      <p class="font-bold text-base">No insights available</p>
      <p class="text-sm text-muted-foreground mt-1 max-w-[260px]">Log some exercises first, then come back for personalized coaching.</p>
     </div>
 
     <!-- Inline typing indicator (with existing insights) -->
-    <div v-if="aiStore.isLoading && assistantMessages.length > 0" class="flex items-center gap-2 text-xs text-muted-foreground/60 animate-pulse py-2 justify-center">
+    <div v-if="aiStore.isLoading && coachMessages.length > 0" class="flex items-center gap-2 text-xs text-muted-foreground/60 animate-pulse py-2 justify-center">
      <Loader2 class="w-3.5 h-3.5 animate-spin text-primary" />
      <span>Coach is thinking...</span>
     </div>

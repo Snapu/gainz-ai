@@ -1,5 +1,5 @@
 import DOMPurify from "dompurify";
-import type { AiResponseData } from "@/modules/aiCoach/presentation";
+import type { CoachingAdvice } from "@/modules/aiCoach/presentation";
 
 // ---------------------------------------------------------------------------
 // View-model types
@@ -23,10 +23,10 @@ export interface DisplayWorkoutGroup {
 
 export interface DisplayInsight {
   id: string;
-  timestamp: Date;
+  timestamp: string;
   isLatest: boolean;
   rawContent: string;
-  parsedData: AiResponseData | null;
+  parsedData: CoachingAdvice | null;
   requestPayload: string | null;
 }
 
@@ -34,12 +34,12 @@ export interface DisplayInsight {
 // AI response parsing
 // ---------------------------------------------------------------------------
 
-/** Tries to parse raw AI message content as structured AiResponseData. Returns null on failure. */
-export function tryParseAiResponse(content: string): AiResponseData | null {
+/** Tries to parse raw AI message content as structured CoachingAdvice. Returns null on failure. */
+export function tryParseCoachingAdvice(content: string): CoachingAdvice | null {
   try {
     const parsed = JSON.parse(content);
     if (parsed && typeof parsed.coachMessage === "string") {
-      return parsed as AiResponseData;
+      return parsed as CoachingAdvice;
     }
     return null;
   } catch {

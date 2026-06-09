@@ -118,7 +118,7 @@ function evictMapIfNeeded(map: StoredMap): StoredMap {
  *
  * Call this after each successful AI response.
  */
-export function learnFromAiResponse(
+export function learnFromCoachingAdvice(
   exercises: Array<{
     exerciseName: string;
     primaryMuscle?: string;

@@ -1,9 +1,9 @@
 import { useDebounceFn } from "@vueuse/core";
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import type { AiResponseData } from "@/modules/aiCoach/presentation";
-import { useAiStore } from "@/modules/aiCoach/presentation";
+import { type CoachingAdvice, useAiStore } from "@/modules/aiCoach/presentation";
 import { useRestTimerStore } from "@/modules/platform/presentation";
+import { isoDateString } from "@/modules/sharedKernel/domain";
 import { formatRestDuration } from "@/modules/sharedKernel/presentation";
 import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
 import { useToast } from "@/shared/presentation/composables/useToast";
@@ -17,10 +17,10 @@ import {
   parseWeight,
   renderMarkdown,
   splitReps,
-  tryParseAiResponse,
+  tryParseCoachingAdvice,
 } from "../helpers/aiCoachPageHelpers";
 
-export type { AiResponseData, DisplayExercise, DisplayInsight, DisplayWorkoutGroup };
+export type { CoachingAdvice, DisplayExercise, DisplayInsight, DisplayWorkoutGroup };
 
 export function useAICoachPageViewModel() {
   const router = useRouter();
@@ -57,12 +57,12 @@ export function useAICoachPageViewModel() {
   // Derived data
   // ---------------------------------------------------------------------------
 
-  const assistantMessages = computed<DisplayInsight[]>(() => {
+  const coachMessages = computed<DisplayInsight[]>(() => {
     const allMessages = aiStore.messages;
     const indexById = new Map(allMessages.map((m, i) => [m.id, i]));
-    const assistantMsgs = allMessages.filter((m) => m.role === "assistant");
-    return assistantMsgs.map((msg, idx) => {
-      const parsedData = tryParseAiResponse(msg.content);
+    const coachMessages = allMessages.filter((m) => m.role === "coach");
+    return coachMessages.map((msg, idx) => {
+      const parsedData = tryParseCoachingAdvice(msg.content);
       const msgIndex = indexById.get(msg.id);
       const previous =
         typeof msgIndex === "number" && msgIndex > 0 ? allMessages[msgIndex - 1] : null;
@@ -73,7 +73,7 @@ export function useAICoachPageViewModel() {
       return {
         id: msg.id,
         timestamp: msg.timestamp,
-        isLatest: idx === assistantMsgs.length - 1,
+        isLatest: idx === coachMessages.length - 1,
         rawContent: msg.content,
         parsedData,
         requestPayload,
@@ -96,18 +96,47 @@ export function useAICoachPageViewModel() {
     return map;
   });
 
+  // ---------------------------------------------------------------------------
+  // Week tracking
+  // ---------------------------------------------------------------------------
+
+  /** Which week (1 or 2) of the current mesocycle we're in, based on plan creation date. */
+  const currentWeekNumber = computed<number>(() => {
+    if (!aiStore.activePlan) return 1;
+    return aiStore.activePlan.getCurrentWeekNumber(new Date());
+  });
+
+  /** Today's session directly from the stored plan — no AI call needed. */
+  const planDerivedWorkout = computed<DisplayExercise[] | null>(() => {
+    if (!aiStore.activePlan) return null;
+    const currentDay = new Date().getDay();
+    const weekNum = currentWeekNumber.value;
+    const session = aiStore.activePlan.getPlannedSessionForDay(currentDay, weekNum);
+    return (session?.exercises as DisplayExercise[]) ?? null;
+  });
+
+  /**
+   * The active workout to display.
+   * Priority: an AI recommendedWorkout from today's messages > the plan-derived workout.
+   * This prevents stale AI responses from a previous day overriding today's plan.
+   */
   const activeWorkout = computed<DisplayExercise[] | null>(() => {
-    const assistantMsgs = aiStore.messages
-      .filter((m) => m.role === "assistant")
+    const today = isoDateString(new Date());
+    const coachMessagesList = aiStore.messages
+      .filter((m) => m.role === "coach")
       .slice()
       .reverse();
-    for (const msg of assistantMsgs) {
-      const parsed = tryParseAiResponse(msg.content);
+    for (const msg of coachMessagesList) {
+      // Only use AI recommendations generated today (local timezone)
+      const msgDate = isoDateString(new Date(msg.timestamp));
+      if (msgDate !== today) break;
+      const parsed = tryParseCoachingAdvice(msg.content);
       if (parsed?.recommendedWorkout && parsed.recommendedWorkout.length > 0) {
         return parsed.recommendedWorkout as DisplayExercise[];
       }
     }
-    return null;
+    // Fall back to the stored plan for today's session
+    return planDerivedWorkout.value;
   });
 
   const completedExercises = computed(() => {
@@ -131,11 +160,15 @@ export function useAICoachPageViewModel() {
   const activeSessionIndex = computed<number>(() => {
     if (!aiStore.activePlan) return -1;
     const currentDay = new Date().getDay();
-    // Find the session matching today's day of week
-    const index = aiStore.activePlan.sessions.findIndex((s) => s.dayOfWeek === currentDay);
-    // If none matches today, default to the first session for now
-    // A more advanced heuristic could look for the next uncompleted session
-    return index >= 0 ? index : 0;
+    const weekNum = currentWeekNumber.value;
+    // Match both day and week for correct W1/W2 highlighting
+    const exactMatch = aiStore.activePlan.sessions.findIndex(
+      (s) => s.dayOfWeek === currentDay && s.weekNumber === weekNum,
+    );
+    if (exactMatch >= 0) return exactMatch;
+    // Fallback: match by day only
+    const dayMatch = aiStore.activePlan.sessions.findIndex((s) => s.dayOfWeek === currentDay);
+    return dayMatch >= 0 ? dayMatch : -1; // -1 = rest day, not 0
   });
 
   const activePlan = computed(() => aiStore.activePlan);
@@ -228,7 +261,7 @@ export function useAICoachPageViewModel() {
   function openGoogleSearch(exerciseName?: string) {
     if (!exerciseName) return;
     window.open(
-      `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(exerciseName + " exercise")}`,
+      `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${exerciseName} exercise`)}`,
       "_blank",
       "noopener,noreferrer",
     );
@@ -244,7 +277,7 @@ export function useAICoachPageViewModel() {
           description: "Plan JSON copied to clipboard for debugging.",
         });
       })
-      .catch((err) => {
+      .catch((_err) => {
         toast({
           title: "Error",
           description: "Failed to copy plan JSON.",
@@ -257,7 +290,7 @@ export function useAICoachPageViewModel() {
     const question = userQuestion.value.trim();
     if (!question) return;
     userQuestion.value = "";
-    aiStore.askAi(question).then((result) => {
+    aiStore.requestAdvice(question).then((result) => {
       if (result.isErr()) {
         userQuestion.value = question;
         toast({
@@ -293,8 +326,8 @@ export function useAICoachPageViewModel() {
     toast({ title: "AI Coaching Error", description, variant: "destructive" });
   }
 
-  const debouncedAskAi = useDebounceFn(() => {
-    aiStore.askAi().then((result) => {
+  const debouncedRequestAdvice = useDebounceFn(() => {
+    aiStore.requestAdvice().then((result) => {
       if (result.isErr()) {
         const description =
           result.error === "missing-api-key"
@@ -338,8 +371,9 @@ export function useAICoachPageViewModel() {
   // Formatting helpers (passed through to template)
   // ---------------------------------------------------------------------------
 
-  function formatTime(d: Date) {
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  function formatTime(d: Date | string) {
+    const date = typeof d === "string" ? new Date(d) : d;
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 
   // ---------------------------------------------------------------------------
@@ -348,18 +382,29 @@ export function useAICoachPageViewModel() {
 
   onMounted(() => {
     aiStore.initialize();
-    if (assistantMessages.value.length === 0) {
-      if (!aiStore.activePlan) {
-        aiStore.generateNewPlan().then((result) => {
-          if (result.isErr()) handleAiError(result.error);
-          else scrollToTop();
-        });
-      } else {
-        debouncedAskAi();
-      }
+
+    const hasPlan = !!aiStore.activePlan;
+    const hasMessages = coachMessages.value.length > 0;
+
+    const isRestDay = hasPlan && planDerivedWorkout.value === null;
+
+    if (!hasPlan && !hasMessages) {
+      // Truly fresh start: no plan and no messages → generate first mesocycle
+      aiStore.generateNewPlan().then((result) => {
+        if (result.isErr()) handleAiError(result.error);
+        else scrollToTop();
+      });
+    } else if (isRestDay) {
+      // Rest day: show the plan overview instead of triggering an AI call
+      activeTab.value = "plan";
+    } else if (aiStore.isNewDataAvailable) {
+      // Plan exists and new training data is available → ask AI to react
+      debouncedRequestAdvice();
     } else if (activeWorkout.value?.length) {
+      // Existing workout with no new data → jump straight to Today tab
       activeTab.value = "today";
     }
+
     scrollToTop();
     window.addEventListener("keydown", onCoachKeydown);
   });
@@ -368,9 +413,9 @@ export function useAICoachPageViewModel() {
     window.removeEventListener("keydown", onCoachKeydown);
   });
 
-  // Sync page index when new messages arrive
+  // Sync page index when new coach messages arrive
   watch(
-    () => assistantMessages.value.length,
+    () => coachMessages.value.length,
     (newLength) => {
       if (newLength > 0) {
         currentPageIndex.value = newLength - 1;
@@ -381,7 +426,7 @@ export function useAICoachPageViewModel() {
 
   // Scroll to top when new messages arrive
   watch(
-    () => assistantMessages.value.length,
+    () => aiStore.messages.length,
     (newLength, oldLength) => {
       if (newLength > (oldLength || 0)) {
         scrollToTop();
@@ -406,10 +451,12 @@ export function useAICoachPageViewModel() {
     openScratchpads,
     openRequestPayloads,
     scrollContainerRef,
-    assistantMessages,
+    coachMessages,
     activeWorkoutGroups,
     activePlan,
     activeSessionIndex,
+    currentWeekNumber,
+    planDerivedWorkout,
     completedExercises,
     remainingExercises,
     cooldownProgressPercent,
@@ -419,7 +466,7 @@ export function useAICoachPageViewModel() {
     renderMarkdown,
     formatRestDuration,
     formatTime,
-    debouncedAskAi,
+    debouncedRequestAdvice,
     handleLogExercise,
     handleAskQuestion,
     openGoogleSearch,

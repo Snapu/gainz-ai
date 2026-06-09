@@ -13,7 +13,8 @@ import {
   type WorkoutSession,
 } from "@/modules/trainingLogs/application";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
-import type { PreviousAiMessage, TrainingPlan } from "../domain/types";
+import type { TrainingPlan } from "../domain";
+import type { CoachingMessage } from "../domain/types";
 
 const INITIAL_LOG_WINDOW_DAYS = 14;
 const EXTENDED_LOG_WINDOW_DAYS = 28;
@@ -163,14 +164,14 @@ export function getInitialLogsWindow(exerciseLogs: ExerciseLog[]): {
 }
 
 export function buildPriorPlanSummary(
-  previousMessages: PreviousAiMessage[],
+  previousMessages: CoachingMessage[],
   todayLogs: ExerciseLog[],
 ): string | null {
-  const assistantMsgs = previousMessages.filter((m) => m.role === "assistant");
+  const coachMessages = previousMessages.filter((m) => m.role === "coach");
 
   let parsedPlan: Record<string, unknown> | null = null;
-  for (let i = assistantMsgs.length - 1; i >= 0; i--) {
-    const msg = assistantMsgs[i];
+  for (let i = coachMessages.length - 1; i >= 0; i--) {
+    const msg = coachMessages[i];
     const parsed = Result.fromThrowable(
       () => JSON.parse(msg.content),
       () => null,
@@ -237,7 +238,7 @@ export function buildPriorPlanSummary(
 
 export function getRecentExerciseNames(
   exerciseLogs: ExerciseLog[],
-  previousMessages: PreviousAiMessage[],
+  previousMessages: CoachingMessage[],
   days = 90,
 ): Set<string> {
   const names = new Set<string>();
@@ -251,9 +252,9 @@ export function getRecentExerciseNames(
     }
   }
 
-  const assistantMsgs = previousMessages.filter((m) => m.role === "assistant");
-  for (let i = assistantMsgs.length - 1; i >= 0; i--) {
-    const msg = assistantMsgs[i];
+  const coachMessages = previousMessages.filter((m) => m.role === "coach");
+  for (let i = coachMessages.length - 1; i >= 0; i--) {
+    const msg = coachMessages[i];
     const parsed = Result.fromThrowable(
       () => JSON.parse(msg.content) as Record<string, unknown>,
       () => null,
@@ -478,6 +479,7 @@ export function formatExercises(
 export function formatPlanForPrompt(
   plan: TrainingPlan,
   mode: "planning" | "execution" = "execution",
+  currentWeekNumber?: number,
 ): string {
   const lines: string[] = [];
   const createdAtStr = isoDateString(new Date(plan.createdAt));
@@ -488,11 +490,18 @@ export function formatPlanForPrompt(
 
   for (const session of plan.sessions) {
     const dayStr = dayNames[session.dayOfWeek] ?? `Day${session.dayOfWeek}`;
+
+    // Determine if this session is today (considering week number when available)
+    const isToday =
+      session.dayOfWeek === currentDayOfWeek &&
+      (currentWeekNumber == null || session.weekNumber === currentWeekNumber);
+
+    const todayMarker = isToday ? " [TODAY]" : "";
     lines.push(
-      `W${session.weekNumber}-${dayStr} ${session.sessionLabel} (${session.focusDescription}):`,
+      `W${session.weekNumber}-${dayStr} ${session.sessionLabel} (${session.focusDescription}):${todayMarker}`,
     );
 
-    if (mode === "execution" && session.dayOfWeek !== currentDayOfWeek) {
+    if (mode === "execution" && !isToday) {
       continue;
     }
 

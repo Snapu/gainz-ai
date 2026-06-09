@@ -1,2 +1,2 @@
-export * from "./postProcessAiResponse";
+export * from "./postProcessCoachingAdvice";
 export * from "./useCases";

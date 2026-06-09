@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAiStore } from "@/modules/aiCoach/presentation";
 import { useRestTimerStore } from "@/modules/platform/presentation";
 import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
-import type { AiResponseData } from "./useAICoachPageViewModel";
+import type { CoachingAdvice } from "./useAICoachPageViewModel";
 import { useAICoachPageViewModel } from "./useAICoachPageViewModel";
 
 vi.mock("vue-router", () => ({
@@ -52,8 +52,8 @@ describe("useAICoachPageViewModel", () => {
       aiStore.messages = [
         {
           id: "msg1",
-          role: "assistant",
-          timestamp: new Date(),
+          role: "coach",
+          timestamp: new Date().toISOString(),
           sessionId: new Date().toISOString().split("T")[0] ?? "",
           logsCount: 0,
           content: JSON.stringify({
@@ -62,7 +62,7 @@ describe("useAICoachPageViewModel", () => {
               { exerciseName: "Bench Press", targetSets: 3, targetReps: "8-10" },
               { exerciseName: "Squat", targetSets: 3, targetReps: "8-10" },
             ],
-          } as AiResponseData),
+          } as CoachingAdvice),
         },
       ];
 
@@ -82,8 +82,8 @@ describe("useAICoachPageViewModel", () => {
       aiStore.messages = [
         {
           id: "msg1",
-          role: "assistant",
-          timestamp: new Date(),
+          role: "coach",
+          timestamp: new Date().toISOString(),
           sessionId: new Date().toISOString().split("T")[0] ?? "",
           logsCount: 0,
           content: JSON.stringify({
@@ -102,7 +102,7 @@ describe("useAICoachPageViewModel", () => {
                 supersetId: "arms1",
               },
             ],
-          } as AiResponseData),
+          } as CoachingAdvice),
         },
       ];
 

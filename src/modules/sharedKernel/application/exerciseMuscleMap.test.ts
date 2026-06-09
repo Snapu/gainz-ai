@@ -5,7 +5,7 @@ import {
   clearLearnedMap,
   getLearnedMapSize,
   getLearnedMuscleMap,
-  learnFromAiResponse,
+  learnFromCoachingAdvice,
 } from "@/modules/sharedKernel/application";
 
 const repository = createExerciseMuscleMapRepository();
@@ -18,26 +18,32 @@ afterEach(() => {
   clearLearnedMap(repository);
 });
 
-describe("learnFromAiResponse", () => {
+describe("learnFromCoachingAdvice", () => {
   it("does nothing for empty input", () => {
-    learnFromAiResponse([], repository);
+    learnFromCoachingAdvice([], repository);
     expect(getLearnedMapSize(repository)).toBe(0);
   });
 
   it("learns a valid exercise→muscle mapping", () => {
-    learnFromAiResponse([{ exerciseName: "Cable Crossover", primaryMuscle: "Chest" }], repository);
+    learnFromCoachingAdvice(
+      [{ exerciseName: "Cable Crossover", primaryMuscle: "Chest" }],
+      repository,
+    );
     const map = getLearnedMuscleMap(repository);
     expect(map["cable crossover"]?.primaryMuscle).toBe("Chest");
   });
 
   it("normalizes the key to lowercase", () => {
-    learnFromAiResponse([{ exerciseName: "CABLE CROSSOVER", primaryMuscle: "Chest" }], repository);
+    learnFromCoachingAdvice(
+      [{ exerciseName: "CABLE CROSSOVER", primaryMuscle: "Chest" }],
+      repository,
+    );
     const map = getLearnedMuscleMap(repository);
     expect(map["cable crossover"]).toBeDefined();
   });
 
   it("rejects exercises with invalid primaryMuscle", () => {
-    learnFromAiResponse(
+    learnFromCoachingAdvice(
       [{ exerciseName: "Mystery Move", primaryMuscle: "InvalidMuscle" }],
       repository,
     );
@@ -45,23 +51,23 @@ describe("learnFromAiResponse", () => {
   });
 
   it("accepts legacy muscleGroup field as primaryMuscle fallback", () => {
-    learnFromAiResponse([{ exerciseName: "Reverse Fly", muscleGroup: "Back" }], repository);
+    learnFromCoachingAdvice([{ exerciseName: "Reverse Fly", muscleGroup: "Back" }], repository);
     const map = getLearnedMuscleMap(repository);
     expect(map["reverse fly"]?.primaryMuscle).toBe("Back");
   });
 
   it("skips entries with no exerciseName", () => {
-    learnFromAiResponse([{ exerciseName: "", primaryMuscle: "Chest" }], repository);
+    learnFromCoachingAdvice([{ exerciseName: "", primaryMuscle: "Chest" }], repository);
     expect(getLearnedMapSize(repository)).toBe(0);
   });
 
   it("skips entries with no primaryMuscle or muscleGroup", () => {
-    learnFromAiResponse([{ exerciseName: "Mystery Move" }], repository);
+    learnFromCoachingAdvice([{ exerciseName: "Mystery Move" }], repository);
     expect(getLearnedMapSize(repository)).toBe(0);
   });
 
   it("stores valid secondary muscles", () => {
-    learnFromAiResponse(
+    learnFromCoachingAdvice(
       [
         {
           exerciseName: "Cable Crossover",
@@ -77,7 +83,7 @@ describe("learnFromAiResponse", () => {
   });
 
   it("silently drops secondary muscles with invalid muscle group", () => {
-    learnFromAiResponse(
+    learnFromCoachingAdvice(
       [
         {
           exerciseName: "Cable Crossover",
@@ -92,7 +98,7 @@ describe("learnFromAiResponse", () => {
   });
 
   it("clamps secondary contribution to [0, 1]", () => {
-    learnFromAiResponse(
+    learnFromCoachingAdvice(
       [
         {
           exerciseName: "Cable Crossover",
@@ -108,14 +114,14 @@ describe("learnFromAiResponse", () => {
 
   it("does not overwrite exercises already in the default activation map", () => {
     // "Bench Press" is in the default map — AI should not override it
-    learnFromAiResponse([{ exerciseName: "Bench Press", primaryMuscle: "Back" }], repository);
+    learnFromCoachingAdvice([{ exerciseName: "Bench Press", primaryMuscle: "Back" }], repository);
     const map = getLearnedMuscleMap(repository);
     // Should not appear in learned map (or if it does, not with "Back")
     expect(map["bench press"]?.primaryMuscle).not.toBe("Back");
   });
 
   it("learns multiple exercises in one call", () => {
-    learnFromAiResponse(
+    learnFromCoachingAdvice(
       [
         { exerciseName: "Cable Crossover", primaryMuscle: "Chest" },
         { exerciseName: "Reverse Fly", primaryMuscle: "Back" },

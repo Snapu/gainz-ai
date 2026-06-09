@@ -1,16 +1,26 @@
 import { err, ok, Result, type Result as ResultType } from "neverthrow";
 
-interface AiMessageRecord {
+interface MessageRecord {
   timestamp: Date | string;
 }
 
-export type AiMessageStorageError = "load-failed" | "save-failed";
+export type MessageStorageError = "load-failed" | "save-failed";
 
 const STORAGE_KEY = "ai-sessions-v1";
 const LEGACY_STORAGE_KEY_PREFIX = "ai-messages-";
-const MAX_SESSION_AGE_DAYS = 7;
+// Match plan cycle length so messages survive the full 2-week mesocycle.
+// Plan-scoped session IDs (plan-YYYY-MM-DD) need this to stay alive for 28 days.
+const MAX_SESSION_AGE_DAYS = 28;
 
-type SessionsMap = Record<string, AiMessageRecord[]>;
+export function createPlanSessionId(dateIsoString: string): string {
+  return `plan-${dateIsoString}`;
+}
+
+export function extractDateFromSessionId(sessionId: string): string {
+  return sessionId.startsWith("plan-") ? sessionId.slice(5) : sessionId;
+}
+
+type SessionsMap = Record<string, MessageRecord[]>;
 
 function getSessionsMap(): ResultType<SessionsMap, "load-failed"> {
   const readStoredResult = Result.fromThrowable(
@@ -40,7 +50,7 @@ function saveSessionsMap(sessionsMap: SessionsMap): ResultType<void, "save-faile
   )();
 }
 
-export function loadAiMessagesFromStorage<T extends AiMessageRecord>(
+export function loadMessagesFromStorage<T extends MessageRecord>(
   sessionId: string,
 ): ResultType<T[], "load-failed"> {
   const mapResult = getSessionsMap();
@@ -49,15 +59,10 @@ export function loadAiMessagesFromStorage<T extends AiMessageRecord>(
   const sessionMessages = mapResult.value[sessionId];
   if (!sessionMessages || !Array.isArray(sessionMessages)) return ok([]);
 
-  return ok(
-    sessionMessages.map((message) => ({
-      ...(message as unknown as T),
-      timestamp: new Date(message.timestamp),
-    })),
-  );
+  return ok(sessionMessages as T[]);
 }
 
-export function saveAiMessagesToStorage<T extends AiMessageRecord>(
+export function saveMessagesToStorage<T extends MessageRecord>(
   sessionId: string,
   messages: T[],
 ): ResultType<void, "save-failed"> {
@@ -68,7 +73,7 @@ export function saveAiMessagesToStorage<T extends AiMessageRecord>(
   return saveSessionsMap(sessionsMap);
 }
 
-export function removeAiMessagesFromStorage(sessionId: string): void {
+export function removeMessagesFromStorage(sessionId: string): void {
   const mapResult = getSessionsMap();
   if (mapResult.isOk()) {
     delete mapResult.value[sessionId];
@@ -76,7 +81,7 @@ export function removeAiMessagesFromStorage(sessionId: string): void {
   }
 }
 
-export function cleanOldAiSessions(): void {
+export function cleanOldCoachingSessions(): void {
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - MAX_SESSION_AGE_DAYS);
   const cutoffIsoString = cutoffDate.toISOString().slice(0, 10);
@@ -87,7 +92,9 @@ export function cleanOldAiSessions(): void {
     let hasChanges = false;
 
     for (const sessionId of Object.keys(sessionsMap)) {
-      if (sessionId < cutoffIsoString) {
+      // Extract the date portion from both "2026-06-04" and "plan-2026-06-04" formats
+      const dateStr = extractDateFromSessionId(sessionId);
+      if (dateStr < cutoffIsoString) {
         delete sessionsMap[sessionId];
         hasChanges = true;
       }

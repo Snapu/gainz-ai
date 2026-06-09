@@ -9,35 +9,35 @@ import {
   splitReps,
   splitWeight,
   titleClass,
-  tryParseAiResponse,
+  tryParseCoachingAdvice,
 } from "./aiCoachPageHelpers";
 
 // ---------------------------------------------------------------------------
-// tryParseAiResponse
+// tryParseCoachingAdvice
 // ---------------------------------------------------------------------------
-describe("tryParseAiResponse", () => {
+describe("tryParseCoachingAdvice", () => {
   it("returns parsed data when JSON contains coachMessage", () => {
     const content = JSON.stringify({ coachMessage: "Great job!", scratchpad: "thinking..." });
-    const result = tryParseAiResponse(content);
+    const result = tryParseCoachingAdvice(content);
     expect(result).toEqual({ coachMessage: "Great job!", scratchpad: "thinking..." });
   });
 
   it("returns null when JSON is valid but missing coachMessage", () => {
     const content = JSON.stringify({ recommendedWorkout: [] });
-    expect(tryParseAiResponse(content)).toBeNull();
+    expect(tryParseCoachingAdvice(content)).toBeNull();
   });
 
   it("returns null for invalid JSON", () => {
-    expect(tryParseAiResponse("not json")).toBeNull();
+    expect(tryParseCoachingAdvice("not json")).toBeNull();
   });
 
   it("returns null for empty string", () => {
-    expect(tryParseAiResponse("")).toBeNull();
+    expect(tryParseCoachingAdvice("")).toBeNull();
   });
 
   it("returns null when coachMessage is not a string", () => {
     const content = JSON.stringify({ coachMessage: 42 });
-    expect(tryParseAiResponse(content)).toBeNull();
+    expect(tryParseCoachingAdvice(content)).toBeNull();
   });
 });
 

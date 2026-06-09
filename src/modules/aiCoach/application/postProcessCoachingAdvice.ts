@@ -1,19 +1,24 @@
 import type { DeloadStatus } from "@/modules/trainingInsights/domain";
-import { clampRestSeconds, classifyExercise } from "@/modules/trainingInsights/domain";
+import { clampRestSeconds } from "@/modules/trainingInsights/domain";
 import type { WorkoutPhase } from "@/modules/trainingLogs/application";
-import type { AiResponseData } from "../domain/types";
+import type { CoachingAdvice } from "../domain/types";
 
 /**
  * Enforces domain invariants on the raw AI response.
  * Pure function separated from the external I/O adapter.
  */
-export function postProcessAiResponse(
-  parsedAiResponse: AiResponseData,
+export function adviceStartsDeload(advice: CoachingAdvice | null | undefined): boolean {
+  if (!advice) return false;
+  return advice.startDeload === true;
+}
+
+export function postProcessCoachingAdvice(
+  parsedCoachingAdvice: CoachingAdvice,
   phase: WorkoutPhase,
   deloadStatus: DeloadStatus,
-): AiResponseData {
+): CoachingAdvice {
   // We clone the object to avoid mutating the original
-  const cleaned: AiResponseData = { ...parsedAiResponse };
+  const cleaned: CoachingAdvice = { ...parsedCoachingAdvice };
 
   // 1. Phase orchestration: user is done, no new workout needed
   if (phase === "post-workout") {

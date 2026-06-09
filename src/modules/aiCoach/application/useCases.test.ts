@@ -1,6 +1,7 @@
 import { err, errAsync, ok, okAsync } from "neverthrow";
 import { describe, expect, it, vi } from "vitest";
-import { type AiCoachService, askCoachWithSingleRetry, responseStartsDeload } from "./useCases";
+import type { CoachingAdvice } from "../domain/types";
+import { type AiCoachService, requestAdviceWithSingleRetry } from "./useCases";
 
 function makeService(askImpl: AiCoachService["ask"]): AiCoachService {
   return {
@@ -16,10 +17,12 @@ describe("aiCoach application use-cases", () => {
 
     const ask = vi
       .fn<AiCoachService["ask"]>()
-      .mockReturnValueOnce(errAsync("ai-request-failed"))
-      .mockReturnValueOnce(okAsync({ responseText: "{}", requestPayload: "payload" }));
+      .mockReturnValueOnce(errAsync("coaching-request-failed"))
+      .mockReturnValueOnce(
+        okAsync({ advice: { coachMessage: "Hello" } as CoachingAdvice, requestPayload: "payload" }),
+      );
 
-    const runPromise = askCoachWithSingleRetry(
+    const runPromise = requestAdviceWithSingleRetry(
       makeService(ask),
       {
         apiKey: "api-key",
@@ -38,7 +41,7 @@ describe("aiCoach application use-cases", () => {
     const result = await runPromise;
 
     expect(ask).toHaveBeenCalledTimes(2);
-    expect(result).toEqual(ok({ responseText: "{}", requestPayload: "payload" }));
+    expect(result).toEqual(ok({ advice: { coachMessage: "Hello" }, requestPayload: "payload" }));
 
     vi.useRealTimers();
   });
@@ -46,7 +49,7 @@ describe("aiCoach application use-cases", () => {
   it("does not retry missing-api-key failures", async () => {
     const ask = vi.fn<AiCoachService["ask"]>().mockReturnValue(errAsync("missing-api-key"));
 
-    const result = await askCoachWithSingleRetry(makeService(ask), {
+    const result = await requestAdviceWithSingleRetry(makeService(ask), {
       apiKey: undefined,
       userProfile: {} as never,
       insights: {} as never,
@@ -57,11 +60,5 @@ describe("aiCoach application use-cases", () => {
 
     expect(ask).toHaveBeenCalledTimes(1);
     expect(result).toEqual(err("missing-api-key"));
-  });
-
-  it("parses startDeload safely from response JSON", () => {
-    expect(responseStartsDeload('{"startDeload":true}')).toBe(true);
-    expect(responseStartsDeload('{"startDeload":false}')).toBe(false);
-    expect(responseStartsDeload("not-json")).toBe(false);
   });
 });

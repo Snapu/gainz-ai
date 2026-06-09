@@ -1,24 +1,25 @@
 import { type GenerateContentConfig, GoogleGenAI } from "@google/genai";
 import * as Sentry from "@sentry/vue";
-import { errAsync, Result, ResultAsync } from "neverthrow";
+import { errAsync, ok, okAsync, Result, ResultAsync } from "neverthrow";
+
 import type { Event } from "@/modules/events/domain";
 import { createExerciseMuscleMapRepository } from "@/modules/platform/infrastructure";
-import { learnFromAiResponse, VALID_MUSCLE_GROUPS } from "@/modules/sharedKernel/application";
+import { learnFromCoachingAdvice, VALID_MUSCLE_GROUPS } from "@/modules/sharedKernel/application";
 import { isoDateString } from "@/modules/sharedKernel/domain";
 import {
   getSessionStartBoundary,
   resolveCurrentSession,
   type WorkoutSession,
 } from "@/modules/trainingLogs/application";
-import { postProcessAiResponse } from "../application";
+import { postProcessCoachingAdvice } from "../application";
 import {
-  type AiResponseData,
-  type AskAiError,
-  type AskAiOptions,
-  type AskAiResult,
-  createAiResponseSchema,
-} from "../domain/types";
-import { loadPlan } from "./planStorage";
+  type CoachingAdvice,
+  type CoachingAdviceError,
+  type CoachingAdviceRequest,
+  type CoachingAdviceResult,
+  createCoachingAdviceSchema,
+} from "../domain";
+import { translateCoachingAdviceJson } from "./CoachingAdviceTranslator";
 import {
   buildPriorPlanSummary,
   compactLogs,
@@ -111,6 +112,8 @@ When constraints clash, strictly follow this priority order:
 - During conversational Q&A mid-workout, OMIT 'recommendedWorkout' entirely unless the user explicitly asks for a change to the plan. This prevents accidental plan drift.
 
 6. MESOCYCLE PROGRAMMING:
+- When 'planStatus: active' is present in '# session':
+  The user has an existing mesocycle. Select today's session (marked [TODAY] in '# program') → output as 'recommendedWorkout'. Adapt weights/reps from '# logs'. Do NOT regenerate 'trainingPlan'.
 - When phase is "planning" AND no '# program' section is present:
   Generate a 'trainingPlan' with a 2-week cycle matching the user's days/week and pattern.
   Name sessions clearly. Distribute weekly volume across sessions respecting recovery.
@@ -145,7 +148,9 @@ export function getTodayLogsCount(session: WorkoutSession | null): number {
   return session?.logs.length ?? 0;
 }
 
-export function askAi(options: AskAiOptions): ResultAsync<AskAiResult, AskAiError> {
+export function requestCoachingAdvice(
+  options: CoachingAdviceRequest,
+): ResultAsync<CoachingAdviceResult, CoachingAdviceError> {
   const {
     apiKey,
     userProfile,
@@ -162,8 +167,8 @@ export function askAi(options: AskAiOptions): ResultAsync<AskAiResult, AskAiErro
   return ResultAsync.fromPromise(
     (async () => {
       const ai = new GoogleGenAI({ apiKey });
-      let aiResponseText = "";
-      let parsedAiResponse: AiResponseData | null = null;
+      let adviceResponseText = "";
+      let parsedCoachingAdvice: CoachingAdvice | null = null;
       let currentUserInput = "";
 
       try {
@@ -190,6 +195,14 @@ export function askAi(options: AskAiOptions): ResultAsync<AskAiResult, AskAiErro
 
         const restDays = getDaysSinceLastWorkout(exerciseLogs, session);
         if (restDays !== null) sessionParts.push(`restDays: ${restDays}`);
+
+        // Inject plan status and current cycle week so the AI knows not to regenerate
+        const activePlanLoaded = options.activePlan;
+        if (activePlanLoaded) {
+          sessionParts.push("planStatus: active");
+          const cycleWeek = activePlanLoaded.getCurrentWeekNumber(now);
+          sessionParts.push(`cycleWeek: ${cycleWeek}`);
+        }
 
         if (isFirstMessage) {
           const pattern = getTrainingPattern(exerciseLogs);
@@ -232,7 +245,10 @@ export function askAi(options: AskAiOptions): ResultAsync<AskAiResult, AskAiErro
         }
 
         // ── # workload / # muscles / # exercises — PRIMACY position ──────────
-        if (phase === "planning" || isFirstMessage || question) {
+        // Include full training data when: planning from scratch, first message of the day,
+        // a plan is active (so AI can adapt weights to actual performance), or a question was asked.
+        const hasPlanActive = sessionParts.some((p) => p.startsWith("planStatus:"));
+        if (phase === "planning" || isFirstMessage || question || hasPlanActive) {
           sections.push(`# workload\n${formatWorkload(insights)}`);
           sections.push(`# muscles\n${formatMuscles(insights)}`);
           sections.push(
@@ -262,14 +278,14 @@ export function askAi(options: AskAiOptions): ResultAsync<AskAiResult, AskAiErro
         // ── # update / # plan ─────────────────────────────────────────────────
         if (previousMessages.length > 0) {
           if (isMidWorkout) {
-            const assistantMsgs = previousMessages.filter((m) => m.role === "assistant");
-            const lastAssistant = assistantMsgs[assistantMsgs.length - 1];
-            const cutoff = lastAssistant?.timestamp
-              ? new Date(lastAssistant.timestamp).getTime()
-              : 0;
-            const newLogs = todayLogs.filter((l) => l.loggedAt.getTime() > cutoff);
-            if (newLogs.length > 0) {
-              sections.push(`# update\n${compactLogs(newLogs)}`);
+            const coachMessages = previousMessages.filter((m) => m.role === "coach");
+            if (coachMessages.length > 0) {
+              const lastCoach = coachMessages[coachMessages.length - 1];
+              const cutoff = lastCoach?.timestamp ? new Date(lastCoach.timestamp).getTime() : 0;
+              const newLogs = todayLogs.filter((l) => l.loggedAt.getTime() > cutoff);
+              if (newLogs.length > 0) {
+                sections.push(`# update\n${compactLogs(newLogs)}`);
+              }
             }
           }
 
@@ -279,10 +295,12 @@ export function askAi(options: AskAiOptions): ResultAsync<AskAiResult, AskAiErro
           }
         }
 
-        const activePlan = loadPlan();
-        if (activePlan && (isFirstMessage || phase === "planning")) {
+        const activePlan = options.activePlan;
+        if (activePlan && (isFirstMessage || phase === "planning" || hasPlanActive)) {
+          // Compute cycle week to pass to formatPlanForPrompt for [TODAY] marker accuracy
+          const planCycleWeek = activePlan.getCurrentWeekNumber(now);
           sections.push(
-            `# program\n${formatPlanForPrompt(activePlan, options.mode || "execution")}`,
+            `# program\n${formatPlanForPrompt(activePlan, options.mode || "execution", planCycleWeek)}`,
           );
         }
 
@@ -340,6 +358,10 @@ export function askAi(options: AskAiOptions): ResultAsync<AskAiResult, AskAiErro
         }
 
         const conversationContents = [
+          ...previousMessages.map((msg) => ({
+            role: msg.role === "coach" ? ("model" as const) : ("user" as const),
+            parts: [{ text: msg.content }],
+          })),
           { role: "user" as const, parts: [{ text: currentUserInput }] },
         ];
 
@@ -353,8 +375,8 @@ export function askAi(options: AskAiOptions): ResultAsync<AskAiResult, AskAiErro
               contents: conversationContents,
               config: {
                 ...aiConfig,
-                responseSchema: createAiResponseSchema(
-                  [...VALID_MUSCLE_GROUPS],
+                responseSchema: createCoachingAdviceSchema(
+                  Array.from(VALID_MUSCLE_GROUPS),
                   options.mode || "execution",
                 ),
               },
@@ -382,71 +404,53 @@ export function askAi(options: AskAiOptions): ResultAsync<AskAiResult, AskAiErro
           }
         }
 
-        aiResponseText = "";
+        adviceResponseText = "";
         for await (const chunk of responseStream) {
-          if (chunk.text) aiResponseText += chunk.text;
+          if (chunk.text) adviceResponseText += chunk.text;
         }
 
-        // Validate JSON response structure using Result.fromThrowable (neverthrow-elegant pattern)
-        const validationResult = Result.fromThrowable(
-          () => JSON.parse(aiResponseText) as AiResponseData,
-          (error: unknown) => {
-            Sentry.captureException(error, {
-              tags: { scope: "ai-service", feature: "ask-ai-response-parse" },
-              extra: { responseLength: aiResponseText.length },
-            });
+        // Validate JSON response structure using the ACL (neverthrow-elegant pattern)
+        const validationResult = translateCoachingAdviceJson(adviceResponseText)
+          .mapErr((err) => {
             return "generate-content-stream-failed" as const;
-          },
-        )();
+          })
+          .map((parsed) => {
+            return postProcessCoachingAdvice(parsed, phase, insights.deloadStatus);
+          });
 
         if (validationResult.isErr()) {
           throw new Error(validationResult.error);
         }
 
-        parsedAiResponse = validationResult.value;
+        parsedCoachingAdvice = validationResult.value;
 
-        // --- POST-PROCESSING ---
-        parsedAiResponse = postProcessAiResponse(parsedAiResponse, phase, insights.deloadStatus);
-
-        aiResponseText = JSON.stringify(parsedAiResponse);
-
-        if (
-          !parsedAiResponse ||
-          typeof parsedAiResponse.coachMessage !== "string" ||
-          parsedAiResponse.coachMessage.trim() === ""
-        ) {
-          Sentry.captureMessage("AI response missing coachMessage", {
-            level: "warning",
-            tags: { scope: "ai-service", feature: "ask-ai-response-validate" },
-            extra: { responseLength: aiResponseText.length },
-          });
-          throw new Error("generate-content-stream-failed");
-        }
-
-        return { responseText: aiResponseText, requestPayload: currentUserInput };
+        return {
+          advice: parsedCoachingAdvice,
+          requestPayload: currentUserInput,
+        };
       } catch (error) {
         console.error("AI request failed:", error);
         Sentry.captureException(error, {
           tags: { scope: "ai-service", feature: "ask-ai-request" },
-          extra: { responseLength: aiResponseText.length },
+          extra: { responseLength: adviceResponseText.length },
         });
         throw error;
       } finally {
-        if (parsedAiResponse && Array.isArray(parsedAiResponse.recommendedWorkout)) {
+        if (parsedCoachingAdvice && Array.isArray(parsedCoachingAdvice.recommendedWorkout)) {
           try {
-            learnFromAiResponse(
-              parsedAiResponse.recommendedWorkout,
+            learnFromCoachingAdvice(
+              parsedCoachingAdvice.recommendedWorkout,
               createExerciseMuscleMapRepository(),
             );
           } catch (error) {
             Sentry.captureException(error, {
               tags: { scope: "ai-service", feature: "learn-from-response" },
-              extra: { responseLength: aiResponseText.length },
+              extra: { responseLength: adviceResponseText.length },
             });
           }
         }
       }
     })(),
-    () => "generate-content-stream-failed" as AskAiError,
+    () => "generate-content-stream-failed" as CoachingAdviceError,
   );
 }

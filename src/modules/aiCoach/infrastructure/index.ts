@@ -1,12 +1,12 @@
 import type { AiCoachService } from "@/modules/aiCoach/application";
-import { askAi, getTodayLogsCount } from "./askAi";
 import { classifyExercises } from "./classifyExercises";
+import { getTodayLogsCount, requestCoachingAdvice } from "./requestCoachingAdvice";
 
-export * from "./planStorage";
+export * from "./LocalStoragePlanRepository";
 
 export function createAiCoachService(): AiCoachService {
   return {
-    ask: askAi,
+    ask: requestCoachingAdvice,
     classifyExercises,
     getTodayLogsCount,
   };

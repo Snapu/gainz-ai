@@ -85,14 +85,14 @@ describe("classifyExercises", () => {
     expect(result.isOk()).toBe(true);
   });
 
-  it("returns ai-request-failed and captures exception for malformed JSON", async () => {
+  it("returns coaching-request-failed and captures exception for malformed JSON", async () => {
     generateContentMock.mockResolvedValue({ text: "not-json" });
 
     const result = await classifyExercises(["Bench Press"], "test-api-key");
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
-      expect(result.error).toBe("ai-request-failed");
+      expect(result.error).toBe("coaching-request-failed");
     }
     expect(captureExceptionMock).toHaveBeenCalled();
   });

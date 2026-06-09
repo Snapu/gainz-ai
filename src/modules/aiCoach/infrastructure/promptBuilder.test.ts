@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ExerciseE1RM } from "@/modules/trainingInsights/domain/e1rm";
-import type { TrainingPlan } from "../domain/types";
+import { TrainingPlan } from "../domain";
 import { formatExercises, formatPlanForPrompt } from "./promptBuilder";
 
 describe("formatExercises", () => {
@@ -47,40 +47,36 @@ describe("formatExercises", () => {
 
 describe("formatPlanForPrompt", () => {
   it("should format a valid training plan into compact text", () => {
-    const plan: TrainingPlan = {
-      createdAt: "2026-06-02T10:00:00Z",
-      cycleWeeks: 2,
-      sessions: [
-        {
-          dayOfWeek: 1,
-          weekNumber: 1,
-          sessionLabel: "Unit A",
-          focusDescription: "Push Focus",
-          exercises: [
-            {
-              exerciseName: "Incline DB Press",
-              targetSets: 3,
-              targetReps: "6-8",
-              targetRpe: 8.5,
-              restSeconds: 120,
-            },
-            {
-              exerciseName: "DB Squats",
-              targetSets: 2,
-              targetReps: "8-10",
-              targetWeight: "60kg",
-              notes: "Knees out",
-            },
-            {
-              exerciseName: "Bicep Curls",
-              targetSets: 3,
-              targetReps: "12",
-              supersetId: "A",
-            },
-          ],
-        },
-      ],
-    };
+    const plan = TrainingPlan.create("2026-06-02T10:00:00Z", 2, [
+      {
+        dayOfWeek: 1,
+        weekNumber: 1,
+        sessionLabel: "Unit A",
+        focusDescription: "Push Focus",
+        exercises: [
+          {
+            exerciseName: "Incline DB Press",
+            targetSets: 3,
+            targetReps: "6-8",
+            targetRpe: 8.5,
+            restSeconds: 120,
+          },
+          {
+            exerciseName: "DB Squats",
+            targetSets: 2,
+            targetReps: "8-10",
+            targetWeight: "60kg",
+            notes: "Knees out",
+          },
+          {
+            exerciseName: "Bicep Curls",
+            targetSets: 3,
+            targetReps: "12",
+            supersetId: "A",
+          },
+        ],
+      },
+    ]);
 
     const result = formatPlanForPrompt(plan, "planning");
     const expected = `cycle: 2w, created: 2026-06-02
