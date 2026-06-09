@@ -327,11 +327,7 @@ const selectedDetail = computed(() => {
                 </span>
                 <Hourglass v-if="muscle.status && !muscle.status.recoveryReady" class="w-3 h-3 text-yellow-500 drop-shadow-md" />
               </div>
-              <div class="flex items-center gap-1.5 mb-1 whitespace-nowrap">
-                <UiBadge variant="surface" class="font-mono uppercase tracking-wider">
-                  {{ getJargon(muscle.status?.landmark) }}
-                </UiBadge>
-              </div>
+
               <span class="text-xs sm:text-sm font-mono font-bold whitespace-nowrap opacity-90 mt-[2px]" :style="{ color: getLineColor(muscle.status?.landmark) }">
                 {{ muscle.status?.isoWeekSets != null ? muscle.status.isoWeekSets.toFixed(0) : '0' }} <span class="opacity-50 font-sans text-[10px] sm:text-xs font-medium tracking-wide">SETS/WK</span>
               </span>
