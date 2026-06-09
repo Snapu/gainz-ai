@@ -225,24 +225,6 @@ const selectedDetail = computed(() => {
     },
   };
 });
-
-function getLandmarkBadgeVariant(landmark?: VolumeLandmark): string {
-  if (!landmark) return "surface";
-  switch (landmark) {
-    case "below_MEV":
-      return "neutral";
-    case "at_MEV":
-      return "success";
-    case "at_MAV":
-      return "info";
-    case "approaching_MRV":
-      return "warning";
-    case "above_MRV":
-      return "danger";
-    default:
-      return "surface";
-  }
-}
 </script>
 
 <template>
@@ -346,7 +328,7 @@ function getLandmarkBadgeVariant(landmark?: VolumeLandmark): string {
                 <Hourglass v-if="muscle.status && !muscle.status.recoveryReady" class="w-3 h-3 text-yellow-500 drop-shadow-md" />
               </div>
               <div class="flex items-center gap-1.5 mb-1 whitespace-nowrap">
-                <UiBadge :variant="getLandmarkBadgeVariant(muscle.status?.landmark) as any" class="font-mono uppercase tracking-wider">
+                <UiBadge variant="surface" class="font-mono uppercase tracking-wider">
                   {{ getJargon(muscle.status?.landmark) }}
                 </UiBadge>
               </div>
@@ -367,7 +349,7 @@ function getLandmarkBadgeVariant(landmark?: VolumeLandmark): string {
           <!-- Header: name + landmark badge -->
           <div v-if="selectedDetail" class="flex items-center gap-2 px-5 pt-6 pb-4 border-b border-white/10">
             <span class="text-base font-bold uppercase tracking-widest flex-1">{{ selectedDetail.name }}</span>
-            <UiBadge class="uppercase tracking-wider" :variant="getLandmarkBadgeVariant(selectedDetail.landmark) as any">
+            <UiBadge class="uppercase tracking-wider" variant="surface">
               {{ getJargon(selectedDetail.landmark) }}
             </UiBadge>
           </div>
