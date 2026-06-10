@@ -67,19 +67,23 @@ onUnmounted(() => {
 
 const { toast } = useToast();
 
-watch(needRefresh, (isNeeded) => {
-  if (isNeeded) {
-    toast({
-      title: "Update Available",
-      description: "A new version of GainzAI is ready.",
-      duration: 100000,
-      action: {
-        label: "Reload",
-        onClick: () => updateServiceWorker(true),
-      },
-    });
-  }
-});
+watch(
+  needRefresh,
+  (isNeeded) => {
+    if (isNeeded) {
+      toast({
+        title: "Update Available",
+        description: "A new version of GainzAI is ready.",
+        duration: 100000,
+        action: {
+          label: "Reload",
+          onClick: () => updateServiceWorker(true),
+        },
+      });
+    }
+  },
+  { immediate: true },
+);
 
 // Move sync listener from main.ts to App.vue
 onMounted(() => {
