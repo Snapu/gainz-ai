@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  ArrowRight,
   BarChart2,
   CalendarDays,
   CheckCircle2,
@@ -7,6 +8,8 @@ import {
   Hourglass,
   Sparkles,
   Timer,
+  TrendingDown,
+  TrendingUp,
 } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { useMetricsStore } from "@/modules/profile/presentation";
@@ -35,6 +38,8 @@ const MUSCLE_MAP_IMAGE_SRC = `${BASE}/assets/muscle/muscle-map-anime.png`;
 function getDotColor(landmark?: VolumeLandmark): string {
   if (!landmark) return "bg-white/30 border-white/50";
   switch (landmark) {
+    case "detraining":
+      return "bg-zinc-400 border-zinc-200 shadow-[0_0_10px_rgba(161,161,170,1)]";
     case "below_MEV":
       return "bg-yellow-500 border-yellow-300 shadow-[0_0_10px_rgba(234,179,8,1)]";
     case "at_MEV":
@@ -53,6 +58,8 @@ function getDotColor(landmark?: VolumeLandmark): string {
 function getLineColor(landmark?: VolumeLandmark): string {
   if (!landmark) return "rgba(255,255,255,0.25)";
   switch (landmark) {
+    case "detraining":
+      return "#a1a1aa";
     case "below_MEV":
       return "#eab308";
     case "at_MEV":
@@ -70,6 +77,8 @@ function getLineColor(landmark?: VolumeLandmark): string {
 
 function getJargon(landmark?: VolumeLandmark): string {
   switch (landmark) {
+    case "detraining":
+      return "Under-Stimulated";
     case "below_MEV":
       return "Maintenance";
     case "at_MEV":
@@ -87,26 +96,28 @@ function getJargon(landmark?: VolumeLandmark): string {
 
 interface MuscleNode {
   dot: { x: number; y: number };
-  textAnchor: { x: number; y: number };
-  align: "left" | "right";
+  anchorY: number;
 }
 
 // X coordinates mapped mathematically for 200% width cropped halves
+// Zig-Zag Left/Right balancing
 
 const MUSCLE_MAP_FRONT: Partial<Record<MuscleGroup, MuscleNode>> = {
-  Chest: { dot: { x: 48, y: 29 }, textAnchor: { x: 0, y: 22 }, align: "left" },
-  Biceps: { dot: { x: 28, y: 35 }, textAnchor: { x: 0, y: 35 }, align: "left" },
-  Abs: { dot: { x: 46, y: 44 }, textAnchor: { x: 0, y: 48 }, align: "left" },
-  Quads: { dot: { x: 40, y: 64 }, textAnchor: { x: 0, y: 64 }, align: "left" },
-  Shoulders: { dot: { x: 64, y: 24 }, textAnchor: { x: 100, y: 15 }, align: "right" },
+  "Front Delts": { dot: { x: 33, y: 23 }, anchorY: 15 }, // Left
+  "Side Delts": { dot: { x: 78, y: 26 }, anchorY: 24 }, // Right
+  Chest: { dot: { x: 40, y: 27 }, anchorY: 35 }, // Left
+  Biceps: { dot: { x: 74, y: 34 }, anchorY: 42 }, // Right
+  Abs: { dot: { x: 45, y: 42 }, anchorY: 55 }, // Left
+  Quads: { dot: { x: 62, y: 62 }, anchorY: 64 }, // Right
 };
 
 const MUSCLE_MAP_BACK: Partial<Record<MuscleGroup, MuscleNode>> = {
-  Back: { dot: { x: 52, y: 33 }, textAnchor: { x: 0, y: 25 }, align: "left" },
-  Triceps: { dot: { x: 75, y: 35 }, textAnchor: { x: 100, y: 32 }, align: "right" },
-  Glutes: { dot: { x: 54, y: 49 }, textAnchor: { x: 100, y: 49 }, align: "right" },
-  Hamstrings: { dot: { x: 66, y: 65 }, textAnchor: { x: 100, y: 65 }, align: "right" },
-  Calves: { dot: { x: 64, y: 80 }, textAnchor: { x: 100, y: 82 }, align: "right" },
+  "Upper Back": { dot: { x: 41, y: 21 }, anchorY: 15 }, // Left
+  Lats: { dot: { x: 62, y: 32 }, anchorY: 28 }, // Right
+  Triceps: { dot: { x: 25, y: 35 }, anchorY: 35 }, // Left
+  Glutes: { dot: { x: 60, y: 48 }, anchorY: 48 }, // Right
+  Hamstrings: { dot: { x: 39, y: 63 }, anchorY: 65 }, // Left
+  Calves: { dot: { x: 64, y: 76 }, anchorY: 82 }, // Right
 };
 
 const views = computed(() => {
@@ -154,18 +165,19 @@ const isDetailOpen = computed({
 });
 
 function getAnchorStyle(node: MuscleNode) {
-  if (node.align === "right") {
+  const isRight = node.dot.x >= 50;
+  if (isRight) {
     return {
-      right: `${100 - node.textAnchor.x}%`,
-      top: `${node.textAnchor.y}%`,
+      right: "0%",
+      top: `${node.anchorY}%`,
       textAlign: "right" as const,
       flexDirection: "column" as const,
       alignItems: "flex-end" as const,
     };
   } else {
     return {
-      left: `${node.textAnchor.x}%`,
-      top: `${node.textAnchor.y}%`,
+      left: "0%",
+      top: `${node.anchorY}%`,
       textAlign: "left" as const,
       flexDirection: "column" as const,
       alignItems: "flex-start" as const,
@@ -279,8 +291,8 @@ const selectedDetail = computed(() => {
              :key="'line-'+muscle.name"
              :x1="muscle.node.dot.x" 
              :y1="muscle.node.dot.y" 
-             :x2="muscle.node.textAnchor.x" 
-             :y2="muscle.node.textAnchor.y" 
+             :x2="muscle.node.dot.x >= 50 ? 100 : 0" 
+             :y2="muscle.node.anchorY" 
              :stroke="getLineColor(muscle.status?.landmark)" 
              stroke-width="0.15" 
              stroke-dasharray="1.5, 2.5"
@@ -293,7 +305,8 @@ const selectedDetail = computed(() => {
            
            <!-- Glowing Dot — enlarged tap target (w-7 h-7 transparent wrapper) -->
            <div
-             class="absolute transform -translate-x-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center cursor-pointer z-10"
+             class="absolute transform -translate-x-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center cursor-pointer"
+             :class="selectedMuscle === muscle.name ? 'z-50' : 'z-10'"
              :style="{ left: `${muscle.node.dot.x}%`, top: `${muscle.node.dot.y}%` }"
              @click.stop="toggleMuscle(muscle.name)"
            >
@@ -313,8 +326,11 @@ const selectedDetail = computed(() => {
 
            <!-- Stacked Callout HUD — tappable -->
            <div
-             class="absolute flex justify-center transform -translate-y-1/2 z-20 cursor-pointer transition-opacity duration-200"
-             :class="selectedMuscle && selectedMuscle !== muscle.name ? 'opacity-40' : 'opacity-100'"
+             class="absolute flex justify-center transform -translate-y-1/2 cursor-pointer transition-opacity duration-200"
+             :class="[
+               selectedMuscle && selectedMuscle !== muscle.name ? 'opacity-40' : 'opacity-100',
+               selectedMuscle === muscle.name ? 'z-50' : 'z-20'
+             ]"
              :style="getAnchorStyle(muscle.node)"
              @click.stop="toggleMuscle(muscle.name)"
            >
@@ -328,9 +344,14 @@ const selectedDetail = computed(() => {
                 <Hourglass v-if="muscle.status && !muscle.status.recoveryReady" class="w-3 h-3 text-yellow-500 drop-shadow-md" />
               </div>
 
-              <span class="text-xs sm:text-sm font-mono font-bold whitespace-nowrap opacity-90 mt-[2px]" :style="{ color: getLineColor(muscle.status?.landmark) }">
-                {{ muscle.status?.isoWeekSets != null ? muscle.status.isoWeekSets.toFixed(0) : '0' }} <span class="opacity-50 font-sans text-[10px] sm:text-xs font-medium tracking-wide">SETS/WK</span>
-              </span>
+              <div class="flex items-center gap-1 mt-[2px]" :style="{ color: getLineColor(muscle.status?.landmark) }">
+                <span class="text-xs sm:text-sm font-mono font-bold whitespace-nowrap opacity-90">
+                  {{ muscle.status?.isoWeekSets != null ? muscle.status.isoWeekSets.toFixed(0) : '0' }} <span class="opacity-50 font-sans text-[10px] sm:text-xs font-medium tracking-wide">SETS/WK</span>
+                </span>
+                <TrendingUp v-if="muscle.status?.volumeTrend === 'up'" class="w-3.5 h-3.5 opacity-80" />
+                <TrendingDown v-else-if="muscle.status?.volumeTrend === 'down'" class="w-3.5 h-3.5 opacity-80" />
+                <ArrowRight v-else-if="muscle.status?.volumeTrend === 'flat' && Math.round(muscle.status?.isoWeekSets ?? 0) > 0" class="w-3.5 h-3.5 opacity-80" />
+              </div>
            </div>
 
           </template>

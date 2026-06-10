@@ -16,7 +16,7 @@ describe("Exercise Classification", () => {
   it("classifies upper body compounds", () => {
     // Bench Press has Chest (primary) + Triceps/Shoulders
     expect(classifyExercise("Bench Press")).toBe("upper-compound");
-    // Pull-Ups have Back (primary) + Biceps
+    // Pull-Ups have Lats (primary) + Biceps + Upper Back
     expect(classifyExercise("Pull-Ups")).toBe("upper-compound");
   });
 
@@ -25,8 +25,7 @@ describe("Exercise Classification", () => {
     expect(classifyExercise("Squat")).toBe("lower-compound");
   });
 
-  it("classifies Deadlift as a lower compound despite having Back as primary", () => {
-    // Our logic handles Deadlifts correctly because we added hasLowerInvolvement
+  it("classifies Deadlift as a lower compound", () => {
     expect(classifyExercise("Deadlift")).toBe("lower-compound");
     expect(classifyExercise("Romanian Deadlift")).toBe("lower-compound");
   });

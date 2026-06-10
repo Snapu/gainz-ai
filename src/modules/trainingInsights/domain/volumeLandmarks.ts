@@ -4,7 +4,13 @@ import type { ExerciseE1RM } from "./e1rm";
 import { getMuscleActivation, type MuscleActivation, type MuscleGroup } from "./exerciseMuscleMap";
 
 /** Volume landmarks relative to MEV/MAV/MRV */
-export type VolumeLandmark = "below_MEV" | "at_MEV" | "at_MAV" | "approaching_MRV" | "above_MRV";
+export type VolumeLandmark =
+  | "detraining"
+  | "below_MEV"
+  | "at_MEV"
+  | "at_MAV"
+  | "approaching_MRV"
+  | "above_MRV";
 
 export interface VolumeLandmarks {
   mev: number;
@@ -26,6 +32,7 @@ interface WeeklyVolume {
   frequencyPerWeek: number;
   hoursSinceLastTrained: number | null;
   recoveryHours: number;
+  volumeTrend: "up" | "down" | "flat";
 }
 
 export interface MuscleGroupInsight {
@@ -55,6 +62,7 @@ export interface MuscleGroupInsight {
   recoveryHours: number;
   recoveryReady: boolean;
   trendStatus?: "improving" | "plateau" | "dropping" | "stable";
+  volumeTrend: "up" | "down" | "flat";
 }
 
 /**
@@ -73,10 +81,12 @@ export interface MuscleGroupInsight {
  */
 export const VOLUME_LANDMARKS: Record<MuscleGroup, VolumeLandmarks> = {
   Chest: { mev: 8, mavLow: 12, mavHigh: 18, mrv: 22 },
-  Back: { mev: 8, mavLow: 14, mavHigh: 20, mrv: 25 },
+  Lats: { mev: 8, mavLow: 14, mavHigh: 20, mrv: 25 },
+  "Upper Back": { mev: 8, mavLow: 14, mavHigh: 20, mrv: 25 },
   Quads: { mev: 6, mavLow: 12, mavHigh: 18, mrv: 20 },
   Hamstrings: { mev: 6, mavLow: 10, mavHigh: 16, mrv: 20 },
-  Shoulders: { mev: 6, mavLow: 12, mavHigh: 20, mrv: 24 },
+  "Front Delts": { mev: 6, mavLow: 12, mavHigh: 20, mrv: 24 },
+  "Side Delts": { mev: 8, mavLow: 16, mavHigh: 22, mrv: 26 },
   Biceps: { mev: 4, mavLow: 8, mavHigh: 18, mrv: 24 },
   Triceps: { mev: 4, mavLow: 8, mavHigh: 16, mrv: 20 },
   Abs: { mev: 2, mavLow: 8, mavHigh: 16, mrv: 22 },
@@ -97,10 +107,12 @@ export const VOLUME_LANDMARKS: Record<MuscleGroup, VolumeLandmarks> = {
  */
 export const RECOVERY_HOURS: Record<MuscleGroup, number> = {
   Chest: 48,
-  Back: 72,
+  Lats: 72,
+  "Upper Back": 72,
   Quads: 72,
   Hamstrings: 72,
-  Shoulders: 48,
+  "Front Delts": 48,
+  "Side Delts": 24,
   Biceps: 48,
   Triceps: 48,
   Abs: 24,
@@ -123,6 +135,12 @@ export function classifyLandmark(
   trendStatus?: "improving" | "plateau" | "dropping" | "stable",
 ): VolumeLandmark {
   const { mev, mavLow, mavHigh, mrv } = VOLUME_LANDMARKS[muscleGroup];
+
+  // Absolute floor: If you are doing basically zero volume, you are detraining,
+  // regardless of what a lagging 1RM trend says.
+  if (sets < mev / 2) {
+    return "detraining";
+  }
 
   if (trendStatus === "improving") {
     if (sets < mev) return "at_MEV";
@@ -267,6 +285,7 @@ export function calculateWeeklyVolume(
   // Initialise one EWMA accumulator per muscle group.
   const ewmaSets = new Map<MuscleGroup, number>();
   const ewmaDirectSets = new Map<MuscleGroup, number>();
+  const ewmaSets7DaysAgo = new Map<MuscleGroup, number>();
 
   // Track the session that dictates the recovery target date
   const recoveryDictatingSession = new Map<
@@ -329,6 +348,10 @@ export function calculateWeeklyVolume(
         mg,
         EWMA_LAMBDA * dailyDirectSets + (1 - EWMA_LAMBDA) * (ewmaDirectSets.get(mg) ?? 0),
       );
+
+      if (daysBack === 7) {
+        ewmaSets7DaysAgo.set(mg, ewmaSets.get(mg) ?? 0);
+      }
     }
   }
 
@@ -357,6 +380,11 @@ export function calculateWeeklyVolume(
     const recoveryHours = dictating?.adaptiveHours ?? RECOVERY_HOURS[muscleGroup];
     const trainedDays = muscleTrainingDays.get(muscleGroup)?.size ?? 0;
 
+    const oldSets = (ewmaSets7DaysAgo.get(muscleGroup) ?? 0) * 7;
+    let volumeTrend: "up" | "down" | "flat" = "flat";
+    if (smoothedSets > oldSets + 1) volumeTrend = "up";
+    else if (smoothedSets < oldSets - 1) volumeTrend = "down";
+
     result.push({
       muscleGroup,
       sets: smoothedSets,
@@ -366,6 +394,7 @@ export function calculateWeeklyVolume(
       frequencyPerWeek: trainedDays,
       hoursSinceLastTrained: hoursSince,
       recoveryHours,
+      volumeTrend,
     });
   }
 
@@ -461,7 +490,8 @@ export function calculateMuscleGroupInsights(
       hoursSinceLastTrained: volume.hoursSinceLastTrained,
       recoveryHours: volume.recoveryHours,
       recoveryReady: recovered,
-      trendStatus,
+      trendStatus: landmark === "detraining" ? undefined : trendStatus,
+      volumeTrend: volume.volumeTrend,
     };
   }
 

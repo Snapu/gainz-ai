@@ -51,9 +51,12 @@ describe("learnFromCoachingAdvice", () => {
   });
 
   it("accepts legacy muscleGroup field as primaryMuscle fallback", () => {
-    learnFromCoachingAdvice([{ exerciseName: "Reverse Fly", muscleGroup: "Back" }], repository);
+    learnFromCoachingAdvice(
+      [{ exerciseName: "Reverse Fly", muscleGroup: "Upper Back" }],
+      repository,
+    );
     const map = getLearnedMuscleMap(repository);
-    expect(map["reverse fly"]?.primaryMuscle).toBe("Back");
+    expect(map["reverse fly"]?.primaryMuscle).toBe("Upper Back");
   });
 
   it("skips entries with no exerciseName", () => {
@@ -72,14 +75,14 @@ describe("learnFromCoachingAdvice", () => {
         {
           exerciseName: "Cable Crossover",
           primaryMuscle: "Chest",
-          secondaryMuscles: [{ muscleGroup: "Shoulders", contribution: 0.3 }],
+          secondaryMuscles: [{ muscleGroup: "Front Delts", contribution: 0.3 }],
         },
       ],
       repository,
     );
     const entry = getLearnedMuscleMap(repository)["cable crossover"];
     expect(entry?.secondaryMuscles).toHaveLength(1);
-    expect(entry?.secondaryMuscles[0]?.muscleGroup).toBe("Shoulders");
+    expect(entry?.secondaryMuscles[0]?.muscleGroup).toBe("Front Delts");
   });
 
   it("silently drops secondary muscles with invalid muscle group", () => {
@@ -103,7 +106,7 @@ describe("learnFromCoachingAdvice", () => {
         {
           exerciseName: "Cable Crossover",
           primaryMuscle: "Chest",
-          secondaryMuscles: [{ muscleGroup: "Shoulders", contribution: 2.5 }],
+          secondaryMuscles: [{ muscleGroup: "Front Delts", contribution: 2.5 }],
         },
       ],
       repository,
@@ -114,17 +117,20 @@ describe("learnFromCoachingAdvice", () => {
 
   it("does not overwrite exercises already in the default activation map", () => {
     // "Bench Press" is in the default map — AI should not override it
-    learnFromCoachingAdvice([{ exerciseName: "Bench Press", primaryMuscle: "Back" }], repository);
+    learnFromCoachingAdvice(
+      [{ exerciseName: "Bench Press", primaryMuscle: "Upper Back" }],
+      repository,
+    );
     const map = getLearnedMuscleMap(repository);
-    // Should not appear in learned map (or if it does, not with "Back")
-    expect(map["bench press"]?.primaryMuscle).not.toBe("Back");
+    // Should not appear in learned map (or if it does, not with "Upper Back")
+    expect(map["bench press"]?.primaryMuscle).not.toBe("Upper Back");
   });
 
   it("learns multiple exercises in one call", () => {
     learnFromCoachingAdvice(
       [
         { exerciseName: "Cable Crossover", primaryMuscle: "Chest" },
-        { exerciseName: "Reverse Fly", primaryMuscle: "Back" },
+        { exerciseName: "Reverse Fly", primaryMuscle: "Upper Back" },
       ],
       repository,
     );
@@ -164,10 +170,10 @@ describe("applyAiCleanupResults", () => {
 
   it("skips exercises already in the default map", () => {
     applyAiCleanupResults(
-      [{ exerciseName: "Bench Press", primaryMuscle: "Back", confidence: 0.99 }],
+      [{ exerciseName: "Bench Press", primaryMuscle: "Upper Back", confidence: 0.99 }],
       repository,
     );
-    expect(getLearnedMuscleMap(repository)["bench press"]?.primaryMuscle).not.toBe("Back");
+    expect(getLearnedMuscleMap(repository)["bench press"]?.primaryMuscle).not.toBe("Upper Back");
   });
 
   it("stores secondary muscles when provided", () => {
@@ -177,13 +183,13 @@ describe("applyAiCleanupResults", () => {
           exerciseName: "Pec Deck",
           primaryMuscle: "Chest",
           confidence: 0.9,
-          secondaryMuscles: [{ muscleGroup: "Shoulders", contribution: 0.2 }],
+          secondaryMuscles: [{ muscleGroup: "Front Delts", contribution: 0.2 }],
         },
       ],
       repository,
     );
     const entry = getLearnedMuscleMap(repository)["pec deck"];
-    expect(entry?.secondaryMuscles[0]?.muscleGroup).toBe("Shoulders");
+    expect(entry?.secondaryMuscles[0]?.muscleGroup).toBe("Front Delts");
     expect(entry?.secondaryMuscles[0]?.contribution).toBe(0.2);
   });
 

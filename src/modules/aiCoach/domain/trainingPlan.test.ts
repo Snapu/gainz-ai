@@ -15,7 +15,7 @@ describe("TrainingPlan", () => {
     dayOfWeek: 1, // Monday
     weekNumber: 2,
     sessionLabel: "Pull",
-    focusDescription: "Back",
+    focusDescription: "Upper Back",
     exercises: [],
   };
 

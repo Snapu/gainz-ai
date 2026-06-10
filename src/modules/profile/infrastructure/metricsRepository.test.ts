@@ -48,7 +48,7 @@ describe("metricsRepository", () => {
     it("loads physiological metrics successfully", async () => {
       const mockRows = [
         createMockRow({ muscleGroup: "Chest", personalMAV: "12", lastUpdated: "2024-01-01" }),
-        createMockRow({ muscleGroup: "Back", personalMRV: "20", lastUpdated: "2024-01-02" }),
+        createMockRow({ muscleGroup: "Lats", personalMRV: "20", lastUpdated: "2024-01-02" }),
       ];
       const doc = createMockDoc(createMockSheet(mockRows));
       const repo = createMetricsRepository(doc);
@@ -64,8 +64,8 @@ describe("metricsRepository", () => {
           personalMRV: undefined,
           lastUpdated: "2024-01-01",
         });
-        expect(metrics["Back"]).toEqual({
-          muscleGroup: "Back",
+        expect(metrics["Lats"]).toEqual({
+          muscleGroup: "Lats",
           personalMAV: undefined,
           personalMRV: 20,
           lastUpdated: "2024-01-02",

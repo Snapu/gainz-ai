@@ -1,26 +1,30 @@
 export type MuscleGroup =
   | "Chest"
-  | "Back"
+  | "Lats"
+  | "Upper Back"
+  | "Front Delts"
+  | "Side Delts"
   | "Quads"
   | "Hamstrings"
-  | "Shoulders"
+  | "Glutes"
   | "Biceps"
   | "Triceps"
   | "Abs"
-  | "Calves"
-  | "Glutes";
+  | "Calves";
 
 export const VALID_MUSCLE_GROUPS: ReadonlySet<MuscleGroup> = new Set<MuscleGroup>([
   "Chest",
-  "Back",
+  "Lats",
+  "Upper Back",
+  "Front Delts",
+  "Side Delts",
   "Quads",
   "Hamstrings",
-  "Shoulders",
+  "Glutes",
   "Biceps",
   "Triceps",
   "Abs",
   "Calves",
-  "Glutes",
 ]);
 
 export function isMuscleGroup(value: unknown): value is MuscleGroup {

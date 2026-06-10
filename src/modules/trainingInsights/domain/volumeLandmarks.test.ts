@@ -11,7 +11,11 @@ import {
 describe("Volume Landmarks", () => {
   describe("classifyLandmark", () => {
     it("classifies below_MEV", () => {
-      expect(classifyLandmark(3, "Chest")).toBe("below_MEV");
+      // For Chest, MEV is 8. MEV / 2 is 4. So 5 is between MEV/2 and MEV.
+      expect(classifyLandmark(5, "Chest")).toBe("below_MEV");
+    });
+    it("classifies detraining", () => {
+      expect(classifyLandmark(3, "Chest")).toBe("detraining");
     });
     it("classifies at_MEV", () => {
       expect(classifyLandmark(8, "Chest")).toBe("at_MEV");
@@ -59,7 +63,7 @@ describe("Volume Landmarks", () => {
     });
     it("returns false within recovery window", () => {
       expect(isRecovered(24, 48)).toBe(false); // Chest (48)
-      expect(isRecovered(24, 48)).toBe(false); // Back (48)
+      expect(isRecovered(24, 48)).toBe(false); // Lats (48)
       expect(isRecovered(48, 72)).toBe(false); // Glutes (72)
     });
     it("returns true after recovery threshold", () => {
@@ -125,7 +129,7 @@ describe("Volume Landmarks", () => {
       const logs = [createLog("Bench Press", 2)];
       const volumes = calculateWeeklyVolume(logs, baseDate);
       const tricepsVolume = volumes.find((v) => v.muscleGroup === "Triceps");
-      const shouldersVolume = volumes.find((v) => v.muscleGroup === "Shoulders");
+      const shouldersVolume = volumes.find((v) => v.muscleGroup === "Front Delts");
 
       expect(tricepsVolume?.isoWeekSets).toBe(0.5);
       expect(tricepsVolume?.isoWeekDirectSets).toBe(0);
@@ -148,7 +152,7 @@ describe("Volume Landmarks", () => {
     it("counts training frequency by distinct days in trailing 7d", () => {
       const logs = [createLog("Pull-Ups", 2), createLog("Pull-Ups", 2), createLog("Pull-Ups", 1)];
       const volumes = calculateWeeklyVolume(logs, baseDate);
-      const backVolume = volumes.find((v) => v.muscleGroup === "Back");
+      const backVolume = volumes.find((v) => v.muscleGroup === "Lats");
       const bicepsVolume = volumes.find((v) => v.muscleGroup === "Biceps");
 
       expect(backVolume?.frequencyPerWeek).toBe(2);
@@ -196,7 +200,7 @@ describe("Volume Landmarks", () => {
     it("tracks hours since last trained", () => {
       const logs = [createLog("Pull-Ups", 2)];
       const volumes = calculateWeeklyVolume(logs, baseDate);
-      const backVolume = volumes.find((v) => v.muscleGroup === "Back");
+      const backVolume = volumes.find((v) => v.muscleGroup === "Lats");
 
       expect(backVolume?.hoursSinceLastTrained).toBeCloseTo(48, 1);
     });
@@ -231,15 +235,15 @@ describe("Volume Landmarks", () => {
     it("calculates landmark for each muscle", () => {
       const logs = [createLog("Bench Press", 1)];
       const insights = calculateMuscleGroupInsights(logs, baseDate);
-      // Because EWMA will smooth a single set, it will be well below MEV (8 sets)
-      expect(insights.Chest?.landmark).toBe("below_MEV");
+      // Because EWMA will smooth a single set, it will be well below MEV/2
+      expect(insights.Chest?.landmark).toBe("detraining");
     });
 
     it("keeps direct and effective sets separate", () => {
       const logs = [createLog("Pull-Ups", 1), createLog("Pull-Ups", 1)];
       const insights = calculateMuscleGroupInsights(logs, baseDate);
-      expect(insights.Back?.isoWeekSets).toBe(2);
-      expect(insights.Back?.isoWeekDirectSets).toBe(2);
+      expect(insights.Lats?.isoWeekSets).toBe(2);
+      expect(insights.Lats?.isoWeekDirectSets).toBe(2);
       expect(insights.Biceps?.isoWeekSets).toBe(1);
       expect(insights.Biceps?.isoWeekDirectSets).toBe(0);
     });
