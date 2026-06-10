@@ -501,10 +501,6 @@ export function formatPlanForPrompt(
       `W${session.weekNumber}-${dayStr} ${session.sessionLabel} (${session.focusDescription}):${todayMarker}`,
     );
 
-    if (mode === "execution" && !isToday) {
-      continue;
-    }
-
     for (const ex of session.exercises) {
       const parts = [`${ex.targetSets}×${ex.targetReps}`];
       if (ex.targetWeight) parts.push(`@${ex.targetWeight}`);

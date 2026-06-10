@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/vue";
+import { useLocalStorage } from "@vueuse/core";
 import { errAsync, okAsync, Result, ResultAsync } from "neverthrow";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
@@ -105,7 +106,7 @@ export const useAiStore = defineStore("ai", () => {
   const messages = ref<CoachingMessage[]>([]);
   const isLoading = ref(false);
   const hasInitialized = ref(false);
-  const lastRequestLogsChecksum = ref<string>("");
+  const lastRequestLogsChecksum = useLocalStorage<string>("ai-coach:last-checksum", "");
   const needsRerun = ref(false);
   const activePlan = ref<TrainingPlan | null>(null);
 

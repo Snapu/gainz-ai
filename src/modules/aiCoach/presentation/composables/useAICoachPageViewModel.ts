@@ -386,19 +386,19 @@ export function useAICoachPageViewModel() {
     const hasPlan = !!aiStore.activePlan;
     const hasMessages = coachMessages.value.length > 0;
 
-    const isRestDay = hasPlan && planDerivedWorkout.value === null;
-
     if (!hasPlan && !hasMessages) {
       // Truly fresh start: no plan and no messages → generate first mesocycle
       aiStore.generateNewPlan().then((result) => {
         if (result.isErr()) handleAiError(result.error);
         else scrollToTop();
       });
-    } else if (isRestDay) {
-      // Rest day: show the plan overview instead of triggering an AI call
-      activeTab.value = "plan";
     } else if (aiStore.isNewDataAvailable) {
       // Plan exists and new training data is available → ask AI to react
+      // If we already know today's planned workout, navigate there immediately
+      // so the user sees their exercises right away while the AI processes.
+      if (planDerivedWorkout.value?.length) {
+        activeTab.value = "today";
+      }
       debouncedRequestAdvice();
     } else if (activeWorkout.value?.length) {
       // Existing workout with no new data → jump straight to Today tab
@@ -430,6 +430,17 @@ export function useAICoachPageViewModel() {
     (newLength, oldLength) => {
       if (newLength > (oldLength || 0)) {
         scrollToTop();
+      }
+    },
+  );
+
+  // Once activeWorkout is populated (e.g. after AI responds), switch to Today tab
+  // so the user sees their workout. Skip if they've manually navigated to Plan.
+  watch(
+    () => activeWorkout.value?.length,
+    (length) => {
+      if (length && activeTab.value !== "plan") {
+        activeTab.value = "today";
       }
     },
   );

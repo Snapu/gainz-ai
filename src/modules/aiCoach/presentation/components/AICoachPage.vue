@@ -34,11 +34,11 @@ const {
   tabOptions,
   openScratchpads,
   openRequestPayloads,
-  scrollContainerRef,
   coachMessages,
   activeWorkoutGroups,
   activePlan,
   activeSessionIndex,
+  planDerivedWorkout,
   completedExercises,
   cooldownProgressPercent,
   getExerciseProgress,
@@ -47,7 +47,6 @@ const {
   renderMarkdown,
   formatRestDuration,
   formatTime,
-  debouncedRequestAdvice,
   handleLogExercise,
   handleAskQuestion,
   openGoogleSearch,
@@ -368,6 +367,25 @@ const {
      <p class="font-bold text-base">Workout Complete!</p>
      <p class="text-sm text-muted-foreground mt-1 max-w-[260px]">You have finished all exercises for today's session.</p>
     </div>
+    <!-- Rest day state (plan exists, but no session for today) -->
+    <div
+     v-else-if="activePlan && !planDerivedWorkout?.length"
+     class="flex flex-col items-center justify-center py-12 text-center opacity-50"
+    >
+     <span class="text-4xl mb-3">🛌</span>
+     <p class="font-bold text-base">Rest Day</p>
+     <p class="text-sm text-muted-foreground mt-1 max-w-[260px]">No training scheduled for today. Recover well!
+     </p>
+     <UiButton
+      variant="ghost"
+      size="sm"
+      class="mt-4 text-xs"
+      @click="activeTab = 'plan'"
+     >
+      View Plan
+     </UiButton>
+    </div>
+    <!-- No plan at all -->
     <div v-else class="flex flex-col items-center justify-center py-12 text-center opacity-50">
      <Sparkles class="w-10 h-10 mb-3 text-primary" />
      <p class="font-bold text-base">No active workout</p>
