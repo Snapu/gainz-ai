@@ -2,6 +2,7 @@ import type { DeloadStatus } from "@/modules/trainingInsights/domain";
 import { clampRestSeconds } from "@/modules/trainingInsights/domain";
 import type { WorkoutPhase } from "@/modules/trainingLogs/application";
 import type { CoachingAdvice } from "../domain/types";
+import { upcastLegacyExercise } from "../domain/upcaster";
 
 /**
  * Enforces domain invariants on the raw AI response.
@@ -42,7 +43,10 @@ export function postProcessCoachingAdvice(
         updatedEx.restSeconds = clampRestSeconds(updatedEx.targetReps, updatedEx.restSeconds);
       }
 
-      return updatedEx;
+      // 4. ACL Defense: Guard against AI returning old format despite prompt instructions
+      // TODO(TechDebt): Remove `upcastLegacyExercise` once we are confident the AI will
+      // never hallucinate string-based durations like `targetReps: "30s"`.
+      return upcastLegacyExercise(updatedEx);
     });
 
     // Sorting has been removed as per user request to keep the natural ordering from the AI
@@ -51,12 +55,16 @@ export function postProcessCoachingAdvice(
   if (cleaned.trainingPlan?.sessions) {
     cleaned.trainingPlan.sessions = cleaned.trainingPlan.sessions.map((session) => ({
       ...session,
-      exercises: session.exercises.map((ex) => ({
-        ...ex,
-        restSeconds: ex.targetReps
-          ? clampRestSeconds(ex.targetReps, ex.restSeconds)
-          : ex.restSeconds,
-      })),
+      exercises: session.exercises.map((ex) => {
+        // TODO(TechDebt): Remove `upcastLegacyExercise`
+        const upcasted = upcastLegacyExercise(ex);
+        return {
+          ...upcasted,
+          restSeconds: upcasted.targetReps
+            ? clampRestSeconds(upcasted.targetReps, upcasted.restSeconds)
+            : upcasted.restSeconds,
+        };
+      }),
     }));
   }
 

@@ -62,7 +62,9 @@ export interface CoachingAdvice {
   recommendedWorkout?: {
     exerciseName: string;
     targetSets: number;
-    targetReps: string;
+    targetReps?: string;
+    targetDurationSeconds?: number;
+    targetDistanceMeters?: number;
     targetWeight?: string;
     targetRpe?: number;
     restSeconds?: number;
@@ -110,11 +112,25 @@ export function createCoachingAdviceSchema(
         "Optional recommended exercises to add to today's workout. OMIT this entirely during mid-workout conversational Q&A to preserve the existing plan.",
       items: {
         type: Type.OBJECT,
-        required: ["exerciseName", "targetSets", "targetReps", "restSeconds"],
+        required: ["exerciseName", "targetSets", "restSeconds"],
         properties: {
           exerciseName: { type: Type.STRING },
           targetSets: { type: Type.INTEGER },
-          targetReps: { type: Type.STRING },
+          targetReps: {
+            type: Type.STRING,
+            description:
+              "Used for counting movements (e.g. '8-12', 'failure'). Do NOT use if duration or distance is provided.",
+          },
+          targetDurationSeconds: {
+            type: Type.INTEGER,
+            description:
+              "Used ONLY for time-based exercises like planks or isometric holds (e.g. 30, 60). Do NOT use targetReps if this is used.",
+          },
+          targetDistanceMeters: {
+            type: Type.INTEGER,
+            description:
+              "Used ONLY for distance-based cardio like running or rowing (e.g. 500, 1000). Do NOT use targetReps if this is used.",
+          },
           targetWeight: {
             type: Type.STRING,
             description:
@@ -193,11 +209,13 @@ export function createCoachingAdviceSchema(
                 type: Type.ARRAY,
                 items: {
                   type: Type.OBJECT,
-                  required: ["exerciseName", "targetSets", "targetReps"],
+                  required: ["exerciseName", "targetSets"],
                   properties: {
                     exerciseName: { type: Type.STRING },
                     targetSets: { type: Type.INTEGER },
                     targetReps: { type: Type.STRING },
+                    targetDurationSeconds: { type: Type.INTEGER },
+                    targetDistanceMeters: { type: Type.INTEGER },
                     targetWeight: { type: Type.STRING },
                     targetRpe: { type: Type.NUMBER },
                     restSeconds: { type: Type.INTEGER },
@@ -244,7 +262,9 @@ export interface PlannedSession {
 export interface PlannedExercise {
   exerciseName: string;
   targetSets: number;
-  targetReps: string;
+  targetReps?: string;
+  targetDurationSeconds?: number;
+  targetDistanceMeters?: number;
   targetWeight?: string;
   targetRpe?: number;
   restSeconds?: number;

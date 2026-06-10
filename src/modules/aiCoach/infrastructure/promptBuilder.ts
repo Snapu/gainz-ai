@@ -204,6 +204,8 @@ export function buildPriorPlanSummary(
       targetSets: number;
       targetWeight?: string;
       targetReps?: string;
+      targetDurationSeconds?: number;
+      targetDistanceMeters?: number;
       restSeconds?: number;
     }) => {
       const done = todayExercises.get(ex.exerciseName) ?? 0;
@@ -220,7 +222,9 @@ export function buildPriorPlanSummary(
       }
 
       const parts = [status];
-      if (ex.targetReps) parts.push(`${ex.targetReps}r`);
+      if (ex.targetDistanceMeters != null) parts.push(`${ex.targetDistanceMeters}m`);
+      else if (ex.targetDurationSeconds != null) parts.push(`${ex.targetDurationSeconds}s`);
+      else if (ex.targetReps) parts.push(`${ex.targetReps}r`);
       if (ex.targetWeight) parts.push(`@${ex.targetWeight}`);
       if (ex.restSeconds) parts.push(`${ex.restSeconds}s`);
 
@@ -502,7 +506,15 @@ export function formatPlanForPrompt(
     );
 
     for (const ex of session.exercises) {
-      const parts = [`${ex.targetSets}×${ex.targetReps}`];
+      let repsStr = "";
+      if (ex.targetDistanceMeters != null) {
+        repsStr = `${ex.targetDistanceMeters}m`;
+      } else if (ex.targetDurationSeconds != null) {
+        repsStr = `${ex.targetDurationSeconds}s`;
+      } else {
+        repsStr = ex.targetReps ?? "";
+      }
+      const parts = [`${ex.targetSets}×${repsStr}`];
       if (ex.targetWeight) parts.push(`@${ex.targetWeight}`);
       if (ex.targetRpe) parts.push(`@RPE${ex.targetRpe}`);
       if (ex.restSeconds) parts.push(`${ex.restSeconds}s`);

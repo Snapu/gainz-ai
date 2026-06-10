@@ -12,7 +12,9 @@ const coachingAdviceSchema = z.object({
       z.object({
         exerciseName: z.string(),
         targetSets: z.number(),
-        targetReps: z.string(),
+        targetReps: z.string().optional(),
+        targetDurationSeconds: z.number().optional(),
+        targetDistanceMeters: z.number().optional(),
         targetWeight: z.string().optional(),
         targetRpe: z.number().optional(),
         restSeconds: z.number().optional(),
@@ -44,7 +46,9 @@ const coachingAdviceSchema = z.object({
             z.object({
               exerciseName: z.string(),
               targetSets: z.number(),
-              targetReps: z.string(),
+              targetReps: z.string().optional(),
+              targetDurationSeconds: z.number().optional(),
+              targetDistanceMeters: z.number().optional(),
               targetWeight: z.string().optional(),
               targetRpe: z.number().optional(),
               restSeconds: z.number().optional(),

@@ -1,1 +1,0 @@
-System.register(["./index-legacy-DkB6ZGTi.js"],function(e,t){var n,r,s,u,c;return{setters:[function(e){n=e.Lt,r=e.Wt,s=e.jt,u=e.nn,c=e.r}],execute:function(){e("default",n({__name:"ExerciseLogs",setup:e=>(e,t)=>(r(),s(u(c)))}))}}});

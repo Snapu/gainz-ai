@@ -4,13 +4,7 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { uiChevronCircleClass } from "@/shared/presentation/components/ui/styles";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 import type { DisplayExercise } from "../helpers/aiCoachPageHelpers";
-import {
-  isDuration,
-  setSegments,
-  splitReps,
-  splitWeight,
-  titleClass,
-} from "../helpers/aiCoachPageHelpers";
+import { setSegments, splitReps, splitWeight, titleClass } from "../helpers/aiCoachPageHelpers";
 
 interface ExerciseProgress {
   done: number;
@@ -32,17 +26,28 @@ const emit = defineEmits<{
   (e: "search", exerciseName: string): void;
 }>();
 
-const isDurationExercise = computed(() => isDuration(props.exercise.targetReps));
+const isDurationExercise = computed(() => {
+  return props.exercise.targetDurationSeconds != null;
+});
 
 const parsedDurationSeconds = computed(() => {
-  if (!isDurationExercise.value || !props.exercise.targetReps) return 0;
-  const repsInfo = splitReps(props.exercise.targetReps);
-  const val = parseInt(repsInfo.value, 10);
-  if (Number.isNaN(val)) return 0;
+  return props.exercise.targetDurationSeconds ?? 0;
+});
 
-  const unit = (repsInfo.unit || "").toLowerCase();
-  if (unit.includes("min")) return val * 60;
-  return val;
+const displayTarget = computed(() => {
+  if (props.exercise.targetDistanceMeters != null) {
+    return { label: "Sets × Distance", value: props.exercise.targetDistanceMeters, unit: "m" };
+  }
+  if (props.exercise.targetDurationSeconds != null) {
+    const s = props.exercise.targetDurationSeconds;
+    if (s >= 60 && s % 60 === 0) {
+      return { label: "Sets × Time", value: s / 60, unit: "min" };
+    }
+    return { label: "Sets × Time", value: s, unit: "s" };
+  }
+
+  const repsInfo = splitReps(props.exercise.targetReps);
+  return { label: "Sets × Reps", value: repsInfo.value, unit: repsInfo.unit };
 });
 
 const timerRemaining = ref(0);
@@ -178,14 +183,14 @@ const timerProgressPercent = computed(() => {
             'col-span-2': (!exercise.targetWeight || splitWeight(exercise.targetWeight).value === 'BW') && exercise.targetRpe
           }">
             <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 whitespace-nowrap">
-              {{ isDurationExercise ? 'Sets × Time' : 'Sets × Reps' }}
+              {{ displayTarget.label }}
             </span>
             <div class="flex items-baseline min-w-0">
               <span class="text-lg font-bold tabular-nums text-foreground shrink-0">{{ exercise.targetSets }}</span>
               <span class="text-xs font-medium text-muted-foreground/50 mx-1 shrink-0">×</span>
-              <span class="text-lg font-bold tabular-nums text-foreground truncate">{{ splitReps(exercise.targetReps).value }}</span>
-              <span v-if="splitReps(exercise.targetReps).unit" class="text-xs font-semibold text-muted-foreground/50 ml-0.5 truncate">
-                {{ splitReps(exercise.targetReps).unit }}
+              <span class="text-lg font-bold tabular-nums text-foreground truncate">{{ displayTarget.value }}</span>
+              <span v-if="displayTarget.unit" class="text-xs font-semibold text-muted-foreground/50 ml-0.5 truncate">
+                {{ displayTarget.unit }}
               </span>
             </div>
           </div>

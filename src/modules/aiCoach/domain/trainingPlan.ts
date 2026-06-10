@@ -1,4 +1,5 @@
 import type { PlannedSession } from "./types";
+import { upcastLegacyExercise } from "./upcaster";
 
 /**
  * Domain Aggregate Root: TrainingPlan
@@ -35,7 +36,13 @@ export class TrainingPlan {
     cycleWeeks: number;
     sessions: PlannedSession[];
   }): TrainingPlan {
-    return new TrainingPlan(data.createdAt, data.cycleWeeks, data.sessions);
+    // TODO(TechDebt): Remove `upcastLegacyExercise` mapping once all active plans have been migrated
+    // to the new `targetDurationSeconds`/`targetDistanceMeters` schema in LocalStorage.
+    const upcastedSessions = data.sessions.map((session) => ({
+      ...session,
+      exercises: session.exercises.map(upcastLegacyExercise),
+    }));
+    return new TrainingPlan(data.createdAt, data.cycleWeeks, upcastedSessions);
   }
 
   /**

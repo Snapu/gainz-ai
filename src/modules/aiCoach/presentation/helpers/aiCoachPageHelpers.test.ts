@@ -178,10 +178,19 @@ describe("isDuration", () => {
     expect(isDuration("30 sec hold")).toBe(true);
   });
 
-  it("returns false for standard rep formats", () => {
+  it("returns true for single character duration suffixes like s", () => {
+    expect(isDuration("30s")).toBe(true);
+    expect(isDuration("30 s")).toBe(true);
+  });
+
+  it("returns false for standard rep formats and distance", () => {
     expect(isDuration("8-12")).toBe(false);
     expect(isDuration("to failure")).toBe(false);
     expect(isDuration(undefined)).toBe(false);
+    // make sure that 's' within words doesn't trigger it if it's not the exact suffix
+    expect(isDuration("10 reps")).toBe(false);
+    // 'm' should be treated as meters, not minutes
+    expect(isDuration("500m")).toBe(false);
   });
 });
 

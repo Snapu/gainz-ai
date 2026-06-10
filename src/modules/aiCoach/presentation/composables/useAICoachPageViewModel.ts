@@ -12,7 +12,6 @@ import {
   type DisplayInsight,
   type DisplayWorkoutGroup,
   groupWorkout,
-  isDuration,
   parseFirstRep,
   parseWeight,
   renderMarkdown,
@@ -37,6 +36,7 @@ export function useAICoachPageViewModel() {
     exerciseName: string;
     reps?: number;
     weight?: number;
+    distance?: number;
     duration?: number;
     rpe?: number;
   } | null>(null);
@@ -230,28 +230,20 @@ export function useAICoachPageViewModel() {
   // ---------------------------------------------------------------------------
 
   function handleLogExercise(exercise: DisplayExercise) {
-    const isDur = isDuration(exercise.targetReps);
-    const parsedReps = parseFirstRep(exercise.targetReps);
-
     let reps: number | undefined;
     let duration: number | undefined;
 
-    if (isDur && parsedReps !== undefined) {
-      const unit = splitReps(exercise.targetReps).unit.toLowerCase();
-      if (unit.includes("sec")) {
-        duration = Math.round((parsedReps / 60) * 10) / 10;
-      } else {
-        // Fallback for min, hr, etc. Assumes min for simplicity.
-        duration = parsedReps;
-      }
+    if (exercise.targetDurationSeconds != null) {
+      duration = Math.round((exercise.targetDurationSeconds / 60) * 100) / 100;
     } else {
-      reps = parsedReps;
+      reps = parseFirstRep(exercise.targetReps);
     }
 
     prefillData.value = {
       exerciseName: exercise.exerciseName,
       reps,
       duration,
+      distance: exercise.targetDistanceMeters,
       weight: parseWeight(exercise.targetWeight),
       rpe: exercise.targetRpe,
     };

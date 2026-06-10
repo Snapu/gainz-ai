@@ -1,5 +1,6 @@
 import DOMPurify from "dompurify";
 import type { CoachingAdvice } from "@/modules/aiCoach/presentation";
+import { upcastLegacyExercise } from "../../domain/upcaster";
 
 // ---------------------------------------------------------------------------
 // View-model types
@@ -8,7 +9,9 @@ import type { CoachingAdvice } from "@/modules/aiCoach/presentation";
 export interface DisplayExercise {
   exerciseName: string;
   targetSets: number;
-  targetReps: string;
+  targetReps?: string;
+  targetDurationSeconds?: number;
+  targetDistanceMeters?: number;
   targetWeight?: string;
   targetRpe?: number;
   notes?: string;
@@ -39,7 +42,13 @@ export function tryParseCoachingAdvice(content: string): CoachingAdvice | null {
   try {
     const parsed = JSON.parse(content);
     if (parsed && typeof parsed.coachMessage === "string") {
-      return parsed as CoachingAdvice;
+      const advice = parsed as CoachingAdvice;
+      if (Array.isArray(advice.recommendedWorkout)) {
+        // TODO(TechDebt): Remove `upcastLegacyExercise` once all legacy AI messages have
+        // been cycled out of history (typically ~14 days) and we are confident the AI won't hallucinate.
+        advice.recommendedWorkout = advice.recommendedWorkout.map((ex) => upcastLegacyExercise(ex));
+      }
+      return advice;
     }
     return null;
   } catch {
@@ -116,7 +125,7 @@ export function splitWeight(weightStr?: string): { value: string; unit: string }
   return { value: weightStr, unit: "" };
 }
 
-/** Determines if a reps string represents a duration (e.g. "30 secs", "1 min") */
+/** LEGACY: Determines if a reps string represents a duration. Used for backward compatibility with older plans. */
 export function isDuration(reps?: string): boolean {
   if (!reps) return false;
   const lower = reps.toLowerCase();
@@ -125,11 +134,12 @@ export function isDuration(reps?: string): boolean {
     lower.includes("min") ||
     lower.includes("hr") ||
     lower.includes("time") ||
-    lower.includes("hold")
+    lower.includes("hold") ||
+    /^[\d\s.,-]+s$/.test(lower)
   );
 }
 
-/** Splits a reps string like "30 secs" into `{ value: "30", unit: "secs" }`. Returns single value for simple ranges. */
+/** LEGACY: Splits a reps string like "30 secs" into `{ value: "30", unit: "secs" }`. Returns single value for simple ranges. */
 export function splitReps(reps?: string): { value: string; unit: string } {
   if (!reps) return { value: "", unit: "" };
 

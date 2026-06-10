@@ -107,6 +107,7 @@ When constraints clash, strictly follow this priority order:
 - MANDATORY CONSTRAINTS: Follow '# goals' explicitly.
 - Use EXACT exerciseName from the '# exercises' section or '# logs'. DO NOT invent new variations.
 - Do NOT give ranges for targetWeight, give a single number (e.g. '82.5kg').
+- Explicit Types: For time-based holds (e.g., Planks), output 'targetDurationSeconds' and OMIT 'targetReps'. For distance cardio (e.g., Running), output 'targetDistanceMeters' and OMIT 'targetReps'. Use 'targetReps' strictly for countable movements (e.g., '8-12').
 
 5. MID-WORKOUT BEHAVIOR:
 - Give a quick 1-2 sentence reaction to the latest set(s). No scratchpad needed.
