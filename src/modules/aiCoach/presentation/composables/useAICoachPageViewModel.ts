@@ -318,6 +318,19 @@ export function useAICoachPageViewModel() {
     }
   }
 
+  function requestOffDayWorkout() {
+    activeTab.value = "messages";
+    aiStore
+      .requestAdvice("I want to train today. Please recommend the next session from my plan.")
+      .then((result) => {
+        if (result.isErr()) {
+          handleAiError(result.error);
+        } else {
+          scrollToTop();
+        }
+      });
+  }
+
   function handleAiError(error: string) {
     const description =
       error === "missing-api-key"
@@ -482,6 +495,7 @@ export function useAICoachPageViewModel() {
     handleAskQuestion,
     openGoogleSearch,
     regeneratePlan,
+    requestOffDayWorkout,
     copyPlanJson,
   };
 }

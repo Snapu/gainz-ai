@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Coffee,
   Copy,
   Loader2,
   Play,
@@ -52,6 +53,7 @@ const {
   openGoogleSearch,
   regeneratePlan,
   copyPlanJson,
+  requestOffDayWorkout,
 } = useAICoachPageViewModel();
 </script>
 
@@ -372,18 +374,28 @@ const {
      v-else-if="activePlan && !planDerivedWorkout?.length"
      class="flex flex-col items-center justify-center py-12 text-center opacity-50"
     >
-     <span class="text-4xl mb-3">🛌</span>
+     <Coffee class="w-10 h-10 mb-3 text-primary" />
      <p class="font-bold text-base">Rest Day</p>
      <p class="text-sm text-muted-foreground mt-1 max-w-[260px]">No training scheduled for today. Recover well!
      </p>
-     <UiButton
-      variant="ghost"
-      size="sm"
-      class="mt-4 text-xs"
-      @click="activeTab = 'plan'"
-     >
-      View Plan
-     </UiButton>
+     <div class="flex gap-2 mt-4">
+       <UiButton
+        variant="ghost"
+        size="sm"
+        class="text-xs"
+        @click="activeTab = 'plan'"
+       >
+        View Plan
+       </UiButton>
+       <UiButton
+        variant="default"
+        size="sm"
+        class="text-xs"
+        @click="requestOffDayWorkout"
+       >
+        Train Anyway
+       </UiButton>
+     </div>
     </div>
     <!-- No plan at all -->
     <div v-else class="flex flex-col items-center justify-center py-12 text-center opacity-50">
