@@ -65,10 +65,10 @@ self.addEventListener("sync", (event: SyncEvent) => {
   }
 });
 
-// Allow the service worker to control the page immediately
-self.addEventListener("install", (event: ExtendableEvent) => {
-  // Skip waiting to activate immediately
-  event.waitUntil(self.skipWaiting());
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("activate", (event: ExtendableEvent) => {
