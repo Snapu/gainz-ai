@@ -21,19 +21,31 @@ let swUpdateInterval: ReturnType<typeof setInterval> | undefined;
 const { needRefresh, updateServiceWorker } = useRegisterSW({
   onRegisteredSW(_swUrl, registration) {
     if (registration) {
-      // Check for updates every hour
+      // Check for updates every 30 minutes
       swUpdateInterval = setInterval(
         () => {
-          registration.update();
+          registration.update().catch(() => {});
         },
-        60 * 60 * 1000,
+        30 * 60 * 1000,
       );
 
-      // Check for updates when the app comes to foreground
+      // Check for updates when the app comes to foreground (Mobile via Capacitor)
       CapacitorApp.addListener("appStateChange", ({ isActive }) => {
         if (isActive) {
-          registration.update();
+          registration.update().catch(() => {});
         }
+      });
+
+      // Check for updates when the browser tab becomes visible again (Web)
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+          registration.update().catch(() => {});
+        }
+      });
+
+      // Check for updates on route changes
+      router.afterEach(() => {
+        registration.update().catch(() => {});
       });
     }
   },

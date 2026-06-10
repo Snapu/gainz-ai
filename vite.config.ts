@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => {
       legacy(),
       vueDevTools(),
       VitePWA({
-        registerType: "autoUpdate",
+        registerType: "prompt",
         strategies: "injectManifest",
         srcDir: "public",
         filename: "service-worker.ts",
