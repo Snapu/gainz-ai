@@ -103,21 +103,21 @@ interface MuscleNode {
 // Zig-Zag Left/Right balancing
 
 const MUSCLE_MAP_FRONT: Partial<Record<MuscleGroup, MuscleNode>> = {
-  "Front Delts": { dot: { x: 33, y: 23 }, anchorY: 15 }, // Left
-  "Side Delts": { dot: { x: 78, y: 26 }, anchorY: 25 }, // Right
+  "Front Delts": { dot: { x: 33, y: 23 }, anchorY: 10 }, // Left
+  "Side Delts": { dot: { x: 78, y: 26 }, anchorY: 20 }, // Right
   Chest: { dot: { x: 40, y: 27 }, anchorY: 35 }, // Left
   Biceps: { dot: { x: 74, y: 34 }, anchorY: 45 }, // Right
-  Abs: { dot: { x: 45, y: 42 }, anchorY: 55 }, // Left
-  Quads: { dot: { x: 62, y: 62 }, anchorY: 65 }, // Right
+  Abs: { dot: { x: 45, y: 42 }, anchorY: 60 }, // Left
+  Quads: { dot: { x: 62, y: 62 }, anchorY: 70 }, // Right
 };
 
 const MUSCLE_MAP_BACK: Partial<Record<MuscleGroup, MuscleNode>> = {
-  "Upper Back": { dot: { x: 41, y: 21 }, anchorY: 15 }, // Left
-  Lats: { dot: { x: 62, y: 32 }, anchorY: 25 }, // Right
-  Triceps: { dot: { x: 25, y: 35 }, anchorY: 40 }, // Left
-  Glutes: { dot: { x: 60, y: 48 }, anchorY: 50 }, // Right
-  Hamstrings: { dot: { x: 39, y: 63 }, anchorY: 65 }, // Left
-  Calves: { dot: { x: 64, y: 76 }, anchorY: 75 }, // Right
+  "Upper Back": { dot: { x: 41, y: 21 }, anchorY: 10 }, // Left
+  Lats: { dot: { x: 62, y: 32 }, anchorY: 20 }, // Right
+  Triceps: { dot: { x: 25, y: 35 }, anchorY: 35 }, // Left
+  Glutes: { dot: { x: 60, y: 48 }, anchorY: 45 }, // Right
+  Hamstrings: { dot: { x: 39, y: 63 }, anchorY: 60 }, // Left
+  Calves: { dot: { x: 64, y: 76 }, anchorY: 70 }, // Right
 };
 
 const views = computed(() => {
