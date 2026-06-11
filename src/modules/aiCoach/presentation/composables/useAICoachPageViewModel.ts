@@ -15,7 +15,6 @@ import {
   parseFirstRep,
   parseWeight,
   renderMarkdown,
-  splitReps,
   tryParseCoachingAdvice,
 } from "../helpers/aiCoachPageHelpers";
 
@@ -397,16 +396,14 @@ export function useAICoachPageViewModel() {
         if (result.isErr()) handleAiError(result.error);
         else scrollToTop();
       });
-    } else if (aiStore.isNewDataAvailable) {
-      // Plan exists and new training data is available → ask AI to react
-      // If we already know today's planned workout, navigate there immediately
-      // so the user sees their exercises right away while the AI processes.
+    } else if (!aiStore.hasTodayCoachMessage) {
+      // New day: plan exists but AI hasn't responded today → get today's workout
       if (planDerivedWorkout.value?.length) {
         activeTab.value = "today";
       }
       debouncedRequestAdvice();
     } else if (activeWorkout.value?.length) {
-      // Existing workout with no new data → jump straight to Today tab
+      // Mid-workout re-entry: AI already responded today → just show the workout
       activeTab.value = "today";
     }
 
@@ -482,7 +479,6 @@ export function useAICoachPageViewModel() {
     renderMarkdown,
     formatRestDuration,
     formatTime,
-    debouncedRequestAdvice,
     handleLogExercise,
     handleAskQuestion,
     openGoogleSearch,

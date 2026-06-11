@@ -119,8 +119,8 @@ describe("calculateTrainingInsights", () => {
       );
 
       // e1RM should not be dragged down by the light deload sets
-      expect(withDeloadLogs.e1rm["Squat"]?.e1rm).toBeCloseTo(
-        withoutDeloadLogs.e1rm["Squat"]?.e1rm ?? 0,
+      expect(withDeloadLogs.e1rm.Squat?.e1rm).toBeCloseTo(
+        withoutDeloadLogs.e1rm.Squat?.e1rm ?? 0,
         0,
       );
     });
@@ -181,12 +181,12 @@ describe("calculateTrainingInsights", () => {
       );
 
       // Both completed and canceled should exclude the light deload logs and match the pure trend
-      expect(withCompletedDeload.e1rm["Squat"]?.e1rm).toBeCloseTo(
-        withoutDeloadPhase.e1rm["Squat"]?.e1rm ?? 0,
+      expect(withCompletedDeload.e1rm.Squat?.e1rm).toBeCloseTo(
+        withoutDeloadPhase.e1rm.Squat?.e1rm ?? 0,
         0,
       );
-      expect(withCanceledDeload.e1rm["Squat"]?.e1rm).toBeCloseTo(
-        withoutDeloadPhase.e1rm["Squat"]?.e1rm ?? 0,
+      expect(withCanceledDeload.e1rm.Squat?.e1rm).toBeCloseTo(
+        withoutDeloadPhase.e1rm.Squat?.e1rm ?? 0,
         0,
       );
     });
@@ -234,6 +234,7 @@ describe("calculateTrainingInsights", () => {
 
       // With the baseline averaging fix, the 5-set week is replaced by the average of the 15-set weeks.
       // So the baseline is ~15 sets, and 15 sets in the current week should NOT trigger a volume spike.
+      expect(result.fatigue.triggeredBy).not.toContain("volumeSpike");
     });
 
     it("evaluates fatigue on completed ISO weeks only (partial-week guard)", () => {

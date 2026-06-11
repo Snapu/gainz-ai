@@ -179,13 +179,11 @@ export function calculateFatigueInsight(
   const sets1 = getRollingSum(dailySets, targetDay - 7);
   const sets2 = getRollingSum(dailySets, targetDay - 14);
   const sets3 = getRollingSum(dailySets, targetDay - 21);
-  const weeklyTotalSets = [sets3, sets2, sets1, sets0];
 
   const tonnage0 = getRollingSum(dailyTonnage, targetDay);
   const tonnage1 = getRollingSum(dailyTonnage, targetDay - 7);
   const tonnage2 = getRollingSum(dailyTonnage, targetDay - 14);
   const tonnage3 = getRollingSum(dailyTonnage, targetDay - 21);
-  const weeklyTonnage = [tonnage3, tonnage2, tonnage1, tonnage0];
 
   const hasSufficientHistory = setsEwma !== null && tonnageEwma !== null;
 

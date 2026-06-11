@@ -88,7 +88,7 @@ export function loadDeloadPhaseInfra(
     await ensureHeaders(sheet);
     const rows = await sheet.getRows();
     if (rows.length === 0) return null;
-    return deserialize(rows[0]!.toObject());
+    return deserialize(rows[0]?.toObject());
   }, mapLoadError)();
 }
 
@@ -102,8 +102,8 @@ export function saveDeloadPhaseInfra(
     const rows = await sheet.getRows();
     const data = serialize(phase);
     if (rows.length > 0) {
-      rows[0]!.assign(data);
-      await rows[0]!.save();
+      rows[0]?.assign(data);
+      await rows[0]?.save();
     } else {
       await sheet.addRow(data);
     }

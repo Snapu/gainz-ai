@@ -31,7 +31,7 @@ export function resolveCurrentSession(
 
   if (msSinceLast > SESSION_INACTIVITY_MS) return null;
 
-  const startTime = recentLogs[0]!.loggedAt;
+  const startTime = recentLogs[0]?.loggedAt;
 
   return {
     sessionId: isoDateString(startTime),

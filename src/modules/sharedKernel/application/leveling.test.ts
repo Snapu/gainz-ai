@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  calculateUserProgress,
-  getNextTitleMilestone,
-  getTitleForLevel,
-} from "@/modules/sharedKernel/application";
+import { calculateUserProgress, getTitleForLevel } from "@/modules/sharedKernel/application";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 
 function mockLog(date: Date, exercise = "Bench Press", weight = 60): ExerciseLog {

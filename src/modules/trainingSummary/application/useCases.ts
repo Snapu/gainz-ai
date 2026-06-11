@@ -1,4 +1,4 @@
-import { err, ok, okAsync, type ResultAsync } from "neverthrow";
+import { okAsync, type ResultAsync } from "neverthrow";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 import type { TrainingSummary } from "@/modules/trainingSummary/domain";
 

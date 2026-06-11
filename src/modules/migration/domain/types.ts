@@ -92,8 +92,8 @@ export function buildExerciseWeightMigrationCandidates(
       return {
         exerciseName,
         affectedLogCount: sortedLogs.length,
-        latestLoggedAt: latestLog!.loggedAt,
-        latestWeight: latestLog!.weight!,
+        latestLoggedAt: latestLog?.loggedAt,
+        latestWeight: latestLog?.weight!,
         recentLogs: sortedLogs.slice(0, previewLogCount).map((log) => ({
           weight: log.weight!,
           loggedAt: log.loggedAt,

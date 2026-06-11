@@ -18,6 +18,13 @@ import {
   TrainingPlan,
 } from "@/modules/aiCoach/domain";
 import { createAiCoachService, LocalStoragePlanRepository } from "@/modules/aiCoach/infrastructure";
+import {
+  cleanOldCoachingSessions,
+  createPlanSessionId,
+  loadMessagesFromStorage,
+  removeMessagesFromStorage,
+  saveMessagesToStorage,
+} from "@/modules/aiCoach/infrastructure/messageStorage";
 import { useDeloadStore } from "@/modules/deload/presentation";
 import { useEventsStore } from "@/modules/events/presentation";
 import {
@@ -78,15 +85,6 @@ function replaceMessageContentById(
   return messages.map((msg) => (msg.id === messageId ? { ...msg, content } : msg));
 }
 
-import {
-  cleanOldCoachingSessions,
-  createPlanSessionId,
-  extractDateFromSessionId,
-  loadMessagesFromStorage,
-  removeMessagesFromStorage,
-  saveMessagesToStorage,
-} from "@/modules/aiCoach/infrastructure/messageStorage";
-
 function isCoachingAdviceError(value: unknown): value is CoachingAdviceError {
   return (
     value === "missing-api-key" ||
@@ -106,8 +104,11 @@ export const useAiStore = defineStore("ai", () => {
   const messages = ref<CoachingMessage[]>([]);
   const isLoading = ref(false);
   const hasInitialized = ref(false);
-  const lastRequestLogsChecksum = useLocalStorage<string>("ai-coach:last-checksum", "");
-  const needsRerun = ref(false);
+  const lastRequestState = useLocalStorage<{ date: string; checksum: string }>(
+    "ai-coach:last-request-state",
+    { date: "", checksum: "" },
+  );
+  const pendingRequest = ref<{ question?: string; mode: "planning" | "execution" } | null>(null);
   const activePlan = ref<TrainingPlan | null>(null);
 
   const userProfileStore = useUserProfileStore();
@@ -154,13 +155,6 @@ export const useAiStore = defineStore("ai", () => {
     }
 
     cleanOldCoachingSessions();
-    hasInitialized.value = true;
-  }
-
-  function ensureInitialized(): void {
-    if (!hasInitialized.value) {
-      initialize();
-    }
   }
 
   function persistMessages(sessionId: string): void {
@@ -177,10 +171,10 @@ export const useAiStore = defineStore("ai", () => {
     question?: string,
     mode: "planning" | "execution" = "execution",
   ): ResultAsync<void, CoachingAdviceError> {
-    ensureInitialized();
+    initialize();
 
     if (isLoading.value) {
-      needsRerun.value = true;
+      pendingRequest.value = { question, mode };
       return okAsync(undefined);
     }
 
@@ -197,7 +191,7 @@ export const useAiStore = defineStore("ai", () => {
     }
 
     isLoading.value = true;
-    needsRerun.value = false;
+    pendingRequest.value = null;
 
     return ResultAsync.fromPromise(
       (async (): Promise<void> => {
@@ -206,9 +200,12 @@ export const useAiStore = defineStore("ai", () => {
         const todayLogsCount = getTodayLogsCount(aiCoachService, currentSession);
         const todayLogsChecksum = getTodayLogsChecksum(currentSession);
 
+        const today = isoDateString(new Date());
+
         if (
           !question &&
-          lastRequestLogsChecksum.value === todayLogsChecksum &&
+          lastRequestState.value.date === today &&
+          lastRequestState.value.checksum === todayLogsChecksum &&
           messages.value.length > 0
         ) {
           return;
@@ -294,7 +291,10 @@ export const useAiStore = defineStore("ai", () => {
           );
           messages.value.push(coachMessage);
           persistMessages(currentId);
-          lastRequestLogsChecksum.value = todayLogsChecksum;
+          lastRequestState.value = {
+            date: isoDateString(new Date()),
+            checksum: todayLogsChecksum,
+          };
         } catch (error) {
           if (userMessageId) {
             messages.value = removeMessageById(messages.value, userMessageId);
@@ -317,21 +317,26 @@ export const useAiStore = defineStore("ai", () => {
     )
       .andThen((result) => {
         isLoading.value = false;
-        if (needsRerun.value) return runCoachingRequest(question, mode);
+        const pending = pendingRequest.value;
+        if (pending) return runCoachingRequest(pending.question, pending.mode);
         return okAsync(result);
       })
       .orElse((error) => {
         isLoading.value = false;
-        if (needsRerun.value) return runCoachingRequest(question, mode);
+        const pending = pendingRequest.value;
+        if (pending) return runCoachingRequest(pending.question, pending.mode);
         return errAsync(error);
       });
   }
 
   function generateNewPlan(): ResultAsync<void, CoachingAdviceError> {
-    ensureInitialized();
+    initialize();
 
     if (isLoading.value) {
-      needsRerun.value = true;
+      pendingRequest.value = {
+        question: "Please generate a new 2-week mesocycle plan.",
+        mode: "planning",
+      };
       return okAsync(undefined);
     }
 
@@ -389,23 +394,11 @@ export const useAiStore = defineStore("ai", () => {
     messages.value = [];
   }
 
-  function resetPlan(): void {
-    planRepository.clearPlan();
-    activePlan.value = null;
-    cleanOldCoachingSessions();
-    messages.value = [];
-    needsRerun.value = true;
-  }
-
-  function clearActivePlan() {
-    planRepository.clearPlan();
-    activePlan.value = null;
-  }
-
-  const isNewDataAvailable = computed<boolean>(() => {
-    const currentSession = resolveCurrentSession(exerciseLogsStore.exerciseLogs);
-    const todayLogsChecksum = getTodayLogsChecksum(currentSession);
-    return messages.value.length === 0 || lastRequestLogsChecksum.value !== todayLogsChecksum;
+  const hasTodayCoachMessage = computed<boolean>(() => {
+    const today = isoDateString(new Date());
+    return messages.value.some(
+      (m) => m.role === "coach" && isoDateString(new Date(m.timestamp)) === today,
+    );
   });
 
   return {
@@ -414,14 +407,11 @@ export const useAiStore = defineStore("ai", () => {
     generateNewPlan,
     classifyExercisesIfNeeded,
     clearMessages,
-    clearActivePlan,
     isLoading,
     messages,
     hasInitialized,
-    _currentSessionId: currentSessionId,
     activePlan,
     currentWorkoutPlan,
-    isNewDataAvailable,
-    lastRequestLogsChecksum,
+    hasTodayCoachMessage,
   };
 });

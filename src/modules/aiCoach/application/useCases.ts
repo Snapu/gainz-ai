@@ -1,4 +1,4 @@
-import { errAsync, Result, ResultAsync } from "neverthrow";
+import { errAsync, ResultAsync } from "neverthrow";
 import type { WorkoutSession } from "@/modules/trainingLogs/application";
 
 /**

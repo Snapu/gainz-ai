@@ -27,11 +27,7 @@ import {
 import { calculateE1RMInsights, type ExerciseE1RM } from "./e1rm";
 import type { MuscleActivation } from "./exerciseMuscleMap";
 import { calculateFatigueInsight } from "./fatigueDetection";
-import {
-  calculateMuscleGroupInsights,
-  getIsoWeekStart,
-  type MuscleGroupInsight,
-} from "./volumeLandmarks";
+import { calculateMuscleGroupInsights, type MuscleGroupInsight } from "./volumeLandmarks";
 
 export * from "./acwr";
 export * from "./deloadPhase";

@@ -1,5 +1,3 @@
-import type { PlannedExercise } from "./types";
-
 /**
  * TODO(TechDebt): Legacy Parsing Functions
  * The functions below (`isDuration`, `parseFirstRep`, `splitReps`) are only kept around

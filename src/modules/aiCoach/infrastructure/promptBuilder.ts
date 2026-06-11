@@ -482,7 +482,6 @@ export function formatExercises(
  */
 export function formatPlanForPrompt(
   plan: TrainingPlan,
-  mode: "planning" | "execution" = "execution",
   currentWeekNumber?: number,
 ): string {
   const lines: string[] = [];

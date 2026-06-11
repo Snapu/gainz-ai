@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import type { MuscleGroup } from "@/modules/sharedKernel/domain";
 import {
   calculateMetricUpdates,
   type EmpiricalDiscoveryInput,

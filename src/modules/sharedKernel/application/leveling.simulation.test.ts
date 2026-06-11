@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 describe("Leveling Simulation", () => {
   it("should verify the 10-year curve", () => {
     // Simulate 10 years of training
-    const WEEKS_IN_10_YEARS = 520;
     const SESSIONS_PER_WEEK = 3.5;
     const SETS_PER_SESSION = 12;
     const RPE_AVG = 8.5;

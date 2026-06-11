@@ -119,7 +119,7 @@ function zourdosPercent(reps: number, rpe: number): number | null {
   const roundedRpe = Math.round(clampedRpe * 2) / 2;
   const colIdx = RPE_STEPS.indexOf(roundedRpe as (typeof RPE_STEPS)[number]);
   if (colIdx === -1) return null;
-  return ZOURDOS_TABLE[reps - 1]![colIdx]!;
+  return ZOURDOS_TABLE[reps - 1]?.[colIdx]!;
 }
 
 // ---------------------------------------------------------------------------
@@ -328,7 +328,7 @@ export function calculateE1RMInsights(
     const dateKey = log.loggedAt.toDateString();
     const dayLogs = byExercise.get(canonical)!;
     if (!dayLogs.has(dateKey)) dayLogs.set(dateKey, []);
-    dayLogs.get(dateKey)!.push(log);
+    dayLogs.get(dateKey)?.push(log);
   }
 
   const result: Record<string, ExerciseE1RM> = {};

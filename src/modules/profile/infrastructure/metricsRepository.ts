@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/vue";
 import type { GoogleSpreadsheet } from "google-spreadsheet";
-import { errAsync, okAsync, ResultAsync } from "neverthrow";
+import { ResultAsync } from "neverthrow";
 import { isAuthError } from "@/modules/platform/infrastructure";
 import type {
   MetricsLoadError,

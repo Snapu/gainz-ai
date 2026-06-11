@@ -210,7 +210,7 @@ describe("calculateE1RM", () => {
     it("result is rounded to 1 decimal place", () => {
       const result = calculateE1RM(87.5, 5, 8);
       expect(result).not.toBeNull();
-      const decimals = result!.toString().split(".")[1]?.length ?? 0;
+      const decimals = result?.toString().split(".")[1]?.length ?? 0;
       expect(decimals).toBeLessThanOrEqual(1);
     });
   });
@@ -233,9 +233,9 @@ describe("calculateE1RMInsights", () => {
       createLog("Bench Press", daysLater(21), 115, 3),
     ];
     const result = calculateE1RMInsights(logs, undefined, daysLater(30));
-    expect(result["Bench Press"]!.trend.length).toBeGreaterThanOrEqual(4);
-    expect(result["Bench Press"]!.e1rm).toBeGreaterThan(100);
-    expect(result["Bench Press"]!.plateau).toBe(false);
+    expect(result["Bench Press"]?.trend.length).toBeGreaterThanOrEqual(4);
+    expect(result["Bench Press"]?.e1rm).toBeGreaterThan(100);
+    expect(result["Bench Press"]?.plateau).toBe(false);
   });
 
   // -------------------------------------------------------------------------
@@ -252,7 +252,7 @@ describe("calculateE1RMInsights", () => {
         createLog("Bench Press", daysLater(21), 80, 5),
       ];
       const result = calculateE1RMInsights(logs, undefined, daysLater(30));
-      const reported = result["Bench Press"]!.e1rm;
+      const reported = result["Bench Press"]?.e1rm;
       const rawLastSession = calculateE1RM(80, 5)!;
       // Reported e1RM should be higher than the raw bad-day session value
       expect(reported).toBeGreaterThan(rawLastSession);
@@ -267,7 +267,7 @@ describe("calculateE1RMInsights", () => {
       const result = calculateE1RMInsights(logs, undefined, daysLater(21));
       const prE1RM = calculateE1RM(110, 5)!;
       // Rolling max should include the PR session immediately
-      expect(result["Bench Press"]!.e1rm).toBeCloseTo(prE1RM, 0);
+      expect(result["Bench Press"]?.e1rm).toBeCloseTo(prE1RM, 0);
     });
   });
 
@@ -286,7 +286,7 @@ describe("calculateE1RMInsights", () => {
         createLog("Squat", daysLater(21), 96, 5),
         createLog("Squat", daysLater(28), 98, 5),
       ];
-      expect(calculateE1RMInsights(logs, undefined, daysLater(35))["Squat"]!.plateau).toBe(false);
+      expect(calculateE1RMInsights(logs, undefined, daysLater(35)).Squat?.plateau).toBe(false);
     });
 
     it("detects a genuine flat plateau (zero slope, 5+ sessions)", () => {
@@ -297,7 +297,7 @@ describe("calculateE1RMInsights", () => {
         createLog("Squat", daysLater(21), 100, 5),
         createLog("Squat", daysLater(28), 100, 5),
       ];
-      expect(calculateE1RMInsights(logs, undefined, daysLater(35))["Squat"]!.plateau).toBe(true);
+      expect(calculateE1RMInsights(logs, undefined, daysLater(35)).Squat?.plateau).toBe(true);
     });
 
     it("does NOT flag plateau with fewer than 5 sessions (minimum window requirement)", () => {
@@ -307,7 +307,7 @@ describe("calculateE1RMInsights", () => {
         createLog("Squat", daysLater(14), 100, 5),
         createLog("Squat", daysLater(21), 100, 5),
       ];
-      expect(calculateE1RMInsights(logs, undefined, daysLater(30))["Squat"]!.plateau).toBe(false);
+      expect(calculateE1RMInsights(logs, undefined, daysLater(30)).Squat?.plateau).toBe(false);
     });
 
     it("resets plateau when exercise is absent for 3+ weeks", () => {
@@ -319,7 +319,7 @@ describe("calculateE1RMInsights", () => {
         createLog("Squat", daysLater(28), 100, 5),
       ];
       // Check beyond PLATEAU_RESET_DAYS (21 days) from last log
-      expect(calculateE1RMInsights(logs, undefined, daysLater(50))["Squat"]!.plateau).toBe(false);
+      expect(calculateE1RMInsights(logs, undefined, daysLater(50)).Squat?.plateau).toBe(false);
     });
   });
 
@@ -336,7 +336,7 @@ describe("calculateE1RMInsights", () => {
       ];
       const result = calculateE1RMInsights(logs, undefined, daysLater(30));
       // bestRPE should be the RPE of the most recent session's best set, not 9
-      expect(result["Row"]!.bestRPE).not.toBe(9);
+      expect(result.Row?.bestRPE).not.toBe(9);
     });
 
     it("bestRPE is the RPE of the set with the highest e1RM in the latest session", () => {
@@ -349,7 +349,7 @@ describe("calculateE1RMInsights", () => {
       ];
       const result = calculateE1RMInsights(logs, undefined, daysLater(21));
       // best set in latest session is 100×5 @RPE6, not 90×5 @RPE9
-      expect(result["Row"]!.bestRPE).toBe(6);
+      expect(result.Row?.bestRPE).toBe(6);
     });
 
     it("bestRPE is undefined when the most recent session has no RPE recorded", () => {
@@ -357,7 +357,7 @@ describe("calculateE1RMInsights", () => {
         createLog("Row", daysLater(0), 100, 8, 9), // has RPE
         createLog("Row", daysLater(7), 110, 6), // no RPE — this is the last session
       ];
-      expect(calculateE1RMInsights(logs, undefined, daysLater(30))["Row"]!.bestRPE).toBeUndefined();
+      expect(calculateE1RMInsights(logs, undefined, daysLater(30)).Row?.bestRPE).toBeUndefined();
     });
   });
 
@@ -376,14 +376,14 @@ describe("calculateE1RMInsights", () => {
 
     it("constant series → slope ≈ 0 → plateau fires with 5+ sessions", () => {
       const logs = [0, 7, 14, 21, 28].map((d) => createLog("Bench", daysLater(d), 100, 5));
-      expect(calculateE1RMInsights(logs, undefined, daysLater(35))["Bench"]!.plateau).toBe(true);
+      expect(calculateE1RMInsights(logs, undefined, daysLater(35)).Bench?.plateau).toBe(true);
     });
 
     it("strictly increasing series → positive slope → no plateau", () => {
       const logs = [0, 7, 14, 21, 28].map((d, i) =>
         createLog("Bench", daysLater(d), 100 + i * 5, 5),
       );
-      expect(calculateE1RMInsights(logs, undefined, daysLater(35))["Bench"]!.plateau).toBe(false);
+      expect(calculateE1RMInsights(logs, undefined, daysLater(35)).Bench?.plateau).toBe(false);
     });
 
     it("strictly decreasing series → negative slope → no plateau (regression: was broken before Math.abs fix)", () => {
@@ -393,7 +393,7 @@ describe("calculateE1RMInsights", () => {
       const logs = [0, 7, 14, 21, 28].map((d, i) =>
         createLog("Bench", daysLater(d), 120 - i * 5, 5),
       );
-      expect(calculateE1RMInsights(logs, undefined, daysLater(35))["Bench"]!.plateau).toBe(false);
+      expect(calculateE1RMInsights(logs, undefined, daysLater(35)).Bench?.plateau).toBe(false);
     });
   });
 
@@ -409,7 +409,7 @@ describe("calculateE1RMInsights", () => {
         createLog("OHP", daysLater(14), 65, 3), // valid
         createLog("OHP", daysLater(21), 67, 3), // valid
       ];
-      const result = calculateE1RMInsights(logs, undefined, daysLater(30))["OHP"]!;
+      const result = calculateE1RMInsights(logs, undefined, daysLater(30)).OHP!;
       // 3 valid sessions (day 0, 14, 21); day 7 was filtered
       expect(result.trend.length).toBe(result.trendDates.length);
       expect(result.trend.length).toBe(3);
@@ -424,9 +424,7 @@ describe("calculateE1RMInsights", () => {
     const logs = Array.from({ length: 12 }, (_, i) =>
       createLog("Deadlift", daysLater(i * 7), 100 + i * 5, 3),
     );
-    expect(calculateE1RMInsights(logs, undefined, daysLater(100))["Deadlift"]!.trend).toHaveLength(
-      8,
-    );
+    expect(calculateE1RMInsights(logs, undefined, daysLater(100)).Deadlift?.trend).toHaveLength(8);
   });
 
   it("uses best e1RM across multiple sets within the same session (NSCA best-set standard)", () => {
@@ -436,17 +434,17 @@ describe("calculateE1RMInsights", () => {
       createLog("Bench Press", daysLater(0), 95, 5),
     ];
     const result = calculateE1RMInsights(logs, undefined, daysLater(10));
-    expect(result["Bench Press"]!.trend[0]).toBeCloseTo(calculateE1RM(100, 5)!, 1);
+    expect(result["Bench Press"]?.trend[0]).toBeCloseTo(calculateE1RM(100, 5)!, 1);
   });
 
   it("skips sets with null e1RM (reps > 20) and counts only valid sessions", () => {
     const logs = [createLog("Curl", daysLater(0), 20, 25), createLog("Curl", daysLater(7), 30, 10)];
-    expect(calculateE1RMInsights(logs, undefined, daysLater(30))["Curl"]!.trend).toHaveLength(1);
+    expect(calculateE1RMInsights(logs, undefined, daysLater(30)).Curl?.trend).toHaveLength(1);
   });
 
   it("returns nothing for exercise where all sets have null e1RM", () => {
     const logs = [createLog("Walk", daysLater(0), 0, 0)];
-    expect(calculateE1RMInsights(logs, undefined, daysLater(30))["Walk"]).toBeUndefined();
+    expect(calculateE1RMInsights(logs, undefined, daysLater(30)).Walk).toBeUndefined();
   });
 
   it("case-insensitive name matching groups all variants together", () => {
@@ -457,7 +455,7 @@ describe("calculateE1RMInsights", () => {
     ];
     const result = calculateE1RMInsights(logs, undefined, daysLater(30));
     expect(Object.keys(result)).toHaveLength(1);
-    expect(result["bench press"]!.trend).toHaveLength(3);
+    expect(result["bench press"]?.trend).toHaveLength(3);
   });
 
   it("tracks multiple exercises independently", () => {
@@ -469,7 +467,7 @@ describe("calculateE1RMInsights", () => {
     ];
     const result = calculateE1RMInsights(logs, undefined, daysLater(30));
     expect(Object.keys(result)).toHaveLength(2);
-    expect(result["Squat"]!.e1rm).toBeGreaterThan(result["Bench Press"]!.e1rm);
+    expect(result.Squat?.e1rm).toBeGreaterThan(result["Bench Press"]?.e1rm);
   });
 
   it("excludes deload week logs from trend", () => {
@@ -482,8 +480,8 @@ describe("calculateE1RMInsights", () => {
     const deloadRange = { start: daysLater(13), end: daysLater(15) };
     const withDeload = calculateE1RMInsights(logs, [deloadRange], daysLater(30));
     const withoutDeload = calculateE1RMInsights(logs, undefined, daysLater(30));
-    expect(withDeload["OHP"]!.trend).toHaveLength(3);
-    expect(withDeload["OHP"]!.e1rm).toBeGreaterThanOrEqual(withoutDeload["OHP"]!.e1rm);
+    expect(withDeload.OHP?.trend).toHaveLength(3);
+    expect(withDeload.OHP?.e1rm).toBeGreaterThanOrEqual(withoutDeload.OHP?.e1rm);
   });
 
   it("excludes synthetic logs from trend (Flaw 7 fix)", () => {
@@ -496,7 +494,7 @@ describe("calculateE1RMInsights", () => {
     ];
     const result = calculateE1RMInsights(logs, undefined, daysLater(30));
     // The synthetic log should not be in the trend, length should be 3
-    expect(result["Squat"]!.trend).toHaveLength(3);
+    expect(result.Squat?.trend).toHaveLength(3);
     // The e1rm should not be inflated by the 140kg synthetic log
     const expectedMax = Math.max(
       calculateE1RM(100, 5)!,
@@ -504,8 +502,8 @@ describe("calculateE1RMInsights", () => {
       calculateE1RM(110, 5)!,
     );
     // Allowing for decay over a few sessions
-    expect(result["Squat"]!.e1rm).toBeLessThan(calculateE1RM(140, 5, 8)!);
-    expect(result["Squat"]!.e1rm).toBeCloseTo(expectedMax, 0);
+    expect(result.Squat?.e1rm).toBeLessThan(calculateE1RM(140, 5, 8)!);
+    expect(result.Squat?.e1rm).toBeCloseTo(expectedMax, 0);
   });
 
   it("synthetic logs in the same session as real logs don't contaminate the best-set selection", () => {
@@ -514,15 +512,15 @@ describe("calculateE1RMInsights", () => {
       { ...createLog("Bench", daysLater(0), 150, 5), synthetic: true }, // synthetic in same session
     ];
     const result = calculateE1RMInsights(logs, undefined, daysLater(10));
-    expect(result["Bench"]!.e1rm).toBeCloseTo(calculateE1RM(100, 5)!, 1);
+    expect(result.Bench?.e1rm).toBeCloseTo(calculateE1RM(100, 5)!, 1);
   });
 
   it("includes trendDates corresponding to the sessions in the trend array", () => {
     const logs = [createLog("Row", daysLater(0), 100, 8), createLog("Row", daysLater(7), 110, 6)];
     const result = calculateE1RMInsights(logs, undefined, daysLater(30));
-    expect(result["Row"]!.trendDates).toHaveLength(2);
-    expect(result["Row"]!.trendDates[0].toDateString()).toBe(daysLater(0).toDateString());
-    expect(result["Row"]!.trendDates[1].toDateString()).toBe(daysLater(7).toDateString());
+    expect(result.Row?.trendDates).toHaveLength(2);
+    expect(result.Row?.trendDates[0].toDateString()).toBe(daysLater(0).toDateString());
+    expect(result.Row?.trendDates[1].toDateString()).toBe(daysLater(7).toDateString());
   });
 
   // -------------------------------------------------------------------------
@@ -536,7 +534,7 @@ describe("calculateE1RMInsights", () => {
         createLog("Bench", daysLater(7), 100, 5, 7), // 7 days history, not 14
       ];
       const result = calculateE1RMInsights(logs, undefined, daysLater(10));
-      expect(result["Bench"]!.rpeOverloadReady).toBe(false);
+      expect(result.Bench?.rpeOverloadReady).toBe(false);
     });
 
     it("is true when exercise is established (>14 days) and last session best set RPE < 8", () => {
@@ -546,7 +544,7 @@ describe("calculateE1RMInsights", () => {
         createLog("Bench", daysLater(14), 100, 5, 7), // exactly 14 days
       ];
       const result = calculateE1RMInsights(logs, undefined, daysLater(15));
-      expect(result["Bench"]!.rpeOverloadReady).toBe(true);
+      expect(result.Bench?.rpeOverloadReady).toBe(true);
     });
 
     it("is false when exercise is established but last session best set RPE is >= 8", () => {
@@ -556,7 +554,7 @@ describe("calculateE1RMInsights", () => {
         createLog("Bench", daysLater(14), 100, 5, 8.5), // RPE >= 8
       ];
       const result = calculateE1RMInsights(logs, undefined, daysLater(15));
-      expect(result["Bench"]!.rpeOverloadReady).toBe(false);
+      expect(result.Bench?.rpeOverloadReady).toBe(false);
     });
 
     it("is false when RPE is missing from the last session", () => {
@@ -566,7 +564,7 @@ describe("calculateE1RMInsights", () => {
         createLog("Bench", daysLater(14), 100, 5), // Missing RPE
       ];
       const result = calculateE1RMInsights(logs, undefined, daysLater(15));
-      expect(result["Bench"]!.rpeOverloadReady).toBe(false);
+      expect(result.Bench?.rpeOverloadReady).toBe(false);
     });
 
     it("uses full history for established check, not just truncated trend window", () => {
@@ -582,7 +580,7 @@ describe("calculateE1RMInsights", () => {
       }
       const result = calculateE1RMInsights(logs, undefined, daysLater(20));
       // Should correctly see it as established because full history is 19 days
-      expect(result["Bench"]!.rpeOverloadReady).toBe(true);
+      expect(result.Bench?.rpeOverloadReady).toBe(true);
     });
   });
 });

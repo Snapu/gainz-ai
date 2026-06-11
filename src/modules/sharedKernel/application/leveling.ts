@@ -265,23 +265,6 @@ function toDayKey(date: Date): string {
 }
 
 /**
- * Deduplicate exercise dates by calendar day.
- *
- * If multiple exercises are logged on the same day,
- * they count as ONE exercise day for consistency tracking.
- */
-function dedupeExerciseDays(dates: Date[]): Date[] {
-  const seen = new Set<string>();
-
-  return dates.filter((date) => {
-    const key = toDayKey(date);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-/**
  * Convert a date to the start of its ISO week (Monday).
  *
  * Weekly granularity:
@@ -294,21 +277,6 @@ function startOfWeek(date: Date): Date {
   const day = d.getDay() || 7; // Sunday → 7
   d.setDate(d.getDate() - day + 1);
   return d;
-}
-
-/**
- * Group exercise days by week.
- */
-function groupByWeek(dates: Date[]): Map<number, Date[]> {
-  const map = new Map<number, Date[]>();
-
-  for (const date of dates) {
-    const weekKey = startOfWeek(date).getTime();
-    if (!map.has(weekKey)) map.set(weekKey, []);
-    map.get(weekKey)!.push(date);
-  }
-
-  return map;
 }
 
 /**
@@ -360,7 +328,7 @@ export function calculateUserProgress(
 
   // Sort logs chronologically (only if needed for performance)
   const isSorted = logs.every(
-    (l, i) => i === 0 || l.loggedAt.getTime() >= logs[i - 1]!.loggedAt.getTime(),
+    (l, i) => i === 0 || l.loggedAt.getTime() >= logs[i - 1]?.loggedAt.getTime(),
   );
   const sortedLogs = isSorted
     ? logs
@@ -371,7 +339,7 @@ export function calculateUserProgress(
   for (const log of sortedLogs) {
     const weekKey = startOfWeek(log.loggedAt).getTime();
     if (!logsByWeek.has(weekKey)) logsByWeek.set(weekKey, []);
-    logsByWeek.get(weekKey)!.push(log);
+    logsByWeek.get(weekKey)?.push(log);
   }
 
   const weekKeys = [...logsByWeek.keys()].sort();
@@ -426,12 +394,12 @@ export function calculateUserProgress(
 
     // Fatigue detection: uses a sliding window of logs for performance
     const windowStartTime = weekEnd.getTime() - slidingWindowDuration;
-    while (windowEndIndex < sortedLogs.length && sortedLogs[windowEndIndex]!.loggedAt <= weekEnd) {
+    while (windowEndIndex < sortedLogs.length && sortedLogs[windowEndIndex]?.loggedAt <= weekEnd) {
       windowEndIndex++;
     }
     while (
       windowStartIndex < windowEndIndex &&
-      sortedLogs[windowStartIndex]!.loggedAt.getTime() < windowStartTime
+      sortedLogs[windowStartIndex]?.loggedAt.getTime() < windowStartTime
     ) {
       windowStartIndex++;
     }
@@ -441,7 +409,7 @@ export function calculateUserProgress(
 
     // Fatigue detection (heuristic: if many groups are above MRV)
     const overreachingGroups = Object.values(insights).filter(
-      (i) => i!.landmark === "above_MRV",
+      (i) => i?.landmark === "above_MRV",
     ).length;
     if (overreachingGroups >= 2) {
       readiness -= READINESS_LOSS_FATIGUE;
@@ -485,7 +453,7 @@ export function calculateUserProgress(
 
     // Pillar: Symmetry (Hitting MAV Landmarks)
     const mavHits = Object.values(insights).filter(
-      (i) => i!.landmark === "at_MAV" || i!.landmark === "above_MRV",
+      (i) => i?.landmark === "at_MAV" || i?.landmark === "above_MRV",
     ).length;
     const masteryXP = mavHits * XP_VOLUME_MAV_BONUS;
     weeklyXP += masteryXP;
@@ -535,12 +503,12 @@ export function calculateUserProgress(
     journeyDurationWeeks: Math.max(
       1,
       Math.ceil(
-        (sortedLogs[sortedLogs.length - 1]!.loggedAt.getTime() -
-          sortedLogs[0]!.loggedAt.getTime()) /
+        (sortedLogs[sortedLogs.length - 1]?.loggedAt.getTime() -
+          sortedLogs[0]?.loggedAt.getTime()) /
           (7 * 24 * 60 * 60 * 1000),
       ),
     ),
-    firstSessionDate: sortedLogs[0]!.loggedAt,
+    firstSessionDate: sortedLogs[0]?.loggedAt,
     xpBreakdown: {
       discipline: Math.floor(xpDiscipline),
       intensity: Math.floor(xpIntensity),

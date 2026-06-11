@@ -1,6 +1,6 @@
 import { useAsyncState, useDebounceFn, useDocumentVisibility, useOnline } from "@vueuse/core";
 
-import { errAsync, okAsync, type Result, ResultAsync } from "neverthrow";
+import { errAsync, okAsync, ResultAsync } from "neverthrow";
 import { ref, watch } from "vue";
 
 type UseOfflineSyncedStoreParams<T, FetchE, AddE, RemoveE, UpdateE = never> = {

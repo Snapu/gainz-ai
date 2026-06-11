@@ -155,7 +155,7 @@ describe("getSessionStartBoundary", () => {
     const logs = [createLog("Squat", minsAgo(20))];
     const session = resolveCurrentSession(logs, now);
     // logs[0] is defined — we just constructed the array with one element above.
-    expect(getSessionStartBoundary(session, now)).toBe(logs[0]!.loggedAt.getTime());
+    expect(getSessionStartBoundary(session, now)).toBe(logs[0]?.loggedAt.getTime());
   });
 
   it("returns start-of-current-day when no session", () => {

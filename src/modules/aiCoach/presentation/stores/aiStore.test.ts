@@ -79,7 +79,6 @@ vi.mock("@/modules/aiCoach/infrastructure/messageStorage", () => ({
 
 import { requestAdviceWithSingleRetry } from "@/modules/aiCoach/application";
 import { useUserProfileStore } from "@/modules/profile/presentation";
-import { resolveCurrentSession } from "@/modules/trainingLogs/presentation";
 import { useAiStore } from "./aiStore";
 
 describe("useAiStore initialization", () => {
@@ -266,54 +265,62 @@ describe("useAiStore currentWorkoutPlan", () => {
   });
 });
 
-describe("useAiStore isNewDataAvailable", () => {
+describe("useAiStore hasTodayCoachMessage", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.clearAllMocks();
   });
 
-  it("returns true if no messages", () => {
+  it("returns false if no messages", () => {
     const store = useAiStore();
     store.messages = [];
-    expect(store.isNewDataAvailable).toBe(true);
+    expect(store.hasTodayCoachMessage).toBe(false);
   });
 
-  it("returns false if messages exist and checksum matches", () => {
+  it("returns true if a coach message exists from today", () => {
     const store = useAiStore();
     store.messages = [
       {
         id: "msg-1",
         role: "coach",
         content: "hello",
-        timestamp: "2026-01-01T10:00:00.000Z",
+        timestamp: new Date().toISOString(),
         sessionId: "2026-01-01",
         logsCount: 1,
       },
     ];
-    store.lastRequestLogsChecksum = "";
-    expect(store.isNewDataAvailable).toBe(false);
+    expect(store.hasTodayCoachMessage).toBe(true);
   });
 
-  it("returns true if messages exist but checksum is different", () => {
+  it("returns false if only user messages exist from today", () => {
     const store = useAiStore();
+    store.messages = [
+      {
+        id: "msg-1",
+        role: "user",
+        content: "hello",
+        timestamp: new Date().toISOString(),
+        sessionId: "2026-01-01",
+        logsCount: 0,
+      },
+    ];
+    expect(store.hasTodayCoachMessage).toBe(false);
+  });
+
+  it("returns false if coach messages are only from yesterday", () => {
+    const store = useAiStore();
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
     store.messages = [
       {
         id: "msg-1",
         role: "coach",
         content: "hello",
-        timestamp: "2026-01-01T10:00:00.000Z",
+        timestamp: yesterday.toISOString(),
         sessionId: "2026-01-01",
         logsCount: 1,
       },
     ];
-
-    vi.mocked(resolveCurrentSession).mockReturnValueOnce({
-      sessionId: "2026-01-01",
-      sessionDate: "2026-01-01",
-      logs: [{ id: "log-1", reps: 10, weight: 100 }],
-    } as any);
-
-    store.lastRequestLogsChecksum = "";
-    expect(store.isNewDataAvailable).toBe(true);
+    expect(store.hasTodayCoachMessage).toBe(false);
   });
 });

@@ -1,5 +1,4 @@
 import type { GoogleSpreadsheet } from "google-spreadsheet";
-import { ok } from "neverthrow";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   loadUserProfile,

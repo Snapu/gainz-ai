@@ -302,7 +302,7 @@ export function requestCoachingAdvice(
           // Compute cycle week to pass to formatPlanForPrompt for [TODAY] marker accuracy
           const planCycleWeek = activePlan.getCurrentWeekNumber(now);
           sections.push(
-            `# program\n${formatPlanForPrompt(activePlan, options.mode || "execution", planCycleWeek)}`,
+            `# program\n${formatPlanForPrompt(activePlan, planCycleWeek)}`,
           );
         }
 
@@ -413,7 +413,7 @@ export function requestCoachingAdvice(
 
         // Validate JSON response structure using the ACL (neverthrow-elegant pattern)
         const validationResult = translateCoachingAdviceJson(adviceResponseText)
-          .mapErr((err) => {
+          .mapErr(() => {
             return "generate-content-stream-failed" as const;
           })
           .map((parsed) => {

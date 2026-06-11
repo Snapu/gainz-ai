@@ -60,7 +60,7 @@ export class ExerciseLogsSheetsRepository {
       }));
 
       await sheet.addRows(rowsWithIds);
-      console.log("Migration complete - added UUIDs to " + rowsWithIds.length + " existing logs");
+      console.log(`Migration complete - added UUIDs to ${rowsWithIds.length} existing logs`);
     }
 
     await sheet.loadHeaderRow();
@@ -209,7 +209,7 @@ export class ExerciseLogsSheetsRepository {
         });
       },
       (error) => {
-        console.error("Failed to load logs from year " + year + ". Error:", error);
+        console.error(`Failed to load logs from year ${year}. Error:`, error);
         return "load-failed" as const;
       },
     )().andThen((rows) => parseData(ExerciseLogSchema.array(), rows));

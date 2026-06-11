@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import type { MuscleActivation } from "./exerciseMuscleMap";
 import { classifyExercise, getProgressionIncrement } from "./exerciseMuscleMap";
 
 describe("Exercise Classification", () => {

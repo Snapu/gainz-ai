@@ -10,7 +10,7 @@ import {
 
 const DAY = 24 * 60 * 60 * 1000;
 
-function makePhase(offsetFromNowMs = 0, durationMs = DELOAD_DURATION_MS) {
+function makePhase(offsetFromNowMs = 0) {
   const start = new Date(Date.now() + offsetFromNowMs);
   return createDeloadPhase(3, ["tonnageSpike", "performanceDecline"], start);
 }

@@ -126,7 +126,7 @@ describe("computeACWR (rolling average)", () => {
     const logs = [createLog(15, 73, 7), createLog(4, 88, 6)];
     const acwr = computeACWR(logs, BASE_DATE);
     expect(acwr).not.toBeNull();
-    const decimalPart = acwr!.toString().split(".")[1] ?? "";
+    const decimalPart = acwr?.toString().split(".")[1] ?? "";
     expect(decimalPart.length).toBeLessThanOrEqual(2);
   });
 
@@ -217,7 +217,7 @@ describe("computeEWMAACWR (EWMA)", () => {
     ];
     const result = computeEWMAACWR(logs, BASE_DATE);
     expect(result).not.toBeNull();
-    const decimalPart = result!.toString().split(".")[1] ?? "";
+    const decimalPart = result?.toString().split(".")[1] ?? "";
     expect(decimalPart.length).toBeLessThanOrEqual(2);
   });
 

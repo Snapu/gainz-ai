@@ -120,7 +120,7 @@ export function useTrainingInsightsPageViewModel() {
     }
 
     if (acwr < 0.6) {
-      const now = new Date().getTime();
+      const now = Date.now();
       const hasRecentLogs = trainingInsightsStore.allLogs.some(
         (log) => (now - log.loggedAt.getTime()) / (1000 * 60 * 60 * 24) <= 7,
       );
@@ -291,7 +291,7 @@ export function useTrainingInsightsPageViewModel() {
       }
     }
 
-    const now = new Date().getTime();
+    const now = Date.now();
 
     return Object.entries(insights.value.e1rm)
       .map(([name, data]) => {

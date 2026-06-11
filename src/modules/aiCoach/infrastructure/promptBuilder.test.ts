@@ -78,7 +78,7 @@ describe("formatPlanForPrompt", () => {
       },
     ]);
 
-    const result = formatPlanForPrompt(plan, "planning");
+    const result = formatPlanForPrompt(plan);
     const expected = `cycle: 2w, created: 2026-06-02
 W1-Mon Unit A (Push Focus):
   Incline DB Press: 3×6-8 @RPE8.5 120s

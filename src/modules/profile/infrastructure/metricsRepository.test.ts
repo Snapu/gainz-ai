@@ -4,7 +4,6 @@ import type {
   GoogleSpreadsheetWorksheet,
 } from "google-spreadsheet";
 import { describe, expect, it, vi } from "vitest";
-import { isAuthError } from "@/modules/platform/infrastructure";
 import type { PhysiologicalMetricsMap } from "@/modules/profile/domain";
 import { createMetricsRepository } from "./metricsRepository";
 
@@ -58,13 +57,13 @@ describe("metricsRepository", () => {
       expect(result.isOk()).toBe(true);
       if (result.isOk()) {
         const metrics = result.value;
-        expect(metrics["Chest"]).toEqual({
+        expect(metrics.Chest).toEqual({
           muscleGroup: "Chest",
           personalMAV: 12,
           personalMRV: undefined,
           lastUpdated: "2024-01-01",
         });
-        expect(metrics["Lats"]).toEqual({
+        expect(metrics.Lats).toEqual({
           muscleGroup: "Lats",
           personalMAV: undefined,
           personalMRV: 20,
