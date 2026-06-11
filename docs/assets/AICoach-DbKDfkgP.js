@@ -1,0 +1,1 @@
+import{At as e,It as t,Ut as n,f as r,tn as i}from"./index-BW2OrJZx.js";var a=t({__name:`AICoach`,setup(t){return(t,a)=>(n(),e(i(r)))}});export{a as default};

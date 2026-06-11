@@ -1,0 +1,1 @@
+System.register(["./index-legacy-BruSzktD.js"],function(t,e){var n,u,c,r,s;return{setters:[function(t){n=t.At,u=t.It,c=t.Ut,r=t.f,s=t.tn}],execute:function(){t("default",u({__name:"AICoach",setup:t=>(t,e)=>(c(),n(s(r)))}))}}});

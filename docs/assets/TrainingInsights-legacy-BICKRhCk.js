@@ -1,0 +1,1 @@
+System.register(["./index-legacy-BruSzktD.js"],function(t,e){var n,s,i,r,u;return{setters:[function(t){n=t.At,s=t.It,i=t.Ut,r=t.s,u=t.tn}],execute:function(){t("default",s({__name:"TrainingInsights",setup:t=>(t,e)=>(i(),n(u(r)))}))}}});

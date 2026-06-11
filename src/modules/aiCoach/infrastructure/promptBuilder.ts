@@ -414,7 +414,7 @@ export function formatMuscles(insights: TrainingInsights): string {
  */
 function buildExerciseParts(
   name: string,
-  data: Record<string, unknown>,
+  data: Record<string, any>,
   exerciseLogs: ExerciseLog[],
   recentExerciseNames?: Set<string>,
 ): string[] | null {

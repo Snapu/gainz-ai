@@ -125,9 +125,9 @@ export function getTodayLogsCount(session: WorkoutSession | null): number {
 
 async function executeAiRequest(
   ai: GoogleGenAI,
-  conversationContents: import("@google/genai").GenerateContentRequest["contents"],
+  conversationContents: any[],
   aiTimeoutMs: number,
-  schema: import("@google/genai").Schema,
+  schema: any,
 ): Promise<string> {
   const generateWithTimeout = (model: "gemini-3-flash-preview" | "gemini-2.5-flash") => {
     const timeoutPromise = new Promise<never>((_, reject) =>
@@ -239,7 +239,7 @@ export function requestCoachingAdvice(
     (e) => {
       if (e instanceof Error && e.message === "generate-content-stream-failed")
         return "generate-content-stream-failed";
-      return "network-error";
+      return "coaching-request-failed";
     },
   );
 }

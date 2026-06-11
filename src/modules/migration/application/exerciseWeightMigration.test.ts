@@ -253,9 +253,8 @@ describe("exerciseWeightMigration service", () => {
       Logs2025: createMockSheet([previousYearRow]),
       Logs2026: createMockSheet([currentYearRow, untouchedRow]),
     });
-    const _trainingSummarySheet = (
-      doc as unknown as { sheetsByTitle: { TrainingSummary: ReturnType<typeof createMockSheet> } }
-    ).sheetsByTitle.TrainingSummary;
+    (doc as unknown as { sheetsByTitle: { TrainingSummary: ReturnType<typeof createMockSheet> } })
+      .sheetsByTitle.TrainingSummary;
 
     const result = await applyExerciseWeightMigrationDecision(
       "Dumbbell Bench Press",
@@ -287,9 +286,8 @@ describe("exerciseWeightMigration service", () => {
     const doc = createMockDoc(migrationSheet, {
       Logs2026: createMockSheet([currentYearRow]),
     });
-    const _trainingSummarySheet = (
-      doc as unknown as { sheetsByTitle: { TrainingSummary: ReturnType<typeof createMockSheet> } }
-    ).sheetsByTitle.TrainingSummary;
+    (doc as unknown as { sheetsByTitle: { TrainingSummary: ReturnType<typeof createMockSheet> } })
+      .sheetsByTitle.TrainingSummary;
 
     const result = await applyExerciseWeightMigrationDecision(
       "Dumbbell Bench Press",
