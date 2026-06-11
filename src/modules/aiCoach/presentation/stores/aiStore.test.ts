@@ -1,6 +1,7 @@
 import { ok } from "neverthrow";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { CoachingMessage } from "@/modules/aiCoach/domain";
 
 const {
   loadMessagesFromStorageMock,
@@ -8,7 +9,7 @@ const {
   removeMessagesFromStorageMock,
   captureExceptionMock,
 } = vi.hoisted(() => ({
-  loadMessagesFromStorageMock: vi.fn(() => ok([])),
+  loadMessagesFromStorageMock: vi.fn(() => ok<CoachingMessage[], "load-failed">([])),
   cleanOldCoachingSessionsMock: vi.fn(),
   removeMessagesFromStorageMock: vi.fn(),
   captureExceptionMock: vi.fn(),
@@ -87,7 +88,7 @@ describe("useAiStore initialization", () => {
     loadMessagesFromStorageMock.mockClear();
     removeMessagesFromStorageMock.mockClear();
     cleanOldCoachingSessionsMock.mockClear();
-    loadMessagesFromStorageMock.mockReturnValue(ok([]));
+    loadMessagesFromStorageMock.mockReturnValue(ok<CoachingMessage[], "load-failed">([]));
   });
 
   it("does not initialize storage on store creation", () => {
@@ -105,12 +106,8 @@ describe("useAiStore initialization", () => {
         {
           id: "msg-1",
           role: "coach",
-          content: "hello",
-          timestamp: "2026-01-01T10:00:00.000Z",
-          sessionId: "2026-01-01",
-          logsCount: 1,
-        },
-      ] as any),
+        } as unknown as CoachingMessage,
+      ]),
     );
 
     store.initialize();

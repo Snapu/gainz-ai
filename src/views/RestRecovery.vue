@@ -29,7 +29,9 @@ const formCustomType = ref("");
 
 // Default to today
 const now = today(getLocalTimeZone());
+
 // Use a more relaxed type for the ref to avoid ZonedDateTime mismatch
+// biome-ignore lint/suspicious/noExplicitAny: v-model mismatch with Reka UI DateRange
 const dateRange = ref<any>({
   start: now,
   end: now,

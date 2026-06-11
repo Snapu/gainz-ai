@@ -86,16 +86,16 @@ export function buildExerciseWeightMigrationCandidates(
       const sortedLogs = [...exerciseLogs].sort(
         (left, right) => right.loggedAt.getTime() - left.loggedAt.getTime(),
       );
-      const latestLog = sortedLogs[0]!;
+      const latestLog = sortedLogs[0];
       const years = new Set(sortedLogs.map((log) => log.loggedAt.getFullYear()));
 
       return {
         exerciseName,
         affectedLogCount: sortedLogs.length,
-        latestLoggedAt: latestLog.loggedAt,
-        latestWeight: latestLog.weight!,
+        latestLoggedAt: latestLog?.loggedAt ?? new Date(),
+        latestWeight: latestLog?.weight ?? 0,
         recentLogs: sortedLogs.slice(0, previewLogCount).map((log) => ({
-          weight: log.weight!,
+          weight: log.weight ?? 0,
           loggedAt: log.loggedAt,
         })),
         spansMultipleYears: years.size > 1,

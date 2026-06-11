@@ -20,8 +20,8 @@ const createMockRow = (data: Record<string, string> = {}) => ({
   save: vi.fn().mockResolvedValue(undefined),
 });
 
-const createMockSheet = (rows: any[] = [], headerValues = ["exerciseName", "decision"]) => {
-  const sheet: any = {
+const createMockSheet = (rows: unknown[] = [], headerValues = ["exerciseName", "decision"]) => {
+  const sheet = {
     headerValues,
     loadHeaderRow: vi.fn().mockResolvedValue(undefined),
     setHeaderRow: vi.fn().mockImplementation(async (headers: string[]) => {
@@ -35,7 +35,7 @@ const createMockSheet = (rows: any[] = [], headerValues = ["exerciseName", "deci
   return sheet;
 };
 
-const createMockDoc = (migrationSheet: any = null, logSheets: Record<string, any> = {}) =>
+const createMockDoc = (migrationSheet: unknown = null, logSheets: Record<string, unknown> = {}) =>
   ({
     sheetsByTitle: {
       ExerciseWeightMigration: migrationSheet,
@@ -253,7 +253,9 @@ describe("exerciseWeightMigration service", () => {
       Logs2025: createMockSheet([previousYearRow]),
       Logs2026: createMockSheet([currentYearRow, untouchedRow]),
     });
-    const trainingSummarySheet = (doc as any).sheetsByTitle.TrainingSummary;
+    const trainingSummarySheet = (
+      doc as unknown as { sheetsByTitle: { TrainingSummary: ReturnType<typeof createMockSheet> } }
+    ).sheetsByTitle.TrainingSummary;
 
     const result = await applyExerciseWeightMigrationDecision(
       "Dumbbell Bench Press",
@@ -298,7 +300,9 @@ describe("exerciseWeightMigration service", () => {
     const doc = createMockDoc(migrationSheet, {
       Logs2026: createMockSheet([currentYearRow]),
     });
-    const trainingSummarySheet = (doc as any).sheetsByTitle.TrainingSummary;
+    const trainingSummarySheet = (
+      doc as unknown as { sheetsByTitle: { TrainingSummary: ReturnType<typeof createMockSheet> } }
+    ).sheetsByTitle.TrainingSummary;
 
     const result = await applyExerciseWeightMigrationDecision(
       "Dumbbell Bench Press",

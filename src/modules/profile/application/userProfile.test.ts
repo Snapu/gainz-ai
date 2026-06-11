@@ -24,8 +24,8 @@ const createMockLocalStorage = () => {
   };
 };
 
-const createMockSheet = (rows: any[] = [], headerValues?: string[]) => {
-  const sheet: any = {
+const createMockSheet = (rows: unknown[] = [], headerValues?: string[]) => {
+  const sheet = {
     headerValues: headerValues ?? [
       "age",
       "heightCm",
@@ -47,7 +47,7 @@ const createMockSheet = (rows: any[] = [], headerValues?: string[]) => {
   return sheet;
 };
 
-const createMockDoc = (sheet: any = null) => {
+const createMockDoc = (sheet: unknown = null) => {
   return {
     sheetsByTitle: { UserProfile: sheet },
     addSheet: vi.fn().mockResolvedValue(createMockSheet()),

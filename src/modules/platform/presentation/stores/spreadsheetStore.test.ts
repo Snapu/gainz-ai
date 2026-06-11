@@ -1,3 +1,4 @@
+import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { errAsync, okAsync } from "neverthrow";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -33,13 +34,16 @@ describe("useSpreadsheetStore", () => {
     const store = useSpreadsheetStore();
 
     let getSpreadsheetIdCalls = 0;
-    (spreadsheetService.getSpreadsheetId as any).mockImplementation(() => {
+    vi.mocked(spreadsheetService.getSpreadsheetId).mockImplementation(() => {
       getSpreadsheetIdCalls++;
       return okAsync(null);
     });
 
-    (spreadsheetService.createSpreadsheet as any).mockImplementation(() => {
-      return okAsync({ spreadsheetId: "new-id", loadInfo: vi.fn() });
+    vi.mocked(spreadsheetService.createSpreadsheet).mockImplementation(() => {
+      return okAsync({
+        spreadsheetId: "new-id",
+        loadInfo: vi.fn(),
+      } as unknown as GoogleSpreadsheet);
     });
 
     // Trigger multiple initializations concurrently
@@ -59,7 +63,7 @@ describe("useSpreadsheetStore", () => {
   it("should not create spreadsheet if getSpreadsheetId fails with an error", async () => {
     const store = useSpreadsheetStore();
 
-    (spreadsheetService.getSpreadsheetId as any).mockReturnValue(
+    vi.mocked(spreadsheetService.getSpreadsheetId).mockReturnValue(
       errAsync("get-spreadsheet-id-failed"),
     );
 
