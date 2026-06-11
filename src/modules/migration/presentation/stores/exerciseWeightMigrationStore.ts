@@ -110,14 +110,12 @@ export const useExerciseWeightMigrationStore = defineStore("exerciseWeightMigrat
       },
     )
       .andThen(() =>
-        ResultAsync.fromPromise(
-          Promise.all([refresh(), logsStore.refresh(), trainingSummaryStore.refresh()]),
-          (error) => {
-            console.error("Failed to refresh after decision:", error);
-            return "save-failed" as const;
-          },
-        ),
+        ResultAsync.fromPromise(Promise.all([refresh(), logsStore.refresh()]), (error) => {
+          console.error("Failed to refresh after decision:", error);
+          return "save-failed" as const;
+        }),
       )
+      .andThen(() => trainingSummaryStore.rebuildAllSummaries())
       .map(() => {
         // Success path: clean up state after both succeed
         activeExerciseName.value = null;
@@ -125,7 +123,7 @@ export const useExerciseWeightMigrationStore = defineStore("exerciseWeightMigrat
       })
       .orTee((error) => {
         // Error path (isolated): capture error and clean up on both success/failure
-        lastError.value = error;
+        lastError.value = String(error);
         activeExerciseName.value = null;
       });
   }

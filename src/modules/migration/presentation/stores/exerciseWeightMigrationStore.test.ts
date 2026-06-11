@@ -65,7 +65,10 @@ describe("useExerciseWeightMigrationStore", () => {
       });
 
     useExerciseLogsStoreMock.mockReturnValue({ refresh: vi.fn() });
-    useTrainingSummaryStoreMock.mockReturnValue({ refresh: vi.fn() });
+    useTrainingSummaryStoreMock.mockReturnValue({
+      refresh: vi.fn(),
+      rebuildAllSummaries: vi.fn(() => okAsync([])),
+    });
   });
 
   it("returns a typed error and clears active state when applyDecision rejects unexpectedly", async () => {
@@ -89,5 +92,37 @@ describe("useExerciseWeightMigrationStore", () => {
 
     expect(store.lastError).toBe("load-failed");
     expect(store.isLoading).toBe(false);
+  });
+
+  it("applies decision successfully, refreshes stores, and rebuilds summaries", async () => {
+    applyExerciseWeightMigrationDecisionMock.mockReturnValueOnce(
+      okAsync({
+        review: {
+          exerciseName: "Bench Press",
+          decision: "convert_to_total",
+          reviewedAt: "now",
+          affectedLogCount: 1,
+        },
+        updatedLogCount: 1,
+      }),
+    );
+    loadAllLogsForMigrationMock.mockReturnValueOnce(okAsync([]));
+
+    const store = useExerciseWeightMigrationStore();
+    const trainingSummaryStore = useTrainingSummaryStoreMock();
+    const logsStore = useExerciseLogsStoreMock();
+
+    const result = await store.applyDecision("Bench Press", "convert_to_total");
+
+    expect(result?.isOk()).toBe(true);
+    expect(store.lastError).toBeNull();
+    expect(store.activeExerciseName).toBeNull();
+    expect(applyExerciseWeightMigrationDecisionMock).toHaveBeenCalledWith(
+      "Bench Press",
+      "convert_to_total",
+      expect.anything(),
+    );
+    expect(logsStore.refresh).toHaveBeenCalled();
+    expect(trainingSummaryStore.rebuildAllSummaries).toHaveBeenCalled();
   });
 });

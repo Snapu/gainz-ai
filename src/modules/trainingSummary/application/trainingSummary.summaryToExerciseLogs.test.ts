@@ -33,7 +33,9 @@ describe("summaryToExerciseLogs", () => {
   });
 
   it("uses maxWeight for all generated log entries", () => {
-    const logs = summaryToExerciseLogs([makeSummary({ maxWeight: 100, sets: 4 })]);
+    const logs = summaryToExerciseLogs([
+      makeSummary({ maxWeight: 100, sets: 4, totalVolume: undefined, totalReps: undefined }),
+    ]);
     expect(logs.every((l) => l.weight === 100)).toBe(true);
   });
 
@@ -42,9 +44,9 @@ describe("summaryToExerciseLogs", () => {
     expect(logs.every((l) => l.reps === 8)).toBe(true);
   });
 
-  it("falls back to 10 reps when totalReps is undefined", () => {
+  it("leaves reps undefined when totalReps is undefined", () => {
     const logs = summaryToExerciseLogs([makeSummary({ sets: 4, totalReps: undefined })]);
-    expect(logs.every((l) => l.reps === 10)).toBe(true);
+    expect(logs.every((l) => l.reps === undefined)).toBe(true);
   });
 
   it("distributes logs across distinct dates within the month", () => {

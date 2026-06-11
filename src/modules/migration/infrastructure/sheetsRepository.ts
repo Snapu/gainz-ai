@@ -3,16 +3,8 @@ import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { errAsync, okAsync, Result, ResultAsync } from "neverthrow";
 import type { ExerciseWeightMigrationRepository } from "@/modules/migration/application";
 import { isAuthError } from "@/modules/platform/infrastructure";
-import { cleanExerciseName, parseOptionalNumber } from "@/modules/sharedKernel/domain";
-import type { ExerciseLog } from "@/modules/trainingLogs/domain";
-import {
-  aggregateLogsToSummary,
-  type TrainingSummary,
-} from "@/modules/trainingSummary/application";
 
 import {
-  type ApplyExerciseWeightMigrationResult,
-  type ExerciseWeightMigrationDecision,
   type ExerciseWeightMigrationReview,
   type MigrationApplyError,
   type MigrationLoadError,
@@ -26,19 +18,6 @@ import {
 const SHEET_NAME = "ExerciseWeightMigration";
 const LOGS_SHEET_PREFIX = "Logs";
 const HEADERS = ["exerciseName", "decision", "reviewedAt", "affectedLogCount"] as const;
-const TRAINING_SUMMARY_SHEET_NAME = "TrainingSummary";
-const TRAINING_SUMMARY_HEADERS = [
-  "year",
-  "month",
-  "workoutDays",
-  "exerciseName",
-  "sets",
-  "totalReps",
-  "maxWeight",
-  "totalVolume",
-  "totalDistance",
-  "totalDuration",
-] as const;
 
 type SheetRow = {
   get: (key: string) => unknown;
@@ -58,22 +37,8 @@ function getLogSheets(doc: GoogleSpreadsheet) {
     .map(([, sheet]) => sheet);
 }
 
-function getTrainingSummarySheet(doc: GoogleSpreadsheet) {
-  return doc.sheetsByTitle[TRAINING_SUMMARY_SHEET_NAME];
-}
-
 async function ensureSheet(doc: GoogleSpreadsheet) {
   return getSheet(doc) ?? (await doc.addSheet({ title: SHEET_NAME, headerValues: [...HEADERS] }));
-}
-
-async function ensureTrainingSummarySheet(doc: GoogleSpreadsheet) {
-  return (
-    getTrainingSummarySheet(doc) ??
-    (await doc.addSheet({
-      title: TRAINING_SUMMARY_SHEET_NAME,
-      headerValues: [...TRAINING_SUMMARY_HEADERS],
-    }))
-  );
 }
 
 async function ensureHeaders(sheet: {
@@ -87,89 +52,6 @@ async function ensureHeaders(sheet: {
   if (missingHeaders.length === 0) return;
   await sheet.setHeaderRow([...currentHeaders, ...missingHeaders]);
   await sheet.loadHeaderRow();
-}
-
-function rowToExerciseLog(row: Pick<SheetRow, "get">): ExerciseLog | undefined {
-  const rawExerciseName = String(row.get("exerciseName") ?? "");
-  const exerciseName = cleanExerciseName(rawExerciseName);
-  if (!exerciseName) return undefined;
-
-  const rawLoggedAt = row.get("loggedAt");
-  if (!rawLoggedAt) return undefined;
-
-  const loggedAt = new Date(String(rawLoggedAt));
-  if (Number.isNaN(loggedAt.getTime())) return undefined;
-
-  return {
-    id: String(row.get("id") ?? crypto.randomUUID()),
-    exerciseName,
-    reps: parseOptionalNumber(row.get("reps")),
-    weight: parseOptionalNumber(row.get("weight")),
-    distance: parseOptionalNumber(row.get("distance")),
-    duration: parseOptionalNumber(row.get("duration")),
-    rpe: parseOptionalNumber(row.get("rpe")),
-    loggedAt,
-  };
-}
-
-function mapSummaryLoadError(error: unknown): "load-failed" | "auth-failed" {
-  if (isAuthError(error)) return "auth-failed";
-  Sentry.captureException(error, {
-    tags: { scope: "exercise-weight-migration", feature: "summary-rebuild-load" },
-  });
-  return "load-failed";
-}
-
-function loadAllLogsForSummary(
-  doc: GoogleSpreadsheet,
-): ResultAsync<ExerciseLog[], "load-failed" | "auth-failed"> {
-  return ResultAsync.fromThrowable(async () => {
-    const logs: ExerciseLog[] = [];
-
-    for (const sheet of getLogSheets(doc)) {
-      const rows = (await sheet.getRows()) as SheetRow[];
-      for (const row of rows) {
-        const log = rowToExerciseLog(row);
-        if (log) logs.push(log);
-      }
-    }
-
-    return logs;
-  }, mapSummaryLoadError)();
-}
-
-function mapSummarySaveError(error: unknown): "save-failed" | "auth-failed" {
-  if (isAuthError(error)) return "auth-failed";
-  Sentry.captureException(error, {
-    tags: { scope: "exercise-weight-migration", feature: "summary-rebuild-save" },
-  });
-  return "save-failed";
-}
-
-function rebuildTrainingSummarySheet(
-  doc: GoogleSpreadsheet,
-): ResultAsync<TrainingSummary[], "load-failed" | "auth-failed" | "save-failed"> {
-  return loadAllLogsForSummary(doc).andThen((logs) => {
-    const currentYear = new Date().getFullYear();
-    const currentMonth = new Date().getMonth() + 1;
-    const logsExcludingCurrentMonth = logs.filter(
-      (log) =>
-        !(
-          log.loggedAt.getFullYear() === currentYear && log.loggedAt.getMonth() + 1 === currentMonth
-        ),
-    );
-
-    const summaries = aggregateLogsToSummary(logsExcludingCurrentMonth);
-
-    return ResultAsync.fromThrowable(async () => {
-      const sheet = await ensureTrainingSummarySheet(doc);
-      await sheet.clearRows();
-      if (summaries.length > 0) {
-        await sheet.addRows(summaries);
-      }
-      return summaries;
-    }, mapSummarySaveError)();
-  });
 }
 
 function loadExerciseWeightMigrationReviewsInfra(
@@ -247,11 +129,11 @@ function saveExerciseWeightMigrationReviewInfra(
   )();
 }
 
-function applyExerciseWeightMigrationDecisionInfra(
+function applyWeightMultiplierInfra(
   exerciseName: string,
-  decision: ExerciseWeightMigrationDecision,
+  multiplier: number,
   doc: GoogleSpreadsheet,
-): ResultAsync<ApplyExerciseWeightMigrationResult, MigrationApplyError> {
+): ResultAsync<number, MigrationApplyError> {
   const normalizedExerciseName = normalizeExerciseName(exerciseName);
   return loadExerciseWeightMigrationReviewsInfra(doc).andThen((reviews) => {
     if (
@@ -259,67 +141,42 @@ function applyExerciseWeightMigrationDecisionInfra(
         (review) => normalizeExerciseName(review.exerciseName) === normalizedExerciseName,
       )
     ) {
-      return errAsync<ApplyExerciseWeightMigrationResult, MigrationApplyError>("already-reviewed");
+      return errAsync<number, MigrationApplyError>("already-reviewed");
     }
 
     return ResultAsync.fromThrowable(
       async () => {
         let updatedLogCount = 0;
 
-        if (decision === "convert_to_total") {
-          for (const sheet of getLogSheets(doc)) {
-            const rows = (await sheet.getRows()) as SheetRow[];
-            for (const row of rows) {
-              const rawExerciseName = String(row.get("exerciseName") ?? "").trim();
-              if (!rawExerciseName) continue;
-              const rowExerciseName = normalizeExerciseName(rawExerciseName);
-              if (rowExerciseName !== normalizedExerciseName) continue;
+        for (const sheet of getLogSheets(doc)) {
+          const rows = (await sheet.getRows()) as SheetRow[];
+          for (const row of rows) {
+            const rawExerciseName = String(row.get("exerciseName") ?? "").trim();
+            if (!rawExerciseName) continue;
+            const rowExerciseName = normalizeExerciseName(rawExerciseName);
+            if (rowExerciseName !== normalizedExerciseName) continue;
 
-              const weight = parseWeight(row.get("weight"));
-              if (weight === undefined) continue;
+            const weight = parseWeight(row.get("weight"));
+            if (weight === undefined) continue;
 
-              row.assign({ weight: String(weight * 2) });
+            if (multiplier !== 1) {
+              row.assign({ weight: String(weight * multiplier) });
               await row.save();
-              updatedLogCount += 1;
             }
-          }
-        } else {
-          for (const sheet of getLogSheets(doc)) {
-            const rows = (await sheet.getRows()) as SheetRow[];
-            for (const row of rows) {
-              const rawExerciseName = String(row.get("exerciseName") ?? "").trim();
-              if (!rawExerciseName) continue;
-              const rowExerciseName = normalizeExerciseName(rawExerciseName);
-              if (rowExerciseName !== normalizedExerciseName) continue;
-              if (parseWeight(row.get("weight")) === undefined) continue;
-              updatedLogCount += 1;
-            }
+            updatedLogCount += 1;
           }
         }
 
-        const review = parseMigrationReview({
-          exerciseName: normalizedExerciseName,
-          decision,
-          reviewedAt: new Date().toISOString(),
-          affectedLogCount: updatedLogCount,
-        });
-
-        return { review, updatedLogCount };
+        return updatedLogCount;
       },
       (error) => {
         if (isAuthError(error)) return "auth-failed" as const;
         Sentry.captureException(error, {
-          tags: { scope: "exercise-weight-migration", feature: "apply" },
+          tags: { scope: "exercise-weight-migration", feature: "apply-multiplier" },
         });
         return "save-failed" as const;
       },
-    )().andThen(({ review, updatedLogCount }) =>
-      saveExerciseWeightMigrationReviewInfra(review, doc).andThen(() =>
-        rebuildTrainingSummarySheet(doc)
-          .map(() => ({ review, updatedLogCount }))
-          .mapErr(() => "summary-rebuild-failed" as const),
-      ),
-    );
+    )();
   });
 }
 
@@ -328,8 +185,9 @@ export function createExerciseWeightMigrationRepository(
 ): ExerciseWeightMigrationRepository {
   return {
     loadReviews: () => loadExerciseWeightMigrationReviewsInfra(doc),
-    saveReview: (review) => saveExerciseWeightMigrationReviewInfra(review, doc),
-    applyDecision: (exerciseName, decision) =>
-      applyExerciseWeightMigrationDecisionInfra(exerciseName, decision, doc),
+    saveReview: (review: ExerciseWeightMigrationReview) =>
+      saveExerciseWeightMigrationReviewInfra(review, doc),
+    applyWeightMultiplier: (exerciseName: string, multiplier: number) =>
+      applyWeightMultiplierInfra(exerciseName, multiplier, doc),
   };
 }

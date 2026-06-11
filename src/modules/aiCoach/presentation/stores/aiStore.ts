@@ -181,6 +181,80 @@ export const useAiStore = defineStore("ai", () => {
     return runCoachingRequest(question, mode);
   }
 
+  function handleCoachingSuccess(
+    result: { advice: any; requestPayload: string },
+    userMessageId: string,
+    currentId: string,
+    todayLogsCount: number,
+    todayLogsChecksum: string,
+  ) {
+    try {
+      const advice = result.advice;
+      if (advice.trainingPlan) {
+        const oldSessionId = currentId;
+        const newPlan = TrainingPlan.create(
+          new Date().toISOString(),
+          advice.trainingPlan.cycleWeeks,
+          advice.trainingPlan.sessions,
+        );
+        planRepository.savePlan(newPlan);
+        activePlan.value = newPlan;
+        const newSessionId = currentSessionId.value;
+        if (newSessionId !== oldSessionId) {
+          removeMessagesFromStorage(oldSessionId);
+          currentId = newSessionId;
+          messages.value = messages.value.filter((m) => m.id === userMessageId);
+        }
+      }
+    } catch (e) {
+      Sentry.captureException(e, { tags: { scope: "ai-store", feature: "extract-plan" } });
+    }
+
+    exerciseMuscleMapStore.refresh();
+
+    if (adviceStartsDeload(result.advice) && !deloadStore.active) {
+      const { riskScore, triggeredBy } = trainingInsightsStore.insights.fatigue;
+      deloadStore.startDeload(riskScore, mapTrainingFatigueTriggersToDeload(triggeredBy));
+    }
+
+    messages.value = replaceMessageContentById(
+      messages.value,
+      userMessageId,
+      result.requestPayload,
+    );
+
+    const coachMessage = createCoachMessage(
+      currentId,
+      todayLogsCount,
+      JSON.stringify(result.advice),
+      todayLogsChecksum,
+    );
+    messages.value.push(coachMessage);
+    persistMessages(currentId);
+    lastRequestState.value = {
+      date: isoDateString(new Date()),
+      checksum: todayLogsChecksum,
+    };
+  }
+
+  function handleCoachingError(error: any, userMessageId: string, currentId: string) {
+    if (userMessageId) {
+      messages.value = removeMessageById(messages.value, userMessageId);
+      persistMessages(currentId);
+    }
+
+    if (isCoachingAdviceError(error)) {
+      throw error;
+    }
+
+    console.error("AI request failed:", error);
+    Sentry.captureException(error, {
+      tags: { scope: "ai-store", feature: "ask-ai" },
+      extra: { hasPendingUserMessage: !!userMessageId },
+    });
+    throw "coaching-request-failed" as const;
+  }
+
   function runCoachingRequest(
     question?: string,
     mode: "planning" | "execution" = "execution",
@@ -195,11 +269,10 @@ export const useAiStore = defineStore("ai", () => {
 
     return ResultAsync.fromPromise(
       (async (): Promise<void> => {
-        let currentId = currentSessionId.value;
+        const currentId = currentSessionId.value;
         const currentSession = resolveCurrentSession(exerciseLogsStore.exerciseLogs);
         const todayLogsCount = getTodayLogsCount(aiCoachService, currentSession);
         const todayLogsChecksum = getTodayLogsChecksum(currentSession);
-
         const today = isoDateString(new Date());
 
         if (
@@ -222,7 +295,6 @@ export const useAiStore = defineStore("ai", () => {
 
         try {
           const previousMessages = [...messages.value];
-
           if (question) {
             userMessage.content = question;
           }
@@ -245,72 +317,15 @@ export const useAiStore = defineStore("ai", () => {
             throw result.error;
           }
 
-          try {
-            const advice = result.value.advice;
-            if (advice.trainingPlan) {
-              const oldSessionId = currentId; // captured before plan changes session ID
-              const newPlan = TrainingPlan.create(
-                new Date().toISOString(),
-                advice.trainingPlan.cycleWeeks,
-                advice.trainingPlan.sessions,
-              );
-              planRepository.savePlan(newPlan);
-              activePlan.value = newPlan;
-              const newSessionId = currentSessionId.value;
-              if (newSessionId !== oldSessionId) {
-                removeMessagesFromStorage(oldSessionId);
-                currentId = newSessionId;
-
-                // Atomically clear old messages now that the new plan is saved.
-                // We keep the user's request so the coach message can be appended to it.
-                messages.value = messages.value.filter((m) => m.id === userMessageId);
-              }
-            }
-          } catch (e) {
-            Sentry.captureException(e, { tags: { scope: "ai-store", feature: "extract-plan" } });
-          }
-
-          exerciseMuscleMapStore.refresh();
-
-          if (adviceStartsDeload(result.value.advice) && !deloadStore.active) {
-            const { riskScore, triggeredBy } = trainingInsightsStore.insights.fatigue;
-            deloadStore.startDeload(riskScore, mapTrainingFatigueTriggersToDeload(triggeredBy));
-          }
-
-          messages.value = replaceMessageContentById(
-            messages.value,
+          handleCoachingSuccess(
+            result.value,
             userMessageId,
-            result.value.requestPayload,
-          );
-
-          const coachMessage = createCoachMessage(
             currentId,
             todayLogsCount,
-            JSON.stringify(result.value.advice),
             todayLogsChecksum,
           );
-          messages.value.push(coachMessage);
-          persistMessages(currentId);
-          lastRequestState.value = {
-            date: isoDateString(new Date()),
-            checksum: todayLogsChecksum,
-          };
         } catch (error) {
-          if (userMessageId) {
-            messages.value = removeMessageById(messages.value, userMessageId);
-            persistMessages(currentId);
-          }
-
-          if (isCoachingAdviceError(error)) {
-            throw error;
-          }
-
-          console.error("AI request failed:", error);
-          Sentry.captureException(error, {
-            tags: { scope: "ai-store", feature: "ask-ai" },
-            extra: { hasPendingUserMessage: !!userMessageId },
-          });
-          throw "coaching-request-failed" as const;
+          handleCoachingError(error, userMessageId, currentId);
         }
       })(),
       (error) => (isCoachingAdviceError(error) ? error : "coaching-request-failed"),

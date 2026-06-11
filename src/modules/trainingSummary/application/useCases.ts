@@ -148,6 +148,7 @@ export function summaryToExerciseLogs(summaries: TrainingSummary[]): ExerciseLog
     const parts = key.split("-");
     const year = Number(parts[0]);
     const month = Number(parts[1]);
+
     const dates: Date[] = [];
     for (let i = 0; i < days; i++) {
       const dayOfMonth = Math.min(1 + i * 2, 28);
@@ -156,35 +157,86 @@ export function summaryToExerciseLogs(summaries: TrainingSummary[]): ExerciseLog
     datesByYearMonth.set(key, dates);
   }
 
+  // Generate logs for each summary entry
   for (const summary of summaries) {
     const key = `${summary.year}-${summary.month}`;
     const dates = datesByYearMonth.get(key) || [];
-    if (dates.length === 0) continue;
 
-    // Distribute sets across the workout days in that month
-    const setsPerDay = Math.ceil(summary.sets / dates.length);
-    let setsRemaining = summary.sets;
+    // Distribute sets across available workout dates
+    const setsPerDay = Math.max(1, Math.floor(summary.sets / dates.length));
+    const extraSets = summary.sets % dates.length;
 
-    for (let i = 0; i < dates.length && setsRemaining > 0; i++) {
-      const date = dates[i]!;
-      const setsThisDay = Math.min(setsPerDay, setsRemaining);
+    let setsAllocated = 0;
+    for (let i = 0; i < dates.length && setsAllocated < summary.sets; i++) {
+      const date = dates[i];
+      if (!date) continue;
 
-      for (let s = 0; s < setsThisDay; s++) {
+      const setsForThisDay = setsPerDay + (i < extraSets ? 1 : 0);
+      if (setsForThisDay === 0) continue;
+
+      const avgReps = summary.totalReps ? Math.round(summary.totalReps / summary.sets) : undefined;
+      const avgWeight =
+        summary.totalVolume && summary.totalReps
+          ? Math.round((summary.totalVolume / summary.totalReps) * 10) / 10
+          : summary.maxWeight;
+
+      for (let j = 0; j < setsForThisDay; j++) {
         logs.push({
-          id: `hist-${summary.year}-${summary.month}-${summary.exerciseName}-${setsRemaining}`,
+          id: `archived-${summary.year}-${summary.month}-${summary.exerciseName}-${i}-${j}`,
           exerciseName: summary.exerciseName,
           loggedAt: date,
-          weight: summary.maxWeight,
-          reps: summary.totalReps ? Math.floor(summary.totalReps / summary.sets) : 10,
-          rpe: 8,
+          reps: avgReps,
+          weight: avgWeight,
           synthetic: true,
         });
-        setsRemaining--;
+        setsAllocated++;
       }
     }
   }
 
-  return logs;
+  // Sort by date to maintain chronological order
+  return logs.sort((a, b) => a.loggedAt.getTime() - b.loggedAt.getTime());
+}
+
+export function rebuildAllTrainingSummaries(
+  summaryRepository: TrainingSummaryRepository,
+  historyRepository: TrainingLogHistoryRepository,
+): ResultAsync<TrainingSummary[], TrainingSummaryLogsLoadError | TrainingSummarySaveError> {
+  return historyRepository
+    .loadCurrentYearLogs()
+    .andThen((currentYearLogs) => {
+      const years = historyRepository.findPastYears();
+      return years.reduce<ResultAsync<ExerciseLog[], TrainingSummaryLogsLoadError>>(
+        (accResult, year) =>
+          accResult.andThen((logs) =>
+            historyRepository.loadYearLogs(year).map((yearLogs) => [...logs, ...yearLogs]),
+          ),
+        okAsync([...currentYearLogs]),
+      );
+    })
+    .andThen((allLogs) => {
+      const currentYear = new Date().getFullYear();
+      const currentMonth = new Date().getMonth() + 1;
+      const logsExcludingCurrentMonth = allLogs.filter(
+        (log) =>
+          !(
+            log.loggedAt.getFullYear() === currentYear &&
+            log.loggedAt.getMonth() + 1 === currentMonth
+          ),
+      );
+
+      const summaries = aggregateLogsToSummary(logsExcludingCurrentMonth);
+
+      return summaryRepository
+        .clearRows()
+        .andThen(() => {
+          if (summaries.length > 0) {
+            return summaryRepository.saveRows(summaries);
+          }
+          return okAsync(undefined);
+        })
+        .map(() => summaries);
+    });
 }
 
 export function getYearsSummarized(summaries: TrainingSummary[]): Set<number> {

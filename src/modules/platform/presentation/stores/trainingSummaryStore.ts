@@ -14,6 +14,7 @@ import {
   loadTrainingSummary,
   migrateUnsummarizedMonths,
   migrateUnsummarizedYears,
+  rebuildAllTrainingSummaries,
   type TrainingLogHistoryRepository,
   type TrainingSummary,
 } from "@/modules/trainingSummary/presentation";
@@ -49,7 +50,7 @@ export const useTrainingSummaryStore = defineStore("trainingSummary", () => {
     if (!summaryRepository || !logsRepository) return errAsync("repository-unavailable");
 
     return loadTrainingSummary(summaryRepository)
-      .orTee((error) => {
+      .orTee((error: any) => {
         console.error("Failed to load training summary:", error);
         Sentry.captureMessage("Failed to load training summary", {
           level: "error",
@@ -94,11 +95,40 @@ export const useTrainingSummaryStore = defineStore("trainingSummary", () => {
     isLoading.value = false;
   }
 
+  function rebuildAllSummaries(docOverride?: GoogleSpreadsheet) {
+    const doc = getDoc(docOverride);
+    if (!doc) return errAsync("repository-unavailable" as const);
+
+    isLoading.value = true;
+    const summaryRepository = createTrainingSummaryRepository(doc);
+    const logsRepository = createTrainingLogHistoryRepository(doc);
+    if (!logsRepository) return errAsync("repository-unavailable" as const);
+
+    return rebuildAllTrainingSummaries(summaryRepository, logsRepository)
+      .orTee((error: any) => {
+        console.error("Failed to rebuild all training summaries:", error);
+        Sentry.captureMessage("Failed to rebuild training summary", {
+          level: "error",
+          tags: { scope: "training-summary-store", feature: "rebuild" },
+          extra: { reason: error },
+        });
+      })
+      .map((summariesResult: TrainingSummary[]) => {
+        summaries.value = summariesResult;
+        isLoading.value = false;
+        return summariesResult;
+      })
+      .mapErr((err: any) => {
+        isLoading.value = false;
+        return err;
+      });
+  }
+
   watchEffect(() => {
     const doc = spreadsheetStore.doc;
     if (!doc) return;
     void init(doc);
   });
 
-  return { summaries, isLoading, isInitialized, refresh };
+  return { summaries, isLoading, isInitialized, refresh, rebuildAllSummaries };
 });

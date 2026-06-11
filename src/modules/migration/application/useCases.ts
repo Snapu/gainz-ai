@@ -31,10 +31,10 @@ export {
 export interface ExerciseWeightMigrationRepository {
   loadReviews(): ResultAsync<ExerciseWeightMigrationReview[], MigrationLoadError>;
   saveReview(review: ExerciseWeightMigrationReview): ResultAsync<void, MigrationSaveError>;
-  applyDecision(
+  applyWeightMultiplier(
     exerciseName: string,
-    decision: ExerciseWeightMigrationDecision,
-  ): ResultAsync<ApplyExerciseWeightMigrationResult, MigrationApplyError>;
+    multiplier: number,
+  ): ResultAsync<number, MigrationApplyError>;
 }
 
 export function loadExerciseWeightMigrationReviews(
@@ -55,7 +55,18 @@ export function applyExerciseWeightMigrationDecision(
   decision: ExerciseWeightMigrationDecision,
   repository: ExerciseWeightMigrationRepository,
 ): ResultAsync<ApplyExerciseWeightMigrationResult, MigrationApplyError> {
-  return repository.applyDecision(exerciseName, decision);
+  const multiplier = decision === "convert_to_total" ? 2 : 1;
+
+  return repository.applyWeightMultiplier(exerciseName, multiplier).andThen((updatedLogCount) => {
+    const review: ExerciseWeightMigrationReview = {
+      exerciseName,
+      decision,
+      reviewedAt: new Date().toISOString(),
+      affectedLogCount: updatedLogCount,
+    };
+
+    return repository.saveReview(review).map(() => ({ review, updatedLogCount }));
+  });
 }
 
 export function loadAllLogsForMigration(

@@ -326,7 +326,6 @@ const TREND_SYMBOL: Record<string, string> = {
 export function formatWorkload(insights: TrainingInsights): string {
   const { fatigue } = insights;
   const lw = fatigue.loadWindow;
-
   const lines: string[] = [];
 
   if (insights.acwr !== null) lines.push(`acwr: ${insights.acwr.toFixed(2)}`);
@@ -354,16 +353,14 @@ export function formatWorkload(insights: TrainingInsights): string {
   const deload = insights.deloadStatus;
   if (deload !== "none") {
     const parts = [`status: ${deload}`];
-    if (insights.deloadEndsAt) {
+    if (insights.deloadEndsAt)
       parts.push(`ended: ${isoDateString(new Date(insights.deloadEndsAt))}`);
-    }
     if (insights.deloadTriggerSnapshot) {
       parts.push(`triggers: [${insights.deloadTriggerSnapshot.triggeredBy.join(",")}]`);
       parts.push(`risk: ${insights.deloadTriggerSnapshot.riskScore}`);
     }
     if (insights.deloadStatus === "active" && insights.deloadTimeRemainingMs !== null) {
-      const daysLeft = Math.ceil(insights.deloadTimeRemainingMs / 86400000);
-      parts.push(`daysLeft: ${daysLeft}`);
+      parts.push(`daysLeft: ${Math.ceil(insights.deloadTimeRemainingMs / 86400000)}`);
     }
     lines.push(`deload: {${parts.join(", ")}}`);
   }
@@ -416,58 +413,55 @@ export function formatMuscles(insights: TrainingInsights): string {
  * Example:
  *   Bankdrücken: e1rm:79.9 muscle:Chest hyp:40-65 str:67.5-77.5 SWAP trend:04-17→80.4 04-22→78.6 04-23→79.9
  */
+function buildExerciseParts(
+  name: string,
+  data: any,
+  exerciseLogs: ExerciseLog[],
+  recentExerciseNames?: Set<string>,
+): string[] | null {
+  if (recentExerciseNames && !recentExerciseNames.has(name)) return null;
+
+  const activation = getMuscleActivation(name);
+  const weeklySetCount = countRecentSets(name, exerciseLogs, 7) || undefined;
+
+  const parts: string[] = [`e1rm:${data.e1rm}`];
+  if (activation?.primaryMuscle) parts.push(`muscle:${activation.primaryMuscle}`);
+  if (weeklySetCount) parts.push(`wk:${weeklySetCount}`);
+  if (data.rpeOverloadReady) parts.push("rpe_trigger:overload_ready");
+  else if (data.bestRPE != null) parts.push(`rpe:${data.bestRPE}`);
+
+  if (data.swapRecommended) parts.push("SWAP");
+  else if (data.plateau) parts.push("PLATEAU");
+
+  if (data.targetWeightHyp)
+    parts.push(`hyp:${data.targetWeightHyp.low}-${data.targetWeightHyp.high}`);
+  if (data.targetWeightStr)
+    parts.push(`str:${data.targetWeightStr.low}-${data.targetWeightStr.high}`);
+  if (data.e1rm > 0) parts.push(`inc:+${getProgressionIncrement(classifyExercise(name))}kg`);
+
+  const trendSlice = data.trend.slice(-3);
+  const trendParts = trendSlice.map((e1rm: number, i: number) => {
+    const dateOffset = data.trendDates.length - trendSlice.length + i;
+    const trendDate = data.trendDates[dateOffset];
+    if (!trendDate) return `${e1rm}`;
+    const mmdd = isoDateString(trendDate).slice(5);
+    return `${mmdd}→${e1rm}`;
+  });
+  if (trendParts.length > 0) parts.push(`trend:${trendParts.join(" ")}`);
+
+  return parts;
+}
+
 export function formatExercises(
   insights: TrainingInsights,
   exerciseLogs: ExerciseLog[],
   recentExerciseNames?: Set<string>,
 ): string {
   const lines: string[] = [];
-
   for (const [name, data] of Object.entries(insights.e1rm)) {
-    if (recentExerciseNames && !recentExerciseNames.has(name)) continue;
-
-    const activation = getMuscleActivation(name);
-    const weeklySetCount = countRecentSets(name, exerciseLogs, 7) || undefined;
-
-    const parts: string[] = [`e1rm:${data.e1rm}`];
-    if (activation?.primaryMuscle) parts.push(`muscle:${activation.primaryMuscle}`);
-    if (weeklySetCount) parts.push(`wk:${weeklySetCount}`);
-    if (data.rpeOverloadReady) {
-      parts.push("rpe_trigger:overload_ready");
-    } else if (data.bestRPE != null) {
-      parts.push(`rpe:${data.bestRPE}`);
-    }
-
-    if (data.swapRecommended) {
-      parts.push("SWAP");
-    } else if (data.plateau) {
-      parts.push("PLATEAU");
-    }
-
-    if (data.targetWeightHyp) {
-      parts.push(`hyp:${data.targetWeightHyp.low}-${data.targetWeightHyp.high}`);
-    }
-    if (data.targetWeightStr) {
-      parts.push(`str:${data.targetWeightStr.low}-${data.targetWeightStr.high}`);
-    }
-    if (data.e1rm > 0) {
-      parts.push(`inc:+${getProgressionIncrement(classifyExercise(name))}kg`);
-    }
-
-    // Trend: last 3 sessions as MM-DD→value pairs
-    const trendSlice = data.trend.slice(-3);
-    const trendParts = trendSlice.map((e1rm, i) => {
-      const dateOffset = data.trendDates.length - trendSlice.length + i;
-      const trendDate = data.trendDates[dateOffset];
-      if (!trendDate) return `${e1rm}`;
-      const mmdd = isoDateString(trendDate).slice(5); // "MM-DD"
-      return `${mmdd}→${e1rm}`;
-    });
-    if (trendParts.length > 0) parts.push(`trend:${trendParts.join(" ")}`);
-
-    lines.push(`${name}: ${parts.join(" ")}`);
+    const parts = buildExerciseParts(name, data, exerciseLogs, recentExerciseNames);
+    if (parts) lines.push(`${name}: ${parts.join(" ")}`);
   }
-
   return lines.join("\n");
 }
 
@@ -480,6 +474,21 @@ export function formatExercises(
  *   Incline DB Press: 3×6-8 @8.5
  *   ...
  */
+function formatPlanExercise(ex: any): string {
+  let repsStr = "";
+  if (ex.targetDistanceMeters != null) repsStr = `${ex.targetDistanceMeters}m`;
+  else if (ex.targetDurationSeconds != null) repsStr = `${ex.targetDurationSeconds}s`;
+  else repsStr = ex.targetReps ?? "";
+
+  const parts = [`${ex.targetSets}×${repsStr}`];
+  if (ex.targetWeight) parts.push(`@${ex.targetWeight}`);
+  if (ex.targetRpe) parts.push(`@RPE${ex.targetRpe}`);
+  if (ex.restSeconds) parts.push(`${ex.restSeconds}s`);
+  if (ex.supersetId) parts.push(`[SS:${ex.supersetId}]`);
+  if (ex.notes) parts.push(`(${ex.notes})`);
+  return `  ${ex.exerciseName}: ${parts.join(" ")}`;
+}
+
 export function formatPlanForPrompt(plan: TrainingPlan, currentWeekNumber?: number): string {
   const lines: string[] = [];
   const createdAtStr = isoDateString(new Date(plan.createdAt));
@@ -490,33 +499,16 @@ export function formatPlanForPrompt(plan: TrainingPlan, currentWeekNumber?: numb
 
   for (const session of plan.sessions) {
     const dayStr = dayNames[session.dayOfWeek] ?? `Day${session.dayOfWeek}`;
-
-    // Determine if this session is today (considering week number when available)
     const isToday =
       session.dayOfWeek === currentDayOfWeek &&
       (currentWeekNumber == null || session.weekNumber === currentWeekNumber);
-
     const todayMarker = isToday ? " [TODAY]" : "";
+
     lines.push(
       `W${session.weekNumber}-${dayStr} ${session.sessionLabel} (${session.focusDescription}):${todayMarker}`,
     );
-
     for (const ex of session.exercises) {
-      let repsStr = "";
-      if (ex.targetDistanceMeters != null) {
-        repsStr = `${ex.targetDistanceMeters}m`;
-      } else if (ex.targetDurationSeconds != null) {
-        repsStr = `${ex.targetDurationSeconds}s`;
-      } else {
-        repsStr = ex.targetReps ?? "";
-      }
-      const parts = [`${ex.targetSets}×${repsStr}`];
-      if (ex.targetWeight) parts.push(`@${ex.targetWeight}`);
-      if (ex.targetRpe) parts.push(`@RPE${ex.targetRpe}`);
-      if (ex.restSeconds) parts.push(`${ex.restSeconds}s`);
-      if (ex.supersetId) parts.push(`[SS:${ex.supersetId}]`);
-      if (ex.notes) parts.push(`(${ex.notes})`);
-      lines.push(`  ${ex.exerciseName}: ${parts.join(" ")}`);
+      lines.push(formatPlanExercise(ex));
     }
   }
 
