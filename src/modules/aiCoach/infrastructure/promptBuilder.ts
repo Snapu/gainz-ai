@@ -480,10 +480,7 @@ export function formatExercises(
  *   Incline DB Press: 3×6-8 @8.5
  *   ...
  */
-export function formatPlanForPrompt(
-  plan: TrainingPlan,
-  currentWeekNumber?: number,
-): string {
+export function formatPlanForPrompt(plan: TrainingPlan, currentWeekNumber?: number): string {
   const lines: string[] = [];
   const createdAtStr = isoDateString(new Date(plan.createdAt));
   lines.push(`cycle: ${plan.cycleWeeks}w, created: ${createdAtStr}`);

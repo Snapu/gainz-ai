@@ -41,7 +41,8 @@ export function deloadDaysRemaining(
   now: Date = new Date(),
 ): number | null {
   if (getDeloadStatus(phase, now) !== "active") return null;
-  const msRemaining = new Date(phase!.endsAt).getTime() - now.getTime();
+  if (!phase) return null;
+  const msRemaining = new Date(phase.endsAt).getTime() - now.getTime();
   return Math.max(0, Math.ceil(msRemaining / (24 * 60 * 60 * 1000)));
 }
 

@@ -301,9 +301,7 @@ export function requestCoachingAdvice(
         if (activePlan && (isFirstMessage || phase === "planning" || hasPlanActive)) {
           // Compute cycle week to pass to formatPlanForPrompt for [TODAY] marker accuracy
           const planCycleWeek = activePlan.getCurrentWeekNumber(now);
-          sections.push(
-            `# program\n${formatPlanForPrompt(activePlan, planCycleWeek)}`,
-          );
+          sections.push(`# program\n${formatPlanForPrompt(activePlan, planCycleWeek)}`);
         }
 
         // ── # history / # logs — first message only ─────────────────

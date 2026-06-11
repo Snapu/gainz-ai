@@ -119,7 +119,7 @@ function zourdosPercent(reps: number, rpe: number): number | null {
   const roundedRpe = Math.round(clampedRpe * 2) / 2;
   const colIdx = RPE_STEPS.indexOf(roundedRpe as (typeof RPE_STEPS)[number]);
   if (colIdx === -1) return null;
-  return ZOURDOS_TABLE[reps - 1]?.[colIdx]!;
+  return ZOURDOS_TABLE[reps - 1]?.[colIdx] ?? null;
 }
 
 // ---------------------------------------------------------------------------
