@@ -44,9 +44,9 @@ describe("summaryToExerciseLogs", () => {
     expect(logs.every((l) => l.reps === 8)).toBe(true);
   });
 
-  it("leaves reps undefined when totalReps is undefined", () => {
+  it("falls back to 10 reps when totalReps is undefined", () => {
     const logs = summaryToExerciseLogs([makeSummary({ sets: 4, totalReps: undefined })]);
-    expect(logs.every((l) => l.reps === undefined)).toBe(true);
+    expect(logs.every((l) => l.reps === 10)).toBe(true);
   });
 
   it("distributes logs across distinct dates within the month", () => {

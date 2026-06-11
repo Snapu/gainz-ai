@@ -8,7 +8,6 @@ import {
 } from "@/modules/trainingInsights/domain";
 import {
   getSessionStartBoundary,
-  resolveCurrentSession,
   type WorkoutPhase,
   type WorkoutSession,
 } from "@/modules/trainingLogs/application";
@@ -240,55 +239,48 @@ export function buildPriorPlanSummary(
   return `${progressText}\n\n${jsonText}`;
 }
 
+function addNamesFromMessages(names: Set<string>, messages: CoachingMessage[]): void {
+  const coachMessages = messages.filter((m) => m.role === "coach");
+  for (let i = coachMessages.length - 1; i >= 0; i--) {
+    const msg = coachMessages[i];
+    if (!msg) continue;
+    try {
+      const parsed = JSON.parse(msg.content) as Record<string, unknown>;
+      if (parsed && Array.isArray(parsed.recommendedWorkout)) {
+        for (const ex of parsed.recommendedWorkout) {
+          if (
+            ex &&
+            typeof ex === "object" &&
+            "exerciseName" in ex &&
+            typeof ex.exerciseName === "string"
+          ) {
+            names.add(ex.exerciseName);
+          }
+        }
+      }
+    } catch (e) {
+      // ignore parse errors
+    }
+  }
+}
+
 export function getRecentExerciseNames(
   exerciseLogs: ExerciseLog[],
   previousMessages: CoachingMessage[],
   days = 90,
 ): Set<string> {
   const names = new Set<string>();
-
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
   const cutoffMs = cutoff.getTime();
+
   for (const log of exerciseLogs) {
     if (log.loggedAt.getTime() >= cutoffMs) {
       names.add(log.exerciseName);
     }
   }
 
-  const coachMessages = previousMessages.filter((m) => m.role === "coach");
-  for (let i = coachMessages.length - 1; i >= 0; i--) {
-    const msg = coachMessages[i];
-    const parsed = Result.fromThrowable(
-      () => JSON.parse(msg.content) as Record<string, unknown>,
-      () => null,
-    )().unwrapOr(null);
-
-    if (
-      parsed &&
-      Array.isArray(parsed.recommendedWorkout) &&
-      parsed.recommendedWorkout.length > 0
-    ) {
-      for (const ex of parsed.recommendedWorkout) {
-        if (
-          ex &&
-          typeof ex === "object" &&
-          "exerciseName" in ex &&
-          typeof ex.exerciseName === "string"
-        ) {
-          names.add(ex.exerciseName);
-        }
-      }
-      break;
-    }
-  }
-
-  const session = resolveCurrentSession(exerciseLogs);
-  const todayLogs = session?.logs ?? [];
-  for (const log of todayLogs) {
-    names.add(log.exerciseName);
-  }
-
+  addNamesFromMessages(names, previousMessages);
   return names;
 }
 
@@ -323,12 +315,10 @@ const TREND_SYMBOL: Record<string, string> = {
  *     tonnage: {w-3: 8228, w-2: 18289, w-1: 12074, now: 11517, avg: 11954, ratio: 0.92}
  *   deload: {status: completed, ended: 2026-05-24, triggers: [volumeSpike,...], risk: 6}
  */
-export function formatWorkload(insights: TrainingInsights): string {
+function formatFatigueAndLoad(insights: TrainingInsights): string[] {
   const { fatigue } = insights;
   const lw = fatigue.loadWindow;
   const lines: string[] = [];
-
-  if (insights.acwr !== null) lines.push(`acwr: ${insights.acwr.toFixed(2)}`);
 
   const fatigueParts = [`risk: ${fatigue.riskScore}`, `deload: ${fatigue.shouldDeload}`];
   if (fatigue.decliningExercises) fatigueParts.push(`declining: ${fatigue.decliningExercises}`);
@@ -349,6 +339,15 @@ export function formatWorkload(insights: TrainingInsights): string {
       `  tonnage: {w-3: ${Math.round(t.weekMinus3)}, w-2: ${Math.round(t.weekMinus2)}, w-1: ${Math.round(t.weekMinus1)}, now: ${Math.round(t.current)}, avg: ${Math.round(t.prior3WeekAvg)}${tRatio}}`,
     );
   }
+  return lines;
+}
+
+export function formatWorkload(insights: TrainingInsights): string {
+  const lines: string[] = [];
+
+  if (insights.acwr !== null) lines.push(`acwr: ${insights.acwr.toFixed(2)}`);
+
+  lines.push(...formatFatigueAndLoad(insights));
 
   const deload = insights.deloadStatus;
   if (deload !== "none") {
@@ -415,7 +414,7 @@ export function formatMuscles(insights: TrainingInsights): string {
  */
 function buildExerciseParts(
   name: string,
-  data: any,
+  data: Record<string, unknown>,
   exerciseLogs: ExerciseLog[],
   recentExerciseNames?: Set<string>,
 ): string[] | null {
@@ -474,7 +473,7 @@ export function formatExercises(
  *   Incline DB Press: 3×6-8 @8.5
  *   ...
  */
-function formatPlanExercise(ex: any): string {
+function formatPlanExercise(ex: Record<string, any>): string {
   let repsStr = "";
   if (ex.targetDistanceMeters != null) repsStr = `${ex.targetDistanceMeters}m`;
   else if (ex.targetDurationSeconds != null) repsStr = `${ex.targetDurationSeconds}s`;

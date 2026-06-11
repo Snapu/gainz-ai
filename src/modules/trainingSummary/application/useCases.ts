@@ -163,22 +163,20 @@ export function summaryToExerciseLogs(summaries: TrainingSummary[]): ExerciseLog
     const dates = datesByYearMonth.get(key) || [];
 
     // Distribute sets across available workout dates
-    const setsPerDay = Math.max(1, Math.floor(summary.sets / dates.length));
+    if (dates.length === 0) continue;
+    const setsPerDay = Math.floor(summary.sets / dates.length);
     const extraSets = summary.sets % dates.length;
 
     let setsAllocated = 0;
-    for (let i = 0; i < dates.length && setsAllocated < summary.sets; i++) {
+    for (let i = 0; i < dates.length; i++) {
       const date = dates[i];
       if (!date) continue;
 
       const setsForThisDay = setsPerDay + (i < extraSets ? 1 : 0);
       if (setsForThisDay === 0) continue;
 
-      const avgReps = summary.totalReps ? Math.round(summary.totalReps / summary.sets) : undefined;
-      const avgWeight =
-        summary.totalVolume && summary.totalReps
-          ? Math.round((summary.totalVolume / summary.totalReps) * 10) / 10
-          : summary.maxWeight;
+      const avgReps = summary.totalReps ? Math.floor(summary.totalReps / summary.sets) : 10;
+      const avgWeight = summary.maxWeight;
 
       for (let j = 0; j < setsForThisDay; j++) {
         logs.push({
@@ -187,6 +185,7 @@ export function summaryToExerciseLogs(summaries: TrainingSummary[]): ExerciseLog
           loggedAt: date,
           reps: avgReps,
           weight: avgWeight,
+          rpe: 8,
           synthetic: true,
         });
         setsAllocated++;

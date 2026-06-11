@@ -253,7 +253,7 @@ describe("exerciseWeightMigration service", () => {
       Logs2025: createMockSheet([previousYearRow]),
       Logs2026: createMockSheet([currentYearRow, untouchedRow]),
     });
-    const trainingSummarySheet = (
+    const _trainingSummarySheet = (
       doc as unknown as { sheetsByTitle: { TrainingSummary: ReturnType<typeof createMockSheet> } }
     ).sheetsByTitle.TrainingSummary;
 
@@ -287,7 +287,7 @@ describe("exerciseWeightMigration service", () => {
     const doc = createMockDoc(migrationSheet, {
       Logs2026: createMockSheet([currentYearRow]),
     });
-    const trainingSummarySheet = (
+    const _trainingSummarySheet = (
       doc as unknown as { sheetsByTitle: { TrainingSummary: ReturnType<typeof createMockSheet> } }
     ).sheetsByTitle.TrainingSummary;
 

@@ -6,6 +6,7 @@ import {
   type WorkoutSession,
 } from "@/modules/trainingLogs/application";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
+import type { TrainingSummary } from "@/modules/trainingSummary/domain";
 import type { CoachingAdviceRequest, CoachingMessage } from "../domain";
 import {
   buildPriorPlanSummary,
@@ -21,8 +22,6 @@ import {
   getWorkoutPhase,
   getWorkoutStatus,
 } from "./promptBuilder";
-
-const MAX_SUMMARIES_IN_PROMPT = 12;
 
 export interface AssemblePromptContext {
   session: WorkoutSession | null;
@@ -66,56 +65,32 @@ export function assemblePromptContext(
   };
 }
 
-export function assembleCoachingPrompt(
+function buildSessionSection(
   options: CoachingAdviceRequest,
   context: AssemblePromptContext,
 ): string {
-  const {
-    userProfile,
-    insights,
-    exerciseLogs,
-    trainingSummaries,
-    previousMessages,
-    events = [],
-    question,
-  } = options;
+  const { session, phase, workoutStatus, now, currentTime } = context;
+  const { userProfile, exerciseLogs, activePlan } = options;
 
-  const {
-    session,
-    todayLogs,
-    isFirstMessage,
-    phase,
-    isMidWorkout,
-    recentExerciseNames,
-    initialWindow,
-    workoutStatus,
-    now,
-    currentTime,
-  } = context;
-
-  // ── # session — metadata + profile + preferences merged ──────────────
-  const sessionParts: string[] = [
+  const parts: string[] = [
     `date: ${isoDateString(now)} ${currentTime}`,
     `status: ${workoutStatus}`,
     `phase: ${phase}`,
   ];
 
   const restDays = getDaysSinceLastWorkout(exerciseLogs, session);
-  if (restDays !== null) sessionParts.push(`restDays: ${restDays}`);
+  if (restDays !== null) parts.push(`restDays: ${restDays}`);
 
-  const activePlanLoaded = options.activePlan;
-  if (activePlanLoaded) {
-    sessionParts.push("planStatus: active");
-    const cycleWeek = activePlanLoaded.getCurrentWeekNumber(now);
-    sessionParts.push(`cycleWeek: ${cycleWeek}`);
+  if (activePlan) {
+    parts.push("planStatus: active");
+    parts.push(`cycleWeek: ${activePlan.getCurrentWeekNumber(now)}`);
   }
 
-  if (isFirstMessage) {
+  if (context.isFirstMessage) {
     const pattern = getTrainingPattern(exerciseLogs);
-    if (pattern) sessionParts.push(`pattern: ${pattern}`);
+    if (pattern) parts.push(`pattern: ${pattern}`);
   }
 
-  // Profile fields inline
   const p = userProfile;
   const profileParts: string[] = [];
   if (p.age != null) profileParts.push(`age: ${p.age}`);
@@ -125,58 +100,75 @@ export function assembleCoachingPrompt(
   if (p.fitnessLevel) profileParts.push(`level: ${p.fitnessLevel}`);
   if (p.workoutDaysPerWeek != null) profileParts.push(`days: ${p.workoutDaysPerWeek}`);
   if (p.workoutLocation) profileParts.push(`location: ${p.workoutLocation}`);
-  if (profileParts.length) sessionParts.push(`profile: {${profileParts.join(", ")}}`);
+  if (profileParts.length) parts.push(`profile: {${profileParts.join(", ")}}`);
 
   if (p.equipmentAccess?.length) {
-    sessionParts.push(`equipment: [${p.equipmentAccess.join(", ")}]`);
+    parts.push(`equipment: [${p.equipmentAccess.join(", ")}]`);
   }
 
-  sessionParts.push(`locale: ${navigator.language}`);
-  sessionParts.push("units: kg/min/m");
+  parts.push(`locale: ${navigator.language}`);
+  parts.push("units: kg/min/m");
+  return `# session\n${parts.join("\n")}`;
+}
 
-  const sections: string[] = [`# session\n${sessionParts.join("\n")}`];
-
-  // ── # question ────────────────────────────────────────────────────────
-  if (question) {
-    sections.push(`# question\n${question}`);
+function buildHistorySection(summaries: TrainingSummary[]): string {
+  if (summaries.length === 0) return "";
+  const lines: string[] = [];
+  const byMonth = new Map<string, TrainingSummary[]>();
+  for (const s of summaries.slice(-12)) {
+    const key = `${s.year}-${String(s.month).padStart(2, "0")}`;
+    const existing = byMonth.get(key) ?? [];
+    existing.push(s);
+    byMonth.set(key, existing);
   }
-
-  // ── # goals ───────────────────────────────────────────────────────────
-  if (isFirstMessage || question) {
-    const freeInputClean = userProfile.freeUserInput?.trim();
-    if (freeInputClean) {
-      sections.push(`# goals\n${freeInputClean}`);
+  for (const [monthKey, entries] of byMonth) {
+    const workoutDays = entries[0]?.workoutDays ?? 0;
+    lines.push(`${monthKey} (${workoutDays}d):`);
+    for (const s of entries) {
+      const parts: string[] = [`${s.sets}s`];
+      if (s.totalReps) parts.push(`${s.totalReps}r`);
+      if (s.maxWeight) parts.push(`max:${s.maxWeight}`);
+      if (s.totalVolume && s.totalReps && s.totalReps > 0) {
+        parts.push(`avg:${Math.round((s.totalVolume / s.totalReps) * 10) / 10}`);
+      }
+      lines.push(`  ${s.exerciseName}: ${parts.join(" ")}`);
     }
   }
+  return `# history\n${lines.join("\n")}`;
+}
 
-  // ── # workload / # muscles / # exercises ──────────────────────────────
-  const hasPlanActive = sessionParts.some((p) => p.startsWith("planStatus:"));
-  if (phase === "planning" || isFirstMessage || question || hasPlanActive) {
+function buildWorkloadSection(
+  options: CoachingAdviceRequest,
+  context: AssemblePromptContext,
+  sections: string[],
+): void {
+  const { insights, exerciseLogs, activePlan, question } = options;
+  const { isFirstMessage, phase, recentExerciseNames } = context;
+
+  if (phase === "planning" || isFirstMessage || question || activePlan) {
     sections.push(`# workload\n${formatWorkload(insights)}`);
     sections.push(`# muscles\n${formatMuscles(insights)}`);
     sections.push(`# exercises\n${formatExercises(insights, exerciseLogs, recentExerciseNames)}`);
   } else {
-    // Mid-workout: compact e1RM line only
     const e1rmCompact = Object.entries(insights.e1rm)
       .filter(([name]) => recentExerciseNames.has(name))
-      .map(([name, d]) => {
-        let s = `${name}: ${d.e1rm}kg`;
-        if (d.plateau) s += " PLATEAU";
-        if (d.bestRPE != null) s += ` @RPE${d.bestRPE}`;
-        return s;
-      })
+      .map(
+        ([name, d]) =>
+          `${name}: ${d.e1rm}kg${d.plateau ? " PLATEAU" : ""}${d.bestRPE != null ? ` @RPE${d.bestRPE}` : ""}`,
+      )
       .join(", ");
-    if (e1rmCompact) {
-      sections.push(`# e1rm\n${e1rmCompact}`);
-    }
+    if (e1rmCompact) sections.push(`# e1rm\n${e1rmCompact}`);
   }
+}
 
-  // ── # today ───────────────────────────────────────────────────────────
-  if (todayLogs.length > 0) {
-    sections.push(`# today\n${compactLogs(todayLogs)}`);
-  }
+function buildUpdatesSection(
+  options: CoachingAdviceRequest,
+  context: AssemblePromptContext,
+  sections: string[],
+): void {
+  const { previousMessages } = options;
+  const { todayLogs, isMidWorkout } = context;
 
-  // ── # update / # plan ─────────────────────────────────────────────────
   if (previousMessages.length > 0) {
     if (isMidWorkout) {
       const coachMessages = previousMessages.filter((m) => m.role === "coach");
@@ -184,66 +176,59 @@ export function assembleCoachingPrompt(
         const lastCoach = coachMessages[coachMessages.length - 1];
         const cutoff = lastCoach?.timestamp ? new Date(lastCoach.timestamp).getTime() : 0;
         const newLogs = todayLogs.filter((l) => l.loggedAt.getTime() > cutoff);
-        if (newLogs.length > 0) {
-          sections.push(`# update\n${compactLogs(newLogs)}`);
-        }
+        if (newLogs.length > 0) sections.push(`# update\n${compactLogs(newLogs)}`);
       }
     }
-
     const planSummary = buildPriorPlanSummary(previousMessages, todayLogs);
-    if (planSummary) {
-      sections.push(`# plan\n${planSummary}`);
-    }
+    if (planSummary) sections.push(`# plan\n${planSummary}`);
   }
+}
 
-  const activePlan = options.activePlan;
-  if (activePlan && (isFirstMessage || phase === "planning" || hasPlanActive)) {
-    const planCycleWeek = activePlan.getCurrentWeekNumber(now);
-    sections.push(`# program\n${formatPlanForPrompt(activePlan, planCycleWeek)}`);
-  }
+export function assembleCoachingPrompt(
+  options: CoachingAdviceRequest,
+  context: AssemblePromptContext,
+): string {
+  const { userProfile, trainingSummaries, events = [], question, activePlan } = options;
+  const { session, todayLogs, isFirstMessage, phase, initialWindow, now } = context;
 
-  // ── # history / # logs ────────────────────────────────────────────────
+  const sections: string[] = [buildSessionSection(options, context)];
+
+  if (question) sections.push(`# question\n${question}`);
+
   if (isFirstMessage || question) {
-    if (trainingSummaries.length > 0) {
-      const summaryLines: string[] = [];
-      const byMonth = new Map<string, typeof trainingSummaries>();
-      for (const s of trainingSummaries.slice(-MAX_SUMMARIES_IN_PROMPT)) {
-        const key = `${s.year}-${String(s.month).padStart(2, "0")}`;
-        const existing = byMonth.get(key) ?? [];
-        existing.push(s);
-        byMonth.set(key, existing);
-      }
-      for (const [monthKey, entries] of byMonth) {
-        const workoutDays = entries[0]?.workoutDays ?? 0;
-        summaryLines.push(`${monthKey} (${workoutDays}d):`);
-        for (const s of entries) {
-          const parts: string[] = [`${s.sets}s`];
-          if (s.totalReps) parts.push(`${s.totalReps}r`);
-          if (s.maxWeight) parts.push(`max:${s.maxWeight}`);
-          if (s.totalVolume && s.totalReps && s.totalReps > 0) {
-            parts.push(`avg:${Math.round((s.totalVolume / s.totalReps) * 10) / 10}`);
-          }
-          summaryLines.push(`  ${s.exerciseName}: ${parts.join(" ")}`);
-        }
-      }
-      sections.push(`# history\n${summaryLines.join("\n")}`);
-    }
+    const freeInput = userProfile.freeUserInput?.trim();
+    if (freeInput) sections.push(`# goals\n${freeInput}`);
+  }
+
+  buildWorkloadSection(options, context, sections);
+
+  if (todayLogs.length > 0) sections.push(`# today\n${compactLogs(todayLogs)}`);
+
+  buildUpdatesSection(options, context, sections);
+
+  if (activePlan && (isFirstMessage || phase === "planning" || !!activePlan)) {
+    sections.push(
+      `# program\n${formatPlanForPrompt(activePlan, activePlan.getCurrentWeekNumber(now))}`,
+    );
+  }
+
+  if (isFirstMessage || question) {
+    const hist = buildHistorySection(trainingSummaries);
+    if (hist) sections.push(hist);
   }
 
   if (isFirstMessage) {
-    const sessionBoundary = getSessionStartBoundary(session);
-    const historicalLogs = initialWindow.logs.filter((l) => l.loggedAt.getTime() < sessionBoundary);
-    if (historicalLogs.length > 0) {
+    const historicalLogs = initialWindow.logs.filter(
+      (l) => l.loggedAt.getTime() < getSessionStartBoundary(session),
+    );
+    if (historicalLogs.length > 0)
       sections.push(`# ${initialWindow.label}\n${compactLogs(historicalLogs)}`);
-    }
   }
 
-  // ── # events ──────────────────────────────────────────────────────────
   if (events.length > 0) {
-    const eventsText = events
-      .map((event: Event) => `${event.type}: ${event.dates.join(", ")}`)
-      .join("\n");
-    sections.push(`# events\n${eventsText}`);
+    sections.push(
+      `# events\n${events.map((e: Event) => `${e.type}: ${e.dates.join(", ")}`).join("\n")}`,
+    );
   }
 
   return sections.join("\n\n");

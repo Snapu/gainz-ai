@@ -14,14 +14,8 @@ import {
   createCoachingAdviceSchema,
 } from "../domain";
 import { translateCoachingAdviceJson } from "./CoachingAdviceTranslator";
+import { assembleCoachingPrompt, assemblePromptContext } from "./promptAssembler";
 
-/**
- * Configuration for the Google GenAI content generation.
- * The system instruction embedded below is optimized according to modern sports science guidelines:
- * 1. Hypertrophy (build_muscle) is centered around 6-12 reps with 2-3 min rest periods to maximize volume load and mechanical tension (Schoenfeld et al., 2016/2017).
- * 2. Fat Loss (lose_fat) focuses on muscle preservation using the same 6-12 rep range to maintain high mechanical tension under caloric deficit, preventing muscle loss (Hector & Phillips, 2018).
- * 3. Local endurance (improve_endurance) utilizes 15-25 reps and shorter rest periods for metabolic adaptations (Mitchell et al., 2012).
- */
 const aiConfig: GenerateContentConfig = {
   responseMimeType: "application/json",
   temperature: 0.4,
@@ -109,6 +103,7 @@ You receive sections in this order:
 - # session, # question, # goals, # workload, # muscles, # exercises, # today, # update, # program, # plan, # history, # logs, # events
 `,
 };
+
 function isServiceUnavailableError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const e = error as Record<string, unknown>;
@@ -128,103 +123,110 @@ export function getTodayLogsCount(session: WorkoutSession | null): number {
   return session?.logs.length ?? 0;
 }
 
-import { assembleCoachingPrompt, assemblePromptContext } from "./promptAssembler";
+async function executeAiRequest(
+  ai: GoogleGenAI,
+  conversationContents: import("@google/genai").GenerateContentRequest["contents"],
+  aiTimeoutMs: number,
+  schema: import("@google/genai").Schema,
+): Promise<string> {
+  const generateWithTimeout = (model: "gemini-3-flash-preview" | "gemini-2.5-flash") => {
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("AI request timed out")), aiTimeoutMs),
+    );
+    return Promise.race([
+      ai.models.generateContentStream({
+        model,
+        contents: conversationContents,
+        config: { ...aiConfig, responseSchema: schema },
+      }),
+      timeoutPromise,
+    ]);
+  };
+
+  let responseStream: Awaited<ReturnType<typeof ai.models.generateContentStream>>;
+  try {
+    responseStream = await generateWithTimeout("gemini-2.5-flash");
+  } catch (streamErr) {
+    if (isServiceUnavailableError(streamErr) || isTimeoutError(streamErr)) {
+      Sentry.captureMessage(
+        "Primary model unavailable/slow, falling back to gemini-3-flash-preview",
+        {
+          level: "info",
+          tags: { scope: "ai-service", feature: "model-fallback" },
+          extra: { timedOut: isTimeoutError(streamErr) },
+        },
+      );
+      responseStream = await generateWithTimeout("gemini-3-flash-preview");
+    } else {
+      throw streamErr;
+    }
+  }
+
+  let text = "";
+  for await (const chunk of responseStream) {
+    if (chunk.text) text += chunk.text;
+  }
+  return text;
+}
 
 export function requestCoachingAdvice(
   options: CoachingAdviceRequest,
 ): ResultAsync<CoachingAdviceResult, CoachingAdviceError> {
   const { apiKey, previousMessages, insights } = options;
-
   if (!apiKey) return errAsync("missing-api-key");
 
   return ResultAsync.fromPromise(
     (async () => {
       const ai = new GoogleGenAI({ apiKey });
+      const context = assemblePromptContext(options.exerciseLogs, previousMessages);
+      const currentUserInput = assembleCoachingPrompt(options, context);
+      const { phase, isFirstMessage } = context;
+      const aiTimeoutMs = isFirstMessage || phase === "planning" ? 140_000 : 90_000;
+
+      if (import.meta.env.DEV) console.debug(currentUserInput);
+
+      const conversationContents = [
+        ...previousMessages.map((msg) => ({
+          role: msg.role === "coach" ? ("model" as const) : ("user" as const),
+          parts: [{ text: msg.content }],
+        })),
+        { role: "user" as const, parts: [{ text: currentUserInput }] },
+      ];
+
+      const schema = createCoachingAdviceSchema(
+        Array.from(VALID_MUSCLE_GROUPS),
+        options.mode || "execution",
+      );
+
       let adviceResponseText = "";
       let parsedCoachingAdvice: CoachingAdvice | null = null;
-      let currentUserInput = "";
-
       try {
-        const context = assemblePromptContext(options.exerciseLogs, previousMessages);
-        currentUserInput = assembleCoachingPrompt(options, context);
-        const { phase, isFirstMessage } = context;
-        const aiTimeoutMs = isFirstMessage || phase === "planning" ? 140_000 : 90_000;
+        adviceResponseText = await executeAiRequest(ai, conversationContents, aiTimeoutMs, schema);
 
-        if (import.meta.env.DEV) {
-          console.debug(currentUserInput);
-        }
-
-        const conversationContents = [
-          ...previousMessages.map((msg) => ({
-            role: msg.role === "coach" ? ("model" as const) : ("user" as const),
-            parts: [{ text: msg.content }],
-          })),
-          { role: "user" as const, parts: [{ text: currentUserInput }] },
-        ];
-
-        const generateWithTimeout = (model: "gemini-3-flash-preview" | "gemini-2.5-flash") => {
-          const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("AI request timed out")), aiTimeoutMs),
-          );
-          return Promise.race([
-            ai.models.generateContentStream({
-              model,
-              contents: conversationContents,
-              config: {
-                ...aiConfig,
-                responseSchema: createCoachingAdviceSchema(
-                  Array.from(VALID_MUSCLE_GROUPS),
-                  options.mode || "execution",
-                ),
-              },
-            }),
-            timeoutPromise,
-          ]);
-        };
-
-        let responseStream: Awaited<ReturnType<typeof ai.models.generateContentStream>>;
-        try {
-          responseStream = await generateWithTimeout("gemini-2.5-flash");
-        } catch (streamErr) {
-          if (isServiceUnavailableError(streamErr) || isTimeoutError(streamErr)) {
-            Sentry.captureMessage(
-              "Primary model unavailable/slow, falling back to gemini-3-flash-preview",
-              {
-                level: "info",
-                tags: { scope: "ai-service", feature: "model-fallback" },
-                extra: { timedOut: isTimeoutError(streamErr) },
-              },
-            );
-            responseStream = await generateWithTimeout("gemini-3-flash-preview");
-          } else {
-            throw streamErr;
-          }
-        }
-
-        adviceResponseText = "";
-        for await (const chunk of responseStream) {
-          if (chunk.text) adviceResponseText += chunk.text;
-        }
-
-        // Validate JSON response structure using the ACL (neverthrow-elegant pattern)
         const validationResult = translateCoachingAdviceJson(adviceResponseText)
-          .mapErr(() => {
-            return "generate-content-stream-failed" as const;
-          })
-          .map((parsed) => {
-            return postProcessCoachingAdvice(parsed, phase as WorkoutPhase, insights.deloadStatus);
-          });
+          .mapErr(() => "generate-content-stream-failed" as const)
+          .map((parsed) =>
+            postProcessCoachingAdvice(parsed, phase as WorkoutPhase, insights.deloadStatus),
+          );
 
-        if (validationResult.isErr()) {
-          throw new Error(validationResult.error);
-        }
+        if (validationResult.isErr()) throw new Error(validationResult.error);
 
         parsedCoachingAdvice = validationResult.value;
 
-        return {
-          advice: parsedCoachingAdvice,
-          requestPayload: currentUserInput,
-        };
+        if (Array.isArray(parsedCoachingAdvice.recommendedWorkout)) {
+          try {
+            learnFromCoachingAdvice(
+              parsedCoachingAdvice.recommendedWorkout,
+              createExerciseMuscleMapRepository(),
+            );
+          } catch (e) {
+            Sentry.captureException(e, {
+              tags: { scope: "ai-service", feature: "learn-from-response" },
+            });
+          }
+        }
+
+        return { advice: parsedCoachingAdvice, requestPayload: currentUserInput };
       } catch (error) {
         console.error("AI request failed:", error);
         Sentry.captureException(error, {
@@ -232,22 +234,12 @@ export function requestCoachingAdvice(
           extra: { responseLength: adviceResponseText.length },
         });
         throw error;
-      } finally {
-        if (parsedCoachingAdvice && Array.isArray(parsedCoachingAdvice.recommendedWorkout)) {
-          try {
-            learnFromCoachingAdvice(
-              parsedCoachingAdvice.recommendedWorkout,
-              createExerciseMuscleMapRepository(),
-            );
-          } catch (error) {
-            Sentry.captureException(error, {
-              tags: { scope: "ai-service", feature: "learn-from-response" },
-              extra: { responseLength: adviceResponseText.length },
-            });
-          }
-        }
       }
     })(),
-    () => "generate-content-stream-failed" as CoachingAdviceError,
+    (e) => {
+      if (e instanceof Error && e.message === "generate-content-stream-failed")
+        return "generate-content-stream-failed";
+      return "network-error";
+    },
   );
 }

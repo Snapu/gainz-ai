@@ -407,6 +407,7 @@ export function calculateUserProgress(
 
     /* ---- 3. XP Pillar Calculation ---- */
     let weeklyXP = 0;
+    const sessionPRsThisWeek = new Set<string>();
 
     // Pillar: Discipline (Daily base)
     weeklyXP += uniqueDaysThisWeek * BASE_XP_PER_SESSION;
@@ -428,9 +429,14 @@ export function calculateUserProgress(
         if (currentE1RM === null) continue;
         const prevBest = historyE1RM.get(log.exerciseName) || 0;
 
+        const sessionExerciseKey = `${toDayKey(log.loggedAt)}-${log.exerciseName}`;
+
         if (currentE1RM > prevBest * 1.025 && prevBest > 0) {
-          weeklyXP += XP_PR_BREAKTHROUGH;
-          xpProgression += XP_PR_BREAKTHROUGH * readiness;
+          if (!sessionPRsThisWeek.has(sessionExerciseKey)) {
+            weeklyXP += XP_PR_BREAKTHROUGH;
+            xpProgression += XP_PR_BREAKTHROUGH * readiness;
+            sessionPRsThisWeek.add(sessionExerciseKey);
+          }
         }
 
         if (currentE1RM > prevBest) {
