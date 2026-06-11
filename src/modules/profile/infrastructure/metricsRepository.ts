@@ -58,7 +58,7 @@ function serializeRow(metric: PhysiologicalMetric): Record<string, string> {
   };
 }
 
-export function loadMetricsInfra(
+function loadMetricsInfra(
   doc: GoogleSpreadsheet,
 ): ResultAsync<PhysiologicalMetricsMap, MetricsLoadError> {
   const mapLoadError = (error: unknown): MetricsLoadError => {
@@ -89,7 +89,7 @@ export function loadMetricsInfra(
   }, mapLoadError)();
 }
 
-export function saveMetricsInfra(
+function saveMetricsInfra(
   metrics: PhysiologicalMetricsMap,
   doc: GoogleSpreadsheet,
 ): ResultAsync<void, MetricsSaveError> {

@@ -231,18 +231,6 @@ function getAvatarForLevel(level: number): string {
   return getRankInfoForLevel(level).avatar;
 }
 
-/**
- * Get the next title milestone and XP required.
- */
-export function getNextTitleMilestone(level: number): { level: number; title: string } | null {
-  for (const { level: requiredLevel, title } of TITLES) {
-    if (level < requiredLevel) {
-      return { level: requiredLevel, title };
-    }
-  }
-  return null; // Max title reached
-}
-
 /* ======================================================
  * UTILITIES
  * ====================================================== */

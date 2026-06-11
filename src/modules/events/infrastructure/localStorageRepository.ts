@@ -3,7 +3,7 @@ import { type Event, EventSchema } from "@/modules/events/domain";
 
 const STORAGE_KEY = "events:stored";
 
-export type EventStorageLoadError = "load-failed" | "parse-data-failed";
+type EventStorageLoadError = "load-failed" | "parse-data-failed";
 
 const readStoredEvents = Result.fromThrowable(
   () => localStorage.getItem(STORAGE_KEY),

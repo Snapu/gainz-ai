@@ -30,48 +30,6 @@ export function loadTrainingSummary(
   return summaryRepository.load();
 }
 
-function loadAllLogsForSummary(
-  logsRepository: TrainingLogHistoryRepository,
-): ResultAsync<ExerciseLog[], TrainingSummaryLogsLoadError> {
-  return logsRepository.loadCurrentYearLogs().andThen((currentYearLogs) => {
-    const pastYears = logsRepository.findPastYears();
-
-    return pastYears.reduce<ResultAsync<ExerciseLog[], TrainingSummaryLogsLoadError>>(
-      (allLogsResult, year) =>
-        allLogsResult.andThen((logs) =>
-          logsRepository.loadYearLogs(year).map((yearLogs) => [...logs, ...yearLogs]),
-        ),
-      okAsync([...currentYearLogs]),
-    );
-  });
-}
-
-export function rebuildTrainingSummary(
-  summaryRepository: TrainingSummaryRepository,
-  logsRepository: TrainingLogHistoryRepository,
-): ResultAsync<TrainingSummary[], TrainingSummaryLogsLoadError | TrainingSummarySaveError> {
-  return loadAllLogsForSummary(logsRepository).andThen((logs) => {
-    // Exclude the current month — it is served live from exerciseLogs, not the summary sheet.
-    // Including it would create synthetic sessions (using maxWeight) that overlap with actual
-    // current-month logs in trainingInsightsStore.allLogs, causing false e1RM declines.
-    const currentYear = new Date().getFullYear();
-    const currentMonth = new Date().getMonth() + 1;
-    const logsExcludingCurrentMonth = logs.filter(
-      (log) =>
-        !(
-          log.loggedAt.getFullYear() === currentYear && log.loggedAt.getMonth() + 1 === currentMonth
-        ),
-    );
-
-    const summaries = aggregateLogsToSummary(logsExcludingCurrentMonth);
-
-    return summaryRepository
-      .clearRows()
-      .andThen(() => summaryRepository.saveRows(summaries))
-      .map(() => summaries);
-  });
-}
-
 export function aggregateLogsToSummary(logs: ExerciseLog[]): TrainingSummary[] {
   if (logs.length === 0) return [];
 

@@ -15,7 +15,7 @@ const persistStoredMap = Result.fromThrowable(
   () => "storage-save-failed" as const,
 );
 
-export function loadStoredMuscleMapInfra(): Record<string, unknown> {
+function loadStoredMuscleMapInfra(): Record<string, unknown> {
   return readStoredMap()
     .andThen((raw) => {
       if (!raw) return ok<unknown, "storage-parse-failed">({});
@@ -28,11 +28,11 @@ export function loadStoredMuscleMapInfra(): Record<string, unknown> {
     .unwrapOr({});
 }
 
-export function saveStoredMuscleMapInfra(map: Record<string, unknown>): void {
+function saveStoredMuscleMapInfra(map: Record<string, unknown>): void {
   void persistStoredMap(map);
 }
 
-export function clearStoredMuscleMapInfra(): void {
+function clearStoredMuscleMapInfra(): void {
   localStorage.removeItem(STORAGE_KEY);
 }
 

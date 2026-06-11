@@ -3,7 +3,7 @@ import { type CallbackTypes, googleSdkLoaded } from "vue3-google-login";
 import type { GoogleAccessTokenService } from "@/modules/auth/application";
 import type { AuthTokenRequestError } from "@/modules/auth/domain";
 
-export function requestGoogleAccessTokenInfra(
+function requestGoogleAccessTokenInfra(
   clientId: string,
   scopes: string[],
 ): ResultAsync<CallbackTypes.TokenPopupResponse, AuthTokenRequestError> {

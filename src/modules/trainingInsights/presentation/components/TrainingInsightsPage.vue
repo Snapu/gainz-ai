@@ -25,8 +25,6 @@ const {
   deloadStatusLabel,
   deloadStatusToneClass,
   fatigueWeekRows,
-  maxSets,
-  maxTonnage,
   weeklyDeltaLabel,
   setsDeltaPct,
   tonnageDeltaPct,

@@ -26,7 +26,7 @@ async function getOrCreateSheet(doc: GoogleSpreadsheet) {
   return getSheet(doc) ?? (await addSheet(doc));
 }
 
-export function loadTrainingSummaryInfra(
+function loadTrainingSummaryInfra(
   doc: GoogleSpreadsheet,
 ): ResultAsync<TrainingSummary[], "load-failed" | "parse-data-failed"> {
   return ResultAsync.fromThrowable(
@@ -47,7 +47,7 @@ export function loadTrainingSummaryInfra(
   )().andThen((rows) => parseData(TrainingSummarySchema.array(), rows));
 }
 
-export function saveTrainingSummaryRowsInfra(
+function saveTrainingSummaryRowsInfra(
   summaries: TrainingSummary[],
   doc: GoogleSpreadsheet,
 ): ResultAsync<void, "save-failed"> {
@@ -64,9 +64,7 @@ export function saveTrainingSummaryRowsInfra(
   )();
 }
 
-export function clearTrainingSummaryRowsInfra(
-  doc: GoogleSpreadsheet,
-): ResultAsync<void, "save-failed"> {
+function clearTrainingSummaryRowsInfra(doc: GoogleSpreadsheet): ResultAsync<void, "save-failed"> {
   return ResultAsync.fromThrowable(
     async () => {
       const sheet = await getOrCreateSheet(doc);

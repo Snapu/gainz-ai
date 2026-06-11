@@ -55,7 +55,7 @@ function serializeForSheet(profile: UserProfile): Record<string, string> {
   };
 }
 
-export function loadUserProfileInfra(
+function loadUserProfileInfra(
   doc: GoogleSpreadsheet,
 ): ResultAsync<UserProfile | null, "load-failed" | "parse-data-failed" | "auth-failed"> {
   const mapLoadError = (error: unknown): "load-failed" | "auth-failed" => {
@@ -84,7 +84,7 @@ export function loadUserProfileInfra(
   });
 }
 
-export function saveUserProfileInfra(
+function saveUserProfileInfra(
   profile: UserProfile,
   doc: GoogleSpreadsheet,
 ): ResultAsync<void, "save-failed" | "auth-failed"> {
@@ -115,7 +115,7 @@ export function saveUserProfileInfra(
   }, mapSaveError)();
 }
 
-export function migrateFromLocalStorageInfra(
+function migrateFromLocalStorageInfra(
   doc: GoogleSpreadsheet,
 ): ResultAsync<"migrated" | "skipped" | "no-data", "migration-failed"> {
   const mapMigrationError = (error: unknown): "migration-failed" => {

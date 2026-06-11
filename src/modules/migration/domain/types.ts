@@ -2,7 +2,7 @@ import { z } from "zod";
 import { cleanExerciseName, parseOptionalNumber } from "@/modules/sharedKernel/domain";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 
-export const DEFAULT_PREVIEW_LOG_COUNT = 5;
+const DEFAULT_PREVIEW_LOG_COUNT = 5;
 
 const ExerciseNameSchema = z.string().trim().min(1).transform(cleanExerciseName);
 

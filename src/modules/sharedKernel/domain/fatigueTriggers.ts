@@ -1,4 +1,4 @@
-export const FATIGUE_TRIGGER_IDS = [
+const FATIGUE_TRIGGER_IDS = [
   "volumeSpike",
   "tonnageSpike",
   "performanceDecline",

@@ -40,7 +40,7 @@ export * from "./restPeriods";
 export * from "./volumeLandmarks";
 
 /** High-level training phase shown in the UI. */
-export type SystemicPhase = "Build" | "Maintain" | "Deload" | "Inactive";
+type SystemicPhase = "Build" | "Maintain" | "Deload" | "Inactive";
 
 /**
  * Derive the high-level systemic phase from available signals.

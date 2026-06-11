@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowLeft, Check, Sparkles, X } from "@lucide/vue";
+import { ArrowLeft, Check, Sparkles } from "@lucide/vue";
 import { useStepper } from "@vueuse/core";
 import { storeToRefs } from "pinia";
 import { computed, watch } from "vue";

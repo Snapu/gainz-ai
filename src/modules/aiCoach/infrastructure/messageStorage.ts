@@ -4,8 +4,6 @@ interface MessageRecord {
   timestamp: Date | string;
 }
 
-export type MessageStorageError = "load-failed" | "save-failed";
-
 const STORAGE_KEY = "ai-sessions-v1";
 const LEGACY_STORAGE_KEY_PREFIX = "ai-messages-";
 // Match plan cycle length so messages survive the full 2-week mesocycle.

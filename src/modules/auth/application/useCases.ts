@@ -5,7 +5,7 @@ import type { AuthError, AuthTokenRequestError } from "@/modules/auth/domain";
 
 export const CLIENT_ID = "804592774481-hvo962fnjn23g9tt4i0s5d62f17pegg7.apps.googleusercontent.com";
 
-export const SCOPES = [
+const SCOPES = [
   "https://www.googleapis.com/auth/spreadsheets",
   "https://www.googleapis.com/auth/drive.metadata.readonly",
   "https://www.googleapis.com/auth/drive.file",

@@ -1,10 +1,10 @@
 import type { ResultAsync } from "neverthrow";
 import type { UserProfile } from "../domain/types";
 
-export type UserProfileLoadError = "load-failed" | "parse-data-failed" | "auth-failed";
-export type UserProfileSaveError = "save-failed" | "auth-failed";
-export type UserProfileMigrationResult = "migrated" | "skipped" | "no-data";
-export type UserProfileMigrationError = "migration-failed";
+type UserProfileLoadError = "load-failed" | "parse-data-failed" | "auth-failed";
+type UserProfileSaveError = "save-failed" | "auth-failed";
+type UserProfileMigrationResult = "migrated" | "skipped" | "no-data";
+type UserProfileMigrationError = "migration-failed";
 
 export interface UserProfileRepository {
   load: () => ResultAsync<UserProfile | null, UserProfileLoadError>;

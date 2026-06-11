@@ -172,7 +172,7 @@ function rebuildTrainingSummarySheet(
   });
 }
 
-export function loadExerciseWeightMigrationReviewsInfra(
+function loadExerciseWeightMigrationReviewsInfra(
   doc: GoogleSpreadsheet,
 ): ResultAsync<ExerciseWeightMigrationReview[], MigrationLoadError> {
   return ResultAsync.fromThrowable(
@@ -205,7 +205,7 @@ export function loadExerciseWeightMigrationReviewsInfra(
   });
 }
 
-export function saveExerciseWeightMigrationReviewInfra(
+function saveExerciseWeightMigrationReviewInfra(
   review: ExerciseWeightMigrationReview,
   doc: GoogleSpreadsheet,
 ): ResultAsync<void, MigrationSaveError> {
@@ -247,7 +247,7 @@ export function saveExerciseWeightMigrationReviewInfra(
   )();
 }
 
-export function applyExerciseWeightMigrationDecisionInfra(
+function applyExerciseWeightMigrationDecisionInfra(
   exerciseName: string,
   decision: ExerciseWeightMigrationDecision,
   doc: GoogleSpreadsheet,

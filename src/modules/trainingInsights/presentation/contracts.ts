@@ -2,7 +2,6 @@ export type {
   MuscleActivation,
   MuscleGroup,
   MuscleGroupInsight,
-  SystemicPhase,
   TrainingInsights,
   VolumeLandmark,
 } from "@/modules/trainingInsights/domain";

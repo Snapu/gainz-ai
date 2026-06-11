@@ -7,5 +7,4 @@ export {
   deloadProgressPercent,
   getDeloadStatus,
   isDeloadActive,
-  isDeloadFatigueTriggerId,
 } from "@/modules/deload/domain";

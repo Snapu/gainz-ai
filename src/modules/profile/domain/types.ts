@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { parseOptionalNumber } from "@/modules/sharedKernel/domain";
 
-export const FitnessGoalSchema = z.enum([
+const FitnessGoalSchema = z.enum([
   "build_muscle",
   "lose_fat",
   "improve_endurance",
@@ -11,13 +11,13 @@ export const FitnessGoalSchema = z.enum([
 ]);
 export type FitnessGoal = z.infer<typeof FitnessGoalSchema>;
 
-export const FitnessLevelSchema = z.enum(["beginner", "intermediate", "advanced"]);
+const FitnessLevelSchema = z.enum(["beginner", "intermediate", "advanced"]);
 export type FitnessLevel = z.infer<typeof FitnessLevelSchema>;
 
-export const WorkoutLocationSchema = z.enum(["gym", "home", "both"]);
+const WorkoutLocationSchema = z.enum(["gym", "home", "both"]);
 export type WorkoutLocation = z.infer<typeof WorkoutLocationSchema>;
 
-export const EquipmentOptionSchema = z.enum([
+const EquipmentOptionSchema = z.enum([
   "bodyweight",
   "dumbbells",
   "barbell_rack",

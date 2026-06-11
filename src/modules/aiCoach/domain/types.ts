@@ -259,7 +259,7 @@ export interface PlannedSession {
   exercises: PlannedExercise[];
 }
 
-export interface PlannedExercise {
+interface PlannedExercise {
   exerciseName: string;
   targetSets: number;
   targetReps?: string;
