@@ -21,4 +21,8 @@ export interface TrainingPlanRepository {
    * Clears the current active plan.
    */
   clearPlan(): Result<void, "storage-error">;
+
+  loadCompletedSessions(): Result<string[], "storage-error">;
+  saveCompletedSessions(keys: string[]): Result<void, "storage-error">;
+  clearCompletedSessions(): Result<void, "storage-error">;
 }

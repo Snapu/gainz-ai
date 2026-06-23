@@ -1,4 +1,4 @@
-import { type GenerateContentConfig, GoogleGenAI } from "@google/genai";
+import { type Content, type GenerateContentConfig, GoogleGenAI } from "@google/genai";
 import * as Sentry from "@sentry/vue";
 import { errAsync, ResultAsync } from "neverthrow";
 
@@ -87,13 +87,15 @@ When constraints clash, strictly follow this priority order:
 
 6. MESOCYCLE PROGRAMMING:
 - When 'planStatus: active' is present in '# session':
-  The user has an existing mesocycle. If a session is marked [TODAY] in '# program', use it. If there is NO [TODAY] marker, pick the next logical session from the plan and output it. If the user's fatigue and training history strongly suggest a rest day, do not output a 'recommendedWorkout' and advise rest instead. Adapt weights/reps from '# logs'. Do NOT regenerate 'trainingPlan'.
+  The user has an existing mesocycle. Look at the '# program' section. Sessions marked '[DONE]' have already been completed.
+  If an uncompleted session is marked '[TODAY]', use it. If there is NO valid '[TODAY]' marker, pick the next logical uncompleted session from the plan (skipping any marked '[DONE]') and output it. 
+  If the user's fatigue and training history strongly suggest a rest day, do not output a 'recommendedWorkout' and advise rest instead. Adapt weights/reps from '# logs'. Do NOT regenerate 'trainingPlan'.
 - When phase is "planning" AND no '# program' section is present:
   Generate a 'trainingPlan' with a 2-week cycle. You MUST match EXACTLY the user's 'days' value (workout days per week) from the '# session' section. Do not generate more or fewer sessions per week.
   Name sessions clearly. Distribute weekly volume across sessions respecting recovery.
   ALSO output today's session as 'recommendedWorkout'.
 - When '# program' is present:
-  Use it to select today's session (or the next logical session if no [TODAY] marker exists) → output as 'recommendedWorkout'.
+  Use it to select today's session (or the next uncompleted session skipping '[DONE]' markers) → output as 'recommendedWorkout'.
   Adapt weights/reps based on actual performance in '# logs'.
   Do NOT regenerate 'trainingPlan' unless the user explicitly asks.
 - When the user asks for a new plan (detected via '# question'):
@@ -125,9 +127,9 @@ export function getTodayLogsCount(session: WorkoutSession | null): number {
 
 async function executeAiRequest(
   ai: GoogleGenAI,
-  conversationContents: any[],
+  conversationContents: Content[],
   aiTimeoutMs: number,
-  schema: any,
+  schema: unknown,
 ): Promise<string> {
   const generateWithTimeout = (model: "gemini-3-flash-preview" | "gemini-2.5-flash") => {
     const timeoutPromise = new Promise<never>((_, reject) =>

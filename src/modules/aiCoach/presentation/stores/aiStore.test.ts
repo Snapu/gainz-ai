@@ -34,6 +34,9 @@ vi.mock("@/modules/aiCoach/infrastructure", () => ({
     loadPlan = vi.fn(() => ({ isOk: () => true, value: null }));
     savePlan = vi.fn(() => ({}));
     clearPlan = vi.fn(() => ({}));
+    loadCompletedSessions = vi.fn(() => ({ isOk: () => true, value: [] }));
+    saveCompletedSessions = vi.fn(() => ({}));
+    clearCompletedSessions = vi.fn(() => ({}));
   },
 }));
 
@@ -69,6 +72,7 @@ vi.mock("@/modules/trainingInsights/presentation", () => ({
 vi.mock("@/modules/trainingLogs/presentation", () => ({
   useExerciseLogsStore: vi.fn(() => ({ exerciseLogs: [] })),
   resolveCurrentSession: vi.fn(() => null),
+  getSessionStartBoundary: vi.fn(() => Date.now()),
 }));
 
 vi.mock("@/modules/aiCoach/infrastructure/messageStorage", () => ({

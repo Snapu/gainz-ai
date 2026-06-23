@@ -2,7 +2,7 @@ import { Result } from "neverthrow";
 import { TrainingPlan, type TrainingPlanRepository } from "../domain";
 
 const PLAN_STORAGE_KEY = "training-plan-v1";
-const MAX_PLAN_AGE_DAYS = 28;
+const COMPLETED_SESSIONS_STORAGE_KEY = "training-plan-completed-v1";
 
 export class LocalStoragePlanRepository implements TrainingPlanRepository {
   loadPlan(): Result<TrainingPlan | null, "storage-error"> {
@@ -21,7 +21,8 @@ export class LocalStoragePlanRepository implements TrainingPlanRepository {
 
         const createdAt = new Date(plan.createdAt);
         const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - MAX_PLAN_AGE_DAYS);
+        const maxPlanAgeDays = plan.cycleWeeks * 7 + 7;
+        cutoffDate.setDate(cutoffDate.getDate() - maxPlanAgeDays);
 
         if (createdAt < cutoffDate) {
           localStorage.removeItem(PLAN_STORAGE_KEY);
@@ -47,6 +48,35 @@ export class LocalStoragePlanRepository implements TrainingPlanRepository {
     return Result.fromThrowable(
       () => {
         localStorage.removeItem(PLAN_STORAGE_KEY);
+      },
+      () => "storage-error" as const,
+    )();
+  }
+
+  loadCompletedSessions(): Result<string[], "storage-error"> {
+    return Result.fromThrowable(
+      () => {
+        const stored = localStorage.getItem(COMPLETED_SESSIONS_STORAGE_KEY);
+        if (!stored) return [];
+        return JSON.parse(stored) as string[];
+      },
+      () => "storage-error" as const,
+    )();
+  }
+
+  saveCompletedSessions(keys: string[]): Result<void, "storage-error"> {
+    return Result.fromThrowable(
+      () => {
+        localStorage.setItem(COMPLETED_SESSIONS_STORAGE_KEY, JSON.stringify(keys));
+      },
+      () => "storage-error" as const,
+    )();
+  }
+
+  clearCompletedSessions(): Result<void, "storage-error"> {
+    return Result.fromThrowable(
+      () => {
+        localStorage.removeItem(COMPLETED_SESSIONS_STORAGE_KEY);
       },
       () => "storage-error" as const,
     )();

@@ -2,7 +2,7 @@ import * as Sentry from "@sentry/vue";
 import { useLocalStorage } from "@vueuse/core";
 import { errAsync, okAsync, Result, ResultAsync } from "neverthrow";
 import { defineStore } from "pinia";
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 
 import {
   adviceStartsDeload,
@@ -20,7 +20,6 @@ import {
 import { createAiCoachService, LocalStoragePlanRepository } from "@/modules/aiCoach/infrastructure";
 import {
   cleanOldCoachingSessions,
-  createPlanSessionId,
   loadMessagesFromStorage,
   removeMessagesFromStorage,
   saveMessagesToStorage,
@@ -110,6 +109,7 @@ export const useAiStore = defineStore("ai", () => {
   );
   const pendingRequest = ref<{ question?: string; mode: "planning" | "execution" } | null>(null);
   const activePlan = ref<TrainingPlan | null>(null);
+  const completedSessions = ref<Set<string>>(new Set());
 
   const userProfileStore = useUserProfileStore();
   const exerciseLogsStore = useExerciseLogsStore();
@@ -121,18 +121,33 @@ export const useAiStore = defineStore("ai", () => {
   const aiCoachService = createAiCoachService();
   const planRepository = new LocalStoragePlanRepository();
 
+  const activeSession = computed(() => resolveCurrentSession(exerciseLogsStore.exerciseLogs));
+
   const currentSessionId = computed<string>(() => {
-    // Use the active plan's creation date as a stable conversation anchor.
-    // This ensures messages persist across the entire mesocycle (not just one day).
-    const plan = activePlan.value;
-    if (plan?.createdAt) {
-      return createPlanSessionId(isoDateString(new Date(plan.createdAt)));
+    // Anchor messages to the start of the day of the active session
+    // This keeps pre-workout and mid-workout chat on the same ID, and supports midnight spanning
+    const session = activeSession.value;
+    const boundary = session
+      ? new Date(session.startTime).setHours(0, 0, 0, 0)
+      : new Date().setHours(0, 0, 0, 0);
+    return isoDateString(new Date(boundary));
+  });
+
+  watch(activeSession, (newSession, oldSession) => {
+    if (oldSession && !newSession) {
+      markCurrentSessionCompleted(oldSession.startTime);
     }
-    // During a live workout session (no plan yet), use the workout session ID
-    const session = resolveCurrentSession(exerciseLogsStore.exerciseLogs);
-    if (session) return session.sessionId;
-    // Fallback: today's date (for users without a plan)
-    return isoDateString(new Date());
+  });
+
+  watch(currentSessionId, (newSessionId, oldSessionId) => {
+    if (!hasInitialized.value || newSessionId === oldSessionId) return;
+
+    const loadedMessagesResult = loadMessagesFromStorage<CoachingMessage>(newSessionId);
+    if (loadedMessagesResult.isOk()) {
+      messages.value = loadedMessagesResult.value;
+    } else {
+      messages.value = [];
+    }
   });
 
   function initialize(): void {
@@ -141,6 +156,11 @@ export const useAiStore = defineStore("ai", () => {
     const planResult = planRepository.loadPlan();
     if (planResult.isOk() && planResult.value) {
       activePlan.value = planResult.value;
+    }
+
+    const completedResult = planRepository.loadCompletedSessions();
+    if (completedResult.isOk()) {
+      completedSessions.value = new Set(completedResult.value);
     }
 
     const loadedMessagesResult = loadMessagesFromStorage<CoachingMessage>(currentSessionId.value);
@@ -182,7 +202,7 @@ export const useAiStore = defineStore("ai", () => {
   }
 
   function handleCoachingSuccess(
-    result: { advice: any; requestPayload: string },
+    result: { advice: CoachingAdvice; requestPayload: string },
     userMessageId: string,
     currentId: string,
     todayLogsCount: number,
@@ -237,7 +257,7 @@ export const useAiStore = defineStore("ai", () => {
     };
   }
 
-  function handleCoachingError(error: any, userMessageId: string, currentId: string) {
+  function handleCoachingError(error: unknown, userMessageId: string, currentId: string) {
     if (userMessageId) {
       messages.value = removeMessageById(messages.value, userMessageId);
       persistMessages(currentId);
@@ -311,6 +331,8 @@ export const useAiStore = defineStore("ai", () => {
             events: eventsStore.events,
             question,
             mode,
+            activePlan: activePlan.value ?? undefined,
+            completedSessionKeys: completedSessions.value,
           });
 
           if (result.isErr()) {
@@ -409,6 +431,32 @@ export const useAiStore = defineStore("ai", () => {
     messages.value = [];
   }
 
+  function markCurrentSessionCompleted(date: Date = new Date()) {
+    const plan = activePlan.value;
+    if (!plan) return;
+
+    const currentWeek = plan.getCurrentWeekNumber(date);
+    const currentDay = date.getDay();
+    const session = plan.getPlannedSessionForDay(currentDay, currentWeek);
+
+    if (session) {
+      const key = TrainingPlan.sessionKey(session.weekNumber, session.dayOfWeek);
+      if (!completedSessions.value.has(key)) {
+        completedSessions.value.add(key);
+        planRepository.saveCompletedSessions(Array.from(completedSessions.value));
+
+        if (plan.isFullyCompleted(completedSessions.value)) {
+          clearMessages();
+          planRepository.clearPlan();
+          planRepository.clearCompletedSessions();
+          activePlan.value = null;
+          completedSessions.value = new Set();
+          generateNewPlan();
+        }
+      }
+    }
+  }
+
   const hasTodayCoachMessage = computed<boolean>(() => {
     const today = isoDateString(new Date());
     return messages.value.some(
@@ -426,7 +474,9 @@ export const useAiStore = defineStore("ai", () => {
     messages,
     hasInitialized,
     activePlan,
+    completedSessions,
     currentWorkoutPlan,
     hasTodayCoachMessage,
+    markCurrentSessionCompleted,
   };
 });

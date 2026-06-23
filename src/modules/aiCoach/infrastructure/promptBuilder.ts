@@ -4,6 +4,7 @@ import {
   classifyExercise,
   getMuscleActivation,
   getProgressionIncrement,
+  type ExerciseE1RM,
   type TrainingInsights,
 } from "@/modules/trainingInsights/domain";
 import {
@@ -12,8 +13,8 @@ import {
   type WorkoutSession,
 } from "@/modules/trainingLogs/application";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
-import type { TrainingPlan } from "../domain";
-import type { CoachingMessage } from "../domain/types";
+import { TrainingPlan } from "../domain";
+import type { CoachingMessage, PlannedExercise } from "../domain/types";
 
 const INITIAL_LOG_WINDOW_DAYS = 14;
 const EXTENDED_LOG_WINDOW_DAYS = 28;
@@ -414,7 +415,7 @@ export function formatMuscles(insights: TrainingInsights): string {
  */
 function buildExerciseParts(
   name: string,
-  data: Record<string, any>,
+  data: ExerciseE1RM,
   exerciseLogs: ExerciseLog[],
   recentExerciseNames?: Set<string>,
 ): string[] | null {
@@ -469,11 +470,11 @@ export function formatExercises(
  *
  * Example output:
  * cycle: 2w, created: 2026-06-02
- * W1-Mon Unit A (Push Focus):
+ * W1-Mon Unit A (Push Focus): [TODAY]
  *   Incline DB Press: 3×6-8 @8.5
  *   ...
  */
-function formatPlanExercise(ex: Record<string, any>): string {
+function formatPlanExercise(ex: PlannedExercise): string {
   let repsStr = "";
   if (ex.targetDistanceMeters != null) repsStr = `${ex.targetDistanceMeters}m`;
   else if (ex.targetDurationSeconds != null) repsStr = `${ex.targetDurationSeconds}s`;
@@ -488,7 +489,11 @@ function formatPlanExercise(ex: Record<string, any>): string {
   return `  ${ex.exerciseName}: ${parts.join(" ")}`;
 }
 
-export function formatPlanForPrompt(plan: TrainingPlan, currentWeekNumber?: number): string {
+export function formatPlanForPrompt(
+  plan: TrainingPlan,
+  currentWeekNumber?: number,
+  completedKeys: ReadonlySet<string> = new Set(),
+): string {
   const lines: string[] = [];
   const createdAtStr = isoDateString(new Date(plan.createdAt));
   lines.push(`cycle: ${plan.cycleWeeks}w, created: ${createdAtStr}`);
@@ -501,10 +506,13 @@ export function formatPlanForPrompt(plan: TrainingPlan, currentWeekNumber?: numb
     const isToday =
       session.dayOfWeek === currentDayOfWeek &&
       (currentWeekNumber == null || session.weekNumber === currentWeekNumber);
-    const todayMarker = isToday ? " [TODAY]" : "";
+    const isDone = completedKeys.has(
+      TrainingPlan.sessionKey(session.weekNumber, session.dayOfWeek),
+    );
+    const marker = isToday ? " [TODAY]" : isDone ? " [DONE]" : "";
 
     lines.push(
-      `W${session.weekNumber}-${dayStr} ${session.sessionLabel} (${session.focusDescription}):${todayMarker}`,
+      `W${session.weekNumber}-${dayStr} ${session.sessionLabel} (${session.focusDescription}):${marker}`,
     );
     for (const ex of session.exercises) {
       lines.push(formatPlanExercise(ex));

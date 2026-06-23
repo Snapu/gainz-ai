@@ -22,6 +22,7 @@ export interface CoachingAdviceRequest {
   question?: string;
   mode?: "planning" | "execution";
   activePlan?: TrainingPlan | null;
+  completedSessionKeys?: ReadonlySet<string>;
 }
 
 export type CoachingMessage = {
@@ -259,7 +260,7 @@ export interface PlannedSession {
   exercises: PlannedExercise[];
 }
 
-interface PlannedExercise {
+export interface PlannedExercise {
   exerciseName: string;
   targetSets: number;
   targetReps?: string;

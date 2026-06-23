@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ExerciseE1RM } from "@/modules/trainingInsights/domain/e1rm";
+import type { ExerciseE1RM, TrainingInsights } from "@/modules/trainingInsights/domain";
 import { TrainingPlan } from "../domain";
 import { formatExercises, formatPlanForPrompt } from "./promptBuilder";
 
@@ -20,7 +20,11 @@ describe("formatExercises", () => {
       },
     };
 
-    const output = formatExercises({ e1rm: e1rmData } as any, [], undefined);
+    const output = formatExercises(
+      { e1rm: e1rmData } as unknown as TrainingInsights,
+      [],
+      undefined,
+    );
     expect(output).toContain("rpe_trigger:overload_ready");
   });
 
@@ -40,7 +44,11 @@ describe("formatExercises", () => {
       },
     };
 
-    const output = formatExercises({ e1rm: e1rmData } as any, [], undefined);
+    const output = formatExercises(
+      { e1rm: e1rmData } as unknown as TrainingInsights,
+      [],
+      undefined,
+    );
     expect(output).toContain("rpe:9");
   });
 });

@@ -50,7 +50,7 @@ export const useTrainingSummaryStore = defineStore("trainingSummary", () => {
     if (!summaryRepository || !logsRepository) return errAsync("repository-unavailable");
 
     return loadTrainingSummary(summaryRepository)
-      .orTee((error: any) => {
+      .orTee((error: unknown) => {
         console.error("Failed to load training summary:", error);
         Sentry.captureMessage("Failed to load training summary", {
           level: "error",

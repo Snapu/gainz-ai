@@ -1,0 +1,1 @@
+System.register(["./UiButton-legacy-C8bQS-n6.js","./index-legacy-CO_UCFwR.js"],function(e,t){var n,u,c,i,s;return{setters:[function(e){n=e.C,u=e.Ct,c=e.U,i=e.k},function(e){s=e.f}],execute:function(){e("default",i({__name:"AICoach",setup:e=>(e,t)=>(c(),n(u(s)))}))}}});

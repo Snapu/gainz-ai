@@ -142,10 +142,10 @@ function buildWorkloadSection(
   context: AssemblePromptContext,
   sections: string[],
 ): void {
-  const { insights, exerciseLogs, activePlan, question } = options;
+  const { insights, exerciseLogs, question } = options;
   const { isFirstMessage, phase, recentExerciseNames } = context;
 
-  if (phase === "planning" || isFirstMessage || question || activePlan) {
+  if (phase === "planning" || isFirstMessage || question) {
     sections.push(`# workload\n${formatWorkload(insights)}`);
     sections.push(`# muscles\n${formatMuscles(insights)}`);
     sections.push(`# exercises\n${formatExercises(insights, exerciseLogs, recentExerciseNames)}`);
@@ -188,8 +188,15 @@ export function assembleCoachingPrompt(
   options: CoachingAdviceRequest,
   context: AssemblePromptContext,
 ): string {
-  const { userProfile, trainingSummaries, events = [], question, activePlan } = options;
-  const { session, todayLogs, isFirstMessage, phase, initialWindow, now } = context;
+  const {
+    userProfile,
+    trainingSummaries,
+    events = [],
+    question,
+    activePlan,
+    completedSessionKeys,
+  } = options;
+  const { session, todayLogs, isFirstMessage, initialWindow, now } = context;
 
   const sections: string[] = [buildSessionSection(options, context)];
 
@@ -206,9 +213,13 @@ export function assembleCoachingPrompt(
 
   buildUpdatesSection(options, context, sections);
 
-  if (activePlan && (isFirstMessage || phase === "planning" || !!activePlan)) {
+  if (activePlan) {
     sections.push(
-      `# program\n${formatPlanForPrompt(activePlan, activePlan.getCurrentWeekNumber(now))}`,
+      `# program\n${formatPlanForPrompt(
+        activePlan,
+        activePlan.getCurrentWeekNumber(now),
+        completedSessionKeys,
+      )}`,
     );
   }
 

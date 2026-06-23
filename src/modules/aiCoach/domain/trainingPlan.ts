@@ -46,6 +46,19 @@ export class TrainingPlan {
   }
 
   /**
+   * Generates a unique string identifier for a session based on its week and day number.
+   */
+  public static sessionKey(weekNumber: number, dayOfWeek: number): string {
+    return `W${weekNumber}-D${dayOfWeek}`;
+  }
+
+  public isFullyCompleted(completedKeys: ReadonlySet<string>): boolean {
+    return this.sessions.every((s) =>
+      completedKeys.has(TrainingPlan.sessionKey(s.weekNumber, s.dayOfWeek)),
+    );
+  }
+
+  /**
    * Calculates the current cycle week (1-indexed) based on the current date.
    */
   public getCurrentWeekNumber(currentDate: Date = new Date()): number {
