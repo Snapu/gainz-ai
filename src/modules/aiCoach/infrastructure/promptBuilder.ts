@@ -2,9 +2,9 @@ import { Result } from "neverthrow";
 import { isoDateString } from "@/modules/sharedKernel/domain";
 import {
   classifyExercise,
+  type ExerciseE1RM,
   getMuscleActivation,
   getProgressionIncrement,
-  type ExerciseE1RM,
   type TrainingInsights,
 } from "@/modules/trainingInsights/domain";
 import {

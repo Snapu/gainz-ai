@@ -39,6 +39,7 @@ const {
   activeWorkoutGroups,
   activePlan,
   activeSessionIndex,
+  isPlanSessionCompleted,
   planDerivedWorkout,
   completedExercises,
   cooldownProgressPercent,
@@ -431,7 +432,10 @@ const {
         <h4 class="font-bold text-sm text-foreground mb-0.5 flex items-center gap-2">
           {{ session.sessionLabel }} 
           <span class="text-xs text-muted-foreground font-medium">Week {{ session.weekNumber }}</span>
-          <UiBadge v-if="sIdx === activeSessionIndex" variant="default" class="uppercase tracking-wider ml-auto">Today</UiBadge>
+          <UiBadge v-if="isPlanSessionCompleted(session.weekNumber, session.dayOfWeek)" variant="outline" class="uppercase tracking-wider ml-auto text-primary border-primary/30 bg-primary/5">
+           <CheckCircle2 class="w-3 h-3 mr-1" /> Done
+          </UiBadge>
+          <UiBadge v-else-if="sIdx === activeSessionIndex" variant="default" class="uppercase tracking-wider ml-auto">Today</UiBadge>
         </h4>
         <p class="text-xs text-muted-foreground mb-3 pb-1 border-b border-border/50">{{ session.focusDescription }}</p>
         <div class="w-full overflow-x-auto">

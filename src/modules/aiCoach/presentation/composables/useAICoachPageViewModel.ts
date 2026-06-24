@@ -1,6 +1,7 @@
 import { useDebounceFn } from "@vueuse/core";
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
+import { TrainingPlan } from "@/modules/aiCoach/domain";
 import { type CoachingAdvice, useAiStore } from "@/modules/aiCoach/presentation";
 import { useRestTimerStore } from "@/modules/platform/presentation";
 import { isoDateString } from "@/modules/sharedKernel/domain";
@@ -171,6 +172,10 @@ export function useAICoachPageViewModel() {
   });
 
   const activePlan = computed(() => aiStore.activePlan);
+
+  const isPlanSessionCompleted = (weekNumber: number, dayOfWeek: number) => {
+    return aiStore.completedSessions.has(TrainingPlan.sessionKey(weekNumber, dayOfWeek));
+  };
 
   /** Derives rest duration from the current workout plan for the selected exercise. */
   const selectedRestSeconds = computed<number | null>(() => {
@@ -468,6 +473,7 @@ export function useAICoachPageViewModel() {
     activeWorkoutGroups,
     activePlan,
     activeSessionIndex,
+    isPlanSessionCompleted,
     currentWeekNumber,
     planDerivedWorkout,
     completedExercises,
