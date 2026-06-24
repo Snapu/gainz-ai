@@ -59,21 +59,17 @@ describe("TrainingPlan", () => {
   });
 
   describe("getNextUncompletedSession", () => {
-    it("returns exact match for day and week", () => {
+    it("returns first uncompleted session chronologically", () => {
       const plan = TrainingPlan.create("2026-01-01T00:00:00Z", 2, [dummySession, dummySessionW2]);
-      expect(plan.getNextUncompletedSession(1, 1, new Set())).toBe(dummySession);
-      expect(plan.getNextUncompletedSession(1, 2, new Set())).toBe(dummySessionW2);
+      expect(plan.getNextUncompletedSession(new Set())).toBe(dummySession);
     });
 
-    it("falls back to day match if exact week is not found", () => {
-      const plan = TrainingPlan.create("2026-01-01T00:00:00Z", 2, [dummySession]);
-      // Week 2 requested, but only Week 1 exists for day 1
-      expect(plan.getNextUncompletedSession(1, 2, new Set())).toBe(dummySession);
-    });
-
-    it("falls back to next uncompleted session if no matching day exists", () => {
-      const plan = TrainingPlan.create("2026-01-01T00:00:00Z", 2, [dummySession]);
-      expect(plan.getNextUncompletedSession(2, 1, new Set())).toBe(dummySession);
+    it("returns next session if first is completed", () => {
+      const plan = TrainingPlan.create("2026-01-01T00:00:00Z", 2, [dummySession, dummySessionW2]);
+      const completed = new Set([
+        TrainingPlan.sessionKey(dummySession.weekNumber, dummySession.dayOfWeek),
+      ]);
+      expect(plan.getNextUncompletedSession(completed)).toBe(dummySessionW2);
     });
 
     it("returns undefined if all sessions are completed", () => {
@@ -81,35 +77,33 @@ describe("TrainingPlan", () => {
       const completed = new Set([
         TrainingPlan.sessionKey(dummySession.weekNumber, dummySession.dayOfWeek),
       ]);
-      expect(plan.getNextUncompletedSession(1, 1, completed)).toBeUndefined();
+      expect(plan.getNextUncompletedSession(completed)).toBeUndefined();
     });
   });
 
   describe("getPlannedSessionForDay", () => {
     it("returns exact match for day and week", () => {
       const plan = TrainingPlan.create("2026-01-01T00:00:00Z", 2, [dummySession, dummySessionW2]);
-      expect(plan.getPlannedSessionForDay(1, 1, new Set())).toBe(dummySession);
-      expect(plan.getPlannedSessionForDay(1, 2, new Set())).toBe(dummySessionW2);
+      expect(plan.getPlannedSessionForDay(1, 1)).toBe(dummySession);
+      expect(plan.getPlannedSessionForDay(1, 2)).toBe(dummySessionW2);
     });
 
     it("falls back to day match if exact week is not found", () => {
       const plan = TrainingPlan.create("2026-01-01T00:00:00Z", 2, [dummySession]);
       // Week 2 requested, but only Week 1 exists for day 1
-      expect(plan.getPlannedSessionForDay(1, 2, new Set())).toBe(dummySession);
+      expect(plan.getPlannedSessionForDay(1, 2)).toBe(dummySession);
     });
 
-    it("returns undefined if no matching day exists (no fallback 3)", () => {
+    it("returns undefined if no matching day exists", () => {
       const plan = TrainingPlan.create("2026-01-01T00:00:00Z", 2, [dummySession]);
       // Day 2 (Tuesday) requested, plan only has Monday
-      expect(plan.getPlannedSessionForDay(2, 1, new Set())).toBeUndefined();
+      expect(plan.getPlannedSessionForDay(2, 1)).toBeUndefined();
     });
 
-    it("returns undefined if exact match is completed and no other session matches day", () => {
+    it("returns session even if it is completed", () => {
       const plan = TrainingPlan.create("2026-01-01T00:00:00Z", 2, [dummySession]);
-      const completed = new Set([
-        TrainingPlan.sessionKey(dummySession.weekNumber, dummySession.dayOfWeek),
-      ]);
-      expect(plan.getPlannedSessionForDay(1, 1, completed)).toBeUndefined();
+      // The session should be returned regardless of completion status
+      expect(plan.getPlannedSessionForDay(1, 1)).toBe(dummySession);
     });
   });
 });

@@ -425,7 +425,7 @@ export const useAiStore = defineStore("ai", () => {
 
     const currentWeek = plan.getCurrentWeekNumber(date);
     const currentDay = date.getDay();
-    const session = plan.getPlannedSessionForDay(currentDay, currentWeek, completedSessions.value);
+    const session = plan.getPlannedSessionForDay(currentDay, currentWeek);
 
     if (session) {
       const key = TrainingPlan.sessionKey(session.weekNumber, session.dayOfWeek);

@@ -104,55 +104,28 @@ export class TrainingPlan {
   }
 
   /**
-   * Shared steps 1 & 2: exact week+day match, then day-only fallback.
+   * Finds the first uncompleted session chronologically in the plan.
+   * This is used to determine the next overall milestone in the mesocycle (e.g., for highlighting the next session).
    */
-  private findSessionForDay(
-    dayOfWeek: number,
-    weekNumber: number,
-    completedKeys: ReadonlySet<string>,
-  ): PlannedSession | undefined {
-    // 1. Exact match for today
-    const exactMatch = this.sessions.find(
-      (s) =>
-        s.dayOfWeek === dayOfWeek &&
-        s.weekNumber === weekNumber &&
-        !TrainingPlan.isCompleted(s, completedKeys),
-    );
-    if (exactMatch) return exactMatch;
-
-    // 2. Fallback: match by day only
-    return this.sessions.find(
-      (s) => s.dayOfWeek === dayOfWeek && !TrainingPlan.isCompleted(s, completedKeys),
-    );
-  }
-
-  /**
-   * Finds the appropriate uncompleted session matching the AI Coach's selection logic:
-   * 1. Exact uncompleted session for today.
-   * 2. Any uncompleted session for today.
-   * 3. Next logical uncompleted session in the plan chronologically.
-   */
-  public getNextUncompletedSession(
-    dayOfWeek: number,
-    weekNumber: number,
-    completedKeys: ReadonlySet<string>,
-  ): PlannedSession | undefined {
-    const dayMatch = this.findSessionForDay(dayOfWeek, weekNumber, completedKeys);
-    if (dayMatch) return dayMatch;
-
-    // 3. Fallback: Next logical uncompleted session
+  public getNextUncompletedSession(completedKeys: ReadonlySet<string>): PlannedSession | undefined {
     return this.sessions.find((s) => !TrainingPlan.isCompleted(s, completedKeys));
   }
 
   /**
-   * Finds the appropriate planned session for a given day, ensuring it hasn't been completed.
-   * This is strictly for matching calendar days to plan days, NOT for finding the next chronological session.
+   * Finds the exact planned session for a given day and week, regardless of completion status.
+   * This ensures the calendar representation (what is scheduled for today) remains stable.
    */
   public getPlannedSessionForDay(
     dayOfWeek: number,
     weekNumber: number,
-    completedKeys: ReadonlySet<string>,
   ): PlannedSession | undefined {
-    return this.findSessionForDay(dayOfWeek, weekNumber, completedKeys);
+    // 1. Exact match for today
+    const exactMatch = this.sessions.find(
+      (s) => s.dayOfWeek === dayOfWeek && s.weekNumber === weekNumber,
+    );
+    if (exactMatch) return exactMatch;
+
+    // 2. Fallback: match by day only
+    return this.sessions.find((s) => s.dayOfWeek === dayOfWeek);
   }
 }

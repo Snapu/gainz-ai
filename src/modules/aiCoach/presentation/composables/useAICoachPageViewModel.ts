@@ -113,11 +113,7 @@ export function useAICoachPageViewModel() {
     if (!aiStore.activePlan) return null;
     const currentDay = new Date().getDay();
     const weekNum = currentWeekNumber.value;
-    const session = aiStore.activePlan.getNextUncompletedSession(
-      currentDay,
-      weekNum,
-      aiStore.completedSessions,
-    );
+    const session = aiStore.activePlan.getPlannedSessionForDay(currentDay, weekNum);
     return (session?.exercises as DisplayExercise[]) ?? null;
   });
 
@@ -165,14 +161,8 @@ export function useAICoachPageViewModel() {
 
   const activeSessionIndex = computed<number>(() => {
     if (!aiStore.activePlan) return -1;
-    const currentDay = new Date().getDay();
-    const weekNum = currentWeekNumber.value;
 
-    const session = aiStore.activePlan.getNextUncompletedSession(
-      currentDay,
-      weekNum,
-      aiStore.completedSessions,
-    );
+    const session = aiStore.activePlan.getNextUncompletedSession(aiStore.completedSessions);
     if (!session) return -1;
 
     return aiStore.activePlan.sessions.findIndex(
