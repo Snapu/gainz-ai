@@ -1,0 +1,1 @@
+System.register(["./UiButton-legacy-C8bQS-n6.js","./index-legacy-bJwtS3u0.js"],function(e,t){var n,s,u,c,i;return{setters:[function(e){n=e.C,s=e.Ct,u=e.U,c=e.k},function(e){i=e.r}],execute:function(){e("default",c({__name:"ExerciseLogs",setup:e=>(e,t)=>(u(),n(s(i)))}))}}});

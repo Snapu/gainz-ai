@@ -55,6 +55,7 @@ const {
   openGoogleSearch,
   regeneratePlan,
   copyPlanJson,
+  copyDebugState,
   requestOffDayWorkout,
 } = useAICoachPageViewModel();
 </script>
@@ -474,16 +475,27 @@ const {
       </div>
      </div>
 
-     <!-- Debug Button -->
-     <UiButton
-      variant="ghost"
-      size="sm"
-      class="text-muted-foreground w-full mt-2 border border-border/40 border-dashed hover:bg-muted/30"
-      @click="copyPlanJson"
-     >
-      <Copy class="w-3.5 h-3.5 mr-2 opacity-70" />
-      Copy Plan JSON
-     </UiButton>
+     <!-- Debug Buttons -->
+     <div class="flex gap-2 mt-2">
+       <UiButton
+        variant="ghost"
+        size="sm"
+        class="text-muted-foreground flex-1 border border-border/40 border-dashed hover:bg-muted/30"
+        @click="copyPlanJson"
+       >
+        <Copy class="w-3.5 h-3.5 mr-2 opacity-70" />
+        Copy Plan
+       </UiButton>
+       <UiButton
+        variant="ghost"
+        size="sm"
+        class="text-muted-foreground flex-1 border border-border/40 border-dashed hover:bg-muted/30"
+        @click="copyDebugState"
+       >
+        <Copy class="w-3.5 h-3.5 mr-2 opacity-70" />
+        Copy Debug
+       </UiButton>
+     </div>
     </div>
     
     <div v-else class="flex flex-col items-center justify-center py-12 text-center opacity-50">

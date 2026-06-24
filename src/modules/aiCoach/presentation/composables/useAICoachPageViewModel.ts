@@ -281,6 +281,37 @@ export function useAICoachPageViewModel() {
       });
   }
 
+  function copyDebugState() {
+    const debugState = {
+      activePlan: aiStore.activePlan,
+      completedSessions: Array.from(aiStore.completedSessions),
+      activeSessionIndex: activeSessionIndex.value,
+      currentWeekNumber: currentWeekNumber.value,
+      currentDayOfWeek: currentDayOfWeek.value,
+      exerciseLogs: exerciseLogsStore.exerciseLogs.map((l) => ({
+        id: l.id,
+        exerciseName: l.exerciseName,
+        loggedAt: l.loggedAt.toISOString(),
+      })),
+    };
+
+    navigator.clipboard
+      .writeText(JSON.stringify(debugState, null, 2))
+      .then(() => {
+        toast({
+          title: "Copied!",
+          description: "Debug state copied to clipboard.",
+        });
+      })
+      .catch((_err) => {
+        toast({
+          title: "Error",
+          description: "Failed to copy debug state.",
+          variant: "destructive",
+        });
+      });
+  }
+
   function handleAskQuestion() {
     const question = userQuestion.value.trim();
     if (!question) return;
@@ -491,5 +522,6 @@ export function useAICoachPageViewModel() {
     regeneratePlan,
     requestOffDayWorkout,
     copyPlanJson,
+    copyDebugState,
   };
 }
