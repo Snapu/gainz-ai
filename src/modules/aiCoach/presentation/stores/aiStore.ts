@@ -132,11 +132,7 @@ export const useAiStore = defineStore("ai", () => {
     return isoDateString(new Date(boundary));
   });
 
-  watch(activeSession, (newSession, oldSession) => {
-    if (oldSession && !newSession) {
-      markCurrentSessionCompleted(oldSession.startTime);
-    }
-  });
+
 
   watch(currentSessionId, (newSessionId, oldSessionId) => {
     if (!hasInitialized.value || newSessionId === oldSessionId) return;
@@ -419,31 +415,68 @@ export const useAiStore = defineStore("ai", () => {
     messageRepository.removeMessages(currentSessionId.value);
   }
 
-  function markCurrentSessionCompleted(date: Date = new Date()) {
+  function evaluateCompletedSessions() {
     const plan = activePlan.value;
     if (!plan) return;
+    const planCreated = new Date(plan.createdAt).getTime();
 
-    const currentWeek = plan.getCurrentWeekNumber(date);
-    const currentDay = date.getDay();
-    const session = plan.getPlannedSessionForDay(currentDay, currentWeek);
+    let changed = false;
 
-    if (session) {
-      const key = TrainingPlan.sessionKey(session.weekNumber, session.dayOfWeek);
-      if (!completedSessions.value.has(key)) {
-        completedSessions.value.add(key);
-        planRepository.saveCompletedSessions(Array.from(completedSessions.value));
+    // Group logs by local date (using year-month-date as key)
+    const logsByDate = new Map<
+      string,
+      { date: Date; logs: typeof exerciseLogsStore.exerciseLogs }
+    >();
 
-        if (plan.isFullyCompleted(completedSessions.value)) {
-          clearMessages();
-          planRepository.clearPlan();
-          planRepository.clearCompletedSessions();
-          activePlan.value = null;
-          completedSessions.value = new Set();
-          generateNewPlan();
+    for (const log of exerciseLogsStore.exerciseLogs) {
+      if (log.loggedAt.getTime() < planCreated) continue;
+
+      const key = `${log.loggedAt.getFullYear()}-${log.loggedAt.getMonth()}-${log.loggedAt.getDate()}`;
+
+      if (!logsByDate.has(key)) {
+        logsByDate.set(key, { date: log.loggedAt, logs: [] });
+      }
+      logsByDate.get(key)!.logs.push(log);
+    }
+
+    for (const { date, logs } of logsByDate.values()) {
+      const weekNum = plan.getCurrentWeekNumber(date);
+      const dayOfWeek = date.getDay();
+
+      const session = plan.getPlannedSessionForDay(dayOfWeek, weekNum);
+      if (session) {
+        const sessionKey = TrainingPlan.sessionKey(session.weekNumber, session.dayOfWeek);
+        if (!completedSessions.value.has(sessionKey)) {
+          if (plan.isSessionSatisfiedByLogs(session, logs)) {
+            completedSessions.value.add(sessionKey);
+            changed = true;
+          }
         }
       }
     }
+
+    if (changed) {
+      planRepository.saveCompletedSessions(Array.from(completedSessions.value));
+      if (plan.isFullyCompleted(completedSessions.value)) {
+        clearMessages();
+        planRepository.clearPlan();
+        planRepository.clearCompletedSessions();
+        activePlan.value = null;
+        completedSessions.value = new Set();
+        generateNewPlan();
+      }
+    }
   }
+
+  watch(
+    () => exerciseLogsStore.exerciseLogs,
+    () => {
+      evaluateCompletedSessions();
+    },
+    { immediate: true },
+  );
+
+
 
   const hasTodayCoachMessage = computed<boolean>(() => {
     const today = isoDateString(new Date());
@@ -465,6 +498,6 @@ export const useAiStore = defineStore("ai", () => {
     completedSessions,
     currentWorkoutPlan,
     hasTodayCoachMessage,
-    markCurrentSessionCompleted,
+
   };
 });
