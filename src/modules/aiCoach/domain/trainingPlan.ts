@@ -94,12 +94,21 @@ export class TrainingPlan {
     if (!this.createdAt) return 1;
 
     const created = new Date(this.createdAt);
-    const diffMs = currentDate.getTime() - created.getTime();
+    const currentDay = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth(),
+      currentDate.getDate(),
+    ).getTime();
+    const createdDay = new Date(
+      created.getFullYear(),
+      created.getMonth(),
+      created.getDate(),
+    ).getTime();
 
-    // If the plan is somehow created in the future, default to week 1 to avoid negative values
-    if (diffMs < 0) return 1;
+    const diffDays = Math.floor((currentDay - createdDay) / (24 * 60 * 60 * 1000));
+    if (diffDays < 0) return 1;
 
-    const diffWeeks = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
+    const diffWeeks = Math.floor(diffDays / 7);
     return (diffWeeks % this.cycleWeeks) + 1;
   }
 

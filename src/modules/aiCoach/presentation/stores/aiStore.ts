@@ -132,8 +132,6 @@ export const useAiStore = defineStore("ai", () => {
     return isoDateString(new Date(boundary));
   });
 
-
-
   watch(currentSessionId, (newSessionId, oldSessionId) => {
     if (!hasInitialized.value || newSessionId === oldSessionId) return;
 
@@ -418,46 +416,84 @@ export const useAiStore = defineStore("ai", () => {
   function evaluateCompletedSessions() {
     const plan = activePlan.value;
     if (!plan) return;
-    const planCreated = new Date(plan.createdAt).getTime();
 
-    let changed = false;
+    const createdDate = new Date(plan.createdAt);
+    const planCreatedDay = new Date(
+      createdDate.getFullYear(),
+      createdDate.getMonth(),
+      createdDate.getDate(),
+    ).getTime();
 
-    // Group logs by local date (using year-month-date as key)
+    const today = new Date();
+    const currentDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    const todayDiffDays = Math.floor((currentDay - planCreatedDay) / (24 * 60 * 60 * 1000));
+
+    // If we are somehow evaluating a plan that hasn't started yet, default to cycle 0
+    const currentCycleNumber =
+      todayDiffDays >= 0 ? Math.floor(todayDiffDays / (plan.cycleWeeks * 7)) : 0;
+
+    // Reset completedSessions before evaluating, since we rely ENTIRELY on the current cycle's logs
+    const newCompletedSessions = new Set<string>();
+
+    // Group logs by local date
     const logsByDate = new Map<
       string,
       { date: Date; logs: typeof exerciseLogsStore.exerciseLogs }
     >();
 
     for (const log of exerciseLogsStore.exerciseLogs) {
-      if (log.loggedAt.getTime() < planCreated) continue;
+      const logDay = new Date(
+        log.loggedAt.getFullYear(),
+        log.loggedAt.getMonth(),
+        log.loggedAt.getDate(),
+      ).getTime();
+      const diffDays = Math.floor((logDay - planCreatedDay) / (24 * 60 * 60 * 1000));
+
+      // Ignore logs from before the plan was created
+      if (diffDays < 0) continue;
+
+      // Ignore logs from previous cycles! We only care about the current cycle.
+      const logCycleNumber = Math.floor(diffDays / (plan.cycleWeeks * 7));
+      if (logCycleNumber !== currentCycleNumber) continue;
 
       const key = `${log.loggedAt.getFullYear()}-${log.loggedAt.getMonth()}-${log.loggedAt.getDate()}`;
-
       if (!logsByDate.has(key)) {
         logsByDate.set(key, { date: log.loggedAt, logs: [] });
       }
       logsByDate.get(key)!.logs.push(log);
     }
 
+    let changed = false;
+
     for (const { date, logs } of logsByDate.values()) {
       const weekNum = plan.getCurrentWeekNumber(date);
       const dayOfWeek = date.getDay();
 
       const session = plan.getPlannedSessionForDay(dayOfWeek, weekNum);
-      if (session) {
+      if (session && plan.isSessionSatisfiedByLogs(session, logs)) {
         const sessionKey = TrainingPlan.sessionKey(session.weekNumber, session.dayOfWeek);
-        if (!completedSessions.value.has(sessionKey)) {
-          if (plan.isSessionSatisfiedByLogs(session, logs)) {
-            completedSessions.value.add(sessionKey);
-            changed = true;
-          }
+        if (!newCompletedSessions.has(sessionKey)) {
+          newCompletedSessions.add(sessionKey);
+        }
+      }
+    }
+
+    if (newCompletedSessions.size !== completedSessions.value.size) {
+      changed = true;
+    } else {
+      for (const key of newCompletedSessions) {
+        if (!completedSessions.value.has(key)) {
+          changed = true;
+          break;
         }
       }
     }
 
     if (changed) {
-      planRepository.saveCompletedSessions(Array.from(completedSessions.value));
-      if (plan.isFullyCompleted(completedSessions.value)) {
+      completedSessions.value = newCompletedSessions;
+      planRepository.saveCompletedSessions(Array.from(newCompletedSessions));
+
+      if (plan.isFullyCompleted(newCompletedSessions)) {
         clearMessages();
         planRepository.clearPlan();
         planRepository.clearCompletedSessions();
@@ -475,8 +511,6 @@ export const useAiStore = defineStore("ai", () => {
     },
     { immediate: true },
   );
-
-
 
   const hasTodayCoachMessage = computed<boolean>(() => {
     const today = isoDateString(new Date());
@@ -498,6 +532,5 @@ export const useAiStore = defineStore("ai", () => {
     completedSessions,
     currentWorkoutPlan,
     hasTodayCoachMessage,
-
   };
 });
