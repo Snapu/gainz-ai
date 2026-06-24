@@ -87,25 +87,42 @@ export class TrainingPlan {
     return completedExercisesCount / session.exercises.length >= 0.5;
   }
 
+  private static startOfDayMs(d: Date | string): number {
+    const date = new Date(d);
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  }
+
+  /**
+   * Calculates the difference in days between a given date and the plan's creation date.
+   */
+  private getDiffDays(currentDate: Date): number {
+    if (!this.createdAt) return -1;
+    const currentDay = TrainingPlan.startOfDayMs(currentDate);
+    const createdDay = TrainingPlan.startOfDayMs(this.createdAt);
+    return Math.floor((currentDay - createdDay) / (24 * 60 * 60 * 1000));
+  }
+
+  /**
+   * Determines if a log date falls into the same cycle as the current date.
+   */
+  public isInCurrentCycle(logDate: Date, currentDate: Date = new Date()): boolean {
+    const logDiffDays = this.getDiffDays(logDate);
+    // If the log is from before the plan started, it's never in the current cycle
+    if (logDiffDays < 0) return false;
+
+    const currentDiffDays = this.getDiffDays(currentDate);
+    const currentCycleNumber =
+      currentDiffDays >= 0 ? Math.floor(currentDiffDays / (this.cycleWeeks * 7)) : 0;
+    const logCycleNumber = Math.floor(logDiffDays / (this.cycleWeeks * 7));
+
+    return logCycleNumber === currentCycleNumber;
+  }
+
   /**
    * Calculates the current cycle week (1-indexed) based on the current date.
    */
   public getCurrentWeekNumber(currentDate: Date = new Date()): number {
-    if (!this.createdAt) return 1;
-
-    const created = new Date(this.createdAt);
-    const currentDay = new Date(
-      currentDate.getFullYear(),
-      currentDate.getMonth(),
-      currentDate.getDate(),
-    ).getTime();
-    const createdDay = new Date(
-      created.getFullYear(),
-      created.getMonth(),
-      created.getDate(),
-    ).getTime();
-
-    const diffDays = Math.floor((currentDay - createdDay) / (24 * 60 * 60 * 1000));
+    const diffDays = this.getDiffDays(currentDate);
     if (diffDays < 0) return 1;
 
     const diffWeeks = Math.floor(diffDays / 7);

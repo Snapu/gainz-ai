@@ -417,21 +417,6 @@ export const useAiStore = defineStore("ai", () => {
     const plan = activePlan.value;
     if (!plan) return;
 
-    const createdDate = new Date(plan.createdAt);
-    const planCreatedDay = new Date(
-      createdDate.getFullYear(),
-      createdDate.getMonth(),
-      createdDate.getDate(),
-    ).getTime();
-
-    const today = new Date();
-    const currentDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-    const todayDiffDays = Math.floor((currentDay - planCreatedDay) / (24 * 60 * 60 * 1000));
-
-    // If we are somehow evaluating a plan that hasn't started yet, default to cycle 0
-    const currentCycleNumber =
-      todayDiffDays >= 0 ? Math.floor(todayDiffDays / (plan.cycleWeeks * 7)) : 0;
-
     // Reset completedSessions before evaluating, since we rely ENTIRELY on the current cycle's logs
     const newCompletedSessions = new Set<string>();
 
@@ -441,20 +426,10 @@ export const useAiStore = defineStore("ai", () => {
       { date: Date; logs: typeof exerciseLogsStore.exerciseLogs }
     >();
 
+    const today = new Date();
+
     for (const log of exerciseLogsStore.exerciseLogs) {
-      const logDay = new Date(
-        log.loggedAt.getFullYear(),
-        log.loggedAt.getMonth(),
-        log.loggedAt.getDate(),
-      ).getTime();
-      const diffDays = Math.floor((logDay - planCreatedDay) / (24 * 60 * 60 * 1000));
-
-      // Ignore logs from before the plan was created
-      if (diffDays < 0) continue;
-
-      // Ignore logs from previous cycles! We only care about the current cycle.
-      const logCycleNumber = Math.floor(diffDays / (plan.cycleWeeks * 7));
-      if (logCycleNumber !== currentCycleNumber) continue;
+      if (!plan.isInCurrentCycle(log.loggedAt, today)) continue;
 
       const key = `${log.loggedAt.getFullYear()}-${log.loggedAt.getMonth()}-${log.loggedAt.getDate()}`;
       if (!logsByDate.has(key)) {
