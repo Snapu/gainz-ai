@@ -2,7 +2,7 @@ import * as Sentry from "@sentry/vue";
 import { useLocalStorage } from "@vueuse/core";
 import { errAsync, okAsync, Result, ResultAsync } from "neverthrow";
 import { defineStore } from "pinia";
-import { computed, ref, watch } from "vue";
+import { computed, ref, shallowRef, watch } from "vue";
 
 import {
   adviceStartsDeload,
@@ -17,13 +17,11 @@ import {
   type CoachingMessage,
   TrainingPlan,
 } from "@/modules/aiCoach/domain";
-import { createAiCoachService, LocalStoragePlanRepository } from "@/modules/aiCoach/infrastructure";
 import {
-  cleanOldCoachingSessions,
-  loadMessagesFromStorage,
-  removeMessagesFromStorage,
-  saveMessagesToStorage,
-} from "@/modules/aiCoach/infrastructure/messageStorage";
+  createAiCoachService,
+  LocalStorageMessageRepository,
+  LocalStoragePlanRepository,
+} from "@/modules/aiCoach/infrastructure";
 import { useDeloadStore } from "@/modules/deload/presentation";
 import { useEventsStore } from "@/modules/events/presentation";
 import {
@@ -108,7 +106,7 @@ export const useAiStore = defineStore("ai", () => {
     { date: "", checksum: "" },
   );
   const pendingRequest = ref<{ question?: string; mode: "planning" | "execution" } | null>(null);
-  const activePlan = ref<TrainingPlan | null>(null);
+  const activePlan = shallowRef<TrainingPlan | null>(null);
   const completedSessions = ref<Set<string>>(new Set());
 
   const userProfileStore = useUserProfileStore();
@@ -120,6 +118,7 @@ export const useAiStore = defineStore("ai", () => {
   const trainingInsightsStore = useTrainingInsightsStore();
   const aiCoachService = createAiCoachService();
   const planRepository = new LocalStoragePlanRepository();
+  const messageRepository = new LocalStorageMessageRepository();
 
   const activeSession = computed(() => resolveCurrentSession(exerciseLogsStore.exerciseLogs));
 
@@ -142,7 +141,7 @@ export const useAiStore = defineStore("ai", () => {
   watch(currentSessionId, (newSessionId, oldSessionId) => {
     if (!hasInitialized.value || newSessionId === oldSessionId) return;
 
-    const loadedMessagesResult = loadMessagesFromStorage<CoachingMessage>(newSessionId);
+    const loadedMessagesResult = messageRepository.loadMessages(newSessionId);
     if (loadedMessagesResult.isOk()) {
       messages.value = loadedMessagesResult.value;
     } else {
@@ -163,7 +162,7 @@ export const useAiStore = defineStore("ai", () => {
       completedSessions.value = new Set(completedResult.value);
     }
 
-    const loadedMessagesResult = loadMessagesFromStorage<CoachingMessage>(currentSessionId.value);
+    const loadedMessagesResult = messageRepository.loadMessages(currentSessionId.value);
     if (loadedMessagesResult.isErr()) {
       Sentry.captureMessage("Failed to load messages from storage", {
         level: "warning",
@@ -174,17 +173,7 @@ export const useAiStore = defineStore("ai", () => {
       messages.value = loadedMessagesResult.value;
     }
 
-    cleanOldCoachingSessions();
-  }
-
-  function persistMessages(sessionId: string): void {
-    const saveResult = saveMessagesToStorage(sessionId, messages.value);
-    if (saveResult.isErr()) {
-      Sentry.captureMessage("Failed to save messages to storage", {
-        level: "warning",
-        tags: { scope: "ai-store", feature: "storage-save" },
-      });
-    }
+    messageRepository.cleanOldSessions();
   }
 
   function requestAdvice(
@@ -221,7 +210,7 @@ export const useAiStore = defineStore("ai", () => {
         activePlan.value = newPlan;
         const newSessionId = currentSessionId.value;
         if (newSessionId !== oldSessionId) {
-          removeMessagesFromStorage(oldSessionId);
+          messageRepository.removeMessages(oldSessionId);
           currentId = newSessionId;
           messages.value = messages.value.filter((m) => m.id === userMessageId);
         }
@@ -250,7 +239,7 @@ export const useAiStore = defineStore("ai", () => {
       todayLogsChecksum,
     );
     messages.value.push(coachMessage);
-    persistMessages(currentId);
+    messageRepository.saveMessages(currentId, messages.value);
     lastRequestState.value = {
       date: isoDateString(new Date()),
       checksum: todayLogsChecksum,
@@ -260,7 +249,7 @@ export const useAiStore = defineStore("ai", () => {
   function handleCoachingError(error: unknown, userMessageId: string, currentId: string) {
     if (userMessageId) {
       messages.value = removeMessageById(messages.value, userMessageId);
-      persistMessages(currentId);
+      messageRepository.saveMessages(currentId, messages.value);
     }
 
     if (isCoachingAdviceError(error)) {
@@ -319,7 +308,7 @@ export const useAiStore = defineStore("ai", () => {
             userMessage.content = question;
           }
           messages.value.push(userMessage);
-          persistMessages(currentId);
+          messageRepository.saveMessages(currentId, messages.value);
 
           const result = await requestAdviceWithSingleRetry(aiCoachService, {
             apiKey,
@@ -426,9 +415,8 @@ export const useAiStore = defineStore("ai", () => {
   );
 
   function clearMessages() {
-    initialize();
-    removeMessagesFromStorage(currentSessionId.value);
     messages.value = [];
+    messageRepository.removeMessages(currentSessionId.value);
   }
 
   function markCurrentSessionCompleted(date: Date = new Date()) {
@@ -437,7 +425,7 @@ export const useAiStore = defineStore("ai", () => {
 
     const currentWeek = plan.getCurrentWeekNumber(date);
     const currentDay = date.getDay();
-    const session = plan.getPlannedSessionForDay(currentDay, currentWeek);
+    const session = plan.getPlannedSessionForDay(currentDay, currentWeek, completedSessions.value);
 
     if (session) {
       const key = TrainingPlan.sessionKey(session.weekNumber, session.dayOfWeek);

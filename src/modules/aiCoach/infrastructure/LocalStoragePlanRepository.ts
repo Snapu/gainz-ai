@@ -1,10 +1,10 @@
 import { Result } from "neverthrow";
-import { TrainingPlan, type TrainingPlanRepository } from "../domain";
+import { TrainingPlan } from "../domain";
 
 const PLAN_STORAGE_KEY = "training-plan-v1";
 const COMPLETED_SESSIONS_STORAGE_KEY = "training-plan-completed-v1";
 
-export class LocalStoragePlanRepository implements TrainingPlanRepository {
+export class LocalStoragePlanRepository {
   loadPlan(): Result<TrainingPlan | null, "storage-error"> {
     return Result.fromThrowable(
       () => {

@@ -106,12 +106,18 @@ export function useAICoachPageViewModel() {
     return aiStore.activePlan.getCurrentWeekNumber(new Date());
   });
 
+  const currentDayOfWeek = computed(() => new Date().getDay());
+
   /** Today's session directly from the stored plan — no AI call needed. */
   const planDerivedWorkout = computed<DisplayExercise[] | null>(() => {
     if (!aiStore.activePlan) return null;
     const currentDay = new Date().getDay();
     const weekNum = currentWeekNumber.value;
-    const session = aiStore.activePlan.getPlannedSessionForDay(currentDay, weekNum);
+    const session = aiStore.activePlan.getNextUncompletedSession(
+      currentDay,
+      weekNum,
+      aiStore.completedSessions,
+    );
     return (session?.exercises as DisplayExercise[]) ?? null;
   });
 
@@ -161,14 +167,17 @@ export function useAICoachPageViewModel() {
     if (!aiStore.activePlan) return -1;
     const currentDay = new Date().getDay();
     const weekNum = currentWeekNumber.value;
-    // Match both day and week for correct W1/W2 highlighting
-    const exactMatch = aiStore.activePlan.sessions.findIndex(
-      (s) => s.dayOfWeek === currentDay && s.weekNumber === weekNum,
+
+    const session = aiStore.activePlan.getNextUncompletedSession(
+      currentDay,
+      weekNum,
+      aiStore.completedSessions,
     );
-    if (exactMatch >= 0) return exactMatch;
-    // Fallback: match by day only
-    const dayMatch = aiStore.activePlan.sessions.findIndex((s) => s.dayOfWeek === currentDay);
-    return dayMatch >= 0 ? dayMatch : -1; // -1 = rest day, not 0
+    if (!session) return -1;
+
+    return aiStore.activePlan.sessions.findIndex(
+      (s) => s.dayOfWeek === session.dayOfWeek && s.weekNumber === session.weekNumber,
+    );
   });
 
   const activePlan = computed(() => aiStore.activePlan);
@@ -473,6 +482,7 @@ export function useAICoachPageViewModel() {
     activeWorkoutGroups,
     activePlan,
     activeSessionIndex,
+    currentDayOfWeek,
     isPlanSessionCompleted,
     currentWeekNumber,
     planDerivedWorkout,

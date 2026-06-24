@@ -509,7 +509,7 @@ export function formatPlanForPrompt(
     const isDone = completedKeys.has(
       TrainingPlan.sessionKey(session.weekNumber, session.dayOfWeek),
     );
-    const marker = isToday ? " [TODAY]" : isDone ? " [DONE]" : "";
+    const marker = isDone ? " [DONE]" : isToday ? " [TODAY]" : "";
 
     lines.push(
       `W${session.weekNumber}-${dayStr} ${session.sessionLabel} (${session.focusDescription}):${marker}`,

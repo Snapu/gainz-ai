@@ -52,10 +52,39 @@ export class TrainingPlan {
     return `W${weekNumber}-D${dayOfWeek}`;
   }
 
+  private static isCompleted(s: PlannedSession, completedKeys: ReadonlySet<string>): boolean {
+    return completedKeys.has(TrainingPlan.sessionKey(s.weekNumber, s.dayOfWeek));
+  }
+
   public isFullyCompleted(completedKeys: ReadonlySet<string>): boolean {
-    return this.sessions.every((s) =>
-      completedKeys.has(TrainingPlan.sessionKey(s.weekNumber, s.dayOfWeek)),
-    );
+    return this.sessions.every((s) => TrainingPlan.isCompleted(s, completedKeys));
+  }
+
+  /**
+   * Determines if a session is satisfied by the given logs by checking if at least 50%
+   * of the planned exercises (by canonical name and target sets) were completed.
+   */
+  public isSessionSatisfiedByLogs(
+    session: PlannedSession,
+    logs: { exerciseName: string }[],
+  ): boolean {
+    if (session.exercises.length === 0) return true;
+
+    const completedSetsMap = new Map<string, number>();
+    for (const log of logs) {
+      const count = completedSetsMap.get(log.exerciseName) || 0;
+      completedSetsMap.set(log.exerciseName, count + 1);
+    }
+
+    let completedExercisesCount = 0;
+    for (const ex of session.exercises) {
+      const doneSets = completedSetsMap.get(ex.exerciseName) || 0;
+      if (doneSets >= ex.targetSets) {
+        completedExercisesCount++;
+      }
+    }
+
+    return completedExercisesCount / session.exercises.length >= 0.5;
   }
 
   /**
@@ -75,16 +104,55 @@ export class TrainingPlan {
   }
 
   /**
-   * Finds the appropriate session for a given day and week number.
-   * Prioritizes an exact match for day AND week, then falls back to a day-only match.
+   * Shared steps 1 & 2: exact week+day match, then day-only fallback.
+   */
+  private findSessionForDay(
+    dayOfWeek: number,
+    weekNumber: number,
+    completedKeys: ReadonlySet<string>,
+  ): PlannedSession | undefined {
+    // 1. Exact match for today
+    const exactMatch = this.sessions.find(
+      (s) =>
+        s.dayOfWeek === dayOfWeek &&
+        s.weekNumber === weekNumber &&
+        !TrainingPlan.isCompleted(s, completedKeys),
+    );
+    if (exactMatch) return exactMatch;
+
+    // 2. Fallback: match by day only
+    return this.sessions.find(
+      (s) => s.dayOfWeek === dayOfWeek && !TrainingPlan.isCompleted(s, completedKeys),
+    );
+  }
+
+  /**
+   * Finds the appropriate uncompleted session matching the AI Coach's selection logic:
+   * 1. Exact uncompleted session for today.
+   * 2. Any uncompleted session for today.
+   * 3. Next logical uncompleted session in the plan chronologically.
+   */
+  public getNextUncompletedSession(
+    dayOfWeek: number,
+    weekNumber: number,
+    completedKeys: ReadonlySet<string>,
+  ): PlannedSession | undefined {
+    const dayMatch = this.findSessionForDay(dayOfWeek, weekNumber, completedKeys);
+    if (dayMatch) return dayMatch;
+
+    // 3. Fallback: Next logical uncompleted session
+    return this.sessions.find((s) => !TrainingPlan.isCompleted(s, completedKeys));
+  }
+
+  /**
+   * Finds the appropriate planned session for a given day, ensuring it hasn't been completed.
+   * This is strictly for matching calendar days to plan days, NOT for finding the next chronological session.
    */
   public getPlannedSessionForDay(
     dayOfWeek: number,
     weekNumber: number,
+    completedKeys: ReadonlySet<string>,
   ): PlannedSession | undefined {
-    return (
-      this.sessions.find((s) => s.dayOfWeek === dayOfWeek && s.weekNumber === weekNumber) ??
-      this.sessions.find((s) => s.dayOfWeek === dayOfWeek)
-    );
+    return this.findSessionForDay(dayOfWeek, weekNumber, completedKeys);
   }
 }

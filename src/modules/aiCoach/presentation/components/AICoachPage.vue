@@ -39,6 +39,7 @@ const {
   activeWorkoutGroups,
   activePlan,
   activeSessionIndex,
+  currentDayOfWeek,
   isPlanSessionCompleted,
   planDerivedWorkout,
   completedExercises,
@@ -420,14 +421,20 @@ const {
        class="shrink-0 h-8 text-xs font-semibold"
        :disabled="aiStore.isLoading"
        @click="regeneratePlan"
-      >
-       <RotateCw class="w-3.5 h-3.5 mr-1.5" :class="{ 'animate-spin': aiStore.isLoading }" />
-       New Plan
-      </UiButton>
-     </div>
-     
-     <div class="flex flex-col gap-4 w-full">
-      <div v-for="(session, sIdx) in activePlan.sessions" :key="sIdx" class="rounded-xl overflow-hidden border border-border/50" :class="{ 'bg-primary/5 ring-1 ring-primary/20': sIdx === activeSessionIndex, 'bg-card': sIdx !== activeSessionIndex }">
+       >
+        <RotateCw class="w-3.5 h-3.5 mr-1.5" :class="{ 'animate-spin': aiStore.isLoading }" />
+        New Plan
+       </UiButton>
+      </div>
+      
+      <div class="flex flex-col gap-4 w-full">
+       <div v-for="(session, sIdx) in activePlan.sessions" :key="sIdx" 
+           class="rounded-xl overflow-hidden border border-border/50 transition-opacity" 
+           :class="{ 
+             'bg-primary/5 ring-1 ring-primary/20': sIdx === activeSessionIndex, 
+             'bg-card': sIdx !== activeSessionIndex,
+             'opacity-60': isPlanSessionCompleted(session.weekNumber, session.dayOfWeek)
+           }">
        <div class="p-3">
         <h4 class="font-bold text-sm text-foreground mb-0.5 flex items-center gap-2">
           {{ session.sessionLabel }} 
@@ -435,7 +442,9 @@ const {
           <UiBadge v-if="isPlanSessionCompleted(session.weekNumber, session.dayOfWeek)" variant="outline" class="uppercase tracking-wider ml-auto text-primary border-primary/30 bg-primary/5">
            <CheckCircle2 class="w-3 h-3 mr-1" /> Done
           </UiBadge>
-          <UiBadge v-else-if="sIdx === activeSessionIndex" variant="default" class="uppercase tracking-wider ml-auto">Today</UiBadge>
+          <UiBadge v-else-if="sIdx === activeSessionIndex" variant="default" class="uppercase tracking-wider ml-auto">
+           {{ session.dayOfWeek === currentDayOfWeek ? 'Today' : 'Next' }}
+          </UiBadge>
         </h4>
         <p class="text-xs text-muted-foreground mb-3 pb-1 border-b border-border/50">{{ session.focusDescription }}</p>
         <div class="w-full overflow-x-auto">

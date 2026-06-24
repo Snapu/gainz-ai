@@ -38,6 +38,12 @@ vi.mock("@/modules/aiCoach/infrastructure", () => ({
     saveCompletedSessions = vi.fn(() => ({}));
     clearCompletedSessions = vi.fn(() => ({}));
   },
+  LocalStorageMessageRepository: class {
+    loadMessages = loadMessagesFromStorageMock;
+    saveMessages = vi.fn(() => ok(undefined));
+    removeMessages = removeMessagesFromStorageMock;
+    cleanOldSessions = cleanOldCoachingSessionsMock;
+  },
 }));
 
 vi.mock("@/modules/deload/presentation", () => ({
@@ -73,13 +79,6 @@ vi.mock("@/modules/trainingLogs/presentation", () => ({
   useExerciseLogsStore: vi.fn(() => ({ exerciseLogs: [] })),
   resolveCurrentSession: vi.fn(() => null),
   getSessionStartBoundary: vi.fn(() => Date.now()),
-}));
-
-vi.mock("@/modules/aiCoach/infrastructure/messageStorage", () => ({
-  loadMessagesFromStorage: loadMessagesFromStorageMock,
-  cleanOldCoachingSessions: cleanOldCoachingSessionsMock,
-  removeMessagesFromStorage: removeMessagesFromStorageMock,
-  saveMessagesToStorage: vi.fn(() => ok(undefined)),
 }));
 
 import { requestAdviceWithSingleRetry } from "@/modules/aiCoach/application";
