@@ -6,6 +6,7 @@ import { type CoachingAdvice, useAiStore } from "@/modules/aiCoach/presentation"
 import { useRestTimerStore } from "@/modules/platform/presentation";
 import { isoDateString } from "@/modules/sharedKernel/domain";
 import { formatRestDuration } from "@/modules/sharedKernel/presentation";
+import { getSessionStartBoundary, resolveCurrentSession } from "@/modules/trainingLogs/application";
 import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
 import { useToast } from "@/shared/presentation/composables/useToast";
 import {
@@ -226,6 +227,57 @@ export function useAICoachPageViewModel() {
     });
 
     return exIndex === nextExIndex;
+  }
+
+  function getLastSessionSummary(exerciseName: string): string | null {
+    const currentSession = resolveCurrentSession(exerciseLogsStore.exerciseLogs);
+    const sessionBoundary = getSessionStartBoundary(currentSession);
+
+    // Get all logs for this exercise that happened before the current session boundary
+    const pastLogs = exerciseLogsStore.exerciseLogs.filter(
+      (l) => l.exerciseName === exerciseName && l.loggedAt.getTime() < sessionBoundary,
+    );
+
+    if (!pastLogs.length) return null;
+
+    // Sort to find the most recent
+    pastLogs.sort((a, b) => b.loggedAt.getTime() - a.loggedAt.getTime());
+    const lastLogTime = pastLogs[0].loggedAt.getTime();
+
+    // Use the domain helper to gather all logs from that specific past session
+    const lastSession = resolveCurrentSession(pastLogs, lastLogTime);
+
+    let sessionLogs = [];
+    if (lastSession) {
+      sessionLogs = lastSession.logs;
+    } else {
+      // Fallback
+      const fallbackDateStr = pastLogs[0].loggedAt.toDateString();
+      sessionLogs = pastLogs.filter((l) => l.loggedAt.toDateString() === fallbackDateStr);
+      sessionLogs.reverse();
+    }
+
+    const reps = sessionLogs.map((l) => l.reps).filter((r): r is number => r != null);
+    const weights = sessionLogs.map((l) => l.weight).filter((w): w is number => w != null);
+    const durations = sessionLogs.map((l) => l.duration).filter((d): d is number => d != null);
+
+    if (reps.length === 0 && durations.length > 0) {
+      return `${sessionLogs.length} sets, max ${Math.max(...durations)} min`;
+    }
+
+    let text = "";
+    if (reps.length > 0) {
+      text += reps.join(", ");
+    } else {
+      text += `${sessionLogs.length} sets`;
+    }
+
+    if (weights.length > 0) {
+      const maxWeight = Math.max(...weights);
+      text += ` @ ${maxWeight}kg`;
+    }
+
+    return text;
   }
 
   // ---------------------------------------------------------------------------
@@ -523,5 +575,6 @@ export function useAICoachPageViewModel() {
     requestOffDayWorkout,
     copyPlanJson,
     copyDebugState,
+    getLastSessionSummary,
   };
 }

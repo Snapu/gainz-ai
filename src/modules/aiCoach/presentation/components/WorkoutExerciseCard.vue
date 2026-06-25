@@ -19,6 +19,7 @@ const props = defineProps<{
   progress: ExerciseProgress;
   /** Used as `h3` for standalone exercises, `h4` for exercises inside a superset group. */
   headingLevel?: "h3" | "h4";
+  lastSessionSummary?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -148,12 +149,17 @@ const timerProgressPercent = computed(() => {
       <!-- Title row -->
       <div class="flex items-start justify-between gap-3 w-full">
         <div class="flex items-center gap-2 min-w-0 pr-4">
-          <component
-            :is="headingLevel ?? 'h3'"
-            :class="titleClass(isCompleted)"
-          >
-            {{ exercise.exerciseName }}
-          </component>
+          <div class="flex flex-col min-w-0">
+            <component
+              :is="headingLevel ?? 'h3'"
+              :class="titleClass(isCompleted)"
+            >
+              {{ exercise.exerciseName }}
+            </component>
+            <span v-if="lastSessionSummary" class="text-xs text-muted-foreground/70 font-medium mt-0.5 truncate">
+              Last: {{ lastSessionSummary }}
+            </span>
+          </div>
           <button
             @click.stop="emit('search', exercise.exerciseName)"
             class="ml-2 rounded-full p-2 bg-white/5 hover:bg-white/10 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-95 flex items-center justify-center cursor-pointer shrink-0"
@@ -165,9 +171,9 @@ const timerProgressPercent = computed(() => {
         </div>
       </div>
 
-      <!-- Coach notes (only shown when highlighted) -->
+      <!-- Coach notes -->
       <div
-        v-if="exercise.notes && isHighlighted"
+        v-if="exercise.notes"
         class="text-xs text-muted-foreground font-medium italic leading-relaxed bg-muted/10 border border-muted/10 px-3 py-2 rounded-xl w-full"
       >
         <span>{{ exercise.notes }}</span>

@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Coffee,
   Copy,
-  Loader2,
   Play,
   RotateCw,
   Sparkles,
@@ -57,12 +56,17 @@ const {
   copyPlanJson,
   copyDebugState,
   requestOffDayWorkout,
+  getLastSessionSummary,
 } = useAICoachPageViewModel();
 </script>
 
 <template>
- <div class="min-h-screen bg-background flex flex-col pt-safe relative">
-  <!-- Header -->
+  <div class="min-h-screen bg-background flex flex-col pt-safe relative">
+   <!-- Global Progress Bar -->
+   <div v-if="aiStore.isLoading" class="fixed top-0 left-0 w-full h-1 bg-muted/20 overflow-hidden z-[100]">
+     <div class="h-full bg-primary w-1/2 rounded-full progress-indeterminate"></div>
+   </div>
+   <!-- Header -->
   <AppHeader>
    <UiButton variant="ghost" size="icon" @click="router.back()">
     <ArrowLeft class="w-5 h-5" />
@@ -167,9 +171,13 @@ const {
     </div>
 
     <!-- Loading State (initial) -->
-    <div v-if="aiStore.isLoading && coachMessages.length === 0" class="flex flex-col items-center justify-center py-20 text-center gap-3">
-     <Loader2 class="w-8 h-8 animate-spin text-primary" />
-     <p class="text-sm font-bold tracking-tight text-muted-foreground animate-pulse">Analyzing your workouts...</p>
+    <div v-if="aiStore.isLoading && coachMessages.length === 0" class="flex flex-col gap-3 py-4 w-full animate-pulse">
+      <div class="h-3 w-24 bg-muted/20 rounded"></div>
+      <div class="h-4 w-full bg-muted/20 rounded mt-2"></div>
+      <div class="h-4 w-[90%] bg-muted/20 rounded"></div>
+      <div class="h-4 w-[95%] bg-muted/20 rounded"></div>
+      <div class="h-4 w-[60%] bg-muted/20 rounded"></div>
+      <div class="h-8 w-24 bg-muted/20 rounded-xl mt-2"></div>
     </div>
 
     <!-- Empty Fallback -->
@@ -180,9 +188,10 @@ const {
     </div>
 
     <!-- Inline typing indicator (with existing insights) -->
-    <div v-if="aiStore.isLoading && coachMessages.length > 0" class="flex items-center gap-2 text-xs text-muted-foreground/60 animate-pulse py-2 justify-center">
-     <Loader2 class="w-3.5 h-3.5 animate-spin text-primary" />
-     <span>Coach is thinking...</span>
+    <div v-if="aiStore.isLoading && coachMessages.length > 0" class="flex flex-col gap-3 py-4 w-full animate-pulse mt-4 pt-4 border-t border-border/20">
+      <div class="h-3 w-16 bg-muted/20 rounded"></div>
+      <div class="h-4 w-[85%] bg-muted/20 rounded mt-1"></div>
+      <div class="h-4 w-[60%] bg-muted/20 rounded"></div>
     </div>
 
     <!-- View Today's Workout -->
@@ -223,12 +232,32 @@ const {
 
    <!-- TAB: Today -->
    <template v-else-if="activeTab === 'today'">
-    <!-- Workout Plan heading -->
-    <div v-if="activeWorkoutGroups?.length" class="mt-1 flex items-center justify-between gap-4">
-     <div class="flex items-center gap-2">
-      <h3 class="text-sm font-bold text-foreground">Workout Plan</h3>
+    <template v-if="aiStore.isLoading && !activeWorkoutGroups?.length">
+     <!-- Skeleton for Today Tab -->
+     <div class="mt-1 flex items-center justify-between gap-4">
+      <div class="h-4 w-32 bg-muted/20 animate-pulse rounded"></div>
      </div>
-    </div>
+     <div class="flex flex-col gap-3 mt-4">
+      <div v-for="i in 3" :key="i" class="w-full p-4 border border-border/40 rounded-xl shadow-sm bg-card animate-pulse">
+       <div class="flex justify-between items-start mb-4">
+        <div class="h-5 w-40 bg-muted/20 rounded"></div>
+        <div class="h-8 w-8 bg-muted/20 rounded-full"></div>
+       </div>
+       <div class="grid grid-cols-3 gap-3">
+        <div class="h-10 bg-muted/20 rounded col-span-1"></div>
+        <div class="h-10 bg-muted/20 rounded col-span-1"></div>
+        <div class="h-10 bg-muted/20 rounded col-span-1"></div>
+       </div>
+      </div>
+     </div>
+    </template>
+    <template v-else>
+     <!-- Workout Plan heading -->
+     <div v-if="activeWorkoutGroups?.length" class="mt-1 flex items-center justify-between gap-4">
+      <div class="flex items-center gap-2">
+       <h3 class="text-sm font-bold text-foreground">Workout Plan</h3>
+      </div>
+     </div>
 
     <!-- Completed exercises strip -->
     <UiCard v-if="completedExercises.length" variant="list" class="mt-1 shadow-sm opacity-60">
@@ -343,6 +372,7 @@ const {
          :is-completed="isExerciseCompleted(exercise)"
          :is-highlighted="isHighlighted(gIndex, exIndex)"
          :progress="getExerciseProgress(exercise.exerciseName, exercise.targetSets)"
+         :last-session-summary="getLastSessionSummary(exercise.exerciseName)"
          heading-level="h4"
          @log="handleLogExercise"
          @search="openGoogleSearch"
@@ -359,6 +389,7 @@ const {
         :is-completed="isExerciseCompleted(exercise)"
         :is-highlighted="isHighlighted(gIndex, exIndex)"
         :progress="getExerciseProgress(exercise.exerciseName, exercise.targetSets)"
+        :last-session-summary="getLastSessionSummary(exercise.exerciseName)"
         heading-level="h3"
         @log="handleLogExercise"
         @search="openGoogleSearch"
@@ -407,12 +438,28 @@ const {
      <p class="text-sm text-muted-foreground mt-1 max-w-[260px]">Ask the Coach for a recommendation to start.</p>
     </div>
    </template>
+   </template>
 
    <!-- TAB: Plan -->
    <template v-else-if="activeTab === 'plan'">
-    <div v-if="activePlan" class="flex flex-col gap-4">
-     <div class="flex items-center justify-between gap-4">
-      <div class="flex items-center gap-2">
+    <template v-if="aiStore.isLoading && !activePlan">
+     <!-- Skeleton for Plan Tab -->
+     <div class="flex items-center justify-between gap-4 mb-4">
+      <div class="h-4 w-40 bg-muted/20 animate-pulse rounded"></div>
+      <div class="h-8 w-24 bg-muted/20 animate-pulse rounded"></div>
+     </div>
+     <div class="flex flex-col gap-4 w-full">
+      <div v-for="i in 3" :key="i" class="rounded-xl border border-border/50 bg-card p-3 animate-pulse">
+       <div class="h-4 w-32 bg-muted/20 rounded mb-2"></div>
+       <div class="h-3 w-48 bg-muted/20 rounded mb-4"></div>
+       <div class="h-20 bg-muted/20 rounded w-full"></div>
+      </div>
+     </div>
+    </template>
+    <template v-else>
+     <div v-if="activePlan" class="flex flex-col gap-4">
+      <div class="flex items-center justify-between gap-4">
+       <div class="flex items-center gap-2">
        <h3 class="text-sm font-bold text-foreground">Current Training Cycle</h3>
        <UiBadge variant="surface" class="uppercase tracking-wider whitespace-nowrap">{{ activePlan.cycleWeeks }} Week(s)</UiBadge>
       </div>
@@ -423,7 +470,7 @@ const {
        :disabled="aiStore.isLoading"
        @click="regeneratePlan"
        >
-        <RotateCw class="w-3.5 h-3.5 mr-1.5" :class="{ 'animate-spin': aiStore.isLoading }" />
+        <RotateCw class="w-3.5 h-3.5 mr-1.5" />
         New Plan
        </UiButton>
       </div>
@@ -512,6 +559,7 @@ const {
       Generate Plan
      </UiButton>
     </div>
+    </template>
    </template>
 
   </div>
@@ -541,5 +589,12 @@ const {
 .slide-down-leave-to {
  transform: translateY(-100%);
  opacity: 0;
+}
+.progress-indeterminate {
+ animation: indeterminate 1.5s infinite linear;
+}
+@keyframes indeterminate {
+ 0% { transform: translateX(-100%); }
+ 100% { transform: translateX(200%); }
 }
 </style>
