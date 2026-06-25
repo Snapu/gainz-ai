@@ -10,6 +10,7 @@ import {
   Play,
   RotateCw,
   Sparkles,
+  Timer,
 } from "@lucide/vue";
 import { LogExerciseSheet } from "@/modules/trainingLogs/presentation";
 import AppHeader from "@/shared/presentation/components/AppHeader.vue";
@@ -257,10 +258,11 @@ const {
      <div v-if="activeWorkoutGroups?.length" class="mt-1 flex items-center justify-between gap-4">
       <div class="flex items-center gap-2">
        <h3 class="text-sm font-bold text-foreground">Workout Plan</h3>
-       <UiBadge v-if="currentSessionElapsedText" variant="surface" class="uppercase tracking-wider">
-         {{ currentSessionElapsedText }} elapsed
-       </UiBadge>
       </div>
+      <UiBadge v-if="currentSessionElapsedText" variant="surface" class="uppercase tracking-wider">
+        <Timer class="w-3 h-3 mr-1.5 opacity-70" />
+        {{ currentSessionElapsedText }}
+      </UiBadge>
      </div>
 
     <!-- Completed exercises strip -->
