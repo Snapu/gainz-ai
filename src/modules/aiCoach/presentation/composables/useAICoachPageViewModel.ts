@@ -161,10 +161,7 @@ export function useAICoachPageViewModel() {
     const diffMs = Math.max(0, currentReactiveTime.value.getTime() - session.startTime.getTime());
     const minutes = Math.floor(diffMs / 60000);
 
-    if (minutes < 60) return `${minutes}m`;
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours}h ${mins}m`;
+    return `${minutes} Min`;
   });
 
   const remainingExercises = computed(() => {
