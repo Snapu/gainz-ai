@@ -1,4 +1,4 @@
-import { useDebounceFn } from "@vueuse/core";
+import { useDebounceFn, useNow } from "@vueuse/core";
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { TrainingPlan } from "@/modules/aiCoach/domain";
@@ -147,6 +147,24 @@ export function useAICoachPageViewModel() {
     return activeWorkout.value.filter(
       (ex) => getExerciseProgress(ex.exerciseName, ex.targetSets).isCompleted,
     );
+  });
+
+  const currentReactiveTime = useNow({ interval: 60000 });
+
+  const currentSessionElapsedText = computed<string | null>(() => {
+    const session = resolveCurrentSession(
+      exerciseLogsStore.exerciseLogs,
+      currentReactiveTime.value.getTime(),
+    );
+    if (!session) return null;
+
+    const diffMs = Math.max(0, currentReactiveTime.value.getTime() - session.startTime.getTime());
+    const minutes = Math.floor(diffMs / 60000);
+
+    if (minutes < 60) return `${minutes}m`;
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours}h ${mins}m`;
   });
 
   const remainingExercises = computed(() => {
@@ -576,5 +594,6 @@ export function useAICoachPageViewModel() {
     copyPlanJson,
     copyDebugState,
     getLastSessionSummary,
+    currentSessionElapsedText,
   };
 }

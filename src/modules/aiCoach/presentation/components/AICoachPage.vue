@@ -57,6 +57,7 @@ const {
   copyDebugState,
   requestOffDayWorkout,
   getLastSessionSummary,
+  currentSessionElapsedText,
 } = useAICoachPageViewModel();
 </script>
 
@@ -256,6 +257,9 @@ const {
      <div v-if="activeWorkoutGroups?.length" class="mt-1 flex items-center justify-between gap-4">
       <div class="flex items-center gap-2">
        <h3 class="text-sm font-bold text-foreground">Workout Plan</h3>
+       <UiBadge v-if="currentSessionElapsedText" variant="surface" class="uppercase tracking-wider">
+         {{ currentSessionElapsedText }} elapsed
+       </UiBadge>
       </div>
      </div>
 
