@@ -73,34 +73,31 @@ export class TrainingPlan {
     if (session.exercises.length === 0) return true;
 
     if (getPrimaryMuscleFn) {
-      // 1. Group planned volume by primary muscle
+      // 1. Group planned volume by primary muscle OR canonical name
       const plannedVolume = new Map<string, number>();
       for (const ex of session.exercises) {
         const muscle = getPrimaryMuscleFn(ex.exerciseName);
-        if (muscle) {
-          const current = plannedVolume.get(muscle) || 0;
-          plannedVolume.set(muscle, current + ex.targetSets);
-        }
+        const key = muscle ? `muscle:${muscle}` : `name:${normalizeFn(ex.exerciseName)}`;
+        const current = plannedVolume.get(key) || 0;
+        plannedVolume.set(key, current + ex.targetSets);
       }
 
-      // If we couldn't resolve any muscles, fallback to name matching
       if (plannedVolume.size > 0) {
-        // 2. Group logged volume by primary muscle
+        // 2. Group logged volume by primary muscle OR canonical name
         const loggedVolume = new Map<string, number>();
         for (const log of logs) {
           const muscle = getPrimaryMuscleFn(log.exerciseName);
-          if (muscle) {
-            const current = loggedVolume.get(muscle) || 0;
-            loggedVolume.set(muscle, current + 1);
-          }
+          const key = muscle ? `muscle:${muscle}` : `name:${normalizeFn(log.exerciseName)}`;
+          const current = loggedVolume.get(key) || 0;
+          loggedVolume.set(key, current + 1);
         }
 
-        // 3. Evaluate by total muscle volume satisfied (capped per muscle)
+        // 3. Evaluate by total volume satisfied (capped per requirement)
         let totalPlannedSets = 0;
         let totalSatisfiedSets = 0;
-        for (const [muscle, targetSets] of plannedVolume.entries()) {
+        for (const [key, targetSets] of plannedVolume.entries()) {
           totalPlannedSets += targetSets;
-          const doneSets = loggedVolume.get(muscle) || 0;
+          const doneSets = loggedVolume.get(key) || 0;
           totalSatisfiedSets += Math.min(doneSets, targetSets);
         }
 

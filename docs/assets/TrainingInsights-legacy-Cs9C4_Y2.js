@@ -1,0 +1,1 @@
+System.register(["./UiButton-legacy-C8bQS-n6.js","./index-legacy-DkM0tkTG.js"],function(t,e){var n,i,s,u,c;return{setters:[function(t){n=t.C,i=t.Ct,s=t.U,u=t.k},function(t){c=t.s}],execute:function(){t("default",u({__name:"TrainingInsights",setup:t=>(t,e)=>(s(),n(i(c)))}))}}});
