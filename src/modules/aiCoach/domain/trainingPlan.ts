@@ -67,18 +67,60 @@ export class TrainingPlan {
   public isSessionSatisfiedByLogs(
     session: PlannedSession,
     logs: { exerciseName: string }[],
+    normalizeFn: (name: string) => string = (name) => name,
+    getPrimaryMuscleFn?: (name: string) => string | undefined,
   ): boolean {
     if (session.exercises.length === 0) return true;
 
+    if (getPrimaryMuscleFn) {
+      // 1. Group planned volume by primary muscle
+      const plannedVolume = new Map<string, number>();
+      for (const ex of session.exercises) {
+        const muscle = getPrimaryMuscleFn(ex.exerciseName);
+        if (muscle) {
+          const current = plannedVolume.get(muscle) || 0;
+          plannedVolume.set(muscle, current + ex.targetSets);
+        }
+      }
+
+      // If we couldn't resolve any muscles, fallback to name matching
+      if (plannedVolume.size > 0) {
+        // 2. Group logged volume by primary muscle
+        const loggedVolume = new Map<string, number>();
+        for (const log of logs) {
+          const muscle = getPrimaryMuscleFn(log.exerciseName);
+          if (muscle) {
+            const current = loggedVolume.get(muscle) || 0;
+            loggedVolume.set(muscle, current + 1);
+          }
+        }
+
+        // 3. Evaluate by total muscle volume satisfied (capped per muscle)
+        let totalPlannedSets = 0;
+        let totalSatisfiedSets = 0;
+        for (const [muscle, targetSets] of plannedVolume.entries()) {
+          totalPlannedSets += targetSets;
+          const doneSets = loggedVolume.get(muscle) || 0;
+          totalSatisfiedSets += Math.min(doneSets, targetSets);
+        }
+
+        if (totalPlannedSets === 0) return true;
+        return totalSatisfiedSets / totalPlannedSets >= 0.5;
+      }
+    }
+
+    // Fallback: evaluate by canonical name
     const completedSetsMap = new Map<string, number>();
     for (const log of logs) {
-      const count = completedSetsMap.get(log.exerciseName) || 0;
-      completedSetsMap.set(log.exerciseName, count + 1);
+      const normalizedName = normalizeFn(log.exerciseName);
+      const count = completedSetsMap.get(normalizedName) || 0;
+      completedSetsMap.set(normalizedName, count + 1);
     }
 
     let completedExercisesCount = 0;
     for (const ex of session.exercises) {
-      const doneSets = completedSetsMap.get(ex.exerciseName) || 0;
+      const normalizedName = normalizeFn(ex.exerciseName);
+      const doneSets = completedSetsMap.get(normalizedName) || 0;
       if (doneSets >= ex.targetSets) {
         completedExercisesCount++;
       }

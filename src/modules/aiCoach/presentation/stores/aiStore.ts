@@ -444,9 +444,22 @@ export const useAiStore = defineStore("ai", () => {
       const weekNum = plan.getCurrentWeekNumber(date);
       const dayOfWeek = date.getDay();
 
-      const session = plan.getPlannedSessionForDay(dayOfWeek, weekNum);
-      if (session && plan.isSessionSatisfiedByLogs(session, logs)) {
-        const sessionKey = TrainingPlan.sessionKey(session.weekNumber, session.dayOfWeek);
+      let satisfiedSession = plan.getPlannedSessionForDay(dayOfWeek, weekNum);
+      const resolveMuscle = (name: string) => getMuscleActivation(name, exerciseMuscleMapStore.learnedMap)?.primaryMuscle;
+
+      if (!satisfiedSession || !plan.isSessionSatisfiedByLogs(satisfiedSession, logs, normalizeExerciseName, resolveMuscle)) {
+        // Fallback: Check if the logs satisfy ANY uncompleted session
+        const uncompletedSessions = plan.sessions.filter(
+          (s) => !newCompletedSessions.has(TrainingPlan.sessionKey(s.weekNumber, s.dayOfWeek))
+        );
+        
+        satisfiedSession = uncompletedSessions.find((s) => 
+          plan.isSessionSatisfiedByLogs(s, logs, normalizeExerciseName, resolveMuscle)
+        );
+      }
+
+      if (satisfiedSession) {
+        const sessionKey = TrainingPlan.sessionKey(satisfiedSession.weekNumber, satisfiedSession.dayOfWeek);
         if (!newCompletedSessions.has(sessionKey)) {
           newCompletedSessions.add(sessionKey);
         }
