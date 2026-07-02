@@ -1,3 +1,4 @@
+import { getLocalDayIndex } from "@/modules/sharedKernel/domain";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 import { computeEwma, DEFAULT_EWMA_LAMBDA_ACUTE, DEFAULT_EWMA_LAMBDA_CHRONIC } from "./ewma";
 
@@ -24,11 +25,11 @@ function calculateSetLoad(log: ExerciseLog): number {
  * Logs dated after `targetDate` are excluded.
  */
 function buildDailyLoadMap(logs: ExerciseLog[], targetDate: Date): Map<number, number> {
-  const targetDay = Math.floor(targetDate.getTime() / MS_PER_DAY);
+  const targetDay = getLocalDayIndex(targetDate);
   const dailyLoads = new Map<number, number>();
 
   for (const log of logs) {
-    const dayKey = Math.floor(log.loggedAt.getTime() / MS_PER_DAY);
+    const dayKey = getLocalDayIndex(log.loggedAt);
     if (dayKey > targetDay) continue; // Ignore future logs
     dailyLoads.set(dayKey, (dailyLoads.get(dayKey) ?? 0) + calculateSetLoad(log));
   }
@@ -136,7 +137,7 @@ export function computeEWMAACWR(
 ): number | null {
   if (logs.length === 0) return null;
 
-  const targetDay = Math.floor(targetDate.getTime() / MS_PER_DAY);
+  const targetDay = getLocalDayIndex(targetDate);
   const dailyLoads = buildDailyLoadMap(logs, targetDate);
 
   const ewmaResult = computeEwma(dailyLoads, targetDay, lambdaAcute, lambdaChronic, 7);

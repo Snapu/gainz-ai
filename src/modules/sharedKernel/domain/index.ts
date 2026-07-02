@@ -4,4 +4,5 @@ export * from "./fatigueTriggers";
 export * from "./muscleGroups";
 export * from "./number";
 export * from "./parseData";
+export * from "./time";
 export * from "./userProgress";

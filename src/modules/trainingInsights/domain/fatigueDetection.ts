@@ -1,5 +1,6 @@
 import {
   type FatigueTriggerId,
+  getLocalDayIndex,
   isFatigueTriggerId as isSharedFatigueTriggerId,
 } from "@/modules/sharedKernel/domain";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
@@ -124,14 +125,14 @@ export function calculateFatigueInsight(
   targetDate: Date = new Date(),
   excludeRanges?: { start: Date; end: Date }[],
 ): FatigueInsight {
-  const targetDay = Math.floor(targetDate.getTime() / MS_PER_DAY);
+  const targetDay = getLocalDayIndex(targetDate);
 
   const dailySets = new Map<number, number>();
   const dailyTonnage = new Map<number, number>();
 
   for (const log of logs) {
     if (log.synthetic) continue;
-    const dayKey = Math.floor(log.loggedAt.getTime() / MS_PER_DAY);
+    const dayKey = getLocalDayIndex(log.loggedAt);
     if (dayKey > targetDay) continue;
 
     dailySets.set(dayKey, (dailySets.get(dayKey) ?? 0) + 1);
@@ -144,8 +145,8 @@ export function calculateFatigueInsight(
   // and triggering a false volume spike when normal training resumes.
   if (excludeRanges) {
     for (const range of excludeRanges) {
-      const rangeStartDay = Math.floor(range.start.getTime() / MS_PER_DAY);
-      const rangeEndDay = Math.floor(range.end.getTime() / MS_PER_DAY);
+      const rangeStartDay = getLocalDayIndex(range.start);
+      const rangeEndDay = getLocalDayIndex(range.end);
 
       if (rangeEndDay < targetDay - 28) continue; // Too old to affect current EWMA
 
@@ -175,15 +176,26 @@ export function calculateFatigueInsight(
   const setsEwma = computeEwma(dailySets, targetDay);
   const tonnageEwma = computeEwma(dailyTonnage, targetDay);
 
-  const sets0 = getRollingSum(dailySets, targetDay);
-  const sets1 = getRollingSum(dailySets, targetDay - 7);
-  const sets2 = getRollingSum(dailySets, targetDay - 14);
-  const sets3 = getRollingSum(dailySets, targetDay - 21);
+  // For the UI and AI context, we use the EWMA weekly equivalent (acute * 7)
+  // rather than strict rolling sums, as rolling sums produce unintuitive drops
+  // when a workout crosses the 7-day boundary.
+  const ewma1 = computeEwma(dailySets, targetDay - 7);
+  const ewma2 = computeEwma(dailySets, targetDay - 14);
+  const ewma3 = computeEwma(dailySets, targetDay - 21);
 
-  const tonnage0 = getRollingSum(dailyTonnage, targetDay);
-  const tonnage1 = getRollingSum(dailyTonnage, targetDay - 7);
-  const tonnage2 = getRollingSum(dailyTonnage, targetDay - 14);
-  const tonnage3 = getRollingSum(dailyTonnage, targetDay - 21);
+  const sets0 = Math.round(setsEwma?.acute ? setsEwma.acute * 7 * 10 : 0) / 10;
+  const sets1 = Math.round((ewma1?.acute ?? 0) * 7 * 10) / 10;
+  const sets2 = Math.round((ewma2?.acute ?? 0) * 7 * 10) / 10;
+  const sets3 = Math.round((ewma3?.acute ?? 0) * 7 * 10) / 10;
+
+  const ewmaTonnage1 = computeEwma(dailyTonnage, targetDay - 7);
+  const ewmaTonnage2 = computeEwma(dailyTonnage, targetDay - 14);
+  const ewmaTonnage3 = computeEwma(dailyTonnage, targetDay - 21);
+
+  const tonnage0 = Math.round(tonnageEwma?.acute ? tonnageEwma.acute * 7 * 10 : 0) / 10;
+  const tonnage1 = Math.round((ewmaTonnage1?.acute ?? 0) * 7 * 10) / 10;
+  const tonnage2 = Math.round((ewmaTonnage2?.acute ?? 0) * 7 * 10) / 10;
+  const tonnage3 = Math.round((ewmaTonnage3?.acute ?? 0) * 7 * 10) / 10;
 
   const hasSufficientHistory = setsEwma !== null && tonnageEwma !== null;
 
@@ -216,26 +228,14 @@ export function calculateFatigueInsight(
     };
   }
 
-  // EWMA Snapshots for robust 4-week ramp detection (prevents rest-day jitter)
-  // We use the 'acute' (7-day) EWMA, not the chronic (28-day) EWMA, because we want
-  // to compare the weekly volume at these 4 distinct checkpoints.
-  const ewma1 = computeEwma(dailySets, targetDay - 7);
-  const ewma2 = computeEwma(dailySets, targetDay - 14);
-  const ewma3 = computeEwma(dailySets, targetDay - 21);
-
-  const ewmaSets0 = setsEwma.acute * 7;
-  const ewmaSets1 = ewma1 ? ewma1.acute * 7 : 0;
-  const ewmaSets2 = ewma2 ? ewma2.acute * 7 : 0;
-  const ewmaSets3 = ewma3 ? ewma3.acute * 7 : 0;
-
   // Keep id name volumeIncreasing for backward compatibility in snapshot/history.
   const volumeIncreasing =
     ewma3 !== null &&
-    ewmaSets2 > ewmaSets3 &&
-    ewmaSets1 > ewmaSets2 &&
-    ewmaSets0 >= ewmaSets1 &&
-    ewmaSets0 >= ewmaSets3 * VOLUME_RAMP_MIN_MULTIPLIER &&
-    ewmaSets0 >= VOLUME_SPIKE_MIN_BASELINE;
+    sets2 > sets3 &&
+    sets1 > sets2 &&
+    sets0 >= sets1 &&
+    sets0 >= sets3 * VOLUME_RAMP_MIN_MULTIPLIER &&
+    sets0 >= VOLUME_SPIKE_MIN_BASELINE;
 
   let decliningExercises = 0;
   if (!isCurrentWeekDeload) {

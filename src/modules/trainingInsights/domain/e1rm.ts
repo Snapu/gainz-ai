@@ -1,3 +1,4 @@
+import { getLocalDayIndex } from "@/modules/sharedKernel/domain";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 import { normalizeExerciseName } from "./exerciseMuscleMap";
 
@@ -370,7 +371,7 @@ export function calculateE1RMInsights(
     if (sessionData.length === 0) continue;
 
     const lastLogDate = new Date(sortedDays[sortedDays.length - 1]!);
-    const daysSinceLastLog = (now.getTime() - lastLogDate.getTime()) / MS_PER_DAY;
+    const daysSinceLastLog = getLocalDayIndex(now) - getLocalDayIndex(lastLogDate);
 
     // Keep the last TREND_WINDOW_SIZE sessions.
     // trendDates is derived from the same trendWindow slice — not from sortedDays —
@@ -487,7 +488,7 @@ export function calculateE1RMInsights(
       const lastEverDate = new Date(sortedDays[sortedDays.length - 1]!);
       const isEstablished =
         sortedDays.length >= 2 &&
-        lastEverDate.getTime() - firstEverDate.getTime() >= 14 * MS_PER_DAY;
+        getLocalDayIndex(lastEverDate) - getLocalDayIndex(firstEverDate) >= 14;
       const rpeOverloadReady = bestRPE != null && bestRPE < 8 && isEstablished;
 
       result[displayName] = {
