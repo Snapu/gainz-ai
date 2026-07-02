@@ -99,6 +99,8 @@ function buildSessionSection(
   if (p.fitnessGoal?.length) profileParts.push(`goal: ${p.fitnessGoal.join(",")}`);
   if (p.fitnessLevel) profileParts.push(`level: ${p.fitnessLevel}`);
   if (p.workoutDaysPerWeek != null) profileParts.push(`days: ${p.workoutDaysPerWeek}`);
+  if (p.workoutDurationMinutes != null)
+    profileParts.push(`sessionMins: ${p.workoutDurationMinutes}`);
   if (p.workoutLocation) profileParts.push(`location: ${p.workoutLocation}`);
   if (profileParts.length) parts.push(`profile: {${profileParts.join(", ")}}`);
 

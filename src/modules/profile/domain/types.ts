@@ -61,6 +61,7 @@ export const UserProfileSchema = z.object({
   fitnessGoal: commaSeparatedArraySchema(FitnessGoalSchema),
   fitnessLevel: optionalEnumSchema(FitnessLevelSchema),
   workoutDaysPerWeek: optionalNumberSchema,
+  workoutDurationMinutes: optionalNumberSchema,
   workoutLocation: optionalEnumSchema(WorkoutLocationSchema),
   equipmentAccess: commaSeparatedArraySchema(EquipmentOptionSchema),
   freeUserInput: z.preprocess((val) => (val === "" ? undefined : val), z.string().optional()),

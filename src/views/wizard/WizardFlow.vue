@@ -84,6 +84,23 @@ const workoutDaysString = computed({
   },
 });
 
+const workoutDurationLabels: [string, number][] = [
+  ["30 min", 30],
+  ["45 min", 45],
+  ["60 min", 60],
+  ["90 min", 90],
+];
+
+const workoutDurationString = computed({
+  get: () =>
+    userProfile.value.workoutDurationMinutes
+      ? String(userProfile.value.workoutDurationMinutes)
+      : "",
+  set: (val: string) => {
+    userProfile.value.workoutDurationMinutes = val === "" ? undefined : Number(val);
+  },
+});
+
 const stepper = useStepper(
   WIZARD_STEPS.reduce(
     (acc, step) => {
@@ -223,6 +240,17 @@ function skipWizard() {
           <p class="text-muted-foreground mb-10 text-lg">Workouts per week</p>
           <UiToggleGroup type="single" v-model="workoutDaysString" class="grid grid-cols-2">
             <UiToggleGroupItem v-for="[label, value] in workoutDaysPerWeekLabels" :key="value" :value="String(value)" class="justify-center h-20 text-xl font-bold">
+              {{ label }}
+            </UiToggleGroupItem>
+          </UiToggleGroup>
+        </template>
+
+        <!-- Duration -->
+        <template v-else-if="stepper.isCurrent('duration')">
+          <h2 class="text-3xl font-bold mb-2 tracking-tight">Session length</h2>
+          <p class="text-muted-foreground mb-10 text-lg">How long do you usually train?</p>
+          <UiToggleGroup type="single" v-model="workoutDurationString" class="grid grid-cols-2">
+            <UiToggleGroupItem v-for="[label, value] in workoutDurationLabels" :key="value" :value="String(value)" class="justify-center h-20 text-xl font-bold">
               {{ label }}
             </UiToggleGroupItem>
           </UiToggleGroup>

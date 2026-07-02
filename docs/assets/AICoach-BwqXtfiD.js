@@ -1,0 +1,1 @@
+import{C as e,Ct as t,U as n,k as r}from"./UiButton-BYHzVDl0.js";import{l as i}from"./index-MCT0oWYI.js";var a=r({__name:`AICoach`,setup(r){return(r,a)=>(n(),e(t(i)))}});export{a as default};
