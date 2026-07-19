@@ -23,7 +23,7 @@ const tabs = [
         :class="{ 'text-primary': route.name === tab.name }"
       >
         <component :is="tab.icon" class="w-6 h-6 mb-1" :class="{ 'stroke-[2.5]': route.name === tab.name }" />
-        <span class="text-[10px] font-bold tracking-wide" :class="route.name === tab.name ? 'text-primary' : 'text-muted-foreground/60'">
+        <span class="text-xs font-bold tracking-wide" :class="route.name === tab.name ? 'text-primary' : 'text-muted-foreground/60'">
           {{ tab.label }}
         </span>
       </router-link>

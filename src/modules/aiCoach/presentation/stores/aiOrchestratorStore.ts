@@ -161,7 +161,7 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
           chatStore.removeMessagesFromSession(oldSessionId);
           currentId = newSessionId;
           // Clean up old messages locally, keep only current user message
-          chatStore.messages = chatStore.messages.filter((m) => m.id === userMessageId);
+          chatStore.retainOnlyMessage(userMessageId);
         }
       }
     } catch (e) {

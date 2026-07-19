@@ -1,6 +1,7 @@
 import DOMPurify from "dompurify";
 import type { CoachingAdvice } from "@/modules/aiCoach/presentation";
-import { upcastLegacyExercise } from "../../domain";
+
+import { type CoachingAdviceError, upcastLegacyExercise } from "../../domain";
 
 // ---------------------------------------------------------------------------
 // View-model types
@@ -54,6 +55,12 @@ export function tryParseCoachingAdvice(content: string): CoachingAdvice | null {
   } catch {
     return null;
   }
+}
+
+export function getAiErrorDescription(error: CoachingAdviceError | string): string {
+  return error === "missing-api-key"
+    ? "No API Key configured! Please add one in your profile."
+    : "Failed to get AI response. Please try again.";
 }
 
 // ---------------------------------------------------------------------------

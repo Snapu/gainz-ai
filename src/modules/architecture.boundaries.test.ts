@@ -375,7 +375,12 @@ describe("module architecture boundaries", () => {
   });
 
   it("module page components keep orchestration in composables/stores", async () => {
-    const pageComponents: string[] = [];
+    const pageComponents: string[] = [
+      path.resolve(ROOT, "../views/HomeTab.vue"),
+      path.resolve(ROOT, "../views/InsightsTab.vue"),
+      path.resolve(ROOT, "../views/PlanTab.vue"),
+      path.resolve(ROOT, "../views/CoachTab.vue"),
+    ];
 
     const violations: string[] = [];
 

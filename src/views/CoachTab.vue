@@ -20,6 +20,7 @@ const {
   renderMarkdown,
 } = useCoachChatViewModel();
 
+// Used as a template ref, but TS complains it's unused if we don't reference it in script
 void scrollContainerRef;
 </script>
 

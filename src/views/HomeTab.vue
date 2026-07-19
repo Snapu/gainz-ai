@@ -14,7 +14,7 @@ import UserProgressCard from "@/shared/presentation/components/UserProgressCard.
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiBottomSheet from "@/shared/presentation/components/ui/UiBottomSheet.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
-import { useHomeWorkoutViewModel } from "@/shared/presentation/composables/useHomeWorkoutViewModel";
+import { useHomeWorkoutViewModel } from "@/views/composables/useHomeWorkoutViewModel";
 
 const {
   router,

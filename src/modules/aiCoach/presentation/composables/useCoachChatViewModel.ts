@@ -2,6 +2,7 @@ import { useDebounceFn } from "@vueuse/core";
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import {
   type DisplayInsight,
+  getAiErrorDescription,
   renderMarkdown,
   tryParseCoachingAdvice,
   useAiOrchestratorStore,
@@ -64,22 +65,14 @@ export function useCoachChatViewModel() {
     });
   }
 
-  function handleAiError(error: string) {
-    const description =
-      error === "missing-api-key"
-        ? "No API Key configured! Please add one in your profile."
-        : "Failed to get AI response. Please try again.";
-    toast({ title: "AI Coaching Error", description, variant: "destructive" });
-  }
-
   const debouncedRequestAdvice = useDebounceFn(() => {
     orchestratorStore.requestAdvice().then((result) => {
       if (result.isErr()) {
-        const description =
-          result.error === "missing-api-key"
-            ? "No API Key configured! Please add one in your profile."
-            : "Failed to get AI response. Please try again.";
-        toast({ title: "AI Coaching Error", description, variant: "destructive" });
+        toast({
+          title: "AI Coaching Error",
+          description: getAiErrorDescription(result.error),
+          variant: "destructive",
+        });
       } else {
         scrollToTop();
       }
@@ -107,7 +100,12 @@ export function useCoachChatViewModel() {
 
     if (!hasPlan && !hasMessages) {
       orchestratorStore.generateNewPlan().then((result) => {
-        if (result.isErr()) handleAiError(result.error);
+        if (result.isErr())
+          toast({
+            title: "AI Coaching Error",
+            description: getAiErrorDescription(result.error),
+            variant: "destructive",
+          });
         else scrollToTop();
       });
     } else if (!chatStore.hasTodayCoachMessage) {

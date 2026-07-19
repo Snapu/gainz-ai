@@ -48,7 +48,7 @@ export function evaluateCompletedSessions(
       !satisfiedSession ||
       !plan.isSessionSatisfiedByLogs(
         satisfiedSession,
-        dayLogs as any,
+        dayLogs,
         normalizeExerciseName,
         resolveMuscle,
       )
@@ -59,7 +59,7 @@ export function evaluateCompletedSessions(
       );
 
       satisfiedSession = uncompletedSessions.find((s) =>
-        plan.isSessionSatisfiedByLogs(s, dayLogs as any, normalizeExerciseName, resolveMuscle),
+        plan.isSessionSatisfiedByLogs(s, dayLogs, normalizeExerciseName, resolveMuscle),
       );
     }
 

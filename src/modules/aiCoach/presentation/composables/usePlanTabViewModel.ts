@@ -1,6 +1,7 @@
 import { computed, onMounted, ref } from "vue";
 import { TrainingPlan } from "@/modules/aiCoach/domain";
 import {
+  getAiErrorDescription,
   useAiOrchestratorStore,
   useCoachChatStore,
   useTrainingPlanStore,
@@ -44,7 +45,11 @@ export function usePlanTabViewModel() {
     try {
       const result = await orchestratorStore.generateNewPlan();
       if (result.isErr()) {
-        handleAiError(result.error);
+        toast({
+          title: "AI Coaching Error",
+          description: getAiErrorDescription(result.error),
+          variant: "destructive",
+        });
       } else {
         toast({
           title: "Plan Regenerated",
@@ -55,14 +60,6 @@ export function usePlanTabViewModel() {
     } finally {
       isRegenerating.value = false;
     }
-  }
-
-  function handleAiError(error: string) {
-    const description =
-      error === "missing-api-key"
-        ? "No API Key configured! Please add one in your profile."
-        : "Failed to get AI response. Please try again.";
-    toast({ title: "AI Coaching Error", description, variant: "destructive" });
   }
 
   function copyPlanJson() {

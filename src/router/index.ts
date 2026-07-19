@@ -79,7 +79,7 @@ const router = createRouter({
     },
     {
       path: "/ai-coach",
-      redirect: "/app/plan",
+      redirect: "/app/coach",
     },
   ],
 });

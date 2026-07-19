@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import type { PluginListenerHandle } from "@capacitor/core";
 import { Keyboard } from "@capacitor/keyboard";
 import { Plus } from "@lucide/vue";
 import { storeToRefs } from "pinia";
-import { onMounted, ref } from "vue";
+import { onMounted, onUnmounted, ref } from "vue";
 import { useRestTimerStore } from "@/modules/platform/presentation";
 import { LogExerciseSheet } from "@/modules/trainingLogs/presentation";
 import RestTimerToast from "@/shared/presentation/components/RestTimerToast.vue";
@@ -15,17 +16,30 @@ const { isResting, formattedTime: formattedRestTime } = storeToRefs(restTimerSto
 const logSheet = useLogSheet();
 
 const isKeyboardVisible = ref(false);
+const keyboardShowPromise = ref<Promise<PluginListenerHandle> | null>(null);
+const keyboardHidePromise = ref<Promise<PluginListenerHandle> | null>(null);
 
 onMounted(() => {
   try {
-    Keyboard.addListener("keyboardWillShow", () => {
+    keyboardShowPromise.value = Keyboard.addListener("keyboardWillShow", () => {
       isKeyboardVisible.value = true;
     });
-    Keyboard.addListener("keyboardWillHide", () => {
+    keyboardHidePromise.value = Keyboard.addListener("keyboardWillHide", () => {
       isKeyboardVisible.value = false;
     });
   } catch (e) {
     console.warn("Keyboard plugin not available", e);
+  }
+});
+
+onUnmounted(async () => {
+  if (keyboardShowPromise.value) {
+    const listener = await keyboardShowPromise.value;
+    listener.remove();
+  }
+  if (keyboardHidePromise.value) {
+    const listener = await keyboardHidePromise.value;
+    listener.remove();
   }
 });
 
@@ -43,7 +57,7 @@ function handleFabClick() {
     <div class="absolute inset-0 pb-16">
       <router-view v-slot="{ Component }">
         <transition name="fade" mode="out-in">
-          <keep-alive>
+          <keep-alive :max="4">
             <component :is="Component" />
           </keep-alive>
         </transition>
