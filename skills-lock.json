@@ -11,7 +11,7 @@
       "source": "wondelai/skills",
       "sourceType": "github",
       "skillPath": "domain-driven-design/SKILL.md",
-      "computedHash": "8c99f2c4f802cdd1855f850d60378a8b697ca3fd2d6749346643da675bfc44a4"
+      "computedHash": "3a84c4c48b3d1bcdf07e6ba096749679f97915dd6b4f9c87ab8a715b936fed30"
     },
     "find-skills": {
       "source": "vercel-labs/skills",
@@ -77,7 +77,7 @@
       "source": "onmax/nuxt-skills",
       "sourceType": "github",
       "skillPath": "skills/vueuse/SKILL.md",
-      "computedHash": "6a5d44723d96da16c0633b24b2b266d8f486f9fd9e5721d78ab0860777b8484f"
+      "computedHash": "81c6a7945aa6b1c5805235c88bab7543fd6c28c19414a75a5fe594c937fe792e"
     }
   }
 }

@@ -259,7 +259,7 @@ function addNamesFromMessages(names: Set<string>, messages: CoachingMessage[]): 
           }
         }
       }
-    } catch (e) {
+    } catch (_e) {
       // ignore parse errors
     }
   }

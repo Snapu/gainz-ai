@@ -63,7 +63,6 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
     () => spreadsheetStore.doc,
     async (doc) => {
       if (doc && exerciseLogs.value.length === 0) {
-        console.log("[exerciseLogs] Spreadsheet ready, refreshing logs");
         const result = await refresh();
         if (result.isErr() && result.error === "auth-failed") {
           handleAuthError("exercise-log-load");
@@ -73,7 +72,6 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
   );
 
   const addExerciseLog: typeof add = (exerciseLog) => {
-    console.log("Adding exercise log", exerciseLog);
     return add(exerciseLog).mapErr((error) => {
       if (error === "auth-failed") {
         handleAuthError("exercise-log-add");
@@ -83,7 +81,6 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
   };
 
   const removeExerciseLog: typeof remove = (exerciseLog) => {
-    console.log("Removing exercise log", exerciseLog);
     return remove(exerciseLog).mapErr((error) => {
       if (error === "auth-failed") {
         handleAuthError("exercise-log-delete");
@@ -93,7 +90,6 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
   };
 
   const updateExerciseLog: typeof update = (exerciseLog) => {
-    console.log("Updating exercise log", exerciseLog);
     return update(exerciseLog).mapErr((error) => {
       if (error === "auth-failed") {
         handleAuthError("exercise-log-update");

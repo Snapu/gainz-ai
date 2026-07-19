@@ -82,7 +82,9 @@ async function applyDecision(
         <h1 class="text-lg font-bold tracking-tight text-foreground">Weight Migration</h1>
         <p class="text-xs text-muted-foreground/70 mt-0.5">{{ summaryText }}</p>
       </div>
-      <UiButton variant="ghost" size="sm" @click="migrationStore.refresh()">Refresh</UiButton>
+      <template #actions>
+        <UiButton variant="ghost" size="sm" @click="migrationStore.refresh()">Refresh</UiButton>
+      </template>
     </AppHeader>
 
     <main class="flex-1 px-4 pt-4 pb-12 overflow-y-auto no-scrollbar">

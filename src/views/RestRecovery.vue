@@ -82,9 +82,11 @@ function remove(id: string) {
         <ArrowLeft class="w-6 h-6" />
       </UiButton>
       <h1 class="text-xl font-bold tracking-tight flex-1">Rest & Recovery</h1>
-      <UiButton variant="ghost" size="icon" @click="isAddOpen = true">
-        <Plus class="w-6 h-6" />
-      </UiButton>
+      <template #actions>
+        <UiButton variant="ghost" size="icon" @click="isAddOpen = true">
+          <Plus class="w-6 h-6" />
+        </UiButton>
+      </template>
     </AppHeader>
 
     <p class="px-6 pt-4 text-sm text-muted-foreground">Track rest days, illness, injuries, and other off days so your AI coach can account for them.</p>

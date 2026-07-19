@@ -11,7 +11,6 @@ import type {
   WorkoutLocation,
 } from "@/modules/profile/presentation";
 import { useUserProfileStore, WIZARD_STEPS } from "@/modules/profile/presentation";
-import AppHeader from "@/shared/presentation/components/AppHeader.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiInput from "@/shared/presentation/components/ui/UiInput.vue";
 import UiNumberField from "@/shared/presentation/components/ui/UiNumberField.vue";
@@ -141,7 +140,7 @@ function handleNext() {
   if (stepper.isLast.value) {
     // If we're on the last step, mark as complete and route to logs
     profileStore.hasCompletedSetup = true;
-    router.push("/exercise-logs");
+    router.push("/app/home");
   } else {
     stepper.goToNext();
   }
@@ -157,16 +156,16 @@ function handleBack() {
 
 function skipWizard() {
   profileStore.hasCompletedSetup = true;
-  router.push("/exercise-logs");
+  router.push("/app/home");
 }
 </script>
 
 <template>
   <div class="min-h-screen bg-background flex flex-col pt-safe">
     <!-- Header -->
-    <AppHeader 
-      class="justify-between transition-all z-20"
-      :class="{ 'border-b-transparent': !isEditMode }"
+    <header 
+      class="flex items-center justify-between p-4 sticky top-0 bg-background/90 backdrop-blur-xl transition-all z-20"
+      :class="{ 'border-b border-white/5': isEditMode }"
     >
       <!-- Left: Back Button -->
       <UiButton
@@ -207,7 +206,7 @@ function skipWizard() {
         Skip
       </UiButton>
       <div v-else class="w-12 h-12"></div>
-    </AppHeader>
+    </header>
 
     <!-- Content Area -->
     <main class="flex-1 px-6 pb-32 flex flex-col mt-4">

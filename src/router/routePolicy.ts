@@ -29,7 +29,7 @@ export function resolveRouteTarget(
   const isWizardWithoutEdit = toPath.startsWith("/wizard") && query?.mode !== "edit";
 
   if (isExcluded || isWizardWithoutEdit) {
-    return "/exercise-logs";
+    return "/app/home";
   }
 
   return true;

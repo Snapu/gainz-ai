@@ -1,6 +1,6 @@
 import DOMPurify from "dompurify";
 import type { CoachingAdvice } from "@/modules/aiCoach/presentation";
-import { upcastLegacyExercise } from "../../domain/upcaster";
+import { upcastLegacyExercise } from "../../domain";
 
 // ---------------------------------------------------------------------------
 // View-model types

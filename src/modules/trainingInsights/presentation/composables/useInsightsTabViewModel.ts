@@ -1,7 +1,7 @@
 import { storeToRefs } from "pinia";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, watch } from "vue";
 import { useRouter } from "vue-router";
-import { useAiStore } from "@/modules/aiCoach/presentation";
+import { useAiOrchestratorStore } from "@/modules/aiCoach/presentation";
 import { useDeloadStore } from "@/modules/deload/presentation";
 import { useExerciseMuscleMapStore } from "@/modules/platform/presentation";
 import { useMetricsStore } from "@/modules/profile/presentation";
@@ -12,8 +12,6 @@ import {
   normalizeExerciseName,
   useTrainingInsightsStore,
 } from "@/modules/trainingInsights/presentation";
-
-type TrainingInsightsTab = "map" | "phase" | "exercises";
 
 type AcwrZoneViewModel = {
   label: string;
@@ -42,17 +40,17 @@ function clampPct(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
-export function useTrainingInsightsPageViewModel() {
+export function useInsightsTabViewModel() {
   const router = useRouter();
   const muscleMapStore = useExerciseMuscleMapStore();
   const deloadStore = useDeloadStore();
-  const aiStore = useAiStore();
+  const orchestratorStore = useAiOrchestratorStore();
   const trainingInsightsStore = useTrainingInsightsStore();
   const metricsStore = useMetricsStore();
   const { insights } = storeToRefs(trainingInsightsStore);
 
   onMounted(() => {
-    void aiStore.classifyExercisesIfNeeded();
+    void orchestratorStore.classifyExercisesIfNeeded();
   });
 
   watch(
@@ -74,18 +72,11 @@ export function useTrainingInsightsPageViewModel() {
     { deep: true },
   );
 
-  const activeTab = ref<TrainingInsightsTab>("map");
-  const tabOptions = [
-    { id: "map", label: "Muscles" },
-    { id: "phase", label: "Phase" },
-    { id: "exercises", label: "Exercises" },
-  ] as const;
-
   const muscleInsightsList = computed((): MuscleGroupWithKey[] => {
     const result: MuscleGroupWithKey[] = [];
     for (const [group, insight] of Object.entries(insights.value.muscleGroups)) {
       if (insight !== undefined) {
-        result.push({ ...insight, muscleGroup: group });
+        result.push({ muscleGroup: group as MuscleGroup, ...(insight as MuscleGroupInsight) });
       }
     }
     return result;
@@ -294,7 +285,8 @@ export function useTrainingInsightsPageViewModel() {
     const now = Date.now();
 
     return Object.entries(insights.value.e1rm)
-      .map(([name, data]) => {
+      .map(([name, dataObj]) => {
+        const data = dataObj as any;
         const trend = data.trend;
         const current = trend[trend.length - 1] ?? data.e1rm;
         const previous = trend.length >= 2 ? (trend[trend.length - 2] ?? null) : null;
@@ -383,12 +375,49 @@ export function useTrainingInsightsPageViewModel() {
     return `${parts.join(", ")}.`;
   });
 
+  const coachAssessmentText = computed(() => {
+    const fatigue = insights.value.fatigue;
+    if (fatigue.riskScore < 3 && fatigue.triggeredBy.length === 0) {
+      return "Your workload and recovery are balanced. Keep training consistently.";
+    }
+
+    let base = fatigue.reason || "Training volume and fatigue markers are elevated.";
+    if (
+      base.includes("Multiple fatigue triggers active") ||
+      base.includes("Sustained performance decline")
+    ) {
+      base = "Your risk of overtraining is high due to multiple fatigue signals.";
+    }
+
+    const triggers = fatigue.triggeredBy.map(formatTriggerLabel);
+    if (triggers.length > 0) {
+      return `${base} Triggers detected: ${triggers.join(", ")}.`;
+    }
+    return base;
+  });
+
+  const topImprovingExercises = computed(() => {
+    return activeExerciseMetrics.value
+      .filter((m) => m.status === "improving")
+      .sort((a, b) => (b.deltaPct ?? 0) - (a.deltaPct ?? 0))
+      .slice(0, 3);
+  });
+
+  const attentionRequiredExercises = computed(() => {
+    return activeExerciseMetrics.value
+      .filter((m) => m.status === "plateau" || m.status === "dropping")
+      .sort((a, b) => {
+        if (a.status === "dropping" && b.status !== "dropping") return -1;
+        if (b.status === "dropping" && a.status !== "dropping") return 1;
+        return 0;
+      })
+      .slice(0, 3);
+  });
+
   return {
     router,
     deloadStore,
     insights,
-    activeTab,
-    tabOptions,
     maintenanceLikeCount,
     totalMuscleGroups,
     notRecoveredCount,
@@ -417,5 +446,8 @@ export function useTrainingInsightsPageViewModel() {
     droppingExerciseCount,
     averageBestRPE,
     exerciseStatusNote,
+    coachAssessmentText,
+    topImprovingExercises,
+    attentionRequiredExercises,
   };
 }

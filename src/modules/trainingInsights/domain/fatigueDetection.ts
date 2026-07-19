@@ -92,14 +92,6 @@ function getPrimaryFatigueReason(triggeredBy: FatigueTriggerId[]): string | unde
   return topTrigger ? TRIGGER_REASON[topTrigger] : undefined;
 }
 
-function getRollingSum(map: Map<number, number>, endDay: number): number {
-  let sum = 0;
-  for (let i = 0; i < 7; i++) {
-    sum += map.get(endDay - i) ?? 0;
-  }
-  return sum;
-}
-
 /**
  * Calculates deload recommendation using multiple external+performance signals.
  *

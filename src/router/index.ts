@@ -23,9 +23,31 @@ const router = createRouter({
       component: () => import("../views/wizard/WizardFlow.vue"),
     },
     {
-      path: "/exercise-logs",
-      name: "exercise-logs",
-      component: () => import("../views/ExerciseLogs.vue"),
+      path: "/app",
+      component: () => import("../shared/presentation/components/AppLayout.vue"),
+      redirect: { name: "home" },
+      children: [
+        {
+          path: "home",
+          name: "home",
+          component: () => import("../views/HomeTab.vue"),
+        },
+        {
+          path: "insights",
+          name: "insights",
+          component: () => import("../views/InsightsTab.vue"),
+        },
+        {
+          path: "plan",
+          name: "plan",
+          component: () => import("../views/PlanTab.vue"),
+        },
+        {
+          path: "coach",
+          name: "coach",
+          component: () => import("../views/CoachTab.vue"),
+        },
+      ],
     },
     {
       path: "/exercise-migration",
@@ -48,14 +70,16 @@ const router = createRouter({
       component: () => import("../views/Impressum.vue"),
     },
     {
+      path: "/exercise-logs",
+      redirect: "/app/home",
+    },
+    {
       path: "/training-insights",
-      name: "training-insights",
-      component: () => import("../views/TrainingInsights.vue"),
+      redirect: "/app/insights",
     },
     {
       path: "/ai-coach",
-      name: "ai-coach",
-      component: () => import("../views/AICoach.vue"),
+      redirect: "/app/plan",
     },
   ],
 });

@@ -5,5 +5,4 @@ export {
   getLearnedMuscleMap,
 } from "@/modules/sharedKernel/application";
 export type { FatigueTriggerId, UserProgress } from "@/modules/sharedKernel/domain";
-export { localeDateString } from "@/modules/sharedKernel/domain";
-export { formatRestDuration } from "./formatTime";
+export { isoDateString, localeDateString } from "@/modules/sharedKernel/domain";

@@ -10,8 +10,11 @@ import {
   Timer,
   TrendingDown,
   TrendingUp,
+  X,
 } from "@lucide/vue";
-import { computed, ref } from "vue";
+import { useScroll } from "@vueuse/core";
+import { DialogClose, DialogTitle } from "reka-ui";
+import { computed, onMounted, ref, watch } from "vue";
 import { useMetricsStore } from "@/modules/profile/presentation";
 import {
   type MuscleGroup,
@@ -20,6 +23,7 @@ import {
   VOLUME_LANDMARKS,
   type VolumeLandmark,
 } from "@/modules/trainingInsights/presentation";
+import { uiIconButtonClass } from "@/shared/presentation/components/ui/styles";
 import UiBadge from "./ui/UiBadge.vue";
 import UiBottomSheet from "./ui/UiBottomSheet.vue";
 import UiSegmentedControl from "./ui/UiSegmentedControl.vue";
@@ -233,9 +237,55 @@ const selectedDetail = computed(() => {
       mavLowPct: (targets.mavLow / maxDisplay) * 100,
       mavHighPct: (targets.mavHigh / maxDisplay) * 100,
       mrvPct: (targets.mrv / maxDisplay) * 100,
-      currentPct: Math.min((sets / maxDisplay) * 100, 100),
+      currentPct: Math.min(((status?.isoWeekSets ?? 0) / maxDisplay) * 100, 100),
     },
   };
+});
+
+const mapContainerRef = ref<HTMLElement | null>(null);
+const mainScrollRef = ref<HTMLElement | null>(null);
+
+onMounted(() => {
+  // Find the closest scrollable container (e.g. <main class="overflow-y-auto">)
+  mainScrollRef.value = mapContainerRef.value?.closest(".overflow-y-auto") as HTMLElement;
+});
+
+const { y: scrollY } = useScroll(mainScrollRef);
+const initialScrollY = ref(0);
+const scrollOffset = ref(0);
+
+watch(isDetailOpen, (isOpen) => {
+  if (isOpen) {
+    initialScrollY.value = scrollY.value;
+    scrollOffset.value = 0;
+  } else {
+    scrollOffset.value = 0;
+  }
+});
+
+watch(scrollY, (newY) => {
+  if (isDetailOpen.value) {
+    const delta = newY - initialScrollY.value;
+    if (delta > 0) {
+      // User is scrolling down the page. Move the sheet down by the same amount.
+      scrollOffset.value = delta;
+      if (delta > 150) {
+        isDetailOpen.value = false;
+      }
+    } else {
+      scrollOffset.value = 0;
+    }
+  }
+});
+
+const sheetStyle = computed(() => {
+  if (scrollOffset.value > 0) {
+    return {
+      transform: `translateY(${scrollOffset.value}px)`,
+      transition: "none",
+    };
+  }
+  return {};
 });
 </script>
 
@@ -253,10 +303,7 @@ const selectedDetail = computed(() => {
       </div>
     </div>
 
-    <!-- Tap hint -->
-    <p :class="['text-center text-xs text-muted-foreground/40 mb-1 tracking-wider uppercase animate-pulse duration-300', selectedMuscle ? 'invisible' : '']">Tap a muscle for details</p>
-
-    <div class="relative w-full aspect-[1/1.85] overflow-hidden rounded-xl">
+    <div ref="mapContainerRef" class="relative w-full aspect-[1/1.85] overflow-hidden rounded-xl">
       <div class="absolute inset-0 w-full h-full">
 
           <!-- IMAGE LAYER (Screen blended on the stacking context root to drop the black background) -->
@@ -266,7 +313,7 @@ const selectedDetail = computed(() => {
                  :src="MUSCLE_MAP_IMAGE_SRC" 
                  loading="eager"
                  fetchpriority="high"
-                 class="absolute inset-y-0 w-[200%] h-full max-w-none pointer-events-none opacity-[0.25] invert transition-all duration-300 ease-in-out object-fill"
+                 class="absolute inset-y-0 w-[200%] h-full max-w-none pointer-events-none opacity-[0.4] invert transition-all duration-300 ease-in-out object-fill"
                  :class="currentView.alignImage"
                  :style="{ transform: currentView.offsetStyle }"
                  @load="isMapImageLoaded = true"
@@ -285,7 +332,7 @@ const selectedDetail = computed(() => {
           >
         
         <!-- SVG Overlay for Connecting Lines -->
-        <svg class="absolute inset-0 w-full h-full pointer-events-none z-0 overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <svg class="absolute inset-0 w-full h-full pointer-events-none z-0 overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none" style="mask-image: linear-gradient(to right, transparent 0%, transparent 15%, black 30%, black 70%, transparent 85%, transparent 100%); -webkit-mask-image: linear-gradient(to right, transparent 0%, transparent 15%, black 30%, black 70%, transparent 85%, transparent 100%);">
            <line 
              v-for="muscle in currentView.muscles" 
              :key="'line-'+muscle.name"
@@ -361,23 +408,30 @@ const selectedDetail = computed(() => {
       </div>
 
       <!-- ─── Detail Overlay (BottomSheet) ──────────────── -->
-      <UiBottomSheet v-model:open="isDetailOpen" :hide-overlay="true" :modal="false" contentClass="p-0 gap-0">
+      <UiBottomSheet v-model:open="isDetailOpen" :hide-overlay="true" :modal="false" contentClass="p-0 gap-0" :contentStyle="sheetStyle">
         <template #header>
           <!-- Header: name + landmark badge -->
-          <div v-if="selectedDetail" class="flex items-center gap-2 px-5 pt-6 pb-4 border-b border-white/10">
-            <span class="text-base font-bold uppercase tracking-widest flex-1">{{ selectedDetail.name }}</span>
-            <UiBadge class="uppercase tracking-wider" variant="surface">
+          <div v-if="selectedDetail" class="flex items-center gap-3 p-6 pb-4 border-b border-white/5 shrink-0 bg-background/95 backdrop-blur-xl z-10 sticky top-0">
+            <DialogTitle class="text-2xl font-bold tracking-tight text-foreground flex-1 capitalize">{{ selectedDetail.name.toLowerCase() }}</DialogTitle>
+            <UiBadge 
+              class="capitalize" 
+              :variant="selectedDetail.landmark === 'at_MAV' ? 'info' : selectedDetail.landmark === 'approaching_MRV' ? 'warning' : selectedDetail.landmark === 'above_MRV' ? 'danger' : 'surface'"
+            >
               {{ getJargon(selectedDetail.landmark) }}
             </UiBadge>
+            <DialogClose :class="uiIconButtonClass" class="ml-2">
+              <X class="w-5 h-5 text-muted-foreground" />
+              <span class="sr-only">Close</span>
+            </DialogClose>
           </div>
         </template>
 
         <div v-if="selectedDetail" class="flex flex-col pb-safe">
           <!-- Volume Section -->
-          <div class="px-5 pt-4 pb-4 border-b border-white/10 space-y-2">
+          <div class="px-6 py-5 border-b border-white/5 space-y-3">
             <div class="flex items-center justify-between mb-1">
-              <div class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground/60">
-                <BarChart2 class="w-3.5 h-3.5" />
+              <div class="flex items-center gap-1.5 text-sm font-bold text-foreground/80">
+                <BarChart2 class="w-4 h-4 text-muted-foreground/70" />
                 <span>Volume</span>
               </div>
               <span class="text-xs font-bold font-mono" :style="{ color: getLineColor(selectedDetail.landmark) }">
@@ -386,7 +440,7 @@ const selectedDetail = computed(() => {
             </div>
 
             <!-- Segmented Volume Bar -->
-            <div class="relative h-2.5 rounded-full overflow-hidden flex bg-white/5 border border-white/5">
+            <div class="relative h-2 rounded-full overflow-hidden flex bg-white/5 border border-white/5">
               <!-- Zone: below MEV -->
               <div class="h-full bg-white/10" :style="{ width: selectedDetail.bar.mevPct + '%' }"></div>
               <!-- Zone: MEV → mavLow (Maintenance/Minimum) -->
@@ -403,7 +457,7 @@ const selectedDetail = computed(() => {
               
               <!-- Current position needle -->
               <div
-                class="absolute top-0 h-full w-[2px] bg-white shadow-[0_0_5px_rgba(255,255,255,0.9)] transition-all duration-300 z-10"
+                class="absolute top-0 h-full w-0.5 bg-white shadow-[0_0_5px_rgba(255,255,255,1)] transition-all duration-300 z-30"
                 :style="{ left: selectedDetail.bar.currentPct + '%' }"
               ></div>
               
@@ -419,18 +473,18 @@ const selectedDetail = computed(() => {
             </div>
 
             <!-- Bar axis labels -->
-            <div class="relative h-3.5 text-xs text-muted-foreground/50 font-mono select-none mt-1">
-              <span class="absolute -translate-x-1/2" :style="{ left: selectedDetail.bar.mevPct + '%' }">MEV {{ selectedDetail.targets.mev }}</span>
-              <span class="absolute -translate-x-1/2" :style="{ left: ((selectedDetail.bar.mavLowPct + selectedDetail.bar.mavHighPct) / 2) + '%' }">MAV {{ selectedDetail.targets.mavLow }}–{{ selectedDetail.targets.mavHigh }}</span>
-              <span class="absolute -translate-x-1/2" :style="{ left: selectedDetail.bar.mrvPct + '%' }">MRV {{ selectedDetail.targets.mrv }}</span>
+            <div class="relative h-3.5 text-xs font-mono select-none mt-2">
+              <span class="absolute -translate-x-1/2 text-emerald-400/60" :style="{ left: selectedDetail.bar.mevPct + '%' }">MEV {{ selectedDetail.targets.mev }}</span>
+              <span class="absolute -translate-x-1/2 text-cyan-400/60" :style="{ left: ((selectedDetail.bar.mavLowPct + selectedDetail.bar.mavHighPct) / 2) + '%' }">MAV {{ selectedDetail.targets.mavLow }}–{{ selectedDetail.targets.mavHigh }}</span>
+              <span class="absolute -translate-x-1/2 text-red-400/60" :style="{ left: selectedDetail.bar.mrvPct + '%' }">MRV {{ selectedDetail.targets.mrv }}</span>
             </div>
           </div>
 
           <!-- Recovery Section -->
-          <div class="px-5 pt-4 pb-4 border-b border-white/10 space-y-2">
+          <div class="px-6 py-5 border-b border-white/5 space-y-3">
             <div class="flex items-center justify-between mb-1">
-              <div class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground/60">
-                <Timer class="w-3.5 h-3.5" />
+              <div class="flex items-center gap-1.5 text-sm font-bold text-foreground/80">
+                <Timer class="w-4 h-4 text-muted-foreground/70" />
                 <span>Recovery</span>
               </div>
               <div class="flex items-center gap-1 text-xs font-bold" :class="selectedDetail.recoveryReady ? 'text-green-400' : 'text-yellow-400'">
@@ -440,7 +494,7 @@ const selectedDetail = computed(() => {
               </div>
             </div>
             <template v-if="selectedDetail.hoursSinceLastTrained !== null">
-              <div class="h-1.5 bg-white/10 rounded-full overflow-hidden">
+              <div class="h-2 bg-white/10 rounded-full overflow-hidden">
                 <div
                   class="h-full rounded-full transition-all duration-300"
                   :class="selectedDetail.recoveryReady ? 'bg-green-400' : 'bg-yellow-400'"
@@ -462,9 +516,9 @@ const selectedDetail = computed(() => {
           </div>
 
           <!-- Frequency Row -->
-          <div class="flex items-center justify-between px-5 py-4 pb-8">
-            <div class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground/60">
-              <CalendarDays class="w-3.5 h-3.5" />
+          <div class="flex items-center justify-between px-6 py-5 pb-8">
+            <div class="flex items-center gap-1.5 text-sm font-bold text-foreground/80">
+              <CalendarDays class="w-4 h-4 text-muted-foreground/70" />
               <span>Frequency</span>
             </div>
             <span class="text-xs font-bold font-mono text-foreground/80">

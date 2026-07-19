@@ -18,7 +18,12 @@ import { useKeyboardHeight } from "@/shared/presentation/composables/useKeyboard
 import { cn } from "@/shared/presentation/lib/utils";
 
 const props = defineProps<
-  DialogRootProps & { title?: string; contentClass?: any; hideOverlay?: boolean }
+  DialogRootProps & {
+    title?: string;
+    contentClass?: any;
+    contentStyle?: any;
+    hideOverlay?: boolean;
+  }
 >();
 const emits = defineEmits<DialogRootEmits>();
 
@@ -30,6 +35,7 @@ const { keyboardHeight, visibleHeight, startTracking, stopTracking } = useKeyboa
 const dialogStyle = computed(() => ({
   bottom: `${keyboardHeight.value}px`,
   maxHeight: `${visibleHeight.value * 0.9}px`,
+  ...props.contentStyle,
 }));
 
 function handleOpenChange(isOpen: boolean) {

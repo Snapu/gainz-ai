@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Trash } from "@lucide/vue";
 import { haptic } from "ios-haptics";
 import { storeToRefs } from "pinia";
 import { computed, ref, watch } from "vue";
@@ -276,6 +277,14 @@ async function saveLog() {
   internalOpen.value = false;
   emit("saved");
 }
+
+async function deleteLog() {
+  if (!props.logToEdit) return;
+  haptic.confirm();
+  logsStore.removeExerciseLog(props.logToEdit);
+  internalOpen.value = false;
+  emit("saved");
+}
 </script>
 
 <template>
@@ -358,9 +367,20 @@ async function saveLog() {
         </div>
       </div>
 
-      <UiButton class="w-full h-16 rounded-xl text-lg mt-4" @click="saveLog">
-        {{ props.logToEdit ? 'Save Changes' : 'Save Set' }}
-      </UiButton>
+      <div class="flex gap-3 mt-4">
+        <UiButton 
+          v-if="props.logToEdit" 
+          variant="outline" 
+          class="h-16 rounded-xl px-6 border-destructive/20 text-destructive hover:bg-destructive/10" 
+          @click="deleteLog"
+          aria-label="Delete Set"
+        >
+          <Trash class="w-5 h-5" />
+        </UiButton>
+        <UiButton class="flex-1 h-16 rounded-xl text-lg" @click="saveLog">
+          {{ props.logToEdit ? 'Save Changes' : 'Save Set' }}
+        </UiButton>
+      </div>
     </div>
   </UiBottomSheet>
 </template>

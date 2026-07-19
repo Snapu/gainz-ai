@@ -1,30 +1,34 @@
 <script setup lang="ts">
-import { ChevronRight, Play, RotateCcw, Search, Square } from "@lucide/vue";
+import { ChevronRight, MessageSquareText, Play, RotateCcw, Search, Square } from "@lucide/vue";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { uiChevronCircleClass } from "@/shared/presentation/components/ui/styles";
+import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
+import UiRadialProgress from "@/shared/presentation/components/ui/UiRadialProgress.vue";
+import UiSparkline from "@/shared/presentation/components/ui/UiSparkline.vue";
 import type { DisplayExercise } from "../helpers/aiCoachPageHelpers";
-import { setSegments, splitReps, splitWeight, titleClass } from "../helpers/aiCoachPageHelpers";
-
-interface ExerciseProgress {
-  done: number;
-  isCompleted: boolean;
-  progressPercent: number;
-}
+import { splitReps, splitWeight } from "../helpers/aiCoachPageHelpers";
 
 const props = defineProps<{
   exercise: DisplayExercise;
   isCompleted: boolean;
   isHighlighted: boolean;
-  progress: ExerciseProgress;
-  /** Used as `h3` for standalone exercises, `h4` for exercises inside a superset group. */
+  progress: { done: number; isCompleted: boolean };
   headingLevel?: "h3" | "h4";
   lastSessionSummary?: string | null;
+  progressionData?: Array<{
+    values: number[];
+    label: string;
+    color: string;
+    fillColor: string;
+  }> | null;
+  loggedSets?: ExerciseLog[];
+  isResting?: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: "log", exercise: DisplayExercise): void;
   (e: "search", exerciseName: string): void;
+  (e: "editLog", log: ExerciseLog): void;
 }>();
 
 const isDurationExercise = computed(() => {
@@ -128,174 +132,226 @@ const timerProgressPercent = computed(() => {
 <template>
   <UiCard
     as="div"
-    role="button"
-    :aria-disabled="isCompleted"
-    :tabindex="isCompleted ? undefined : 0"
-    @click="!isCompleted && emit('log', exercise)"
-    @keydown.enter="!isCompleted && emit('log', exercise)"
-    @keydown.space.prevent="!isCompleted && emit('log', exercise)"
-    :class="[
-      'relative w-full text-left p-4 border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary duration-200 transition-all shadow-sm',
-      isHighlighted ? 'border-primary/40 bg-primary/[0.02]' : 'border-border/40',
-      isCompleted
-        ? 'opacity-50 cursor-not-allowed pointer-events-none'
-        : 'hover:bg-white/5 active:scale-95 cursor-pointer',
-    ]"
+    class="flex flex-col w-full p-5 transition-colors duration-300"
   >
-    <!-- Animated highlight layer -->
-    <div v-if="isHighlighted" class="absolute inset-0 rounded-xl border-2 border-primary/60 ring-4 ring-primary/20 animate-pulse pointer-events-none" />
-
-    <div class="relative flex flex-col gap-4 w-full z-10">
-      <!-- Title row -->
+    <!-- Card Content -->
+    <div class="relative flex flex-col gap-6 w-full z-10">
+      
+      <!-- 1. Exercise Name (Header) -->
       <div class="flex items-start justify-between gap-3 w-full">
-        <div class="flex items-center gap-2 min-w-0 pr-4">
-          <div class="flex flex-col min-w-0">
-            <component
-              :is="headingLevel ?? 'h3'"
-              :class="titleClass(isCompleted)"
-            >
-              {{ exercise.exerciseName }}
-            </component>
-            <span v-if="lastSessionSummary" class="text-xs text-muted-foreground/70 font-medium mt-0.5 truncate">
-              Last: {{ lastSessionSummary }}
-            </span>
-          </div>
-          <button
-            @click.stop="emit('search', exercise.exerciseName)"
-            class="ml-2 rounded-full p-2 bg-white/5 hover:bg-white/10 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-95 flex items-center justify-center cursor-pointer shrink-0"
-            aria-label="Search images"
-            title="Images"
+        <component
+          :is="headingLevel ?? 'h3'"
+          class="text-lg font-bold text-foreground truncate transition-colors duration-300"
+        >
+          {{ exercise.exerciseName }}
+        </component>
+        
+        <button
+          @click.stop="emit('search', exercise.exerciseName)"
+          class="p-2 -mr-2 -mt-2 text-muted-foreground/50 hover:text-primary transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-full shrink-0"
+          aria-label="Search images"
+          title="Images"
+        >
+          <Search class="w-4 h-4" />
+        </button>
+      </div>
+
+      <!-- 2. Progression (Sub Header) -->
+      <div v-if="progressionData && progressionData.length > 0" class="flex flex-col gap-3 w-full">
+        <h4 class="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Progression</h4>
+        <div class="flex flex-col gap-3 w-full">
+          <div 
+            v-for="(metric, idx) in progressionData" 
+            :key="idx"
+            class="w-full h-[40px] opacity-90"
           >
-            <Search class="w-3.5 h-3.5 text-primary" />
-          </button>
+            <UiSparkline 
+              :values="metric.values" 
+              :reference-value="metric.values[metric.values.length - 1]"
+              :reference-label="metric.label"
+              :width="300" 
+              :height="40" 
+              :color="metric.color" 
+              :fill-color="metric.fillColor"
+            />
+          </div>
         </div>
       </div>
 
-      <!-- Coach notes -->
-      <div
-        v-if="exercise.notes"
-        class="text-xs text-muted-foreground font-medium italic leading-relaxed bg-muted/10 border border-muted/10 px-3 py-2 rounded-xl w-full"
-      >
-        <span>{{ exercise.notes }}</span>
-      </div>
-
-        <!-- Metrics Dashboard Grid & Action -->
-      <div class="flex items-end justify-between w-full gap-4">
-        <!-- 3-Column Micro-grid -->
-        <div class="grid grid-cols-3 gap-3 flex-1 min-w-0">
+      <!-- 3. Target Today (Sub Header) -->
+      <div class="flex flex-col gap-3 w-full">
+        <h4 class="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Target Today</h4>
+        
+        <div class="grid grid-cols-[95px_70px_1fr] sm:grid-cols-[105px_80px_1fr] gap-4 w-full mt-1">
           <!-- Sets × Reps/Time -->
-          <div class="flex flex-col gap-0.5 min-w-0" :class="{
-            'col-span-3': (!exercise.targetWeight || splitWeight(exercise.targetWeight).value === 'BW') && !exercise.targetRpe,
-            'col-span-2': (!exercise.targetWeight || splitWeight(exercise.targetWeight).value === 'BW') && exercise.targetRpe
-          }">
-            <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 whitespace-nowrap">
+          <div class="flex flex-col min-w-0">
+            <span class="text-[10px] font-semibold text-muted-foreground mb-1 uppercase tracking-wider">
               {{ displayTarget.label }}
             </span>
             <div class="flex items-baseline min-w-0">
-              <span class="text-lg font-bold tabular-nums text-foreground shrink-0">{{ exercise.targetSets }}</span>
-              <span class="text-xs font-medium text-muted-foreground/50 mx-1 shrink-0">×</span>
-              <span class="text-lg font-bold tabular-nums text-foreground truncate">{{ displayTarget.value }}</span>
-              <span v-if="displayTarget.unit" class="text-xs font-semibold text-muted-foreground/50 ml-0.5 truncate">
-                {{ displayTarget.unit }}
-              </span>
+              <span class="text-2xl font-bold tabular-nums text-foreground shrink-0">{{ exercise.targetSets }}</span>
+              <span class="text-sm font-bold text-muted-foreground/40 mx-1 shrink-0">×</span>
+              <span class="text-2xl font-bold tabular-nums text-foreground truncate">{{ displayTarget.value }}</span>
             </div>
           </div>
           
           <!-- Weight -->
-          <div v-if="exercise.targetWeight && splitWeight(exercise.targetWeight).value !== 'BW'" class="flex flex-col gap-0.5 min-w-0" :class="{
-            'col-span-2': !exercise.targetRpe
-          }">
-            <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 whitespace-nowrap">Weight</span>
-            <div class="flex items-baseline min-w-0">
-              <span class="text-lg font-bold tabular-nums text-primary/90 truncate">{{ splitWeight(exercise.targetWeight).value }}</span>
-              <span class="text-xs font-semibold text-muted-foreground/50 ml-0.5 shrink-0">{{ splitWeight(exercise.targetWeight).unit }}</span>
+          <div class="flex flex-col min-w-0">
+            <span class="text-[10px] font-semibold text-muted-foreground mb-1 uppercase tracking-wider">Weight</span>
+            <div v-if="exercise.targetWeight && splitWeight(exercise.targetWeight).value !== 'BW'" class="flex items-baseline min-w-0">
+              <span class="text-2xl font-bold tabular-nums text-primary/90 truncate">{{ splitWeight(exercise.targetWeight).value }}</span>
+              <span class="text-xs font-bold text-muted-foreground/50 ml-1 shrink-0">{{ splitWeight(exercise.targetWeight).unit }}</span>
             </div>
+            <div v-else class="text-2xl font-bold text-muted-foreground/30">-</div>
           </div>
           
           <!-- RPE -->
-          <div v-if="exercise.targetRpe" class="flex flex-col gap-0.5 min-w-0">
-            <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 whitespace-nowrap">RPE</span>
-            <div class="flex items-baseline min-w-0">
-              <span class="text-lg font-bold tabular-nums text-amber-500/90 truncate">{{ exercise.targetRpe }}</span>
+          <div class="flex flex-col items-end min-w-0">
+            <span class="text-[10px] font-semibold text-muted-foreground mb-1 uppercase tracking-wider text-right whitespace-nowrap">RPE</span>
+            <div v-if="exercise.targetRpe" class="flex items-center gap-2 justify-end min-w-0">
+              <UiRadialProgress 
+                :progress="(exercise.targetRpe / 10) * 100" 
+                :size="18" 
+                :stroke-width="2.5" 
+                progress-class="text-amber-500/80" 
+                track-class="text-amber-500/15" 
+              />
+              <span class="text-2xl font-bold tabular-nums text-amber-500/90 truncate leading-none">{{ exercise.targetRpe }}</span>
             </div>
+            <div v-else class="text-2xl font-bold text-muted-foreground/30 text-right leading-none">-</div>
           </div>
         </div>
-
-        <!-- Action Chevron -->
-        <div :class="[uiChevronCircleClass, 'group-hover:bg-primary/10 group-hover:text-primary']">
-          <ChevronRight class="w-4 h-4" />
-        </div>
       </div>
       
-      <!-- Segmented set progress bar -->
-      <div v-if="!isCompleted" class="w-full pt-1 flex gap-1.5">
-        <div
-          v-for="(_, i) in setSegments(exercise.targetSets)"
-          :key="i"
-          class="flex-1 h-1.5 rounded-full overflow-hidden bg-muted/20"
-        >
-          <div :class="i < progress.done ? 'bg-primary h-full' : 'bg-transparent h-full'" />
-        </div>
-      </div>
-      
-      <!-- Duration Timer Component -->
-      <div 
-        v-if="isDurationExercise && !isCompleted" 
-        class="mt-1 w-full rounded-xl border p-3 flex items-center justify-between gap-3 bg-primary/[0.02] border-primary/20 shadow-sm transition-colors duration-300"
-        :class="isTimerRunning ? 'border-primary/40 bg-primary/[0.04]' : ''"
+      <!-- 4. Coach message -->
+      <div
+        v-if="exercise.notes"
+        class="flex items-start gap-2.5 w-full bg-primary/[0.05] p-3.5 rounded-xl border border-primary/20 shadow-sm"
       >
-        <div class="flex items-center gap-3 min-w-0">
-          <div class="relative w-12 h-12 shrink-0 flex items-center justify-center">
-            <svg class="w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
-             <circle cx="50" cy="50" r="45" class="stroke-muted/20" stroke-width="8" fill="none" />
-             <circle
-              cx="50"
-              cy="50"
-              r="45"
-              class="transition-all duration-1000 ease-linear stroke-primary"
-              stroke-width="8"
-              fill="none"
-              stroke-linecap="round"
-              :stroke-dasharray="283"
-              :stroke-dashoffset="283 - (283 * Math.max(0, 100 - timerProgressPercent)) / 100"
-             />
-            </svg>
-            <div class="absolute inset-0 flex items-center justify-center">
-             <span class="text-xs font-bold tabular-nums tracking-tight text-primary">
-              {{ timerFormatted }}
-             </span>
+        <MessageSquareText class="w-4 h-4 text-primary shrink-0 mt-0.5" />
+        <span class="text-sm text-foreground/90 font-medium italic leading-relaxed">{{ exercise.notes }}</span>
+      </div>
+
+      <!-- 5. Progress (Sub Header) -->
+      <div class="flex flex-col gap-3 w-full animate-in fade-in duration-300">
+        <h4 class="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Progress</h4>
+        
+        <div class="flex flex-col gap-2 w-full">
+          <!-- Render existing logs -->
+          <div
+            v-for="(log, idx) in loggedSets" 
+            :key="log.id"
+            class="-mx-4 px-4 py-1.5 hover:bg-white/[0.05] active:bg-white/[0.08] transition-colors rounded-none"
+            @click.stop="emit('editLog', log)"
+          >
+            <div 
+              class="grid grid-cols-[95px_70px_1fr] sm:grid-cols-[105px_80px_1fr] gap-4 items-center w-full cursor-pointer transition-opacity active:opacity-70 group"
+            >
+              <!-- Column 1: Reps -->
+              <div class="flex items-center gap-3 min-w-0">
+                <span class="text-[10px] font-bold text-muted-foreground/40 w-4 leading-none tracking-tight">#{{ idx + 1 }}</span>
+                <div v-if="log.reps" class="flex items-baseline gap-0.5">
+                   <span class="text-sm font-bold text-foreground">{{ log.reps }}</span>
+                   <span class="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider">reps</span>
+                </div>
+                <div v-else-if="log.duration" class="flex items-baseline gap-0.5">
+                   <span class="text-sm font-bold text-foreground">{{ log.duration }}</span>
+                   <span class="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider">min</span>
+                </div>
+              </div>
+              
+              <!-- Column 2: Weight -->
+              <div class="flex items-baseline gap-0.5 min-w-0">
+                <template v-if="log.weight">
+                   <span class="text-sm font-bold text-primary">{{ log.weight }}</span>
+                   <span class="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider">kg</span>
+                </template>
+                <template v-else>
+                   <span class="text-sm font-bold text-muted-foreground/30">-</span>
+                </template>
+              </div>
+
+              <!-- Column 3: RPE & Chevron -->
+              <div class="flex items-center justify-end gap-3 w-full min-w-0">
+                <span v-if="log.rpe" class="text-xs font-semibold text-amber-500/80 text-right whitespace-nowrap">
+                  RPE {{ log.rpe }}
+                </span>
+                <span v-else class="text-xs font-semibold text-muted-foreground/30 text-right whitespace-nowrap">-</span>
+                
+                <ChevronRight class="w-4 h-4 text-muted-foreground/30 group-hover:text-muted-foreground/60 transition-colors shrink-0" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Log Next Set Action -->
+          <button 
+            @click.stop="emit('log', exercise)"
+            class="w-full py-3 rounded-xl font-bold transition-all duration-300 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex items-center justify-center gap-2"
+            :class="isCompleted ? 'text-xs bg-transparent text-muted-foreground/50 hover:text-muted-foreground border border-dashed border-white/10 hover:bg-white/5' : (isHighlighted && !isResting ? 'text-sm bg-primary text-primary-foreground shadow-sm' : 'text-sm bg-primary/10 text-primary hover:bg-primary/20')"
+          >
+            <span>{{ isCompleted ? '➕ Add Extra Set' : (isResting ? `Resting... (Log Set ${progress.done + 1})` : `Log Set ${progress.done + 1}`) }}</span>
+            <ChevronRight v-if="!isCompleted" class="w-4 h-4 opacity-70" />
+          </button>
+        </div>
+        
+        <!-- Duration Timer Component -->
+        <div 
+          v-if="isDurationExercise" 
+          class="w-full rounded-xl border p-3 flex items-center justify-between gap-3 bg-primary/[0.02] border-primary/20 shadow-sm transition-colors duration-300 animate-in fade-in duration-300"
+          :class="isTimerRunning ? 'border-primary/40 bg-primary/[0.04]' : ''"
+        >
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="relative w-12 h-12 shrink-0 flex items-center justify-center">
+              <svg class="w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
+               <circle cx="50" cy="50" r="45" class="stroke-muted/20" stroke-width="8" fill="none" />
+               <circle
+                cx="50"
+                cy="50"
+                r="45"
+                class="transition-all duration-1000 ease-linear stroke-primary"
+                stroke-width="8"
+                fill="none"
+                stroke-linecap="round"
+                :stroke-dasharray="283"
+                :stroke-dashoffset="283 - (283 * Math.max(0, 100 - timerProgressPercent)) / 100"
+               />
+              </svg>
+              <div class="absolute inset-0 flex items-center justify-center">
+               <span class="text-xs font-bold tabular-nums tracking-tight text-primary">
+                {{ timerFormatted }}
+               </span>
+              </div>
+            </div>
+            
+            <div class="flex flex-col min-w-0 gap-0.5">
+              <span class="text-xs font-bold uppercase tracking-wider text-muted-foreground/60 leading-none">Exercise Timer</span>
+              <span class="text-sm font-bold text-foreground truncate mt-0.5 transition-colors duration-300" :class="isTimerRunning ? 'text-primary' : ''">
+                {{ isTimerRunning ? 'In Progress' : (timerRemaining > 0 && timerRemaining < parsedDurationSeconds ? 'Paused' : 'Ready') }}
+              </span>
             </div>
           </div>
           
-          <div class="flex flex-col min-w-0 gap-0.5">
-            <span class="text-xs font-bold uppercase tracking-wider text-muted-foreground/60 leading-none">Exercise Timer</span>
-            <span class="text-sm font-bold text-foreground truncate mt-0.5 transition-colors duration-300" :class="isTimerRunning ? 'text-primary' : ''">
-              {{ isTimerRunning ? 'In Progress' : (timerRemaining > 0 && timerRemaining < parsedDurationSeconds ? 'Paused' : 'Ready') }}
-            </span>
+          <div class="flex items-center gap-2 shrink-0">
+            <button
+              v-if="timerRemaining < parsedDurationSeconds && !isTimerRunning"
+              @click.stop="resetTimer"
+              class="h-10 w-10 rounded-full flex items-center justify-center bg-white/5 hover:bg-white/10 text-foreground transition-colors cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              aria-label="Reset Timer"
+            >
+              <RotateCcw class="w-4 h-4" />
+            </button>
+            <button 
+              @click.stop="toggleTimer"
+              class="h-10 w-10 rounded-full flex items-center justify-center transition-colors cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              :class="isTimerRunning ? 'bg-destructive/10 text-destructive hover:bg-destructive/20' : 'bg-primary/10 text-primary hover:bg-primary/20'"
+              :aria-label="isTimerRunning ? 'Pause Timer' : 'Start Timer'"
+            >
+              <Play v-if="!isTimerRunning" class="w-4 h-4 ml-0.5" fill="currentColor" />
+              <Square v-else class="w-4 h-4" fill="currentColor" />
+            </button>
           </div>
-        </div>
-        
-        <div class="flex items-center gap-2 shrink-0">
-          <button
-            v-if="timerRemaining < parsedDurationSeconds && !isTimerRunning"
-            @click.stop="resetTimer"
-            class="h-10 w-10 rounded-full flex items-center justify-center bg-white/5 hover:bg-white/10 text-foreground transition-colors cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            aria-label="Reset Timer"
-          >
-            <RotateCcw class="w-4 h-4" />
-          </button>
-          <button 
-            @click.stop="toggleTimer"
-            class="h-10 w-10 rounded-full flex items-center justify-center transition-colors cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            :class="isTimerRunning ? 'bg-destructive/10 text-destructive hover:bg-destructive/20' : 'bg-primary/10 text-primary hover:bg-primary/20'"
-            :aria-label="isTimerRunning ? 'Pause Timer' : 'Start Timer'"
-          >
-            <Play v-if="!isTimerRunning" class="w-4 h-4 ml-0.5" fill="currentColor" />
-            <Square v-else class="w-4 h-4" fill="currentColor" />
-          </button>
         </div>
       </div>
     </div>
   </UiCard>
 </template>
-

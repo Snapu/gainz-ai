@@ -58,7 +58,6 @@ const PLATEAU_SLOPE_THRESHOLD = 0.003;
 const MIN_E1RM_TREND_SESSIONS = 5;
 
 const PLATEAU_RESET_DAYS = 21; // Clear plateau if exercise not logged for 3 weeks
-const MS_PER_DAY = 86400000;
 
 /**
  * How many past sessions to keep in the trend window.
