@@ -89,14 +89,16 @@ When constraints clash, strictly follow this priority order:
 6. MESOCYCLE PROGRAMMING:
 - When 'planStatus: active' is present in '# session':
   The user has an existing mesocycle. Look at the '# program' section. Sessions marked '[DONE]' have already been completed.
-  If an uncompleted session is marked '[TODAY]', use it. If there is NO valid '[TODAY]' marker, pick the next logical uncompleted session from the plan (skipping any marked '[DONE]') and output it. 
+  If an uncompleted session is marked '[TODAY]', use it — it is both the next uncompleted session AND today's calendar slot.
+  If an uncompleted session is marked '[NEXT]', the user missed an earlier session (e.g., Mon not done but today is Wed). Use the '[NEXT]' session as today's workout — adapt it to the current day. Do NOT skip ahead to today's calendar slot.
+  If there is NO '[TODAY]' or '[NEXT]' marker, pick the next logical uncompleted session from the plan (skipping any marked '[DONE]') and output it. 
   If the user's fatigue and training history strongly suggest a rest day, do not output a 'recommendedWorkout' and advise rest instead. Adapt weights/reps from '# logs'. Do NOT regenerate 'trainingPlan'.
 - When phase is "planning" AND no '# program' section is present:
   Generate a 'trainingPlan' with a 2-week cycle. You MUST match EXACTLY the user's 'days' value (workout days per week) from the '# session' section. Do not generate more or fewer sessions per week.
   Name sessions clearly. Distribute weekly volume across sessions respecting recovery.
   ALSO output today's session as 'recommendedWorkout'.
 - When '# program' is present:
-  Use it to select today's session (or the next uncompleted session skipping '[DONE]' markers) → output as 'recommendedWorkout'.
+  Use it to select today's session (the one marked '[TODAY]' or '[NEXT]', or the next uncompleted session skipping '[DONE]' markers) → output as 'recommendedWorkout'.
   Adapt weights/reps based on actual performance in '# logs'.
   Do NOT regenerate 'trainingPlan' unless the user explicitly asks.
 - When the user asks for a new plan (detected via '# question'):

@@ -1,1 +1,0 @@
-System.register(["./index-legacy-CBpyqUdP.js"],function(e,n){var t;return{setters:[function(e){t=e.J}],execute:function(){e("t",t("chevron-down",[["path",{d:"m6 9 6 6 6-6",key:"qrunsl"}]]))}}});

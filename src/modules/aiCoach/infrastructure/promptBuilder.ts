@@ -501,15 +501,31 @@ export function formatPlanForPrompt(
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const currentDayOfWeek = new Date().getDay();
 
+  // Determine the next uncompleted session so we can mark it correctly.
+  // If the user missed earlier sessions (e.g., Mon not done, today is Wed),
+  // we mark the missed session [NEXT] instead of marking today's calendar slot [TODAY].
+  const nextUncompleted = plan.getNextUncompletedSession(completedKeys);
+  const nextKey = nextUncompleted
+    ? TrainingPlan.sessionKey(nextUncompleted.weekNumber, nextUncompleted.dayOfWeek)
+    : undefined;
+
   for (const session of plan.sessions) {
     const dayStr = dayNames[session.dayOfWeek] ?? `Day${session.dayOfWeek}`;
-    const isToday =
-      session.dayOfWeek === currentDayOfWeek &&
-      (currentWeekNumber == null || session.weekNumber === currentWeekNumber);
-    const isDone = completedKeys.has(
-      TrainingPlan.sessionKey(session.weekNumber, session.dayOfWeek),
-    );
-    const marker = isDone ? " [DONE]" : isToday ? " [TODAY]" : "";
+    const sessionKey = TrainingPlan.sessionKey(session.weekNumber, session.dayOfWeek);
+    const isDone = completedKeys.has(sessionKey);
+
+    let marker = "";
+    if (isDone) {
+      marker = " [DONE]";
+    } else if (sessionKey === nextKey) {
+      // Mark the next uncompleted session. If it happens to be on today's calendar day, use
+      // [TODAY]; otherwise use [NEXT] so the AI knows this is the one to propose even though
+      // it's not the calendar day.
+      const isCalendarToday =
+        session.dayOfWeek === currentDayOfWeek &&
+        (currentWeekNumber == null || session.weekNumber === currentWeekNumber);
+      marker = isCalendarToday ? " [TODAY]" : " [NEXT]";
+    }
 
     lines.push(
       `W${session.weekNumber}-${dayStr} ${session.sessionLabel} (${session.focusDescription}):${marker}`,
