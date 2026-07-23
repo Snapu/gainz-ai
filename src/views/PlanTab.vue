@@ -52,9 +52,9 @@ const {
               <UiBadge variant="surface" class="uppercase tracking-wider whitespace-nowrap">{{ activePlan.cycleWeeks }} Week(s)</UiBadge>
             </div>
             <UiButton
-              variant="outline"
-              size="sm"
-              class="shrink-0 h-8 text-xs font-semibold"
+              variant="secondary"
+              size="xs"
+              class="shrink-0"
               :disabled="isLoading || isRegenerating"
               @click="regeneratePlan"
             >

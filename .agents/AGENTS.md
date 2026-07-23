@@ -25,6 +25,7 @@ src/
 ```
 - **Rule**: Never import from deep module internals. Use layer facades (e.g., `import { useAuthStore } from '@/modules/auth/presentation'`).
 - **Rule**: `sharedKernel` is for cross-domain logic. `platform` is for app-wide infra (Spreadsheets, local storage).
+- **Rule**: Infrastructure and presentation must **delegate** business decisions to the domain — never recompute them. If a domain aggregate already answers a question (e.g., "which session is next?"), outer layers must call that method, not inline their own logic. Duplicated decision logic drifts silently.
 
 ## Key Integration Points
 - **AI (Google GenAI)**: `src/modules/aiCoach/presentation/stores/aiStore.ts`. Tests must mock `window.crypto.subtle`.

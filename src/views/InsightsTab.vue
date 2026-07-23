@@ -237,7 +237,7 @@ const isAllExercisesOpen = ref(false);
               <h3 class="text-sm font-bold text-foreground">Moving the Needle</h3>
               <p class="text-[10px] sm:text-xs text-foreground/60 mt-0.5 line-clamp-1">Top progress & plateaus</p>
             </div>
-            <UiButton variant="secondary" size="sm" class="h-7 text-xs px-2.5 font-medium" @click="isAllExercisesOpen = true">
+            <UiButton variant="secondary" size="xs" @click="isAllExercisesOpen = true">
               View All ({{ totalExerciseCount }})
             </UiButton>
           </div>
