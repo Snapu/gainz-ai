@@ -76,9 +76,20 @@ watch(
 function scrollToGroup(idx: number) {
   if (galleryRef.value) {
     nextTick(() => {
-      const children = galleryRef.value?.children;
+      const container = galleryRef.value;
+      if (!container) return;
+      const children = container.children;
       if (children?.[idx]) {
-        children[idx].scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+        const child = children[idx] as HTMLElement;
+        const containerRect = container.getBoundingClientRect();
+        const childRect = child.getBoundingClientRect();
+
+        const targetScrollLeft =
+          container.scrollLeft +
+          (childRect.left - containerRect.left) -
+          containerRect.width / 2 +
+          childRect.width / 2;
+        container.scrollTo({ left: targetScrollLeft, behavior: "smooth" });
       }
     });
   }
