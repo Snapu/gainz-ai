@@ -2,9 +2,9 @@
 import { ChevronRight, MessageSquareText, Play, RotateCcw, Search, Square } from "@lucide/vue";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
+import UiBarGraph from "@/shared/presentation/components/ui/UiBarGraph.vue";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 import UiRadialProgress from "@/shared/presentation/components/ui/UiRadialProgress.vue";
-import UiSparkline from "@/shared/presentation/components/ui/UiSparkline.vue";
 import type { DisplayExercise } from "../helpers/aiCoachPageHelpers";
 import { splitReps, splitWeight } from "../helpers/aiCoachPageHelpers";
 
@@ -16,10 +16,10 @@ const props = defineProps<{
   headingLevel?: "h3" | "h4";
   lastSessionSummary?: string | null;
   progressionData?: Array<{
-    values: number[];
+    items?: Array<{ value: number; groupKey?: string }>;
+    values?: number[];
     label: string;
     color: string;
-    fillColor: string;
   }> | null;
   loggedSets?: ExerciseLog[];
   isResting?: boolean;
@@ -157,24 +157,24 @@ const timerProgressPercent = computed(() => {
       </div>
 
       <!-- 2. Progression (Sub Header) -->
-      <div v-if="progressionData && progressionData.length > 0" class="flex flex-col gap-3 w-full">
-        <h4 class="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Progression</h4>
-        <div class="flex flex-col gap-3 w-full">
-          <div 
-            v-for="(metric, idx) in progressionData" 
-            :key="idx"
-            class="w-full h-[40px] opacity-90"
-          >
-            <UiSparkline 
-              :values="metric.values" 
-              :reference-value="metric.values[metric.values.length - 1]"
-              :reference-label="metric.label"
-              :width="300" 
-              :height="40" 
-              :color="metric.color" 
-              :fill-color="metric.fillColor"
-            />
-          </div>
+      <div v-if="progressionData && progressionData.length > 0" class="flex flex-col w-full mt-2">
+        <h4 class="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Progression</h4>
+        <div class="flex flex-col w-full" :class="progressionData.length === 2 ? 'gap-0' : 'gap-3'">
+          <template v-for="(metric, idx) in progressionData" :key="idx">
+            <div 
+              v-if="(metric.items && metric.items.length > 0) || (metric.values && metric.values.length > 0)"
+              class="w-full h-16 opacity-90"
+            >
+              <UiBarGraph 
+                :items="metric.items"
+                :values="metric.values" 
+                :label="metric.label"
+                :color="metric.color" 
+                :direction="idx === 1 && progressionData.length === 2 ? 'down' : 'up'"
+                :format-value="metric.label === 'TIME' ? (v) => Number(v).toFixed(2) : undefined"
+              />
+            </div>
+          </template>
         </div>
       </div>
 
@@ -182,33 +182,35 @@ const timerProgressPercent = computed(() => {
       <div class="flex flex-col gap-3 w-full">
         <h4 class="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Target Today</h4>
         
-        <div class="grid grid-cols-[95px_70px_1fr] sm:grid-cols-[105px_80px_1fr] gap-4 w-full mt-1">
-          <!-- Sets × Reps/Time -->
-          <div class="flex flex-col min-w-0">
-            <span class="text-[10px] font-semibold text-muted-foreground mb-1 uppercase tracking-wider">
-              {{ displayTarget.label }}
-            </span>
-            <div class="flex items-baseline min-w-0">
-              <span class="text-2xl font-bold tabular-nums text-foreground shrink-0">{{ exercise.targetSets }}</span>
-              <span class="text-sm font-bold text-muted-foreground/40 mx-1 shrink-0">×</span>
-              <span class="text-2xl font-bold tabular-nums text-foreground truncate">{{ displayTarget.value }}</span>
+        <div class="flex items-start justify-between w-full mt-1 gap-2">
+          <div class="flex items-start gap-8 sm:gap-10">
+            <!-- Sets × Reps/Time -->
+            <div class="flex flex-col shrink-0">
+              <span class="text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wider">
+                {{ displayTarget.label }}
+              </span>
+              <div class="flex items-baseline">
+                <span class="text-2xl font-bold tabular-nums text-foreground shrink-0">{{ exercise.targetSets }}</span>
+                <span class="text-sm font-bold text-muted-foreground/40 mx-1 shrink-0">×</span>
+                <span class="text-2xl font-bold tabular-nums text-foreground">{{ displayTarget.value }}</span>
+              </div>
             </div>
-          </div>
-          
-          <!-- Weight -->
-          <div class="flex flex-col min-w-0">
-            <span class="text-[10px] font-semibold text-muted-foreground mb-1 uppercase tracking-wider">Weight</span>
-            <div v-if="exercise.targetWeight && splitWeight(exercise.targetWeight).value !== 'BW'" class="flex items-baseline min-w-0">
-              <span class="text-2xl font-bold tabular-nums text-primary/90 truncate">{{ splitWeight(exercise.targetWeight).value }}</span>
-              <span class="text-xs font-bold text-muted-foreground/50 ml-1 shrink-0">{{ splitWeight(exercise.targetWeight).unit }}</span>
+            
+            <!-- Weight -->
+            <div class="flex flex-col shrink-0">
+              <span class="text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wider">Weight</span>
+              <div v-if="exercise.targetWeight && splitWeight(exercise.targetWeight).value !== 'BW'" class="flex items-baseline">
+                <span class="text-2xl font-bold tabular-nums text-primary/90">{{ splitWeight(exercise.targetWeight).value }}</span>
+                <span class="text-xs font-bold text-muted-foreground/50 ml-1 shrink-0">{{ splitWeight(exercise.targetWeight).unit }}</span>
+              </div>
+              <div v-else class="text-2xl font-bold text-muted-foreground/30">-</div>
             </div>
-            <div v-else class="text-2xl font-bold text-muted-foreground/30">-</div>
           </div>
           
           <!-- RPE -->
-          <div class="flex flex-col items-end min-w-0">
-            <span class="text-[10px] font-semibold text-muted-foreground mb-1 uppercase tracking-wider text-right whitespace-nowrap">RPE</span>
-            <div v-if="exercise.targetRpe" class="flex items-center gap-2 justify-end min-w-0">
+          <div class="flex flex-col items-end shrink-0">
+            <span class="text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wider text-right whitespace-nowrap">RPE</span>
+            <div v-if="exercise.targetRpe" class="flex items-center gap-2 justify-end">
               <UiRadialProgress 
                 :progress="(exercise.targetRpe / 10) * 100" 
                 :size="18" 
@@ -216,7 +218,7 @@ const timerProgressPercent = computed(() => {
                 progress-class="text-amber-500/80" 
                 track-class="text-amber-500/15" 
               />
-              <span class="text-2xl font-bold tabular-nums text-amber-500/90 truncate leading-none">{{ exercise.targetRpe }}</span>
+              <span class="text-2xl font-bold tabular-nums text-amber-500/90 leading-none">{{ exercise.targetRpe }}</span>
             </div>
             <div v-else class="text-2xl font-bold text-muted-foreground/30 text-right leading-none">-</div>
           </div>

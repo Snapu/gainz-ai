@@ -80,7 +80,7 @@ export function useHomeWorkoutViewModel() {
     }
 
     return Object.entries(groups).map(([date, logs]): GroupedSession => {
-      const volume = logs.reduce((acc, log) => acc + (log.weight || 0) * (log.reps || 0), 0);
+      const volume = logs.reduce((acc, log) => acc + (log.weight ?? 0) * (log.reps ?? 0), 0);
       const exerciseCount = new Set(logs.map((l) => l.exerciseName)).size;
 
       const times = logs.map((l) => l.loggedAt.getTime());
@@ -306,64 +306,48 @@ export function useHomeWorkoutViewModel() {
 
     if (!pastLogs.length) return null;
 
-    const groups: Record<string, ExerciseLog[]> = {};
-    for (const log of pastLogs) {
-      const dateKey = log.loggedAt.toDateString();
-      if (!groups[dateKey]) groups[dateKey] = [];
-      groups[dateKey].push(log);
-    }
+    const sortedLogs = [...pastLogs].sort((a, b) => a.loggedAt.getTime() - b.loggedAt.getTime());
+    if (sortedLogs.length < 2) return null;
 
-    const sortedDates = Object.keys(groups).sort(
-      (a, b) => new Date(a).getTime() - new Date(b).getTime(),
-    );
-    const recentDates = sortedDates.slice(-6);
-
-    if (recentDates.length < 2) return null;
+    const recentLogs = sortedLogs.slice(-12);
 
     const isWeightBased = pastLogs.some((l) => l.weight != null);
     const isDurationBased = !isWeightBased && pastLogs.some((l) => l.duration != null);
 
-    const metrics: Array<{ values: number[]; label: string; color: string; fillColor: string }> =
-      [];
+    const metrics: Array<{
+      items: { value: number; groupKey: string }[];
+      label: string;
+      color: string;
+    }> = [];
 
     if (isWeightBased) {
       metrics.push({
-        values: recentDates.map((date) => {
-          const weights = groups[date].map((l) => l.weight).filter((w): w is number => w != null);
-          return weights.length > 0 ? Math.max(...weights) : 0;
-        }),
-        label: "MAX WEIGHT",
+        items: recentLogs.map((l) => ({
+          value: l.weight ?? 0,
+          groupKey: l.loggedAt.toDateString(),
+        })),
+        label: "WEIGHT",
         color: "oklch(0.87 0.2 150)",
-        fillColor: "oklch(0.87 0.2 150 / 0.15)",
       });
       metrics.push({
-        values: recentDates.map((date) => {
-          return groups[date].reduce((sum, l) => sum + (l.reps || 0), 0);
-        }),
-        label: "TOTAL REPS",
+        items: recentLogs.map((l) => ({ value: l.reps ?? 0, groupKey: l.loggedAt.toDateString() })),
+        label: "REPS",
         color: "oklch(0.65 0.15 250)",
-        fillColor: "oklch(0.65 0.15 250 / 0.15)",
       });
     } else if (isDurationBased) {
       metrics.push({
-        values: recentDates.map((date) => {
-          const durations = groups[date]
-            .map((l) => l.duration)
-            .filter((w): w is number => w != null);
-          return durations.length > 0 ? Math.max(...durations) : 0;
-        }),
-        label: "MAX TIME",
+        items: recentLogs.map((l) => ({
+          value: l.duration ?? 0,
+          groupKey: l.loggedAt.toDateString(),
+        })),
+        label: "TIME",
         color: "oklch(0.87 0.2 150)",
-        fillColor: "oklch(0.87 0.2 150 / 0.15)",
       });
     } else {
       metrics.push({
-        values: recentDates.map((date) => {
-          return groups[date].reduce((sum, l) => sum + (l.reps || 0), 0);
-        }),
-        label: "TOTAL REPS",
+        items: recentLogs.map((l) => ({ value: l.reps ?? 0, groupKey: l.loggedAt.toDateString() })),
+        label: "REPS",
         color: "oklch(0.87 0.2 150)",
-        fillColor: "oklch(0.87 0.2 150 / 0.15)",
       });
     }
 
