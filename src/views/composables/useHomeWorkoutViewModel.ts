@@ -297,11 +297,9 @@ export function useHomeWorkoutViewModel() {
   }
 
   function getExerciseProgression(exerciseName: string) {
-    const currentSession = resolveCurrentSession(logsStore.exerciseLogs);
-    const sessionBoundary = getSessionStartBoundary(currentSession);
 
     const pastLogs = logsStore.exerciseLogs.filter(
-      (l) => l.exerciseName === exerciseName && l.loggedAt.getTime() < sessionBoundary,
+      (l) => l.exerciseName === exerciseName
     );
 
     if (!pastLogs.length) return null;
