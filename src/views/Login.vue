@@ -56,7 +56,7 @@ async function handleLogin() {
         @click="handleLogin" 
         :disabled="isLoggingIn"
       >
-        {{ isLoggingIn ? 'Signing in...' : 'Sign in with Google' }}
+        Sign in with Google
       </UiButton>
     </div>
     

@@ -163,8 +163,7 @@ void scrollContainerRef;
             :disabled="!userQuestion.trim() || chatStore.isLoading"
             @click="handleAskQuestion"
           >
-            <span v-if="chatStore.isLoading">Sending...</span>
-            <span v-else>Send Question</span>
+            <span>Send Question</span>
           </UiButton>
         </div>
       </div>

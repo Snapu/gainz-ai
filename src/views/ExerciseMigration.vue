@@ -36,7 +36,7 @@ function actionLabel(
   if (activeExerciseName.value !== candidate.exerciseName) {
     return decision === "keep_as_is" ? "Already total" : "Convert to total (×2)";
   }
-  return decision === "keep_as_is" ? "Saving..." : "Converting...";
+  return decision === "keep_as_is" ? "Keep Unlinked" : "Convert to AI Coach";
 }
 
 async function applyDecision(

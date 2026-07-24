@@ -153,7 +153,7 @@ const {
             :disabled="isLoading"
           >
             <RotateCw class="w-4 h-4 mr-2" :class="{ 'animate-spin': isLoading }" />
-            <span>Generate Plan</span>
+            Generate New Plan
           </UiButton>
         </div>
       </template>
