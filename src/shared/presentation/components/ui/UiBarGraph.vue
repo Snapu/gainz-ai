@@ -100,10 +100,8 @@ const itemGroupIndices = computed(() => {
             <span 
               class="absolute left-1/2 -translate-x-1/2 text-xs font-bold tracking-tighter transition-opacity"
               :class="[
-                direction === 'down' ? 'top-full' : 'bottom-full',
-                direction === 'down' 
-                  ? (idx % 2 === 0 ? 'mt-1' : 'mt-4') 
-                  : (idx % 2 === 0 ? 'mb-1' : 'mb-4'),
+                direction === 'down' ? 'top-full mt-2' : 'bottom-full mb-1',
+                '-rotate-45',
                 itemGroupIndices[idx] === 0 ? 'opacity-100' : 'opacity-80 group-hover:opacity-100'
               ]"
               :style="{ color: props.color }"

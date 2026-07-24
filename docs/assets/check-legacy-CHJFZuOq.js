@@ -1,0 +1,1 @@
+System.register(["./index-legacy-CNIS1khf.js"],function(e,t){var c;return{setters:[function(e){c=e.J}],execute:function(){e("t",c("check",[["path",{d:"M20 6 9 17l-5-5",key:"1gmf2c"}]]))}}});

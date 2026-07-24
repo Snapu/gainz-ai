@@ -297,10 +297,7 @@ export function useHomeWorkoutViewModel() {
   }
 
   function getExerciseProgression(exerciseName: string) {
-
-    const pastLogs = logsStore.exerciseLogs.filter(
-      (l) => l.exerciseName === exerciseName
-    );
+    const pastLogs = logsStore.exerciseLogs.filter((l) => l.exerciseName === exerciseName);
 
     if (!pastLogs.length) return null;
 
