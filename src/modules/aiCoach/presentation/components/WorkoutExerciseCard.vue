@@ -180,7 +180,7 @@ const timerProgressPercent = computed(() => {
 
       <!-- 3. Target Today (Sub Header) -->
       <div class="flex flex-col gap-3 w-full">
-        <h4 class="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Target Today</h4>
+        <h4 class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Target Today</h4>
         
         <div class="flex items-start justify-between w-full mt-1 gap-2">
           <div class="flex items-start gap-8 sm:gap-10">
@@ -236,7 +236,7 @@ const timerProgressPercent = computed(() => {
 
       <!-- 5. Progress (Sub Header) -->
       <div class="flex flex-col gap-3 w-full animate-in fade-in duration-300">
-        <h4 class="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Progress</h4>
+        <h4 class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Progress</h4>
         
         <div class="flex flex-col gap-2 w-full">
           <!-- Render existing logs -->
