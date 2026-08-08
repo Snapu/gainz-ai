@@ -1,1 +1,0 @@
-System.register(["./index-legacy-CNIS1khf.js"],function(e,t){var n;return{setters:[function(e){n=e.J}],execute:function(){e("t",n("chevron-left",[["path",{d:"m15 18-6-6 6-6",key:"1wnfg3"}]]))}}});

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Check, CheckCircle2, Coffee, List, Sparkles, Timer } from "@lucide/vue";
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onActivated, onMounted, ref, watch } from "vue";
 import {
   type DisplayExercise,
   type DisplayWorkoutGroup,
@@ -64,7 +64,7 @@ const activeGroupIndex = computed(() => {
 
 const visibleGroupIndex = ref(0);
 
-// Auto-scroll on mount or when active group changes
+// Auto-scroll when active group changes
 watch(
   activeGroupIndex,
   async (newIdx) => {
@@ -72,6 +72,16 @@ watch(
   },
   { immediate: true },
 );
+
+// Ensure we scroll to the active group when mounted (since immediate watcher might run before ref is bound)
+onMounted(() => {
+  scrollToGroup(activeGroupIndex.value);
+});
+
+// Restore scroll position to the active group when returning to this view via keep-alive
+onActivated(() => {
+  scrollToGroup(activeGroupIndex.value);
+});
 
 function scrollToGroup(idx: number) {
   if (galleryRef.value) {
