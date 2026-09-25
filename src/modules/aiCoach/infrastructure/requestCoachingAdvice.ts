@@ -135,7 +135,7 @@ async function executeAiRequest(
   aiTimeoutMs: number,
   schema: unknown,
 ): Promise<string> {
-  const generateWithTimeout = (model: "gemini-3.1-flash" | "gemini-3.0-flash") => {
+  const generateWithTimeout = (model: "gemini-3.8-flash" | "gemini-2.5-flash") => {
     const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error("AI request timed out")), aiTimeoutMs),
     );
@@ -151,19 +151,19 @@ async function executeAiRequest(
 
   let responseStream: Awaited<ReturnType<typeof ai.models.generateContentStream>>;
   try {
-    responseStream = await generateWithTimeout("gemini-3.1-flash");
+    responseStream = await generateWithTimeout("gemini-3.8-flash");
   } catch (streamErr) {
     const isNotFound = typeof streamErr === "object" && streamErr !== null && ((streamErr as any).status === "NOT_FOUND" || (streamErr as any).status === 404);
     if (isServiceUnavailableError(streamErr) || isTimeoutError(streamErr) || isNotFound) {
       Sentry.captureMessage(
-        "Primary model unavailable/slow/not-found, falling back to gemini-3.0-flash",
+        "Primary model unavailable/slow/not-found, falling back to gemini-2.5-flash",
         {
           level: "info",
           tags: { scope: "ai-service", feature: "model-fallback" },
           extra: { timedOut: isTimeoutError(streamErr), notFound: isNotFound },
         },
       );
-      responseStream = await generateWithTimeout("gemini-3.0-flash");
+      responseStream = await generateWithTimeout("gemini-2.5-flash");
     } else {
       throw streamErr;
     }
@@ -184,10 +184,7 @@ export function requestCoachingAdvice(
 
   return ResultAsync.fromPromise(
     (async () => {
-      const ai = new GoogleGenAI({ 
-        apiKey,
-        httpOptions: { apiVersion: "v1alpha" }
-      });
+      const ai = new GoogleGenAI({ apiKey });
       const context = assemblePromptContext(options.exerciseLogs, previousMessages);
       const currentUserInput = assembleCoachingPrompt(options, context);
       const { phase, isFirstMessage } = context;
