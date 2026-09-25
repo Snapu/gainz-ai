@@ -135,7 +135,7 @@ export function createCoachingAdviceSchema(
           targetWeight: {
             type: Type.STRING,
             description:
-              "Exact numeric weight only (e.g. '60kg', 'Bodyweight'). Keep it extremely concise (1-2 words). Do not explain logic.",
+              "Exact numeric weight only (e.g. '60kg', 'Bodyweight'). For dumbbell exercises, ALWAYS output the TOTAL combined weight (e.g., for two 20kg dumbbells, output '40kg'). Keep it extremely concise.",
           },
           targetRpe: {
             type: Type.NUMBER,
