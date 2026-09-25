@@ -153,13 +153,14 @@ async function executeAiRequest(
   try {
     responseStream = await generateWithTimeout("gemini-3.1-flash");
   } catch (streamErr) {
-    if (isServiceUnavailableError(streamErr) || isTimeoutError(streamErr)) {
+    const isNotFound = typeof streamErr === "object" && streamErr !== null && ((streamErr as any).status === "NOT_FOUND" || (streamErr as any).status === 404);
+    if (isServiceUnavailableError(streamErr) || isTimeoutError(streamErr) || isNotFound) {
       Sentry.captureMessage(
-        "Primary model unavailable/slow, falling back to gemini-3.0-flash",
+        "Primary model unavailable/slow/not-found, falling back to gemini-3.0-flash",
         {
           level: "info",
           tags: { scope: "ai-service", feature: "model-fallback" },
-          extra: { timedOut: isTimeoutError(streamErr) },
+          extra: { timedOut: isTimeoutError(streamErr), notFound: isNotFound },
         },
       );
       responseStream = await generateWithTimeout("gemini-3.0-flash");
@@ -183,7 +184,10 @@ export function requestCoachingAdvice(
 
   return ResultAsync.fromPromise(
     (async () => {
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({ 
+        apiKey,
+        httpOptions: { apiVersion: "v1alpha" }
+      });
       const context = assemblePromptContext(options.exerciseLogs, previousMessages);
       const currentUserInput = assembleCoachingPrompt(options, context);
       const { phase, isFirstMessage } = context;
