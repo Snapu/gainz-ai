@@ -1,4 +1,4 @@
-import { useNow } from "@vueuse/core";
+import { useNow, useTimeoutPoll } from "@vueuse/core";
 import { storeToRefs } from "pinia";
 import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
@@ -401,7 +401,7 @@ export function useHomeWorkoutViewModel() {
     );
   }
 
-  const currentReactiveTime = useNow({ interval: 60000 });
+  const currentReactiveTime = useNow({ scheduler: (cb) => useTimeoutPoll(cb, 60000) });
   const currentSessionElapsedText = computed<string | null>(() => {
     const session = resolveCurrentSession(
       logsStore.exerciseLogs,

@@ -1,0 +1,1 @@
+(function(){System.register([`./createLucideIcon-legacy-4SG7tHdU.js`],function(e,t){var n,r;return{setters:[function(e){n=e.t}],execute:function(){r={name:`check`,size:24,node:[[`path`,{d:`M20 6 9 17l-5-5`,key:`1gmf2c`}]]},e(`t`,n(r))}}})})();

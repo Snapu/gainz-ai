@@ -9,12 +9,15 @@ vi.mock("@ionic/vue", () => ({
 }));
 
 // Prevent Stencil from trying to define custom elements in jsdom
-global.customElements = {
-  ...global.customElements,
-  define: vi.fn(),
-  get: vi.fn(),
-  whenDefined: vi.fn(),
-};
+Object.defineProperty(globalThis, "customElements", {
+  value: {
+    define: vi.fn(),
+    get: vi.fn(),
+    whenDefined: vi.fn(),
+  },
+  writable: true,
+  configurable: true,
+});
 
 // Mock localStorage as a spyable object
 const storage: Record<string, string> = {};

@@ -1,0 +1,1 @@
+(function(){System.register([`./createLucideIcon-legacy-4SG7tHdU.js`],function(e,t){var n,r;return{setters:[function(e){n=e.t}],execute:function(){r={name:`chevron-left`,size:24,node:[[`path`,{d:`m15 18-6-6 6-6`,key:`1wnfg3`}]]},e(`t`,n(r))}}})})();
