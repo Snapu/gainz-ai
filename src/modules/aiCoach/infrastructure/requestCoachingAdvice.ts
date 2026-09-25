@@ -103,6 +103,7 @@ When constraints clash, strictly follow this priority order:
   Do NOT regenerate 'trainingPlan' unless the user explicitly asks.
 - When the user asks for a new plan (detected via '# question'):
   Generate a fresh 'trainingPlan' (respecting EXACTLY the 'days' value in the '# session' profile), applying progressive overload from performance data.
+  ALSO output today's session from the newly generated plan as 'recommendedWorkout'.
 
 You receive sections in this order:
 - # session, # question, # goals, # workload, # muscles, # exercises, # today, # update, # program, # plan, # history, # logs, # events
