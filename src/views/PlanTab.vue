@@ -11,7 +11,7 @@ const {
   isRegenerating,
   activePlan,
   activeSessionIndex,
-  currentDayOfWeek,
+
   isPlanSessionCompleted,
   regeneratePlan,
   copyPlanJson,
@@ -80,7 +80,7 @@ const {
                   <CheckCircle2 class="w-3 h-3 mr-1" /> Done
                 </UiBadge>
                 <UiBadge v-else-if="sIdx === activeSessionIndex" variant="outline" class="uppercase tracking-wider ml-auto bg-primary/20 text-primary border-transparent">
-                  {{ session.dayOfWeek === currentDayOfWeek ? 'Today' : 'Next' }}
+                  Up Next
                 </UiBadge>
               </h4>
               <p class="text-xs text-muted-foreground mb-4 pb-3 border-b border-white/5">{{ session.focusDescription }}</p>

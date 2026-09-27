@@ -198,7 +198,7 @@ export function assembleCoachingPrompt(
     activePlan,
     completedSessionKeys,
   } = options;
-  const { session, todayLogs, isFirstMessage, initialWindow, now } = context;
+  const { session, todayLogs, isFirstMessage, initialWindow } = context;
 
   const sections: string[] = [buildSessionSection(options, context)];
 
@@ -216,13 +216,7 @@ export function assembleCoachingPrompt(
   buildUpdatesSection(options, context, sections);
 
   if (activePlan) {
-    sections.push(
-      `# program\n${formatPlanForPrompt(
-        activePlan,
-        activePlan.getCurrentWeekNumber(now),
-        completedSessionKeys,
-      )}`,
-    );
+    sections.push(`# program\n${formatPlanForPrompt(activePlan, completedSessionKeys)}`);
   }
 
   if (isFirstMessage || question) {

@@ -470,7 +470,7 @@ export function formatExercises(
  *
  * Example output:
  * cycle: 2w, created: 2026-06-02
- * W1-Mon Unit A (Push Focus): [TODAY]
+ * W1-Mon Unit A (Push Focus): [NEXT_SESSION]
  *   Incline DB Press: 3×6-8 @8.5
  *   ...
  */
@@ -491,7 +491,6 @@ function formatPlanExercise(ex: PlannedExercise): string {
 
 export function formatPlanForPrompt(
   plan: TrainingPlan,
-  currentWeekNumber?: number,
   completedKeys: ReadonlySet<string> = new Set(),
 ): string {
   const lines: string[] = [];
@@ -499,11 +498,10 @@ export function formatPlanForPrompt(
   lines.push(`cycle: ${plan.cycleWeeks}w, created: ${createdAtStr}`);
 
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const currentDayOfWeek = new Date().getDay();
 
   // Determine the next uncompleted session so we can mark it correctly.
-  // If the user missed earlier sessions (e.g., Mon not done, today is Wed),
-  // we mark the missed session [NEXT] instead of marking today's calendar slot [TODAY].
+  // We mark the next session as [NEXT_SESSION] so the AI takes the next session
+  // sequentially, instead of trying to match today's calendar day.
   const nextUncompleted = plan.getNextUncompletedSession(completedKeys);
   const nextKey = nextUncompleted
     ? TrainingPlan.sessionKey(nextUncompleted.weekNumber, nextUncompleted.dayOfWeek)
@@ -518,13 +516,9 @@ export function formatPlanForPrompt(
     if (isDone) {
       marker = " [DONE]";
     } else if (sessionKey === nextKey) {
-      // Mark the next uncompleted session. If it happens to be on today's calendar day, use
-      // [TODAY]; otherwise use [NEXT] so the AI knows this is the one to propose even though
-      // it's not the calendar day.
-      const isCalendarToday =
-        session.dayOfWeek === currentDayOfWeek &&
-        (currentWeekNumber == null || session.weekNumber === currentWeekNumber);
-      marker = isCalendarToday ? " [TODAY]" : " [NEXT]";
+      // Always mark the next uncompleted session as [NEXT_SESSION] so the AI
+      // takes the next session in the sequence regardless of the calendar day.
+      marker = " [NEXT_SESSION]";
     }
 
     lines.push(

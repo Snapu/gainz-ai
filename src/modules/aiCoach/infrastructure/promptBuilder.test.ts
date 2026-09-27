@@ -88,7 +88,7 @@ describe("formatPlanForPrompt", () => {
 
     // Mark session as done so the output is deterministic regardless of current day
     const completedKeys = new Set(["W1-D1"]);
-    const result = formatPlanForPrompt(plan, 1, completedKeys);
+    const result = formatPlanForPrompt(plan, completedKeys);
     const expected = `cycle: 2w, created: 2026-06-02
 W1-Mon Unit A (Push Focus): [DONE]
   Incline DB Press: 3×6-8 @RPE8.5 120s
@@ -128,10 +128,10 @@ W1-Mon Unit A (Push Focus): [DONE]
         },
       ]);
 
-      // No sessions completed — Monday is the next uncompleted, but today is Wednesday.
-      const result = formatPlanForPrompt(plan, 1, new Set());
+      // No sessions completed — Monday is the next uncompleted.
+      const result = formatPlanForPrompt(plan, new Set());
 
-      expect(result).toContain("W1-Mon Upper A (Push): [NEXT]");
+      expect(result).toContain("W1-Mon Upper A (Push): [NEXT_SESSION]");
       // Wednesday and Friday should have no marker
       expect(result).toContain("W1-Wed Lower (Legs):");
       expect(result).not.toContain("W1-Wed Lower (Legs): [");
@@ -142,7 +142,7 @@ W1-Mon Unit A (Push Focus): [DONE]
     }
   });
 
-  it("marks the next uncompleted session [TODAY] when it falls on the current day", () => {
+  it("marks the next uncompleted session [NEXT_SESSION] even when it falls on the current day", () => {
     // Pin clock to Monday 2026-07-20
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-20T08:00:00"));
@@ -158,8 +158,8 @@ W1-Mon Unit A (Push Focus): [DONE]
         },
       ]);
 
-      const result = formatPlanForPrompt(plan, 1, new Set());
-      expect(result).toContain("Monday Session (Full Body): [TODAY]");
+      const result = formatPlanForPrompt(plan, new Set());
+      expect(result).toContain("Monday Session (Full Body): [NEXT_SESSION]");
     } finally {
       vi.useRealTimers();
     }
