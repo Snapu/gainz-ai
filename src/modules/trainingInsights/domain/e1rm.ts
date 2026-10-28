@@ -457,7 +457,7 @@ export function calculateE1RMInsights(
 
     const displayName = displayNames.get(canonical);
     if (displayName) {
-      const isUnweighted = latestSessionData?.logs.every((l: any) => !l.weight || l.weight === 0);
+      const isUnweighted = latestSessionData?.logs.every((l) => !l.weight || l.weight === 0);
 
       let targetWeightHyp = null;
       let targetWeightStr = null;

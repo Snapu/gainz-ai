@@ -286,8 +286,7 @@ export function useInsightsTabViewModel() {
     const now = Date.now();
 
     return Object.entries(insights.value.e1rm)
-      .map(([name, dataObj]) => {
-        const data = dataObj as any;
+      .map(([name, data]) => {
         const trend = data.trend;
         const current = trend[trend.length - 1] ?? data.e1rm;
         const previous = trend.length >= 2 ? (trend[trend.length - 2] ?? null) : null;

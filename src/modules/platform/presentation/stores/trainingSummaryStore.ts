@@ -105,7 +105,7 @@ export const useTrainingSummaryStore = defineStore("trainingSummary", () => {
     if (!logsRepository) return errAsync("repository-unavailable" as const);
 
     return rebuildAllTrainingSummaries(summaryRepository, logsRepository)
-      .orTee((error: any) => {
+      .orTee((error) => {
         console.error("Failed to rebuild all training summaries:", error);
         Sentry.captureMessage("Failed to rebuild training summary", {
           level: "error",
@@ -118,7 +118,7 @@ export const useTrainingSummaryStore = defineStore("trainingSummary", () => {
         isLoading.value = false;
         return summariesResult;
       })
-      .mapErr((err: any) => {
+      .mapErr((err) => {
         isLoading.value = false;
         return err;
       });

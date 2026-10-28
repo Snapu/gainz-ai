@@ -123,6 +123,12 @@ function isTimeoutError(error: unknown): boolean {
   return typeof e.message === "string" && /timed out|timeout/i.test(e.message);
 }
 
+function isNotFoundError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const e = error as Record<string, unknown>;
+  return e.status === "NOT_FOUND" || e.status === 404;
+}
+
 export function getTodayLogsCount(session: WorkoutSession | null): number {
   return session?.logs.length ?? 0;
 }
@@ -151,10 +157,7 @@ async function executeAiRequest(
   try {
     responseStream = await generateWithTimeout("gemini-3.8-flash");
   } catch (streamErr) {
-    const isNotFound =
-      typeof streamErr === "object" &&
-      streamErr !== null &&
-      ((streamErr as any).status === "NOT_FOUND" || (streamErr as any).status === 404);
+    const isNotFound = isNotFoundError(streamErr);
     if (isServiceUnavailableError(streamErr) || isTimeoutError(streamErr) || isNotFound) {
       Sentry.captureMessage(
         "Primary model unavailable/slow/not-found, falling back to gemini-2.5-flash",
