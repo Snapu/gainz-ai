@@ -108,9 +108,6 @@ export const useUserProfileStore = defineStore("userProfile", () => {
       handleAuthError("user-profile-save");
       return;
     }
-    if (result.isOk()) {
-      hasCompletedSetup.value = true;
-    }
   }, 1500);
 
   watch(

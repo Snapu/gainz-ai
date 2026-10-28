@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/vue";
-import { useLocalStorage } from "@vueuse/core";
+import { useIntervalFn, useLocalStorage, useNow } from "@vueuse/core";
 import { defineStore } from "pinia";
 import { computed } from "vue";
 import { CLIENT_ID, requestAccessToken } from "@/modules/auth/application";
@@ -10,10 +10,11 @@ export { CLIENT_ID };
 export const useAuthStore = defineStore("auth", () => {
   const accessToken = useLocalStorage<string | null>("auth:accessToken", null);
   const expiresAt = useLocalStorage<number | null>("auth:expiresAt", null);
+  const now = useNow({ scheduler: (cb) => useIntervalFn(cb, 10000) });
 
   const isLoggedIn = computed(() => {
     if (!accessToken.value || !expiresAt.value) return false;
-    return expiresAt.value - Date.now() > 0;
+    return expiresAt.value - now.value.getTime() > 0;
   });
 
   function login() {

@@ -31,6 +31,7 @@ watch(
       router.push(target);
     }
   },
+  { immediate: true },
 );
 </script>
 

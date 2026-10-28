@@ -24,7 +24,11 @@ const countdownIntervals = new Map<string, ReturnType<typeof setInterval>>();
 export function useToast() {
   function toast(options: ToastOptions) {
     const id = options.id || Math.random().toString(36).substring(2, 9);
-    const toastData = { ...options, id };
+    const toastData: ToastOptions = {
+      ...options,
+      id,
+      countdown: options.countdown ? { ...options.countdown } : undefined,
+    };
     toasts.value.push(toastData);
 
     // Handle countdown

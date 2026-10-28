@@ -1,11 +1,20 @@
-import { useDocumentVisibility, useIntervalFn, useLocalStorage } from "@vueuse/core";
+import {
+  StorageSerializers,
+  useDocumentVisibility,
+  useIntervalFn,
+  useLocalStorage,
+} from "@vueuse/core";
 import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
 
 export const useRestTimerStore = defineStore("restTimer", () => {
-  const restStartTime = useLocalStorage<number | null>("gainz:restStartTime", null);
+  const restStartTime = useLocalStorage<number | null>("gainz:restStartTime", null, {
+    serializer: StorageSerializers.object,
+  });
   const restElapsed = ref(0);
-  const targetRestSeconds = ref<number | null>(null);
+  const targetRestSeconds = useLocalStorage<number | null>("gainz:targetRestSeconds", null, {
+    serializer: StorageSerializers.object,
+  });
   const visibility = useDocumentVisibility();
 
   function updateRestElapsed() {
@@ -58,9 +67,7 @@ export const useRestTimerStore = defineStore("restTimer", () => {
 
   function start(duration?: number) {
     restStartTime.value = Date.now();
-    if (duration) {
-      targetRestSeconds.value = duration;
-    }
+    targetRestSeconds.value = duration ?? null;
   }
 
   function reset() {

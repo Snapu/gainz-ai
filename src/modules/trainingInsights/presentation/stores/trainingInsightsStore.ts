@@ -1,3 +1,4 @@
+import { useIntervalFn, useNow } from "@vueuse/core";
 import { defineStore } from "pinia";
 import { computed } from "vue";
 import { useDeloadStore } from "@/modules/deload/presentation";
@@ -27,6 +28,7 @@ export const useTrainingInsightsStore = defineStore("trainingInsights", () => {
   const profileStore = useUserProfileStore();
   const muscleMapStore = useExerciseMuscleMapStore();
   const deloadStore = useDeloadStore();
+  const now = useNow({ scheduler: (cb) => useIntervalFn(cb, 60000) });
 
   /** Historical + current logs combined — same window used by all insight calculations. */
   const allLogs = computed<ExerciseLog[]>(() => {
@@ -37,7 +39,7 @@ export const useTrainingInsightsStore = defineStore("trainingInsights", () => {
   const insights = computed<TrainingInsights>(() =>
     calculateInsights(
       allLogs.value,
-      new Date(),
+      now.value,
       muscleMapStore.learnedMap,
       profileStore.userProfile.weightKg,
       deloadStore.phase,

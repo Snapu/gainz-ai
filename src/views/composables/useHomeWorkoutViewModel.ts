@@ -130,21 +130,23 @@ export function useHomeWorkoutViewModel() {
   // ---------------------------------------------------------------------------
   // Today's Workout (from AI Coach logic)
   // ---------------------------------------------------------------------------
+  const currentReactiveTime = useNow({ scheduler: (cb) => useTimeoutPoll(cb, 60000) });
+
   const currentWeekNumber = computed<number>(() => {
     if (!planStore.activePlan) return 1;
-    return planStore.activePlan.getCurrentWeekNumber(new Date());
+    return planStore.activePlan.getCurrentWeekNumber(currentReactiveTime.value);
   });
 
   const planDerivedWorkout = computed<DisplayExercise[] | null>(() => {
     if (!planStore.activePlan) return null;
-    const currentDay = new Date().getDay();
+    const currentDay = currentReactiveTime.value.getDay();
     const weekNum = currentWeekNumber.value;
     const session = planStore.activePlan.getPlannedSessionForDay(currentDay, weekNum);
     return (session?.exercises as DisplayExercise[]) ?? null;
   });
 
   const activeWorkout = computed<DisplayExercise[] | null>(() => {
-    const today = isoDateString(new Date());
+    const today = isoDateString(currentReactiveTime.value);
     const coachMessagesList = chatStore.messages
       .filter((m) => m.role === "coach")
       .slice()
@@ -161,7 +163,7 @@ export function useHomeWorkoutViewModel() {
   });
 
   const completedSetsMap = computed<Map<string, number>>(() => {
-    const today = new Date();
+    const today = new Date(currentReactiveTime.value);
     today.setHours(0, 0, 0, 0);
 
     const todaysLogs = logsStore.exerciseLogs.filter(
@@ -401,7 +403,6 @@ export function useHomeWorkoutViewModel() {
     );
   }
 
-  const currentReactiveTime = useNow({ scheduler: (cb) => useTimeoutPoll(cb, 60000) });
   const currentSessionElapsedText = computed<string | null>(() => {
     const session = resolveCurrentSession(
       logsStore.exerciseLogs,

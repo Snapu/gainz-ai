@@ -328,7 +328,11 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
 
   // Watch for completed sessions logic
   watch(
-    () => exerciseLogsStore.exerciseLogs,
+    [
+      () => exerciseLogsStore.exerciseLogs,
+      () => planStore.activePlan,
+      () => exerciseMuscleMapStore.learnedMap,
+    ],
     () => {
       const plan = planStore.activePlan;
       if (!plan) return;

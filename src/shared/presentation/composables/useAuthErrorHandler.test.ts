@@ -66,4 +66,21 @@ describe("useAuthErrorHandler", () => {
     expect(mockLogout).not.toHaveBeenCalled();
     expect(mockToast).not.toHaveBeenCalled();
   });
+
+  it("still logs out and shows toast when accessToken exists but isLoggedIn evaluated to false after expiry", () => {
+    vi.mocked(useAuthStore).mockReturnValue({
+      logout: mockLogout,
+      accessToken: "expired-token",
+      expiresAt: Date.now() - 1000,
+      isLoggedIn: false,
+      login: vi.fn(),
+    } as unknown as ReturnType<typeof useAuthStore>);
+
+    const { handleAuthError } = useAuthErrorHandler();
+
+    handleAuthError();
+
+    expect(mockLogout).toHaveBeenCalledOnce();
+    expect(mockToast).toHaveBeenCalledOnce();
+  });
 });

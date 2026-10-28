@@ -63,8 +63,8 @@ let lastTickRemaining = 0;
 
 watch(
   parsedDurationSeconds,
-  (newVal) => {
-    if (!isTimerRunning.value && timerRemaining.value === 0) {
+  (newVal, oldVal) => {
+    if (!isTimerRunning.value && (timerRemaining.value === 0 || timerRemaining.value === oldVal)) {
       timerRemaining.value = newVal;
     }
   },

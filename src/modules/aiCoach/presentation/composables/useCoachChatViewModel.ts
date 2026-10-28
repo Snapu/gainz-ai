@@ -118,9 +118,7 @@ export function useCoachChatViewModel() {
   watch(
     () => coachMessages.value.length,
     (newLength) => {
-      if (newLength > 0) {
-        currentPageIndex.value = newLength - 1;
-      }
+      currentPageIndex.value = newLength > 0 ? newLength - 1 : 0;
     },
     { immediate: true },
   );

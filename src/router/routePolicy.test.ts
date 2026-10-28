@@ -36,18 +36,18 @@ describe("resolveRouteTarget", () => {
 
   it("redirects incomplete setup users into wizard", () => {
     const state = { ...readyState, setupCompleted: false };
-    expect(resolveRouteTarget("/app/home", undefined, state)).toBe("/wizard/fitness-goal");
-    expect(resolveRouteTarget("/wizard/fitness-goal", undefined, state)).toBe(true);
+    expect(resolveRouteTarget("/app/home", undefined, state)).toBe("/wizard/goal");
+    expect(resolveRouteTarget("/wizard/goal", undefined, state)).toBe(true);
   });
 
   it("redirects auth/setup-complete users away from auth flow pages", () => {
     expect(resolveRouteTarget("/", undefined, readyState)).toBe("/app/home");
     expect(resolveRouteTarget("/loading", undefined, readyState)).toBe("/app/home");
-    expect(resolveRouteTarget("/wizard/fitness-goal", undefined, readyState)).toBe("/app/home");
+    expect(resolveRouteTarget("/wizard/goal", undefined, readyState)).toBe("/app/home");
   });
 
   it("allows wizard edit mode after setup completion", () => {
-    expect(resolveRouteTarget("/wizard/fitness-goal", { mode: "edit" }, readyState)).toBe(true);
+    expect(resolveRouteTarget("/wizard/goal", { mode: "edit" }, readyState)).toBe(true);
   });
 
   it("allows normal application routes when state is ready", () => {

@@ -62,11 +62,13 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
   watch(
     () => spreadsheetStore.doc,
     async (doc) => {
-      if (doc && exerciseLogs.value.length === 0) {
-        const result = await refresh();
-        if (result.isErr() && result.error === "auth-failed") {
-          handleAuthError("exercise-log-load");
-        }
+      if (!doc) {
+        exerciseLogs.value = [];
+        return;
+      }
+      const result = await refresh();
+      if (result.isErr() && result.error === "auth-failed") {
+        handleAuthError("exercise-log-load");
       }
     },
   );

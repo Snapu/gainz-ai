@@ -54,8 +54,9 @@ export function useInsightsTabViewModel() {
   });
 
   watch(
-    () => insights.value.muscleGroups,
-    (muscleGroups: Record<string, MuscleGroupInsight | undefined>) => {
+    [() => insights.value.muscleGroups, () => metricsStore.isLoading] as const,
+    ([muscleGroups, isMetricsLoading]) => {
+      if (isMetricsLoading) return;
       for (const [group, insight] of Object.entries(muscleGroups)) {
         if (!insight) continue;
         const muscle = group as MuscleGroup;
@@ -69,7 +70,7 @@ export function useInsightsTabViewModel() {
         });
       }
     },
-    { deep: true },
+    { immediate: true, deep: true },
   );
 
   const muscleInsightsList = computed((): MuscleGroupWithKey[] => {

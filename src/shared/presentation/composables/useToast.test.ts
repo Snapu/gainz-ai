@@ -70,4 +70,21 @@ describe("useToast", () => {
     expect(onComplete).toHaveBeenCalledTimes(1);
     expect(toasts.value).toHaveLength(0); // Toast dismissed
   });
+
+  it("does not mutate the caller's countdown options object in place", () => {
+    const { toast } = useToast();
+    const callerCountdown = {
+      seconds: 5,
+      onComplete: vi.fn(),
+    };
+
+    toast({
+      title: "Test",
+      countdown: callerCountdown,
+    });
+
+    vi.advanceTimersByTime(2000);
+
+    expect(callerCountdown.seconds).toBe(5);
+  });
 });

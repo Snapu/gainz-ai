@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/vue";
-import { useLocalStorage } from "@vueuse/core";
+import { useIntervalFn, useLocalStorage, useNow } from "@vueuse/core";
 import { Result } from "neverthrow";
 import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
@@ -12,6 +12,7 @@ export const useCoachChatStore = defineStore("coachChat", () => {
   const messages = ref<CoachingMessage[]>([]);
   const isLoading = ref(false);
   const hasInitialized = ref(false);
+  const now = useNow({ scheduler: (cb) => useIntervalFn(cb, 60000) });
 
   const lastRequestState = useLocalStorage<{ date: string; checksum: string }>(
     "ai-coach:last-request-state",
@@ -23,13 +24,15 @@ export const useCoachChatStore = defineStore("coachChat", () => {
   const messageRepository = new LocalStorageMessageRepository();
   const exerciseLogsStore = useExerciseLogsStore();
 
-  const activeSession = computed(() => resolveCurrentSession(exerciseLogsStore.exerciseLogs));
+  const activeSession = computed(() =>
+    resolveCurrentSession(exerciseLogsStore.exerciseLogs, now.value.getTime()),
+  );
 
   const currentSessionId = computed<string>(() => {
     const session = activeSession.value;
     const boundary = session
       ? new Date(session.startTime).setHours(0, 0, 0, 0)
-      : new Date().setHours(0, 0, 0, 0);
+      : new Date(now.value).setHours(0, 0, 0, 0);
     return isoDateString(new Date(boundary));
   });
 
@@ -113,7 +116,7 @@ export const useCoachChatStore = defineStore("coachChat", () => {
   );
 
   const hasTodayCoachMessage = computed<boolean>(() => {
-    const today = isoDateString(new Date());
+    const today = isoDateString(now.value);
     return messages.value.some(
       (m) => m.role === "coach" && isoDateString(new Date(m.timestamp)) === today,
     );

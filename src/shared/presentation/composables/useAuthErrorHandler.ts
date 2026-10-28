@@ -21,8 +21,8 @@ export function useAuthErrorHandler() {
   function handleAuthError(context?: string): void {
     // Guard: if already logged out (e.g. concurrent 401s), do nothing.
     // authStore.logout() is synchronous, so the first caller clears the token
-    // immediately and subsequent callers see isLoggedIn === false.
-    if (!authStore.isLoggedIn) return;
+    // immediately and subsequent callers see accessToken === null.
+    if (!authStore.isLoggedIn && !authStore.accessToken) return;
 
     Sentry.captureMessage("Auth expired during API call", {
       level: "warning",

@@ -61,35 +61,39 @@ const isDumbbellExercise = computed(() => /kurzhantel|dumbbell/i.test(formExerci
 watch(
   () => props.open,
   (isOpen) => {
-    if (isOpen) {
-      if (props.logToEdit) {
-        skipHistoryAutoFill.value = true;
-        formExerciseName.value = props.logToEdit.exerciseName;
-        formReps.value = props.logToEdit.reps ?? null;
-        formWeight.value = props.logToEdit.weight ?? null;
-        formDistance.value = props.logToEdit.distance ?? null;
-        formDuration.value = props.logToEdit.duration ?? null;
-        formRpe.value = props.logToEdit.rpe ?? (deloadStore.active ? 6 : 8.5);
-        isRpeEnabled.value = props.logToEdit.rpe != null;
-      } else if (props.prefillData) {
-        skipHistoryAutoFill.value = true;
-        formExerciseName.value = props.prefillData.exerciseName;
-        formReps.value = props.prefillData.reps ?? null;
-        formWeight.value = props.prefillData.weight ?? null;
-        formDistance.value = null;
-        formDuration.value = props.prefillData.duration ?? null;
-        formRpe.value = props.prefillData.rpe ?? (deloadStore.active ? 6 : 8.5);
-        isRpeEnabled.value = props.prefillData.rpe != null;
-      } else {
-        formExerciseName.value = "";
-        formReps.value = null;
-        formWeight.value = null;
-        formDistance.value = null;
-        formDuration.value = null;
-        formRpe.value = deloadStore.active ? 6 : 8.5;
-        isRpeEnabled.value = false;
-        skipHistoryAutoFill.value = false;
-      }
+    if (!isOpen) {
+      formExerciseName.value = "";
+      skipHistoryAutoFill.value = false;
+      return;
+    }
+
+    if (props.logToEdit) {
+      skipHistoryAutoFill.value = formExerciseName.value !== props.logToEdit.exerciseName;
+      formExerciseName.value = props.logToEdit.exerciseName;
+      formReps.value = props.logToEdit.reps ?? null;
+      formWeight.value = props.logToEdit.weight ?? null;
+      formDistance.value = props.logToEdit.distance ?? null;
+      formDuration.value = props.logToEdit.duration ?? null;
+      formRpe.value = props.logToEdit.rpe ?? (deloadStore.active ? 6 : 8.5);
+      isRpeEnabled.value = props.logToEdit.rpe != null;
+    } else if (props.prefillData) {
+      skipHistoryAutoFill.value = formExerciseName.value !== props.prefillData.exerciseName;
+      formExerciseName.value = props.prefillData.exerciseName;
+      formReps.value = props.prefillData.reps ?? null;
+      formWeight.value = props.prefillData.weight ?? null;
+      formDistance.value = null;
+      formDuration.value = props.prefillData.duration ?? null;
+      formRpe.value = props.prefillData.rpe ?? (deloadStore.active ? 6 : 8.5);
+      isRpeEnabled.value = props.prefillData.rpe != null;
+    } else {
+      formExerciseName.value = "";
+      formReps.value = null;
+      formWeight.value = null;
+      formDistance.value = null;
+      formDuration.value = null;
+      formRpe.value = deloadStore.active ? 6 : 8.5;
+      isRpeEnabled.value = false;
+      skipHistoryAutoFill.value = false;
     }
   },
   { immediate: true },
@@ -105,16 +109,12 @@ watch(formExerciseName, (name) => {
   }
 
   const lastLog = logsStore.lastLogForExercise(name);
-  if (lastLog) {
-    if (lastLog.reps) formReps.value = lastLog.reps;
-    if (lastLog.weight) formWeight.value = lastLog.weight;
-    if (lastLog.distance) formDistance.value = lastLog.distance;
-    if (lastLog.duration) formDuration.value = lastLog.duration;
-    if (lastLog.rpe != null) {
-      formRpe.value = lastLog.rpe;
-      isRpeEnabled.value = true;
-    }
-  }
+  formReps.value = lastLog?.reps ?? null;
+  formWeight.value = lastLog?.weight ?? null;
+  formDistance.value = lastLog?.distance ?? null;
+  formDuration.value = lastLog?.duration ?? null;
+  formRpe.value = lastLog?.rpe ?? (deloadStore.active ? 6 : 8.5);
+  isRpeEnabled.value = lastLog?.rpe != null;
 });
 
 const latestExerciseLogs = computed(() => {
@@ -267,12 +267,10 @@ async function saveLog() {
     logsStore.updateExerciseLog(log);
   } else {
     logsStore.addExerciseLog(log);
+    const DEFAULT_REST_SECONDS = 120; // 2 minutes generic fallback
+    restTimerStore.reset();
+    restTimerStore.start(props.restSeconds ?? DEFAULT_REST_SECONDS);
   }
-
-  const DEFAULT_REST_SECONDS = 120; // 2 minutes generic fallback
-
-  restTimerStore.reset();
-  restTimerStore.start(props.restSeconds ?? DEFAULT_REST_SECONDS);
 
   internalOpen.value = false;
   emit("saved");

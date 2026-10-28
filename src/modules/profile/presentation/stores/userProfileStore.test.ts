@@ -67,7 +67,7 @@ describe("useUserProfileStore", () => {
     expect(mockLocalStorage.getItem("userProfile")).toBeNull();
   });
 
-  it("persists hasCompletedSetup after successful save", async () => {
+  it("does not mark hasCompletedSetup during background debounced save", async () => {
     vi.mocked(migrateFromLocalStorage).mockResolvedValue(ok("no-data"));
     vi.mocked(loadUserProfile).mockResolvedValue(ok(null));
     vi.mocked(saveUserProfile).mockResolvedValue(ok(undefined));
@@ -76,7 +76,8 @@ describe("useUserProfileStore", () => {
     store.updateProfile({ age: 25 });
 
     await new Promise((resolve) => setTimeout(resolve, 2000));
-    expect(store.hasCompletedSetup).toBe(true);
+    expect(saveUserProfile).toHaveBeenCalled();
+    expect(store.hasCompletedSetup).toBe(false);
   });
 
   it("auto-detects setup completion from loaded profile data", async () => {

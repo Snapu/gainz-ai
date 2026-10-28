@@ -22,7 +22,7 @@ export function resolveRouteTarget(
   }
 
   if (!state.setupCompleted) {
-    return toPath.startsWith("/wizard") ? true : "/wizard/fitness-goal";
+    return toPath.startsWith("/wizard") ? true : "/wizard/goal";
   }
 
   const isExcluded = toPath === "/" || toPath === "/loading";
