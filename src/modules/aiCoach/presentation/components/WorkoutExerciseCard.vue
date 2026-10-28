@@ -94,7 +94,6 @@ function startTimer() {
       timerRemaining.value = remaining;
       if (remaining <= 0) {
         pauseTimer();
-        import("ios-haptics").then(({ haptic }) => haptic.confirm()).catch(() => {});
       }
     }
   }, 200);

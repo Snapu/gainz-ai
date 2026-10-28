@@ -24,6 +24,15 @@ export default defineConfig(({ mode }) => {
         strategies: "injectManifest",
         srcDir: "public",
         filename: "service-worker.ts",
+        integration: {
+          configureCustomSWViteBuild(options) {
+            const output = options.build?.rollupOptions?.output;
+            if (output && !Array.isArray(output) && "inlineDynamicImports" in output) {
+              delete output.inlineDynamicImports;
+              (output as Record<string, unknown>).codeSplitting = false;
+            }
+          },
+        },
         devOptions: {
           enabled: false,
           type: "module",

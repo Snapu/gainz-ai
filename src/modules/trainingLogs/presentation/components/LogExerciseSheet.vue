@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { Trash } from "@lucide/vue";
-import { haptic } from "ios-haptics";
 import { storeToRefs } from "pinia";
 import { computed, ref, watch } from "vue";
 import { useDeloadStore } from "@/modules/deload/presentation";
@@ -250,8 +249,6 @@ async function saveLog() {
     return;
   }
 
-  haptic.confirm();
-
   const log: ExerciseLog = {
     id: props.logToEdit?.id || crypto.randomUUID(),
     exerciseName: formExerciseName.value,
@@ -278,7 +275,6 @@ async function saveLog() {
 
 async function deleteLog() {
   if (!props.logToEdit) return;
-  haptic.confirm();
   logsStore.removeExerciseLog(props.logToEdit);
   internalOpen.value = false;
   emit("saved");
@@ -368,6 +364,7 @@ async function deleteLog() {
       <div class="flex gap-3 mt-4">
         <UiButton 
           v-if="props.logToEdit" 
+          haptic
           variant="outline" 
           class="h-16 rounded-xl px-6 border-destructive/20 text-destructive hover:bg-destructive/10" 
           @click="deleteLog"
@@ -375,7 +372,7 @@ async function deleteLog() {
         >
           <Trash class="w-5 h-5" />
         </UiButton>
-        <UiButton class="flex-1 h-16 rounded-xl text-lg" @click="saveLog">
+        <UiButton haptic class="flex-1 h-16 rounded-xl text-lg" @click="saveLog">
           {{ props.logToEdit ? 'Save Changes' : 'Save Set' }}
         </UiButton>
       </div>

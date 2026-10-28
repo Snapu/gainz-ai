@@ -85,7 +85,7 @@ onActivated(() => {
 
 function scrollToGroup(idx: number) {
   if (galleryRef.value) {
-    nextTick(() => {
+    nextTick().then(() => {
       const container = galleryRef.value;
       if (!container) return;
       const children = container.children;

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { cva, type VariantProps } from "class-variance-authority";
+import { hapticTrigger } from "ios-haptics";
+import { type ComponentPublicInstance, ref, watchEffect } from "vue";
 import { cn } from "@/shared/presentation/lib/utils";
 
 const buttonVariants = cva(
@@ -38,15 +40,33 @@ interface Props {
   size?: ButtonVariants["size"];
   type?: "button" | "submit" | "reset";
   class?: any;
+  haptic?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   type: "button",
+  haptic: false,
 });
+
+const buttonRef = ref<HTMLButtonElement | null>(null);
+
+watchEffect(() => {
+  if (props.haptic && buttonRef.value) {
+    hapticTrigger(buttonRef.value);
+  }
+});
+
+function setButtonRef(el: Element | ComponentPublicInstance | null) {
+  buttonRef.value = el instanceof HTMLButtonElement ? el : null;
+}
 </script>
 
 <template>
-  <button :type="props.type" :class="cn(buttonVariants({ variant, size }), props.class)">
+  <button
+    :ref="setButtonRef"
+    :type="props.type"
+    :class="cn(buttonVariants({ variant, size }), props.class)"
+  >
     <slot />
   </button>
 </template>

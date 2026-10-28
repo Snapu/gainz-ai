@@ -27,9 +27,7 @@ const mockLogs: ExerciseLog[] = [
 ];
 
 vi.mock("ios-haptics", () => ({
-  haptic: {
-    confirm: vi.fn(),
-  },
+  hapticTrigger: vi.fn(),
 }));
 
 vi.mock("@/modules/deload/presentation", () => ({

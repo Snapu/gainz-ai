@@ -80,7 +80,7 @@ export function useCoachChatViewModel() {
   }, 500);
 
   function scrollToTop() {
-    nextTick(() => {
+    nextTick().then(() => {
       if (scrollContainerRef.value) {
         scrollContainerRef.value.scrollTo({ top: 0, behavior: "smooth" });
       }

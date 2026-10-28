@@ -40,7 +40,7 @@ const dialogStyle = computed(() => ({
 
 function handleOpenChange(isOpen: boolean) {
   if (isOpen) {
-    nextTick(startTracking);
+    nextTick().then(startTracking);
   } else {
     stopTracking();
   }

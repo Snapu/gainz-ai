@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useElementSize, usePointerSwipe } from "@vueuse/core";
-import { haptic } from "ios-haptics";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { hapticTrigger } from "ios-haptics";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 const props = withDefaults(
   defineProps<{
@@ -28,7 +28,6 @@ const maxSwipePx = computed(() => (width.value * props.maxSwipePercent) / 100);
 
 const cancelledByScroll = ref(false);
 const isSnappingBack = ref(false);
-const hasTriggeredHaptic = ref(false);
 let snapBackTimer: number | null = null;
 
 const SWIPE_INTENT_PX = 8;
@@ -46,21 +45,19 @@ const { distanceX, distanceY, isSwiping } = usePointerSwipe(itemRef, {
   onSwipeStart() {
     cancelledByScroll.value = false;
     isSnappingBack.value = false;
-    hasTriggeredHaptic.value = false;
-  },
-  onSwipe() {
-    if (!hasTriggeredHaptic.value && isThresholdReached.value && !cancelledByScroll.value) {
-      haptic();
-      hasTriggeredHaptic.value = true;
-    }
   },
   onSwipeEnd(_e, direction) {
     if (direction === "left" && isThresholdReached.value && !cancelledByScroll.value) {
-      haptic();
       emit("action");
     }
     snapBack();
   },
+});
+
+onMounted(() => {
+  if (itemRef.value) {
+    hapticTrigger(itemRef.value);
+  }
 });
 
 const visualOffset = computed(() => {

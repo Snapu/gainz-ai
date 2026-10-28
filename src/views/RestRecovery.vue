@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { CalendarDate, getLocalTimeZone, today } from "@internationalized/date";
 import { ArrowLeft, Moon, Plus, X } from "@lucide/vue";
-import { haptic } from "ios-haptics";
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import type { AppEvent } from "@/modules/events/presentation";
@@ -58,7 +57,6 @@ function saveEvent() {
   };
 
   eventsStore.addEvent(ev);
-  haptic.confirm();
   isAddOpen.value = false;
 
   // Reset range
@@ -149,7 +147,7 @@ function remove(id: string) {
 
       <!-- Docked Footer Action -->
       <div class="px-6 pb-safe pt-4 shrink-0 bg-background/95 backdrop-blur z-10 border-t border-white/5">
-        <UiButton class="w-full h-14 rounded-xl text-base font-bold mb-6 shadow-lg shadow-lg/20 transition-all active:scale-95" @click="saveEvent">
+        <UiButton haptic class="w-full h-14 rounded-xl text-base font-bold mb-6 shadow-lg shadow-lg/20 transition-all active:scale-95" @click="saveEvent">
           Save Entry
         </UiButton>
       </div>
