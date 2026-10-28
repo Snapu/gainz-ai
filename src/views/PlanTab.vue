@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CheckCircle2, Copy, RotateCw } from "@lucide/vue";
+import { Calendar as CalendarIcon, CheckCircle2, Copy, RotateCw } from "@lucide/vue";
 import { usePlanTabViewModel } from "@/modules/aiCoach/presentation";
 import AppHeader from "@/shared/presentation/components/AppHeader.vue";
 import GlobalHeaderActions from "@/shared/presentation/components/GlobalHeaderActions.vue";
