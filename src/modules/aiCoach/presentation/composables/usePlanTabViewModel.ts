@@ -44,19 +44,22 @@ export function usePlanTabViewModel() {
     isRegenerating.value = true;
     try {
       const result = await orchestratorStore.generateNewPlan();
-      if (result.isErr()) {
-        toast({
-          title: "AI Coaching Error",
-          description: getAiErrorDescription(result.error),
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Plan Regenerated",
-          description: "Your training cycle has been updated.",
-          variant: "default",
-        });
-      }
+      result.match(
+        () => {
+          toast({
+            title: "Plan Regenerated",
+            description: "Your training cycle has been updated.",
+            variant: "default",
+          });
+        },
+        (error) => {
+          toast({
+            title: "AI Coaching Error",
+            description: getAiErrorDescription(error),
+            variant: "destructive",
+          });
+        },
+      );
     } finally {
       isRegenerating.value = false;
     }

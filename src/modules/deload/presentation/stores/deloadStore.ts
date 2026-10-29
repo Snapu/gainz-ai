@@ -51,9 +51,11 @@ export const useDeloadStore = defineStore("deload", () => {
     const repository = createRepository();
     if (!repository) return;
     const result = await saveDeloadPhase(phase.value, repository);
-    if (result.isErr() && result.error === "auth-failed") {
-      handleAuthError("deload-phase-save");
-    }
+    result.orTee((error) => {
+      if (error === "auth-failed") {
+        handleAuthError("deload-phase-save");
+      }
+    });
   }, 800);
 
   function queueSave(): void {
@@ -88,14 +90,18 @@ export const useDeloadStore = defineStore("deload", () => {
     }
 
     return ResultAsync.fromPromise(loadDeloadPhase(repository), () => undefined as never)
-      .andThen((result) => {
-        if (result.isErr() && result.error === "auth-failed") {
-          handleAuthError("deload-phase-load");
-        }
-        if (result.isOk()) {
-          phase.value = result.value;
-        }
-        return okAsync(undefined);
+      .map((result) => {
+        result.match(
+          (loadedPhase) => {
+            phase.value = loadedPhase;
+          },
+          (error) => {
+            if (error === "auth-failed") {
+              handleAuthError("deload-phase-load");
+            }
+          },
+        );
+        return undefined;
       })
       .andTee(() => {
         isLoading.value = false;

@@ -53,22 +53,24 @@ async function applyDecision(
     return;
   }
 
-  if (result.isErr()) {
-    toast({
-      title: "Migration failed",
-      description: migrationStore.lastError ?? result.error,
-      variant: "destructive",
-    });
-    return;
-  }
-
-  toast({
-    title: "Exercise reviewed",
-    description:
-      decision === "keep_as_is"
-        ? `${candidate.exerciseName} kept as already-total weights.`
-        : `${candidate.exerciseName} converted to total weight.`,
-  });
+  result.match(
+    () => {
+      toast({
+        title: "Exercise reviewed",
+        description:
+          decision === "keep_as_is"
+            ? `${candidate.exerciseName} kept as already-total weights.`
+            : `${candidate.exerciseName} converted to total weight.`,
+      });
+    },
+    (error) => {
+      toast({
+        title: "Migration failed",
+        description: migrationStore.lastError ?? error,
+        variant: "destructive",
+      });
+    },
+  );
 }
 </script>
 

@@ -8,15 +8,19 @@ import {
   uiPressClass,
 } from "@/shared/presentation/components/ui/styles";
 import { cn } from "@/shared/presentation/lib/utils";
-import ClickableList, {
-  type ClickableListItem,
-  type ClickableListItemMeta,
-} from "./ClickableList.vue";
+import UiBadge from "./ui/UiBadge.vue";
 import UiBottomSheet from "./ui/UiBottomSheet.vue";
+import UiToggleGroup from "./ui/UiToggleGroup.vue";
+import UiToggleGroupItem from "./ui/UiToggleGroupItem.vue";
+
+interface ExerciseSelectorOptionMeta {
+  label: string;
+  tone?: "default" | "primary";
+}
 
 export interface ExerciseSelectorOptionDetails {
   description?: string;
-  meta?: ClickableListItemMeta[];
+  meta?: ExerciseSelectorOptionMeta[];
 }
 
 interface Props {
@@ -41,15 +45,6 @@ const filteredOptions = computed(() => {
   return props.options.filter((option) =>
     option.toLowerCase().includes(searchQuery.value.toLowerCase()),
   );
-});
-
-const listItems = computed<ClickableListItem[]>(() => {
-  return filteredOptions.value.map((option) => ({
-    id: option,
-    title: option,
-    description: props.optionDetails?.[option]?.description,
-    meta: props.optionDetails?.[option]?.meta,
-  }));
 });
 
 const showCreateOption = computed(() => {
@@ -156,12 +151,45 @@ watch(isOpen, (val) => {
       </div>
 
       <!-- List Items -->
-      <ClickableList
-        v-if="listItems.length > 0"
-        :items="listItems"
-        item-class="select-none"
-        @select="handleSelect($event.title)"
-      />
+      <UiToggleGroup
+        v-if="filteredOptions.length > 0"
+        type="single"
+        :model-value="modelValue"
+        @update:model-value="(val) => val && handleSelect(String(val))"
+        class="gap-2"
+      >
+        <UiToggleGroupItem
+          v-for="option in filteredOptions"
+          :key="option"
+          :value="option"
+          class="flex flex-col items-start gap-1 p-4 text-left select-none"
+        >
+          <div class="flex w-full items-center justify-between gap-3">
+            <span class="truncate pr-4 text-sm font-bold tracking-tight text-foreground">
+              {{ option }}
+            </span>
+            <div
+              v-if="optionDetails?.[option]?.meta?.length"
+              class="flex shrink-0 flex-wrap justify-end gap-2 text-xs font-semibold text-muted-foreground"
+            >
+              <UiBadge
+                v-for="meta in optionDetails[option].meta"
+                :key="meta.label"
+                :variant="meta.tone === 'primary' ? 'default' : 'secondary'"
+                class="uppercase tracking-wider text-xs"
+              >
+                {{ meta.label }}
+              </UiBadge>
+            </div>
+          </div>
+          <div
+            v-if="optionDetails?.[option]?.description"
+            class="text-left text-xs italic text-muted-foreground/70"
+          >
+            {{ optionDetails[option].description }}
+          </div>
+        </UiToggleGroupItem>
+      </UiToggleGroup>
     </div>
   </UiBottomSheet>
 </template>

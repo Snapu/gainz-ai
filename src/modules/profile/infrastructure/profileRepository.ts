@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/vue";
 import type { GoogleSpreadsheet } from "google-spreadsheet";
-import { errAsync, okAsync, Result, ResultAsync } from "neverthrow";
+import { err, errAsync, ok, okAsync, Result, ResultAsync } from "neverthrow";
 import { isAuthError } from "@/modules/platform/infrastructure";
 import type { UserProfileRepository } from "@/modules/profile/application";
 import { parseData } from "@/modules/sharedKernel/domain";
@@ -147,18 +147,18 @@ function migrateFromLocalStorageInfra(
           });
           return "migration-failed" as const;
         },
-      )();
+      )().andThen((oldData) => {
+        if (!oldData || typeof oldData !== "object") {
+          return err("migration-failed" as const);
+        }
+        return ok(oldData as Record<string, unknown>);
+      });
 
       if (parseOldDataResult.isErr()) {
         return errAsync(parseOldDataResult.error);
       }
 
-      const oldData = parseOldDataResult.value;
-      if (!oldData || typeof oldData !== "object") {
-        return errAsync("migration-failed" as const);
-      }
-
-      const oldDataRecord = oldData as Record<string, unknown>;
+      const oldDataRecord = parseOldDataResult.value;
       const apiKey =
         typeof oldDataRecord.apiKey === "string" && oldDataRecord.apiKey.length > 0
           ? oldDataRecord.apiKey

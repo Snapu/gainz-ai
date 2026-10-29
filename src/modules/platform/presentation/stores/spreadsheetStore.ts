@@ -90,19 +90,19 @@ export const useSpreadsheetStore = defineStore("spreadsheet", () => {
       isLoading.value = true;
       const result = await initializeSpreadsheet(accessToken);
 
-      if (result.isErr()) {
-        if (result.error.reason === "auth-failed") {
-          handleAuthError();
-          isLoading.value = false;
-          return;
-        }
+      result.match(
+        (initialized) => {
+          doc.value = initialized.doc;
+        },
+        (error) => {
+          if (error.reason === "auth-failed") {
+            handleAuthError();
+          } else {
+            reportInitError(error);
+          }
+        },
+      );
 
-        reportInitError(result.error);
-        isLoading.value = false;
-        return;
-      }
-
-      doc.value = result.value.doc;
       isLoading.value = false;
     });
   }

@@ -49,16 +49,19 @@ export function useCoachChatViewModel() {
     if (!question) return;
     userQuestion.value = "";
     orchestratorStore.requestAdvice(question).then((result) => {
-      if (result.isErr()) {
-        userQuestion.value = question;
-        toast({
-          title: "Error",
-          description: getAiErrorDescription(result.error),
-          variant: "destructive",
-        });
-      } else {
-        scrollToTop();
-      }
+      result.match(
+        () => {
+          scrollToTop();
+        },
+        (error) => {
+          userQuestion.value = question;
+          toast({
+            title: "Error",
+            description: getAiErrorDescription(error),
+            variant: "destructive",
+          });
+        },
+      );
     });
   }
 
@@ -77,15 +80,13 @@ export function useCoachChatViewModel() {
 
   onMounted(() => {
     orchestratorStore.ensureSessionAdvice().then((result) => {
-      if (result.isErr()) {
+      result.orTee((error) => {
         toast({
           title: "AI Coaching Error",
-          description: getAiErrorDescription(result.error),
+          description: getAiErrorDescription(error),
           variant: "destructive",
         });
-      } else {
-        scrollToTop();
-      }
+      });
     });
 
     scrollToTop();

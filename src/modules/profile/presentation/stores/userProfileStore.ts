@@ -80,18 +80,21 @@ export const useUserProfileStore = defineStore("userProfile", () => {
         const result = await loadUserProfile(repository);
         if (cancelled) return;
 
-        if (result.isErr() && result.error === "auth-failed") {
-          handleAuthError("user-profile-load");
-          isLoading.value = false;
-          return;
-        }
-
-        if (result.isOk() && result.value) {
-          userProfile.value = { ...result.value };
-          if (profileHasData(result.value)) {
-            hasCompletedSetup.value = true;
-          }
-        }
+        result.match(
+          (profile) => {
+            if (profile) {
+              userProfile.value = { ...profile };
+              if (profileHasData(profile)) {
+                hasCompletedSetup.value = true;
+              }
+            }
+          },
+          (error) => {
+            if (error === "auth-failed") {
+              handleAuthError("user-profile-load");
+            }
+          },
+        );
 
         isLoading.value = false;
       })();
@@ -104,10 +107,11 @@ export const useUserProfileStore = defineStore("userProfile", () => {
     if (!repository) return;
 
     const result = await saveUserProfile(userProfile.value, repository);
-    if (result.isErr() && result.error === "auth-failed") {
-      handleAuthError("user-profile-save");
-      return;
-    }
+    result.orTee((error) => {
+      if (error === "auth-failed") {
+        handleAuthError("user-profile-save");
+      }
+    });
   }, 1500);
 
   watch(

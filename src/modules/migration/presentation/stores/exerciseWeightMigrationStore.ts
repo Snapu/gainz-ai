@@ -53,40 +53,27 @@ export const useExerciseWeightMigrationStore = defineStore("exerciseWeightMigrat
       return;
     }
 
-    const result = await ResultAsync.fromPromise(
-      Promise.all([
+    const result = await ResultAsync.combine([
+      ResultAsync.fromPromise(
         loadExerciseWeightMigrationReviews(migrationRepository),
+        () => "load-failed" as const,
+      ).andThen((r) => r),
+      ResultAsync.fromPromise(
         loadAllLogsForMigration(logsRepository),
-      ]),
-      (error) => {
-        console.error("Failed to refresh exercise weight migration data:", error);
-        return "load-failed" as const;
-      },
-    );
+        () => "load-failed" as const,
+      ).andThen((r) => r),
+    ]);
 
     isLoading.value = false;
 
-    if (result.isErr()) {
-      lastError.value = result.error;
-      return;
-    }
-
-    const [reviewsResult, logsResult] = result.value;
-
-    if (reviewsResult.isErr()) {
-      lastError.value = reviewsResult.error;
-      return;
-    }
-
-    if (logsResult.isErr()) {
-      lastError.value = logsResult.error;
-      return;
-    }
-
-    reviewedExercises.value = reviewsResult.value;
-    pendingExercises.value = buildPendingExerciseMigrationCandidates(
-      logsResult.value,
-      reviewsResult.value,
+    result.match(
+      ([reviews, logs]) => {
+        reviewedExercises.value = reviews;
+        pendingExercises.value = buildPendingExerciseMigrationCandidates(logs, reviews);
+      },
+      (error) => {
+        lastError.value = error;
+      },
     );
   }
 

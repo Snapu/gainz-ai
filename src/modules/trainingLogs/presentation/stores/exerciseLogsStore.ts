@@ -66,10 +66,11 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
         exerciseLogs.value = [];
         return;
       }
-      const result = await refresh();
-      if (result.isErr() && result.error === "auth-failed") {
-        handleAuthError("exercise-log-load");
-      }
+      await refresh().orTee((error) => {
+        if (error === "auth-failed") {
+          handleAuthError("exercise-log-load");
+        }
+      });
     },
   );
 

@@ -45,15 +45,16 @@ export const useMetricsStore = defineStore("physiologicalMetrics", () => {
         const result = await loadMetrics(repository);
         if (cancelled) return;
 
-        if (result.isErr() && result.error === "auth-failed") {
-          handleAuthError("metrics-load");
-          isLoading.value = false;
-          return;
-        }
-
-        if (result.isOk()) {
-          metrics.value = result.value;
-        }
+        result.match(
+          (loadedMetrics) => {
+            metrics.value = loadedMetrics;
+          },
+          (error) => {
+            if (error === "auth-failed") {
+              handleAuthError("metrics-load");
+            }
+          },
+        );
 
         isLoading.value = false;
       })();
@@ -66,9 +67,11 @@ export const useMetricsStore = defineStore("physiologicalMetrics", () => {
     if (!repository) return;
 
     const result = await saveMetrics(metrics.value, repository);
-    if (result.isErr() && result.error === "auth-failed") {
-      handleAuthError("metrics-save");
-    }
+    result.orTee((error) => {
+      if (error === "auth-failed") {
+        handleAuthError("metrics-save");
+      }
+    });
   }, 2000);
 
   /**

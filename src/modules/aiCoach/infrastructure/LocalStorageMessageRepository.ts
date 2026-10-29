@@ -1,4 +1,4 @@
-import { err, ok, Result, type Result as ResultType } from "neverthrow";
+import { ok, Result, type Result as ResultType } from "neverthrow";
 import type { CoachingMessage } from "../domain";
 
 const STORAGE_KEY = "ai-sessions-v1";
@@ -18,22 +18,16 @@ export function extractDateFromSessionId(sessionId: string): string {
 type SessionsMap = Record<string, CoachingMessage[]>;
 
 function getSessionsMap(): ResultType<SessionsMap, "load-failed"> {
-  const readStoredResult = Result.fromThrowable(
+  return Result.fromThrowable(
     () => localStorage.getItem(STORAGE_KEY),
     () => "load-failed" as const,
-  )();
-
-  if (readStoredResult.isErr()) return err("load-failed");
-  if (!readStoredResult.value) return ok({});
-
-  const parseStoredResult = Result.fromThrowable(
-    (stored: string) => JSON.parse(stored) as SessionsMap,
-    () => "load-failed" as const,
-  )(readStoredResult.value);
-
-  if (parseStoredResult.isErr()) return err("load-failed");
-
-  return ok(parseStoredResult.value);
+  )().andThen((stored) => {
+    if (!stored) return ok({});
+    return Result.fromThrowable(
+      (data: string) => JSON.parse(data) as SessionsMap,
+      () => "load-failed" as const,
+    )(stored);
+  });
 }
 
 function saveSessionsMap(sessionsMap: SessionsMap): ResultType<void, "save-failed"> {
@@ -47,32 +41,27 @@ function saveSessionsMap(sessionsMap: SessionsMap): ResultType<void, "save-faile
 
 export class LocalStorageMessageRepository {
   public loadMessages(sessionId: string): ResultType<CoachingMessage[], "load-failed"> {
-    const mapResult = getSessionsMap();
-    if (mapResult.isErr()) return err("load-failed");
-
-    const sessionMessages = mapResult.value[sessionId];
-    if (!sessionMessages || !Array.isArray(sessionMessages)) return ok([]);
-
-    return ok(sessionMessages);
+    return getSessionsMap().map((sessionsMap) => {
+      const sessionMessages = sessionsMap[sessionId];
+      if (!sessionMessages || !Array.isArray(sessionMessages)) return [];
+      return sessionMessages;
+    });
   }
 
   public saveMessages(
     sessionId: string,
     messages: CoachingMessage[],
   ): ResultType<void, "save-failed"> {
-    const mapResult = getSessionsMap();
-    const sessionsMap = mapResult.isOk() ? mapResult.value : {};
-
+    const sessionsMap: SessionsMap = getSessionsMap().unwrapOr({});
     sessionsMap[sessionId] = messages;
     return saveSessionsMap(sessionsMap);
   }
 
   public removeMessages(sessionId: string): void {
-    const mapResult = getSessionsMap();
-    if (mapResult.isOk()) {
-      delete mapResult.value[sessionId];
-      saveSessionsMap(mapResult.value);
-    }
+    getSessionsMap().andTee((sessionsMap) => {
+      delete sessionsMap[sessionId];
+      saveSessionsMap(sessionsMap);
+    });
   }
 
   public cleanOldSessions(): void {
@@ -80,11 +69,8 @@ export class LocalStorageMessageRepository {
     cutoffDate.setDate(cutoffDate.getDate() - MAX_SESSION_AGE_DAYS);
     const cutoffIsoString = cutoffDate.toISOString().slice(0, 10);
 
-    const mapResult = getSessionsMap();
-    if (mapResult.isOk()) {
-      const sessionsMap = mapResult.value;
+    getSessionsMap().andTee((sessionsMap) => {
       let hasChanges = false;
-
       for (const sessionId of Object.keys(sessionsMap)) {
         // Extract the date portion from both "2026-06-04" and "plan-2026-06-04" formats
         const dateStr = extractDateFromSessionId(sessionId);
@@ -97,7 +83,7 @@ export class LocalStorageMessageRepository {
       if (hasChanges) {
         saveSessionsMap(sessionsMap);
       }
-    }
+    });
 
     // Remove legacy keys
     const legacyKeysToRemove: string[] = [];

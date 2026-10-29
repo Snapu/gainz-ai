@@ -14,23 +14,26 @@ async function handleLogin() {
   isLoggingIn.value = true;
   try {
     const result = await authStore.login();
-    if (result.isErr()) {
-      if (result.error === "missing-scopes") {
-        toast({
-          title: "Missing Permissions",
-          description: "Please grant Google Drive and Spreadsheets permissions to continue.",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Login Failed",
-          description: "An error occurred during sign in. Please try again.",
-          variant: "destructive",
-        });
-      }
-    } else {
-      router.push("/loading");
-    }
+    result.match(
+      () => {
+        router.push("/loading");
+      },
+      (error) => {
+        if (error === "missing-scopes") {
+          toast({
+            title: "Missing Permissions",
+            description: "Please grant Google Drive and Spreadsheets permissions to continue.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Login Failed",
+            description: "An error occurred during sign in. Please try again.",
+            variant: "destructive",
+          });
+        }
+      },
+    );
   } catch (err) {
     toast({
       title: "Error",

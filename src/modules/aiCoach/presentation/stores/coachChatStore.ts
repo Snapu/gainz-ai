@@ -49,16 +49,15 @@ export const useCoachChatStore = defineStore("coachChat", () => {
     if (hasInitialized.value) return;
     hasInitialized.value = true;
 
-    const loadedMessagesResult = messageRepository.loadMessages(currentSessionId.value);
-    if (loadedMessagesResult.isErr()) {
-      Sentry.captureMessage("Failed to load messages from storage", {
-        level: "warning",
-        tags: { scope: "ai-store", feature: "storage-load" },
-      });
-      messages.value = [];
-    } else {
-      messages.value = loadedMessagesResult.value;
-    }
+    messages.value = messageRepository
+      .loadMessages(currentSessionId.value)
+      .orTee(() => {
+        Sentry.captureMessage("Failed to load messages from storage", {
+          level: "warning",
+          tags: { scope: "ai-store", feature: "storage-load" },
+        });
+      })
+      .unwrapOr([]);
 
     messageRepository.cleanOldSessions();
   }
@@ -95,13 +94,12 @@ export const useCoachChatStore = defineStore("coachChat", () => {
       const lastCoachMessage = [...messages.value].reverse().find((m) => m.role === "coach");
       if (!lastCoachMessage) return null;
 
-      const parsedResult = Result.fromThrowable(
+      return Result.fromThrowable(
         (json: string) => JSON.parse(json) as CoachingAdvice,
         () => new Error("Invalid json in coach message"),
-      )(lastCoachMessage.content);
-
-      if (parsedResult.isErr()) return null;
-      return parsedResult.value.recommendedWorkout ?? null;
+      )(lastCoachMessage.content)
+        .map((advice) => advice.recommendedWorkout ?? null)
+        .unwrapOr(null);
     },
   );
 

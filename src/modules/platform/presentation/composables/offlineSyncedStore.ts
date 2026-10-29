@@ -39,9 +39,7 @@ export function useOfflineSyncedStore<T, FetchE, AddE, RemoveE, UpdateE = never>
   const isRefreshing = ref(false);
 
   const { state: items, isLoading } = useAsyncState(async () => {
-    const result = await fetchRemote();
-    if (result.isErr()) return [];
-    return result.value;
+    return (await fetchRemote()).unwrapOr([]);
   }, []);
 
   const visibility = useDocumentVisibility();
