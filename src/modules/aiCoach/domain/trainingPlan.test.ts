@@ -25,6 +25,85 @@ describe("TrainingPlan", () => {
       expect(TrainingPlan.create("2026-01-01T00:00:00Z", 5, []).cycleWeeks).toBe(4);
       expect(TrainingPlan.create("2026-01-01T00:00:00Z", 2, []).cycleWeeks).toBe(2);
     });
+
+    it("moves sessions that collide on the same (weekNumber, dayOfWeek) to the next free day", () => {
+      const plan = TrainingPlan.create("2026-10-28T10:00:00.000Z", 2, [
+        { ...dummySession, dayOfWeek: 1, sessionLabel: "Session A" },
+        { ...dummySession, dayOfWeek: 1, sessionLabel: "Session B" },
+        { ...dummySessionW2, dayOfWeek: 1, sessionLabel: "Other week" },
+      ]);
+
+      expect(plan.sessions.map((s) => s.dayOfWeek)).toEqual([1, 2, 1]);
+    });
+
+    it("caps planned sessions per week at 7 and drops excess sessions", () => {
+      const eightSessions = Array.from({ length: 8 }, (_, i) => ({
+        ...dummySession,
+        dayOfWeek: i % 7,
+        sessionLabel: `Session ${i + 1}`,
+      }));
+
+      const plan = TrainingPlan.create("2026-10-28T10:00:00.000Z", 1, eightSessions);
+      expect(plan.sessions).toHaveLength(7);
+      expect(new Set(plan.sessions.map((s) => s.dayOfWeek)).size).toBe(7);
+    });
+
+    it("sorts sessions chronologically by (weekNumber, ISO day of week)", () => {
+      const unsorted = [
+        { ...dummySessionW2, dayOfWeek: 5, sessionLabel: "W2 Friday" },
+        { ...dummySession, dayOfWeek: 5, sessionLabel: "W1 Friday" },
+        { ...dummySession, dayOfWeek: 0, sessionLabel: "W1 Sunday" },
+        { ...dummySession, dayOfWeek: 1, sessionLabel: "W1 Monday" },
+      ];
+
+      const plan = TrainingPlan.create("2026-10-28T10:00:00.000Z", 2, unsorted);
+      expect(plan.sessions.map((s) => `${s.weekNumber}:${s.dayOfWeek}`)).toEqual([
+        "1:1", // W1 Monday
+        "1:5", // W1 Friday
+        "1:0", // W1 Sunday (end of ISO week)
+        "2:5", // W2 Friday
+      ]);
+    });
+  });
+
+  describe("isStructuralReplacementFor", () => {
+    const basePlan = TrainingPlan.create("2026-10-28T10:00:00.000Z", 2, [
+      { ...dummySession, weekNumber: 1, dayOfWeek: 1, sessionLabel: "Upper" },
+      { ...dummySession, weekNumber: 1, dayOfWeek: 3, sessionLabel: "Lower" },
+    ]);
+
+    it("returns false when cycleWeeks and session schedule match (in-place exercise adjustment)", () => {
+      const adjustedExercisesPlan = TrainingPlan.create("2026-10-28T10:00:00.000Z", 2, [
+        {
+          ...dummySession,
+          weekNumber: 1,
+          dayOfWeek: 1,
+          sessionLabel: "Upper",
+          exercises: [{ exerciseName: "Incline Bench", targetSets: 4, restSeconds: 120 }],
+        },
+        { ...dummySession, weekNumber: 1, dayOfWeek: 3, sessionLabel: "Lower" },
+      ]);
+
+      expect(adjustedExercisesPlan.isStructuralReplacementFor(basePlan)).toBe(false);
+    });
+
+    it("returns true when cycleWeeks differ", () => {
+      const diffWeeksPlan = TrainingPlan.create("2026-10-28T10:00:00.000Z", 4, [
+        { ...dummySession, weekNumber: 1, dayOfWeek: 1 },
+        { ...dummySession, weekNumber: 1, dayOfWeek: 3 },
+      ]);
+
+      expect(diffWeeksPlan.isStructuralReplacementFor(basePlan)).toBe(true);
+    });
+
+    it("returns true when session count or days differ", () => {
+      const diffDaysPlan = TrainingPlan.create("2026-10-28T10:00:00.000Z", 2, [
+        { ...dummySession, weekNumber: 1, dayOfWeek: 1 },
+        { ...dummySession, weekNumber: 1, dayOfWeek: 4 }, // shifted from Wed (3) to Thu (4)
+      ]);
+
+      expect(diffDaysPlan.isStructuralReplacementFor(basePlan)).toBe(true);
+    });
   });
 
   describe("reconstitute", () => {
@@ -104,6 +183,34 @@ describe("TrainingPlan", () => {
       const plan = TrainingPlan.create("2026-01-01T00:00:00Z", 2, [dummySession]);
       // The session should be returned regardless of completion status
       expect(plan.getPlannedSessionForDay(1, 1)).toBe(dummySession);
+    });
+  });
+
+  describe("isFullyCompleted", () => {
+    it("returns false for an empty plan so it does not trigger infinite regeneration", () => {
+      const emptyPlan = TrainingPlan.create("2026-01-01T00:00:00Z", 2, []);
+      expect(emptyPlan.isFullyCompleted(new Set())).toBe(false);
+    });
+  });
+
+  describe("isInCurrentCycle", () => {
+    it("rejects same-day logs recorded before the plan was created", () => {
+      const plan = TrainingPlan.create("2026-10-28T14:00:00.000Z", 2, [dummySession]);
+      const earlierSameDayLog = new Date("2026-10-28T10:30:00.000Z");
+      const laterSameDayLog = new Date("2026-10-28T15:00:00.000Z");
+      const now = new Date("2026-10-28T16:00:00.000Z");
+
+      expect(plan.isInCurrentCycle(earlierSameDayLog, now)).toBe(false);
+      expect(plan.isInCurrentCycle(laterSameDayLog, now)).toBe(true);
+    });
+
+    it("tolerates 23-hour daylight saving time transition days without dropping calendar days", () => {
+      // In Berlin/CET, 2026-03-29 is the spring forward DST transition day (23 hours)
+      const plan = TrainingPlan.create("2026-03-28T08:00:00.000Z", 2, [dummySession]);
+      const dayAfterDst = new Date("2026-03-30T10:00:00.000Z");
+
+      // 2 calendar days later must be in cycle
+      expect(plan.isInCurrentCycle(dayAfterDst, dayAfterDst)).toBe(true);
     });
   });
 });

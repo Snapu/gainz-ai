@@ -1,4 +1,3 @@
-import { useDebounceFn } from "@vueuse/core";
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import {
   type DisplayInsight,
@@ -7,14 +6,12 @@ import {
   tryParseCoachingAdvice,
   useAiOrchestratorStore,
   useCoachChatStore,
-  useTrainingPlanStore,
 } from "@/modules/aiCoach/presentation";
 import { useToast } from "@/shared/presentation/composables/useToast";
 
 export function useCoachChatViewModel() {
   const orchestratorStore = useAiOrchestratorStore();
   const chatStore = useCoachChatStore();
-  const planStore = useTrainingPlanStore();
   const { toast } = useToast();
 
   const currentPageIndex = ref(0);
@@ -56,20 +53,6 @@ export function useCoachChatViewModel() {
         userQuestion.value = question;
         toast({
           title: "Error",
-          description: "Failed to send question.",
-          variant: "destructive",
-        });
-      } else {
-        scrollToTop();
-      }
-    });
-  }
-
-  const debouncedRequestAdvice = useDebounceFn(() => {
-    orchestratorStore.requestAdvice().then((result) => {
-      if (result.isErr()) {
-        toast({
-          title: "AI Coaching Error",
           description: getAiErrorDescription(result.error),
           variant: "destructive",
         });
@@ -77,7 +60,7 @@ export function useCoachChatViewModel() {
         scrollToTop();
       }
     });
-  }, 500);
+  }
 
   function scrollToTop() {
     nextTick().then(() => {
@@ -93,24 +76,17 @@ export function useCoachChatViewModel() {
   }
 
   onMounted(() => {
-    orchestratorStore.initialize();
-
-    const hasPlan = !!planStore.activePlan;
-    const hasMessages = coachMessages.value.length > 0;
-
-    if (!hasPlan && !hasMessages) {
-      orchestratorStore.generateNewPlan().then((result) => {
-        if (result.isErr())
-          toast({
-            title: "AI Coaching Error",
-            description: getAiErrorDescription(result.error),
-            variant: "destructive",
-          });
-        else scrollToTop();
-      });
-    } else if (!chatStore.hasTodayCoachMessage) {
-      debouncedRequestAdvice();
-    }
+    orchestratorStore.ensureSessionAdvice().then((result) => {
+      if (result.isErr()) {
+        toast({
+          title: "AI Coaching Error",
+          description: getAiErrorDescription(result.error),
+          variant: "destructive",
+        });
+      } else {
+        scrollToTop();
+      }
+    });
 
     scrollToTop();
   });

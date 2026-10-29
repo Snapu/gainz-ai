@@ -1,48 +1,52 @@
-import { GoogleGenAI, type Schema, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import * as Sentry from "@sentry/vue";
 import { errAsync, okAsync, Result, ResultAsync } from "neverthrow";
+import { z } from "zod";
 import { VALID_MUSCLE_GROUPS } from "@/modules/sharedKernel/application";
 import type { CoachingAdviceError, ExerciseCleanupResult } from "../domain/types";
 
 const CLASSIFICATION_TEMPERATURE = 0.1;
-const MUSCLE_GROUPS_PROMPT_LIST = [...VALID_MUSCLE_GROUPS].join(", ");
+const MUSCLE_GROUPS_LIST = [...VALID_MUSCLE_GROUPS];
+const MUSCLE_GROUPS_PROMPT_LIST = MUSCLE_GROUPS_LIST.join(", ");
 
-const exerciseCleanupSchema: Schema = {
-  type: Type.OBJECT,
-  required: ["classifications"],
-  properties: {
-    classifications: {
-      type: Type.ARRAY,
-      description: "Muscle group assignments for unknown exercises.",
-      items: {
-        type: Type.OBJECT,
-        required: ["exerciseName", "primaryMuscle", "confidence"],
-        properties: {
-          exerciseName: { type: Type.STRING },
-          primaryMuscle: {
-            type: Type.STRING,
-            description: `Primary muscle group. Must be one of: ${MUSCLE_GROUPS_PROMPT_LIST}.`,
-          },
-          secondaryMuscles: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              required: ["muscleGroup"],
-              properties: {
-                muscleGroup: { type: Type.STRING },
-                contribution: { type: Type.NUMBER },
-              },
-            },
-          },
-          confidence: {
-            type: Type.NUMBER,
-            description: "Confidence score 0.0–1.0. Use < 0.8 only when genuinely ambiguous.",
-          },
-        },
-      },
-    },
-  },
-};
+const muscleGroupSchema =
+  MUSCLE_GROUPS_LIST.length > 0
+    ? z
+        .enum(MUSCLE_GROUPS_LIST as [string, ...string[]])
+        .describe(`Must be one of: ${MUSCLE_GROUPS_PROMPT_LIST}.`)
+    : z.string();
+
+function createExerciseCleanupSchema(muscleSchema: z.ZodType<string>) {
+  return z.object({
+    classifications: z
+      .array(
+        z.object({
+          exerciseName: z.string(),
+          primaryMuscle: muscleSchema.describe(
+            `Primary muscle group. Must be one of: ${MUSCLE_GROUPS_PROMPT_LIST}.`,
+          ),
+          secondaryMuscles: z
+            .array(
+              z.object({
+                muscleGroup: muscleSchema,
+                contribution: z.number().optional(),
+              }),
+            )
+            .optional(),
+          confidence: z
+            .number()
+            .describe("Confidence score 0.0–1.0. Use < 0.8 only when genuinely ambiguous."),
+        }),
+      )
+      .describe("Muscle group assignments for unknown exercises."),
+  });
+}
+
+const { $schema: _omitted, ...exerciseCleanupJsonSchema } = z.toJSONSchema(
+  createExerciseCleanupSchema(muscleGroupSchema),
+) as Record<string, unknown>;
+
+const exerciseCleanupValidationSchema = createExerciseCleanupSchema(z.string());
 
 function isServiceUnavailableError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
@@ -83,7 +87,7 @@ Important rules:
 
   const classifyConfig = {
     responseMimeType: "application/json",
-    responseSchema: exerciseCleanupSchema,
+    responseJsonSchema: exerciseCleanupJsonSchema,
     temperature: CLASSIFICATION_TEMPERATURE,
   };
   const classifyContents = [{ role: "user" as const, parts: [{ text: prompt }] }];
@@ -132,9 +136,12 @@ Important rules:
       });
       return "coaching-request-failed" as const;
     })
-    .andThen((response) => {
-      const parseResult = Result.fromThrowable(
-        () => JSON.parse(response.text ?? "") as ExerciseCleanupResult,
+    .andThen((response) =>
+      Result.fromThrowable(
+        () =>
+          exerciseCleanupValidationSchema.parse(
+            JSON.parse(response.text ?? ""),
+          ) as ExerciseCleanupResult,
         (error) => {
           console.error("Exercise classification failed:", error);
           Sentry.captureException(error, {
@@ -143,24 +150,6 @@ Important rules:
           });
           return "coaching-request-failed" as const;
         },
-      )();
-
-      if (parseResult.isErr()) {
-        return errAsync<ExerciseCleanupResult, CoachingAdviceError>(
-          parseResult.error as CoachingAdviceError,
-        );
-      }
-
-      const parsed = parseResult.value;
-      if (!Array.isArray(parsed?.classifications)) {
-        Sentry.captureMessage("Exercise classification returned invalid schema", {
-          level: "warning",
-          tags: { scope: "ai-service", feature: "exercise-classification" },
-          extra: { exerciseCount: exerciseNames.length },
-        });
-        return errAsync<ExerciseCleanupResult, CoachingAdviceError>("coaching-request-failed");
-      }
-
-      return okAsync<ExerciseCleanupResult, CoachingAdviceError>(parsed);
-    });
+      )(),
+    );
 }

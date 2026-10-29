@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/vue";
-import { errAsync, okAsync, ResultAsync } from "neverthrow";
+import { errAsync, okAsync, type ResultAsync } from "neverthrow";
 import { defineStore } from "pinia";
 import { watch } from "vue";
 
@@ -15,6 +15,9 @@ import {
   type CoachingAdvice,
   type CoachingAdviceError,
   type CoachingMessage,
+  type CoachingMode,
+  type PlannedSession,
+  resolveEffectiveCoachingMode,
   TrainingPlan,
 } from "@/modules/aiCoach/domain";
 import { createAiCoachService } from "@/modules/aiCoach/infrastructure";
@@ -68,14 +71,6 @@ function createCoachMessage(
   };
 }
 
-function isCoachingAdviceError(value: unknown): value is CoachingAdviceError {
-  return (
-    value === "missing-api-key" ||
-    value === "coaching-request-failed" ||
-    value === "generate-content-stream-failed"
-  );
-}
-
 function getTodayLogsChecksum(
   session: { logs: { id: string; reps?: number; weight?: number }[] } | null,
 ): string {
@@ -98,6 +93,21 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
   const aiCoachService = createAiCoachService();
 
   let hasInitialized = false;
+  let inFlightMode: CoachingMode | null = null;
+  let pendingRequest: { question?: string; mode: CoachingMode } | null = null;
+
+  function isPlanningQueuedOrInFlight(): boolean {
+    return inFlightMode === "planning" || pendingRequest?.mode === "planning";
+  }
+
+  function drainPendingRequest(): ResultAsync<void, CoachingAdviceError> | null {
+    inFlightMode = null;
+    chatStore.isLoading = false;
+    const next = pendingRequest;
+    if (!next) return null;
+    pendingRequest = null;
+    return runCoachingRequest(next.question, next.mode);
+  }
 
   function initialize(): void {
     if (hasInitialized) return;
@@ -138,44 +148,87 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
       });
   }
 
+  /** Surfaces bad model output when `TrainingPlan.create` had to move a session to a free day. */
+  function reportRescheduledSessions(
+    requested: PlannedSession[],
+    created: readonly PlannedSession[],
+  ): void {
+    const createdByWeekAndLabel = new Map(
+      created.map((s) => [`${s.weekNumber}:${s.sessionLabel}`, s]),
+    );
+    const moved = requested.filter((session) => {
+      const match = createdByWeekAndLabel.get(`${session.weekNumber}:${session.sessionLabel}`);
+      return match && match.dayOfWeek !== session.dayOfWeek;
+    });
+    if (moved.length === 0) return;
+
+    Sentry.captureMessage("AI training plan contained colliding session days", {
+      level: "warning",
+      tags: { scope: "ai-store", feature: "plan-day-collision" },
+      extra: {
+        moved: moved.map((s) => ({ week: s.weekNumber, day: s.dayOfWeek, label: s.sessionLabel })),
+      },
+    });
+  }
+
+  function applyTrainingPlanIfPresent(
+    advice: CoachingAdvice,
+    userMessageId: string,
+    explicitFullReset: boolean,
+  ): void {
+    if (!advice.trainingPlan) return;
+
+    try {
+      const newPlanDraft = TrainingPlan.create(
+        new Date().toISOString(),
+        advice.trainingPlan.cycleWeeks,
+        advice.trainingPlan.sessions,
+      );
+
+      const isFullPlanReset =
+        explicitFullReset ||
+        !planStore.activePlan ||
+        planStore.activePlan.sessions.length === 0 ||
+        newPlanDraft.isStructuralReplacementFor(planStore.activePlan);
+
+      const planCreatedAt =
+        !isFullPlanReset && planStore.activePlan
+          ? planStore.activePlan.createdAt
+          : new Date().toISOString();
+      const newPlan = TrainingPlan.create(
+        planCreatedAt,
+        advice.trainingPlan.cycleWeeks,
+        advice.trainingPlan.sessions,
+      );
+      reportRescheduledSessions(advice.trainingPlan.sessions, newPlan.sessions);
+      if (isFullPlanReset) {
+        planStore.clearCompletedSessions();
+      }
+      planStore.setPlan(newPlan);
+      if (isFullPlanReset) {
+        chatStore.retainOnlyMessage(userMessageId);
+      }
+    } catch (e) {
+      Sentry.captureException(e, { tags: { scope: "ai-store", feature: "extract-plan" } });
+    }
+  }
+
   function handleCoachingSuccess(
     result: { advice: CoachingAdvice; requestPayload: string },
     userMessageId: string,
     currentId: string,
     todayLogsCount: number,
     todayLogsChecksum: string,
-  ) {
-    try {
-      const advice = result.advice;
-      if (advice.trainingPlan) {
-        const oldSessionId = currentId;
-        const newPlan = TrainingPlan.create(
-          new Date().toISOString(),
-          advice.trainingPlan.cycleWeeks,
-          advice.trainingPlan.sessions,
-        );
-        planStore.setPlan(newPlan);
-
-        const newSessionId = chatStore.currentSessionId;
-        if (newSessionId !== oldSessionId) {
-          chatStore.removeMessagesFromSession(oldSessionId);
-          currentId = newSessionId;
-          // Clean up old messages locally, keep only current user message
-          chatStore.retainOnlyMessage(userMessageId);
-        }
-      }
-    } catch (e) {
-      Sentry.captureException(e, { tags: { scope: "ai-store", feature: "extract-plan" } });
-    }
-
+    isFullPlanReset: boolean,
+  ): void {
+    chatStore.updateMessageContent(userMessageId, result.requestPayload);
+    applyTrainingPlanIfPresent(result.advice, userMessageId, isFullPlanReset);
     exerciseMuscleMapStore.refresh();
 
     if (adviceStartsDeload(result.advice) && !deloadStore.active) {
       const { riskScore, triggeredBy } = trainingInsightsStore.insights.fatigue;
       deloadStore.startDeload(riskScore, mapTrainingFatigueTriggersToDeload(triggeredBy));
     }
-
-    chatStore.updateMessageContent(userMessageId, result.requestPayload);
 
     const coachMessage = createCoachMessage(
       currentId,
@@ -191,121 +244,118 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     };
   }
 
-  function handleCoachingError(error: unknown, userMessageId: string, _currentId: string) {
-    if (userMessageId) {
-      chatStore.removeMessage(userMessageId);
-    }
-
-    if (isCoachingAdviceError(error)) {
-      throw error;
-    }
-
-    console.error("AI request failed:", error);
-    Sentry.captureException(error, {
-      tags: { scope: "ai-store", feature: "ask-ai" },
-      extra: { hasPendingUserMessage: !!userMessageId },
-    });
-    throw "coaching-request-failed" as const;
-  }
-
   function runCoachingRequest(
     question?: string,
-    mode: "planning" | "execution" = "execution",
+    mode: CoachingMode = "execution",
   ): ResultAsync<void, CoachingAdviceError> {
     const apiKey = userProfileStore.apiKey;
     if (!apiKey) {
       return errAsync("missing-api-key" as CoachingAdviceError);
     }
 
-    chatStore.isLoading = true;
-    chatStore.pendingRequest = null;
+    const initialSession = resolveCurrentSession(exerciseLogsStore.exerciseLogs);
+    const initialChecksum = getTodayLogsChecksum(initialSession);
+    const today = isoDateString(new Date());
+    const initialEffectiveMode = resolveEffectiveCoachingMode({
+      requestedMode: mode,
+      hasActivePlan: Boolean(planStore.activePlan && planStore.activePlan.sessions.length > 0),
+    });
 
-    return ResultAsync.fromPromise(
-      (async (): Promise<void> => {
+    if (
+      !question &&
+      initialEffectiveMode === "execution" &&
+      planStore.activePlan &&
+      planStore.activePlan.sessions.length > 0 &&
+      chatStore.lastRequestState.date === today &&
+      chatStore.lastRequestState.checksum === initialChecksum &&
+      chatStore.messages.length > 0
+    ) {
+      return okAsync(undefined);
+    }
+
+    chatStore.isLoading = true;
+    pendingRequest = null;
+    inFlightMode = initialEffectiveMode;
+
+    return classifyExercisesIfNeeded()
+      .andThen(() => {
+        let activeQuestion = question;
+        let activeMode = mode;
+        if (pendingRequest?.mode === "planning") {
+          activeQuestion = pendingRequest.question ?? activeQuestion;
+          activeMode = "planning";
+          pendingRequest = null;
+        }
+
         const currentId = chatStore.currentSessionId;
         const currentSession = resolveCurrentSession(exerciseLogsStore.exerciseLogs);
         const todayLogsCount = getTodayLogsCount(aiCoachService, currentSession);
         const todayLogsChecksum = getTodayLogsChecksum(currentSession);
-        const today = isoDateString(new Date());
+        const effectiveMode = resolveEffectiveCoachingMode({
+          requestedMode: activeMode,
+          hasActivePlan: Boolean(planStore.activePlan && planStore.activePlan.sessions.length > 0),
+        });
+        inFlightMode = effectiveMode;
 
-        if (
-          !question &&
-          chatStore.lastRequestState.date === today &&
-          chatStore.lastRequestState.checksum === todayLogsChecksum &&
-          chatStore.messages.length > 0
-        ) {
-          return;
-        }
-
-        await classifyExercisesIfNeeded();
-
+        const previousMessages = [...chatStore.messages];
         const userMessage = createUserMessagePlaceholder(
           currentId,
           todayLogsCount,
           todayLogsChecksum,
         );
-        const userMessageId = userMessage.id;
-
-        try {
-          const previousMessages = [...chatStore.messages];
-          if (question) {
-            userMessage.content = question;
-          }
-          chatStore.addMessage(userMessage);
-
-          const result = await requestAdviceWithSingleRetry(aiCoachService, {
-            apiKey,
-            userProfile: userProfileStore.userProfile,
-            insights: trainingInsightsStore.insights,
-            exerciseLogs: exerciseLogsStore.exerciseLogs,
-            trainingSummaries: trainingSummaryStore.summaries,
-            previousMessages: previousMessages,
-            events: eventsStore.events,
-            question,
-            mode,
-            activePlan: planStore.activePlan ?? undefined,
-            completedSessionKeys: planStore.completedSessions,
-          });
-
-          if (result.isErr()) {
-            throw result.error;
-          }
-
-          handleCoachingSuccess(
-            result.value,
-            userMessageId,
-            currentId,
-            todayLogsCount,
-            todayLogsChecksum,
-          );
-        } catch (error) {
-          handleCoachingError(error, userMessageId, currentId);
+        if (activeQuestion) {
+          userMessage.content = activeQuestion;
         }
-      })(),
-      (error) => (isCoachingAdviceError(error) ? error : "coaching-request-failed"),
-    )
-      .andThen((result) => {
-        chatStore.isLoading = false;
-        const pending = chatStore.pendingRequest;
-        if (pending) return runCoachingRequest(pending.question, pending.mode);
-        return okAsync(result);
+        const userMessageId = userMessage.id;
+        chatStore.addMessage(userMessage);
+
+        return requestAdviceWithSingleRetry(aiCoachService, {
+          apiKey,
+          userProfile: userProfileStore.userProfile,
+          insights: trainingInsightsStore.insights,
+          exerciseLogs: exerciseLogsStore.exerciseLogs,
+          trainingSummaries: trainingSummaryStore.summaries,
+          previousMessages,
+          events: eventsStore.events,
+          question: activeQuestion,
+          mode: activeMode,
+          activePlan: planStore.activePlan ?? undefined,
+          completedSessionKeys: planStore.completedSessions,
+        })
+          .andTee((result) => {
+            handleCoachingSuccess(
+              result,
+              userMessageId,
+              currentId,
+              todayLogsCount,
+              todayLogsChecksum,
+              effectiveMode === "planning",
+            );
+          })
+          .orTee(() => {
+            chatStore.removeMessage(userMessageId);
+          });
       })
-      .orElse((error) => {
-        chatStore.isLoading = false;
-        const pending = chatStore.pendingRequest;
-        if (pending) return runCoachingRequest(pending.question, pending.mode);
-        return errAsync(error);
+      .map(() => undefined)
+      .andTee(() => {
+        void drainPendingRequest();
+      })
+      .orTee(() => {
+        void drainPendingRequest();
       });
   }
 
   function requestAdvice(
     question?: string,
-    mode: "planning" | "execution" = "execution",
+    mode: CoachingMode = "execution",
   ): ResultAsync<void, CoachingAdviceError> {
     initialize();
 
     if (chatStore.isLoading) {
-      chatStore.pendingRequest = { question, mode };
+      if (!question && mode === "execution") {
+        return okAsync(undefined);
+      }
+      pendingRequest = { question, mode };
       return okAsync(undefined);
     }
 
@@ -316,7 +366,10 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     initialize();
 
     if (chatStore.isLoading) {
-      chatStore.pendingRequest = {
+      if (isPlanningQueuedOrInFlight()) {
+        return okAsync(undefined);
+      }
+      pendingRequest = {
         question: "Please generate a new 2-week mesocycle plan.",
         mode: "planning",
       };
@@ -324,6 +377,18 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     }
 
     return runCoachingRequest("Please generate a new 2-week mesocycle plan.", "planning");
+  }
+
+  function ensureSessionAdvice(): ResultAsync<void, CoachingAdviceError> {
+    initialize();
+
+    if (!planStore.activePlan || planStore.activePlan.sessions.length === 0) {
+      return generateNewPlan();
+    }
+    if (!chatStore.hasTodayCoachMessage) {
+      return requestAdvice();
+    }
+    return okAsync(undefined);
   }
 
   // Watch for completed sessions logic
@@ -366,6 +431,7 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     initialize,
     requestAdvice,
     generateNewPlan,
+    ensureSessionAdvice,
     classifyExercisesIfNeeded,
   };
 });

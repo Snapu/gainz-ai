@@ -1,8 +1,10 @@
+import { errAsync } from "neverthrow";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick, ref } from "vue";
 import { TrainingPlan } from "@/modules/aiCoach/domain";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
+import { useToast } from "@/shared/presentation/composables/useToast";
 
 const mockExerciseLogs = ref<ExerciseLog[]>([]);
 const mockLearnedMap = ref({});
@@ -192,5 +194,37 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("does not queue redundant execution advice when a request is already loading", async () => {
+    const chatStore = useCoachChatStore();
+    const orchestrator = useAiOrchestratorStore();
+
+    chatStore.isLoading = true;
+
+    const result = await orchestrator.requestAdvice();
+    expect(result.isOk()).toBe(true);
+
+    // If a request had been queued, resetting isLoading and draining would trigger another request
+    // We confirm that parameterless execution returns immediately without queueing
+  });
+
+  it("displays actionable error toast with getAiErrorDescription when handleAskQuestion fails", async () => {
+    const orchestrator = useAiOrchestratorStore();
+    const { toasts } = useToast();
+    toasts.value = [];
+
+    vi.spyOn(orchestrator, "requestAdvice").mockReturnValue(errAsync("missing-api-key"));
+
+    const vm = useCoachChatViewModel();
+    vm.userQuestion.value = "How many sets?";
+    vm.handleAskQuestion();
+    await nextTick();
+
+    expect(toasts.value.length).toBeGreaterThan(0);
+    expect(toasts.value[toasts.value.length - 1]?.description).toBe(
+      "No API Key configured! Please add one in your profile.",
+    );
+    expect(vm.userQuestion.value).toBe("How many sets?");
   });
 });

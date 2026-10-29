@@ -3,11 +3,12 @@ import { isoDateString } from "@/modules/sharedKernel/domain";
 import {
   getSessionStartBoundary,
   resolveCurrentSession,
+  type WorkoutPhase,
   type WorkoutSession,
 } from "@/modules/trainingLogs/application";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 import type { TrainingSummary } from "@/modules/trainingSummary/domain";
-import type { CoachingAdviceRequest, CoachingMessage } from "../domain";
+import type { CoachingAdviceRequest, CoachingIntent, CoachingMessage } from "../domain";
 import {
   buildPriorPlanSummary,
   compactLogs,
@@ -27,7 +28,7 @@ export interface AssemblePromptContext {
   session: WorkoutSession | null;
   todayLogs: ExerciseLog[];
   isFirstMessage: boolean;
-  phase: string;
+  workoutPhase: WorkoutPhase;
   isMidWorkout: boolean;
   recentExerciseNames: Set<string>;
   initialWindow: ReturnType<typeof getInitialLogsWindow>;
@@ -43,8 +44,8 @@ export function assemblePromptContext(
   const session = resolveCurrentSession(exerciseLogs);
   const todayLogs = session?.logs ?? [];
   const isFirstMessage = previousMessages.length === 0;
-  const phase = getWorkoutPhase(session);
-  const isMidWorkout = phase === "mid-workout";
+  const workoutPhase = getWorkoutPhase(session);
+  const isMidWorkout = workoutPhase === "mid-workout";
   const recentExerciseNames = getRecentExerciseNames(exerciseLogs, previousMessages, 90);
   const initialWindow = getInitialLogsWindow(exerciseLogs);
   const workoutStatus = getWorkoutStatus(session);
@@ -55,7 +56,7 @@ export function assemblePromptContext(
     session,
     todayLogs,
     isFirstMessage,
-    phase,
+    workoutPhase,
     isMidWorkout,
     recentExerciseNames,
     initialWindow,
@@ -68,22 +69,23 @@ export function assemblePromptContext(
 function buildSessionSection(
   options: CoachingAdviceRequest,
   context: AssemblePromptContext,
+  { activePlanForPrompt }: CoachingIntent,
 ): string {
-  const { session, phase, workoutStatus, now, currentTime } = context;
-  const { userProfile, exerciseLogs, activePlan } = options;
+  const { session, workoutPhase, workoutStatus, now, currentTime } = context;
+  const { userProfile, exerciseLogs } = options;
 
   const parts: string[] = [
     `date: ${isoDateString(now)} ${currentTime}`,
     `status: ${workoutStatus}`,
-    `phase: ${phase}`,
+    `phase: ${workoutPhase}`,
   ];
 
   const restDays = getDaysSinceLastWorkout(exerciseLogs, session);
   if (restDays !== null) parts.push(`restDays: ${restDays}`);
 
-  if (activePlan) {
+  if (activePlanForPrompt) {
     parts.push("planStatus: active");
-    parts.push(`cycleWeek: ${activePlan.getCurrentWeekNumber(now)}`);
+    parts.push(`cycleWeek: ${activePlanForPrompt.getCurrentWeekNumber(now)}`);
   }
 
   if (context.isFirstMessage) {
@@ -142,12 +144,13 @@ function buildHistorySection(summaries: TrainingSummary[]): string {
 function buildWorkloadSection(
   options: CoachingAdviceRequest,
   context: AssemblePromptContext,
+  { effectiveMode }: CoachingIntent,
   sections: string[],
 ): void {
   const { insights, exerciseLogs, question } = options;
-  const { isFirstMessage, phase, recentExerciseNames } = context;
+  const { isFirstMessage, workoutPhase, recentExerciseNames } = context;
 
-  if (phase === "planning" || isFirstMessage || question) {
+  if (effectiveMode === "planning" || workoutPhase === "planning" || isFirstMessage || question) {
     sections.push(`# workload\n${formatWorkload(insights)}`);
     sections.push(`# muscles\n${formatMuscles(insights)}`);
     sections.push(`# exercises\n${formatExercises(insights, exerciseLogs, recentExerciseNames)}`);
@@ -189,18 +192,13 @@ function buildUpdatesSection(
 export function assembleCoachingPrompt(
   options: CoachingAdviceRequest,
   context: AssemblePromptContext,
+  intent: CoachingIntent,
 ): string {
-  const {
-    userProfile,
-    trainingSummaries,
-    events = [],
-    question,
-    activePlan,
-    completedSessionKeys,
-  } = options;
+  const { userProfile, trainingSummaries, events = [], question, completedSessionKeys } = options;
+  const { activePlanForPrompt } = intent;
   const { session, todayLogs, isFirstMessage, initialWindow } = context;
 
-  const sections: string[] = [buildSessionSection(options, context)];
+  const sections: string[] = [buildSessionSection(options, context, intent)];
 
   if (question) sections.push(`# question\n${question}`);
 
@@ -209,14 +207,14 @@ export function assembleCoachingPrompt(
     if (freeInput) sections.push(`# goals\n${freeInput}`);
   }
 
-  buildWorkloadSection(options, context, sections);
+  buildWorkloadSection(options, context, intent, sections);
 
   if (todayLogs.length > 0) sections.push(`# today\n${compactLogs(todayLogs)}`);
 
   buildUpdatesSection(options, context, sections);
 
-  if (activePlan) {
-    sections.push(`# program\n${formatPlanForPrompt(activePlan, completedSessionKeys)}`);
+  if (activePlanForPrompt) {
+    sections.push(`# program\n${formatPlanForPrompt(activePlanForPrompt, completedSessionKeys)}`);
   }
 
   if (isFirstMessage || question) {

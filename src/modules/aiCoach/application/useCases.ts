@@ -45,6 +45,12 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Retries once, but only when the model produced unusable output
+ * (`generate-content-stream-failed`). Request failures (`coaching-request-failed`) already
+ * went through the primary → fallback model sequence, so repeating them would only extend
+ * the loading time; `missing-api-key` can never succeed on retry.
+ */
 export function requestAdviceWithSingleRetry(
   service: AiCoachService,
   options: CoachingAdviceRequest,
@@ -53,7 +59,7 @@ export function requestAdviceWithSingleRetry(
   const askOnce = () => requestAdvice(service, options);
 
   return askOnce().orElse((error) => {
-    if (error === "missing-api-key") return errAsync(error);
+    if (error !== "generate-content-stream-failed") return errAsync(error);
 
     return ResultAsync.fromPromise(
       delay(retryDelayMs),

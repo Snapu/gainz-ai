@@ -19,8 +19,6 @@ export const useCoachChatStore = defineStore("coachChat", () => {
     { date: "", checksum: "" },
   );
 
-  const pendingRequest = ref<{ question?: string; mode: "planning" | "execution" } | null>(null);
-
   const messageRepository = new LocalStorageMessageRepository();
   const exerciseLogsStore = useExerciseLogsStore();
 
@@ -82,14 +80,6 @@ export const useCoachChatStore = defineStore("coachChat", () => {
     messageRepository.saveMessages(currentSessionId.value, messages.value);
   }
 
-  function removeMessagesFromSession(sessionId: string) {
-    messageRepository.removeMessages(sessionId);
-    // If the removed session is the current one, clear messages from memory too
-    if (sessionId === currentSessionId.value) {
-      messages.value = [];
-    }
-  }
-
   function clearMessages() {
     messages.value = [];
     messageRepository.removeMessages(currentSessionId.value);
@@ -128,12 +118,10 @@ export const useCoachChatStore = defineStore("coachChat", () => {
     isLoading,
     hasInitialized,
     lastRequestState,
-    pendingRequest,
     currentSessionId,
     addMessage,
     updateMessageContent,
     removeMessage,
-    removeMessagesFromSession,
     clearMessages,
     retainOnlyMessage,
     currentWorkoutPlan,

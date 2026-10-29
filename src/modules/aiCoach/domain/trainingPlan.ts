@@ -25,7 +25,37 @@ export class TrainingPlan {
     sessions: PlannedSession[],
   ): TrainingPlan {
     const validCycleWeeks = Math.max(1, Math.min(4, cycleWeeks || 2));
-    return new TrainingPlan(createdAt, validCycleWeeks, sessions);
+    const usedDaysByWeek = new Map<number, Set<number>>();
+    const normalizedSessions: PlannedSession[] = [];
+
+    for (const session of sessions) {
+      let usedDays = usedDaysByWeek.get(session.weekNumber);
+      if (!usedDays) {
+        usedDays = new Set<number>();
+        usedDaysByWeek.set(session.weekNumber, usedDays);
+      }
+
+      if (usedDays.size >= 7) {
+        continue;
+      }
+
+      let dayOfWeek = ((session.dayOfWeek % 7) + 7) % 7;
+      for (let offset = 0; offset < 7 && usedDays.has(dayOfWeek); offset++) {
+        dayOfWeek = (dayOfWeek + 1) % 7;
+      }
+      usedDays.add(dayOfWeek);
+
+      normalizedSessions.push(
+        dayOfWeek === session.dayOfWeek ? session : { ...session, dayOfWeek },
+      );
+    }
+
+    const toIsoDay = (d: number) => (d === 0 ? 7 : d);
+    normalizedSessions.sort(
+      (a, b) => a.weekNumber - b.weekNumber || toIsoDay(a.dayOfWeek) - toIsoDay(b.dayOfWeek),
+    );
+
+    return new TrainingPlan(createdAt, validCycleWeeks, normalizedSessions);
   }
 
   /**
@@ -57,7 +87,27 @@ export class TrainingPlan {
   }
 
   public isFullyCompleted(completedKeys: ReadonlySet<string>): boolean {
-    return this.sessions.every((s) => TrainingPlan.isCompleted(s, completedKeys));
+    return (
+      this.sessions.length > 0 &&
+      this.sessions.every((s) => TrainingPlan.isCompleted(s, completedKeys))
+    );
+  }
+
+  /**
+   * Determines if this plan represents a structural replacement
+   * (different cycle weeks, session count, or session schedule) rather
+   * than an in-place exercise adjustment of the current cycle.
+   */
+  public isStructuralReplacementFor(other: TrainingPlan): boolean {
+    if (this.cycleWeeks !== other.cycleWeeks) return true;
+    if (this.sessions.length !== other.sessions.length) return true;
+
+    const otherKeys = new Set(
+      other.sessions.map((s) => TrainingPlan.sessionKey(s.weekNumber, s.dayOfWeek)),
+    );
+    return this.sessions.some(
+      (s) => !otherKeys.has(TrainingPlan.sessionKey(s.weekNumber, s.dayOfWeek)),
+    );
   }
 
   /**
@@ -138,13 +188,17 @@ export class TrainingPlan {
     if (!this.createdAt) return -1;
     const currentDay = TrainingPlan.startOfDayMs(currentDate);
     const createdDay = TrainingPlan.startOfDayMs(this.createdAt);
-    return Math.floor((currentDay - createdDay) / (24 * 60 * 60 * 1000));
+    return Math.round((currentDay - createdDay) / (24 * 60 * 60 * 1000));
   }
 
   /**
    * Determines if a log date falls into the same cycle as the current date.
    */
   public isInCurrentCycle(logDate: Date, currentDate: Date = new Date()): boolean {
+    if (!this.createdAt) return false;
+    const createdMs = new Date(this.createdAt).getTime();
+    if (!Number.isNaN(createdMs) && logDate.getTime() < createdMs) return false;
+
     const logDiffDays = this.getDiffDays(logDate);
     // If the log is from before the plan started, it's never in the current cycle
     if (logDiffDays < 0) return false;

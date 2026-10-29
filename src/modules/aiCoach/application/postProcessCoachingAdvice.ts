@@ -18,8 +18,8 @@ export function postProcessCoachingAdvice(
   phase: WorkoutPhase,
   deloadStatus: DeloadStatus,
 ): CoachingAdvice {
-  // We clone the object to avoid mutating the original
-  const cleaned: CoachingAdvice = { ...parsedCoachingAdvice };
+  // Deep clone to guarantee input immutability
+  const cleaned: CoachingAdvice = structuredClone(parsedCoachingAdvice);
 
   // 1. Phase orchestration: user is done, no new workout needed
   if (phase === "post-workout") {
@@ -43,7 +43,18 @@ export function postProcessCoachingAdvice(
         updatedEx.restSeconds = clampRestSeconds(updatedEx.targetReps, updatedEx.restSeconds);
       }
 
-      // 4. ACL Defense: Guard against AI returning old format despite prompt instructions
+      // 4. Target RPE normalization & defaulting for resistance exercises
+      if (updatedEx.targetRpe != null) {
+        updatedEx.targetRpe = Math.max(6, Math.min(10, Math.round(updatedEx.targetRpe * 2) / 2));
+      } else if (
+        updatedEx.targetReps &&
+        !updatedEx.targetDurationSeconds &&
+        !updatedEx.targetDistanceMeters
+      ) {
+        updatedEx.targetRpe = deloadStatus === "active" ? 6.5 : 8.5;
+      }
+
+      // 5. ACL Defense: Guard against AI returning old format despite prompt instructions
       // TODO(TechDebt): Remove `upcastLegacyExercise` once we are confident the AI will
       // never hallucinate string-based durations like `targetReps: "30s"`.
       return upcastLegacyExercise(updatedEx);
@@ -58,14 +69,39 @@ export function postProcessCoachingAdvice(
       exercises: session.exercises.map((ex) => {
         // TODO(TechDebt): Remove `upcastLegacyExercise`
         const upcasted = upcastLegacyExercise(ex);
+        let targetRpe = upcasted.targetRpe;
+        if (targetRpe != null) {
+          targetRpe = Math.max(6, Math.min(10, Math.round(targetRpe * 2) / 2));
+        } else if (
+          upcasted.targetReps &&
+          !upcasted.targetDurationSeconds &&
+          !upcasted.targetDistanceMeters
+        ) {
+          targetRpe = deloadStatus === "active" ? 6.5 : 8.5;
+        }
+
         return {
           ...upcasted,
+          targetRpe,
           restSeconds: upcasted.targetReps
             ? clampRestSeconds(upcasted.targetReps, upcasted.restSeconds)
             : upcasted.restSeconds,
         };
       }),
     }));
+
+    // Backfill today's workout from the first planned session ONLY if recommendedWorkout was omitted
+    // during the full mesocycle planning phase (preserves an explicit empty array `[]` when the coach prescribes a rest day).
+    if (
+      phase === "planning" &&
+      cleaned.recommendedWorkout === undefined &&
+      cleaned.trainingPlan.sessions.length > 0
+    ) {
+      const firstSession = cleaned.trainingPlan.sessions[0];
+      if (firstSession && firstSession.exercises.length > 0) {
+        cleaned.recommendedWorkout = firstSession.exercises.map((ex) => ({ ...ex }));
+      }
+    }
   }
 
   return cleaned;

@@ -145,7 +145,12 @@ export function useHomeWorkoutViewModel() {
     return (session?.exercises as DisplayExercise[]) ?? null;
   });
 
-  const activeWorkout = computed<DisplayExercise[] | null>(() => {
+  /**
+   * Today's latest coach-prescribed workout. An empty array means the coach explicitly
+   * prescribed a rest day; `undefined` means no coach message set a workout today
+   * (e.g. mid-workout Q&A omits the field), so callers should fall back to the plan.
+   */
+  const todaysCoachWorkout = computed<DisplayExercise[] | undefined>(() => {
     const today = isoDateString(currentReactiveTime.value);
     const coachMessagesList = chatStore.messages
       .filter((m) => m.role === "coach")
@@ -155,12 +160,18 @@ export function useHomeWorkoutViewModel() {
       const msgDate = isoDateString(new Date(msg.timestamp));
       if (msgDate !== today) break;
       const parsed = tryParseCoachingAdvice(msg.content);
-      if (parsed?.recommendedWorkout && parsed.recommendedWorkout.length > 0) {
+      if (Array.isArray(parsed?.recommendedWorkout)) {
         return parsed.recommendedWorkout as DisplayExercise[];
       }
     }
-    return planDerivedWorkout.value;
+    return undefined;
   });
+
+  const isCoachRestDay = computed<boolean>(() => todaysCoachWorkout.value?.length === 0);
+
+  const activeWorkout = computed<DisplayExercise[] | null>(
+    () => todaysCoachWorkout.value ?? planDerivedWorkout.value,
+  );
 
   const completedSetsMap = computed<Map<string, number>>(() => {
     const today = new Date(currentReactiveTime.value);
@@ -205,6 +216,25 @@ export function useHomeWorkoutViewModel() {
   const allWorkoutGroups = computed<DisplayWorkoutGroup[] | null>(() => {
     if (!activeWorkout.value) return null;
     return groupWorkout(activeWorkout.value);
+  });
+
+  const isWorkoutComplete = computed<boolean>(() => {
+    return Boolean(
+      allWorkoutGroups.value?.length &&
+        !activeWorkoutGroups.value?.length &&
+        completedExercises.value.length,
+    );
+  });
+
+  const hasActivePlan = computed<boolean>(() =>
+    Boolean(planStore.activePlan && planStore.activePlan.sessions.length > 0),
+  );
+
+  const isRestDay = computed<boolean>(() => {
+    if (todaysCoachWorkout.value !== undefined) {
+      return isCoachRestDay.value;
+    }
+    return hasActivePlan.value && !planDerivedWorkout.value?.length;
   });
 
   function isExerciseCompleted(exercise: DisplayExercise) {
@@ -417,16 +447,7 @@ export function useHomeWorkoutViewModel() {
   });
 
   onMounted(() => {
-    orchestratorStore.initialize();
-
-    const hasPlan = !!planStore.activePlan;
-    const hasMessages = chatStore.messages.length > 0;
-
-    if (!hasPlan && !hasMessages) {
-      orchestratorStore.generateNewPlan();
-    } else if (!chatStore.hasTodayCoachMessage) {
-      orchestratorStore.requestAdvice();
-    }
+    orchestratorStore.ensureSessionAdvice();
   });
 
   return {
@@ -434,7 +455,9 @@ export function useHomeWorkoutViewModel() {
     logsStore,
     spreadsheetStore,
     chatStore,
-    planStore,
+    hasActivePlan,
+    isRestDay,
+    isWorkoutComplete,
     WIZARD_STEPS,
     isSummaryReady,
     userProgress,
@@ -447,6 +470,7 @@ export function useHomeWorkoutViewModel() {
     allWorkoutGroups,
     completedExercises,
     planDerivedWorkout,
+    isCoachRestDay,
     currentSessionElapsedText,
     getExerciseProgress,
     getExerciseProgression,

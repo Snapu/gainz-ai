@@ -46,7 +46,7 @@ describe("postProcessCoachingAdvice", () => {
 
   it("clamps rest periods based on rep ranges", () => {
     const result = postProcessCoachingAdvice(baseResponse, "planning", "none");
-    const workout = result.recommendedWorkout!;
+    const workout = result.recommendedWorkout ?? [];
 
     // Bicep Curls (10 reps -> 120-180s)
     expect(workout.find((e) => e.exerciseName === "Bicep Curls")?.restSeconds).toBe(120);
@@ -72,7 +72,7 @@ describe("postProcessCoachingAdvice", () => {
       ],
     };
     const result = postProcessCoachingAdvice(responseWithMetabolic, "planning", "none");
-    const workout = result.recommendedWorkout!;
+    const workout = result.recommendedWorkout ?? [];
     expect(workout.find((e) => e.exerciseName === "Lateral Raises")?.restSeconds).toBe(15);
   });
 
@@ -111,5 +111,102 @@ describe("postProcessCoachingAdvice", () => {
 
     expect(planExercises?.find((e) => e.exerciseName === "Bicep Curls")?.restSeconds).toBe(120);
     expect(planExercises?.find((e) => e.exerciseName === "Bench Press")?.restSeconds).toBe(180);
+  });
+
+  it("derives recommendedWorkout from the first planned session if omitted during planning phase", () => {
+    const responseWithoutRecommendedWorkout: CoachingAdvice = {
+      coachMessage: "New plan ready.",
+      trainingPlan: {
+        cycleWeeks: 2,
+        sessions: [
+          {
+            dayOfWeek: 1,
+            weekNumber: 1,
+            sessionLabel: "Day 1",
+            focusDescription: "Upper",
+            exercises: [
+              {
+                exerciseName: "Bench Press",
+                targetSets: 3,
+                targetReps: "8",
+                restSeconds: 120,
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = postProcessCoachingAdvice(responseWithoutRecommendedWorkout, "planning", "none");
+    expect(result.recommendedWorkout).toHaveLength(1);
+    expect(result.recommendedWorkout?.[0]?.exerciseName).toBe("Bench Press");
+
+    const midWorkoutResult = postProcessCoachingAdvice(
+      responseWithoutRecommendedWorkout,
+      "mid-workout",
+      "none",
+    );
+    expect(midWorkoutResult.recommendedWorkout).toBeUndefined();
+
+    const explicitRestDayResult = postProcessCoachingAdvice(
+      { ...responseWithoutRecommendedWorkout, recommendedWorkout: [] },
+      "planning",
+      "none",
+    );
+    expect(explicitRestDayResult.recommendedWorkout).toEqual([]);
+  });
+
+  it("normalizes and defaults targetRpe for resistance exercises", () => {
+    const advice: CoachingAdvice = {
+      ...baseResponse,
+      recommendedWorkout: [
+        {
+          exerciseName: "Squat",
+          targetSets: 3,
+          targetReps: "5",
+          // omitted targetRpe
+        },
+        {
+          exerciseName: "Bench Press",
+          targetSets: 3,
+          targetReps: "8",
+          targetRpe: 8.3, // rounds to 8.5
+        },
+        {
+          exerciseName: "Plank",
+          targetSets: 3,
+          targetDurationSeconds: 60,
+          // duration exercise should NOT get targetRpe
+        },
+      ],
+      trainingPlan: {
+        cycleWeeks: 1,
+        sessions: [
+          {
+            dayOfWeek: 1,
+            weekNumber: 1,
+            sessionLabel: "Legs",
+            focusDescription: "Quads",
+            exercises: [
+              {
+                exerciseName: "Squat",
+                targetSets: 3,
+                targetReps: "5",
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const normalResult = postProcessCoachingAdvice(advice, "planning", "none");
+    expect(normalResult.recommendedWorkout?.[0]?.targetRpe).toBe(8.5);
+    expect(normalResult.recommendedWorkout?.[1]?.targetRpe).toBe(8.5);
+    expect(normalResult.recommendedWorkout?.[2]?.targetRpe).toBeUndefined();
+    expect(normalResult.trainingPlan?.sessions[0]?.exercises[0]?.targetRpe).toBe(8.5);
+
+    const deloadResult = postProcessCoachingAdvice(advice, "planning", "active");
+    expect(deloadResult.recommendedWorkout?.[0]?.targetRpe).toBe(6.5);
+    expect(deloadResult.trainingPlan?.sessions[0]?.exercises[0]?.targetRpe).toBe(6.5);
   });
 });

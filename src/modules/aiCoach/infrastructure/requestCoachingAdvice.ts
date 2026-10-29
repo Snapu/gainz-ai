@@ -4,23 +4,23 @@ import { errAsync, ResultAsync } from "neverthrow";
 
 import { createExerciseMuscleMapRepository } from "@/modules/platform/infrastructure";
 import { learnFromCoachingAdvice, VALID_MUSCLE_GROUPS } from "@/modules/sharedKernel/application";
-import type { WorkoutPhase, WorkoutSession } from "@/modules/trainingLogs/application";
+import type { WorkoutSession } from "@/modules/trainingLogs/application";
 import { postProcessCoachingAdvice } from "../application";
 import {
   type CoachingAdvice,
   type CoachingAdviceError,
   type CoachingAdviceRequest,
   type CoachingAdviceResult,
-  createCoachingAdviceSchema,
+  type CoachingMode,
+  resolveCoachingIntent,
 } from "../domain";
-import { translateCoachingAdviceJson } from "./CoachingAdviceTranslator";
+import {
+  createCoachingAdviceJsonSchema,
+  translateCoachingAdviceJson,
+} from "./CoachingAdviceTranslator";
 import { assembleCoachingPrompt, assemblePromptContext } from "./promptAssembler";
 
-const aiConfig: GenerateContentConfig = {
-  responseMimeType: "application/json",
-  temperature: 0.4,
-  topP: 0.85,
-  systemInstruction: `
+const BASE_SYSTEM_INSTRUCTION = `
 You are an elite AI personal trainer providing data-driven feedback and workout planning.
 
 1. CORE RESPONSIBILITIES:
@@ -61,7 +61,7 @@ When constraints clash, strictly follow this priority order:
 - EXERCISE & OVERLOAD RULES:
   - If the user hit the TOP of the rep range on ALL sets previously, increase targetWeight by 'inc' and reset targetReps to bottom. Otherwise push reps higher.
   - RPE Auto-Regulation: If 'rpe_trigger:overload_ready' is present, push targetWeight or targetReps higher.
-  - Target RPEs: strength (8.5-9.5), hypertrophy (7.5-9.0), endurance (7.0-8.0). Deload: drop by 2-3 points.
+  - Target RPEs: strength (8.5-9.5), hypertrophy (7.5-9.0), endurance (7.0-8.0). Deload: drop by 2-3 points. ALWAYS populate 'targetRpe' for resistance exercises.
   - Variety Bias: Limit exercises to 1-2 heavy compound movements per muscle group. Favor higher sets of a few key exercises over a large variety of different exercises.
   - Overlap: Cap heavy pressing movements (Chest, Shoulders, Dips) to max 2 per session to avoid anterior deltoid burnout and CNS fatigue. Do not program 3+ pressing variations in one workout.
 
@@ -81,6 +81,7 @@ When constraints clash, strictly follow this priority order:
 - Use EXACT exerciseName from the '# exercises' section or '# logs'. DO NOT invent new variations of existing exercises. Exception: you may introduce well-known cardio, mobility, or conditioning movements (e.g., Jogging, Incline Walk, Cycling, Jump Rope, Sled Push, Kettlebell Swings, Battle Ropes, Hip 90/90 Stretch) that are not yet in the user's history.
 - Do NOT give ranges for targetWeight, give a single number (e.g. '82.5kg'). For dumbbell exercises, ALWAYS output the TOTAL combined weight (e.g., for two 20kg dumbbells, output '40kg').
 - Explicit Types: For time-based holds (e.g., Planks), output 'targetDurationSeconds' and OMIT 'targetReps'. For distance cardio (e.g., Running), output 'targetDistanceMeters' and OMIT 'targetReps'. Use 'targetReps' strictly for countable movements (e.g., '8-12').
+- Prescribe 'targetRpe' (number between 6.0 and 10.0, e.g. 8.0, 8.5, 9.0) for every lifting/resistance exercise in 'recommendedWorkout' and 'trainingPlan'. Standard working sets are 8.0–9.0 (1–2 RIR), heavy strength is 8.5–9.5, deload is 6.0–6.5. Omit only for pure cardio or mobility.
 
 5. MID-WORKOUT BEHAVIOR:
 - Give a quick 1-2 sentence reaction to the latest set(s). No scratchpad needed.
@@ -90,7 +91,7 @@ When constraints clash, strictly follow this priority order:
 - When 'planStatus: active' is present in '# session':
   The user has an existing mesocycle. Look at the '# program' section. Sessions marked '[DONE]' have already been completed.
   The next session in the sequence is marked '[NEXT_SESSION]'. You MUST use the '[NEXT_SESSION]' as today's workout. Do NOT skip ahead to match the current calendar day — the user trains when they find time, so they just do the next session in order.
-  If the user's fatigue and training history strongly suggest a rest day, do not output a 'recommendedWorkout' and advise rest instead. Adapt weights/reps from '# logs'. Do NOT regenerate 'trainingPlan'.
+  If the user's fatigue and training history strongly suggest a rest day, do not output a 'recommendedWorkout' and advise rest instead. Adapt weights/reps from '# logs'. Do NOT regenerate 'trainingPlan' unless the user explicitly asks to create, change, or adjust their multi-week plan in '# question'.
 - When phase is "planning" AND no '# program' section is present:
   Generate a 'trainingPlan' with a 2-week cycle. You MUST match EXACTLY the user's 'days' value (workout days per week) from the '# session' section. Do not generate more or fewer sessions per week.
   Name sessions clearly. Distribute weekly volume across sessions respecting recovery.
@@ -105,14 +106,28 @@ When constraints clash, strictly follow this priority order:
 
 You receive sections in this order:
 - # session, # question, # goals, # workload, # muscles, # exercises, # today, # update, # program, # plan, # history, # logs, # events
-`,
+`;
+
+function buildSystemInstruction(mode: CoachingMode): string {
+  const modeDirective =
+    mode === "planning"
+      ? `\n7. ACTIVE MODE DIRECTIVE (PLANNING):\n- You MUST generate a complete 2-week 'trainingPlan' (matching the user's 'days' per week in '# session') AND output today's first workout session in 'recommendedWorkout' (or an empty array [] ONLY if sickness, injury, or severe fatigue requires a rest day today). Never omit 'trainingPlan'.`
+      : `\n7. ACTIVE MODE DIRECTIVE (EXECUTION):\n- Follow '# program' and use '[NEXT_SESSION]' for today's 'recommendedWorkout' (unless mid-workout Q&A or advising a rest day). Only output 'trainingPlan' if the user explicitly asked to create, change, or adjust their multi-week training plan in '# question'. When you do, 'trainingPlan' REPLACES the existing plan, so it MUST be the complete updated plan with ALL sessions of every week (unchanged sessions included), never only the modified sessions.`;
+
+  return `${BASE_SYSTEM_INSTRUCTION}${modeDirective}`;
+}
+
+const baseAiConfig: GenerateContentConfig = {
+  responseMimeType: "application/json",
+  temperature: 0.4,
+  topP: 0.85,
 };
 
 function isServiceUnavailableError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const e = error as Record<string, unknown>;
   if ((e.error as Record<string, unknown> | undefined)?.code === 503) return true;
-  if (e.status === "UNAVAILABLE") return true;
+  if (e.status === "UNAVAILABLE" || e.status === 503) return true;
   if (typeof e.message === "string" && /high demand|503|unavailable/i.test(e.message)) return true;
   return false;
 }
@@ -120,7 +135,8 @@ function isServiceUnavailableError(error: unknown): boolean {
 function isTimeoutError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const e = error as Record<string, unknown>;
-  return typeof e.message === "string" && /timed out|timeout/i.test(e.message);
+  if (e.name === "AbortError" || e.name === "TimeoutError") return true;
+  return typeof e.message === "string" && /timed out|timeout|aborted/i.test(e.message);
 }
 
 function isNotFoundError(error: unknown): boolean {
@@ -129,55 +145,128 @@ function isNotFoundError(error: unknown): boolean {
   return e.status === "NOT_FOUND" || e.status === 404;
 }
 
+function isEmptyResponseError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return error.message.startsWith("Empty AI response");
+}
+
 export function getTodayLogsCount(session: WorkoutSession | null): number {
   return session?.logs.length ?? 0;
+}
+
+function extractThoughtSummary(response: unknown): string | undefined {
+  if (!response || typeof response !== "object") return undefined;
+  const candidates = (response as { candidates?: Array<{ content?: { parts?: unknown[] } }> })
+    .candidates;
+  const parts = candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return undefined;
+
+  const thoughts: string[] = [];
+  for (const part of parts) {
+    if (
+      part &&
+      typeof part === "object" &&
+      (part as { thought?: boolean }).thought === true &&
+      typeof (part as { text?: unknown }).text === "string"
+    ) {
+      thoughts.push((part as { text: string }).text.trim());
+    }
+  }
+  return thoughts.length > 0 ? thoughts.join("\n") : undefined;
 }
 
 async function executeAiRequest(
   ai: GoogleGenAI,
   conversationContents: Content[],
   aiTimeoutMs: number,
-  schema: unknown,
-): Promise<string> {
-  const generateWithTimeout = (model: "gemini-3.8-flash" | "gemini-2.5-flash") => {
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("AI request timed out")), aiTimeoutMs),
-    );
-    return Promise.race([
-      ai.models.generateContentStream({
-        model,
-        contents: conversationContents,
-        config: { ...aiConfig, responseSchema: schema },
-      }),
-      timeoutPromise,
-    ]);
+  responseJsonSchema: Record<string, unknown>,
+  mode: CoachingMode,
+): Promise<{ text: string; thought?: string }> {
+  const generateWithTimeout = async (model: "gemini-3.8-flash" | "gemini-2.5-flash") => {
+    const controller = new AbortController();
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        controller.abort();
+        reject(new Error("AI request timed out"));
+      }, aiTimeoutMs);
+    });
+
+    try {
+      const res = await Promise.race([
+        ai.models.generateContent({
+          model,
+          contents: conversationContents,
+          config: {
+            ...baseAiConfig,
+            systemInstruction: buildSystemInstruction(mode),
+            responseJsonSchema,
+            abortSignal: controller.signal,
+          },
+        }),
+        timeoutPromise,
+      ]);
+      const text = res.text?.trim() ?? "";
+      if (!text) {
+        const finishReason = res.candidates?.[0]?.finishReason ?? "UNKNOWN";
+        throw new Error(`Empty AI response (finishReason: ${finishReason})`);
+      }
+      return { text, thought: extractThoughtSummary(res) };
+    } finally {
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+    }
   };
 
-  let responseStream: Awaited<ReturnType<typeof ai.models.generateContentStream>>;
   try {
-    responseStream = await generateWithTimeout("gemini-3.8-flash");
-  } catch (streamErr) {
-    const isNotFound = isNotFoundError(streamErr);
-    if (isServiceUnavailableError(streamErr) || isTimeoutError(streamErr) || isNotFound) {
+    return await generateWithTimeout("gemini-3.8-flash");
+  } catch (primaryErr) {
+    const isNotFound = isNotFoundError(primaryErr);
+    const isEmpty = isEmptyResponseError(primaryErr);
+    if (
+      isServiceUnavailableError(primaryErr) ||
+      isTimeoutError(primaryErr) ||
+      isNotFound ||
+      isEmpty
+    ) {
       Sentry.captureMessage(
-        "Primary model unavailable/slow/not-found, falling back to gemini-2.5-flash",
+        "Primary model unavailable/slow/not-found/empty, falling back to gemini-2.5-flash",
         {
           level: "info",
           tags: { scope: "ai-service", feature: "model-fallback" },
-          extra: { timedOut: isTimeoutError(streamErr), notFound: isNotFound },
+          extra: {
+            timedOut: isTimeoutError(primaryErr),
+            notFound: isNotFound,
+            emptyResponse: isEmpty,
+          },
         },
       );
-      responseStream = await generateWithTimeout("gemini-2.5-flash");
-    } else {
-      throw streamErr;
+      return await generateWithTimeout("gemini-2.5-flash");
     }
+    throw primaryErr;
   }
+}
 
-  let text = "";
-  for await (const chunk of responseStream) {
-    if (chunk.text) text += chunk.text;
+function attachThoughtIfMissing(advice: CoachingAdvice, thought?: string): CoachingAdvice {
+  if (!advice.scratchpad && thought) {
+    return { ...advice, scratchpad: thought };
   }
-  return text;
+  return advice;
+}
+
+function persistLearnedMuscleGroups(advice: CoachingAdvice): void {
+  const exercisesToLearn = [
+    ...(advice.recommendedWorkout ?? []),
+    ...(advice.trainingPlan?.sessions.flatMap((s) => s.exercises) ?? []),
+  ];
+  if (exercisesToLearn.length === 0) return;
+
+  try {
+    learnFromCoachingAdvice(exercisesToLearn, createExerciseMuscleMapRepository());
+  } catch (e) {
+    Sentry.captureException(e, {
+      tags: { scope: "ai-service", feature: "learn-from-response" },
+    });
+  }
 }
 
 export function requestCoachingAdvice(
@@ -186,71 +275,59 @@ export function requestCoachingAdvice(
   const { apiKey, previousMessages, insights } = options;
   if (!apiKey) return errAsync("missing-api-key");
 
+  const ai = new GoogleGenAI({ apiKey });
+  const context = assemblePromptContext(options.exerciseLogs, previousMessages);
+  const { workoutPhase, isFirstMessage } = context;
+
+  const intent = resolveCoachingIntent({
+    requestedMode: options.mode,
+    activePlan: options.activePlan,
+  });
+  const { effectiveMode } = intent;
+
+  const currentUserInput = assembleCoachingPrompt(options, context, intent);
+
+  const aiTimeoutMs =
+    effectiveMode === "planning" || isFirstMessage || workoutPhase === "planning" ? 55_000 : 35_000;
+
+  if (import.meta.env.DEV) console.debug(currentUserInput);
+
+  const conversationContents: Content[] = [
+    ...previousMessages.map((msg) => ({
+      role: msg.role === "coach" ? ("model" as const) : ("user" as const),
+      parts: [{ text: msg.content }],
+    })),
+    { role: "user" as const, parts: [{ text: currentUserInput }] },
+  ];
+
+  const responseJsonSchema = createCoachingAdviceJsonSchema(
+    Array.from(VALID_MUSCLE_GROUPS),
+    effectiveMode,
+    Boolean(options.question),
+  );
+
   return ResultAsync.fromPromise(
-    (async () => {
-      const ai = new GoogleGenAI({ apiKey });
-      const context = assemblePromptContext(options.exerciseLogs, previousMessages);
-      const currentUserInput = assembleCoachingPrompt(options, context);
-      const { phase, isFirstMessage } = context;
-      const aiTimeoutMs = isFirstMessage || phase === "planning" ? 140_000 : 90_000;
-
-      if (import.meta.env.DEV) console.debug(currentUserInput);
-
-      const conversationContents = [
-        ...previousMessages.map((msg) => ({
-          role: msg.role === "coach" ? ("model" as const) : ("user" as const),
-          parts: [{ text: msg.content }],
-        })),
-        { role: "user" as const, parts: [{ text: currentUserInput }] },
-      ];
-
-      const schema = createCoachingAdviceSchema(
-        Array.from(VALID_MUSCLE_GROUPS),
-        options.mode || "execution",
-      );
-
-      let adviceResponseText = "";
-      let parsedCoachingAdvice: CoachingAdvice | null = null;
-      try {
-        adviceResponseText = await executeAiRequest(ai, conversationContents, aiTimeoutMs, schema);
-
-        const validationResult = translateCoachingAdviceJson(adviceResponseText)
-          .mapErr(() => "generate-content-stream-failed" as const)
-          .map((parsed) =>
-            postProcessCoachingAdvice(parsed, phase as WorkoutPhase, insights.deloadStatus),
-          );
-
-        if (validationResult.isErr()) throw new Error(validationResult.error);
-
-        parsedCoachingAdvice = validationResult.value;
-
-        if (Array.isArray(parsedCoachingAdvice.recommendedWorkout)) {
-          try {
-            learnFromCoachingAdvice(
-              parsedCoachingAdvice.recommendedWorkout,
-              createExerciseMuscleMapRepository(),
-            );
-          } catch (e) {
-            Sentry.captureException(e, {
-              tags: { scope: "ai-service", feature: "learn-from-response" },
-            });
-          }
-        }
-
-        return { advice: parsedCoachingAdvice, requestPayload: currentUserInput };
-      } catch (error) {
-        console.error("AI request failed:", error);
-        Sentry.captureException(error, {
-          tags: { scope: "ai-service", feature: "ask-ai-request" },
-          extra: { responseLength: adviceResponseText.length },
-        });
-        throw error;
-      }
-    })(),
-    (e) => {
-      if (e instanceof Error && e.message === "generate-content-stream-failed")
-        return "generate-content-stream-failed";
+    executeAiRequest(ai, conversationContents, aiTimeoutMs, responseJsonSchema, effectiveMode),
+    (error): CoachingAdviceError => {
+      console.error("AI request failed:", error);
+      Sentry.captureException(error, {
+        tags: { scope: "ai-service", feature: "ask-ai-request" },
+        extra: { responseLength: 0, mode: effectiveMode },
+      });
       return "coaching-request-failed";
     },
-  );
+  )
+    .andThen(({ text, thought }) =>
+      translateCoachingAdviceJson(text, effectiveMode)
+        .mapErr((): CoachingAdviceError => "generate-content-stream-failed")
+        .map((parsed) =>
+          postProcessCoachingAdvice(
+            attachThoughtIfMissing(parsed, thought),
+            workoutPhase,
+            insights.deloadStatus,
+          ),
+        ),
+    )
+    .andTee(persistLearnedMuscleGroups)
+    .map((advice) => ({ advice, requestPayload: currentUserInput }));
 }

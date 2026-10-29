@@ -27,10 +27,9 @@ const {
   toggleSession,
   editLog,
   chatStore,
-  planStore,
+  isRestDay,
+  isWorkoutComplete,
   allWorkoutGroups,
-  completedExercises,
-  planDerivedWorkout,
   currentSessionElapsedText,
   getExerciseProgress,
   getExerciseProgression,
@@ -41,7 +40,6 @@ const {
   handleLogExercise,
   openGoogleSearch,
   restTimerStore,
-  activeWorkoutGroups,
   requestOffDayWorkout,
 } = useHomeWorkoutViewModel();
 
@@ -163,7 +161,7 @@ function handleGalleryScroll() {
       <div class="flex-1 px-4 pb-32 flex flex-col gap-6 pt-2">
         <!-- TODAY'S WORKOUT SECTION -->
         <section>
-        <template v-if="chatStore.isLoading && !activeWorkoutGroups?.length">
+        <template v-if="chatStore.isLoading && !allWorkoutGroups?.length">
           <div class="mt-1 flex items-center justify-between gap-4">
             <div class="h-4 w-32 bg-muted/20 animate-pulse rounded"></div>
           </div>
@@ -203,6 +201,17 @@ function handleGalleryScroll() {
               </div>
             </div>
 
+            <!-- Workout Complete Banner -->
+            <div
+              v-if="isWorkoutComplete"
+              class="mb-4 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-3 animate-in fade-in duration-300"
+            >
+              <CheckCircle2 class="w-5 h-5 text-emerald-500 shrink-0" />
+              <div class="flex flex-col">
+                <span class="text-sm font-bold text-foreground">Workout Complete!</span>
+                <span class="text-xs text-muted-foreground font-medium">All exercises completed for today.</span>
+              </div>
+            </div>
 
             <!-- Dot-based Stepper -->
             <div class="flex items-center w-full mb-6 px-1">
@@ -279,16 +288,9 @@ function handleGalleryScroll() {
             </div>
           </div>
           
+          <!-- Rest day state -->
           <EmptyState 
-            v-else-if="!activeWorkoutGroups?.length && completedExercises.length"
-            :icon="CheckCircle2"
-            title="Workout Complete!"
-            class="opacity-100"
-          />
-          
-          <!-- Rest day state (plan exists, but no session for today) -->
-          <EmptyState 
-            v-else-if="planStore.activePlan && !planDerivedWorkout?.length"
+            v-else-if="isRestDay"
             :icon="Coffee"
             title="Rest Day"
             description="No training scheduled for today."
