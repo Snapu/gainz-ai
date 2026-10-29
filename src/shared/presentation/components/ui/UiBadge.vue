@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { VariantProps } from "class-variance-authority";
+import type { HTMLAttributes } from "vue";
 import { cn } from "@/shared/presentation/lib/utils";
 import { badgeVariants } from "./styles";
 
@@ -7,7 +8,7 @@ type BadgeVariants = VariantProps<typeof badgeVariants>;
 
 interface Props {
   variant?: BadgeVariants["variant"];
-  class?: any;
+  class?: HTMLAttributes["class"];
 }
 
 const props = withDefaults(defineProps<Props>(), {

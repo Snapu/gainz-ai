@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import type { Component } from "vue";
+import type { Component, HTMLAttributes } from "vue";
 import { cn } from "@/shared/presentation/lib/utils";
 
 const props = defineProps<{
   icon?: Component;
   title: string;
   description?: string;
-  class?: any;
+  class?: HTMLAttributes["class"];
 }>();
 </script>
 

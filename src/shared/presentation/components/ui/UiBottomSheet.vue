@@ -12,7 +12,7 @@ import {
   DialogTitle,
   useForwardPropsEmits,
 } from "reka-ui";
-import { computed, nextTick, watch } from "vue";
+import { type CSSProperties, computed, type HTMLAttributes, nextTick, watch } from "vue";
 import { uiIconButtonClass } from "@/shared/presentation/components/ui/styles";
 import { useKeyboardHeight } from "@/shared/presentation/composables/useKeyboardHeight";
 import { cn } from "@/shared/presentation/lib/utils";
@@ -20,8 +20,8 @@ import { cn } from "@/shared/presentation/lib/utils";
 const props = defineProps<
   DialogRootProps & {
     title?: string;
-    contentClass?: any;
-    contentStyle?: any;
+    contentClass?: HTMLAttributes["class"];
+    contentStyle?: CSSProperties;
     hideOverlay?: boolean;
   }
 >();

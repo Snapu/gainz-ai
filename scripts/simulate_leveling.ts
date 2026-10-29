@@ -66,13 +66,7 @@ function runSimulation() {
     const earned = simulateYear(readiness);
     totalXP += earned;
 
-    // Resolve level
-    while (totalXP >= xpForLevel(level)) {
-      // Note: totalXP here is cumulative. xpForLevel should probably be XP *to advance* from that level.
-      // The traditional way is: if (currentXP >= totalXPRequiredForLevel(level + 1))
-    }
-
-    // Correct level resolution:
+    // Level resolution:
     let tempXP = totalXP;
     let tempLevel = 1;
     while (tempXP >= xpForLevel(tempLevel)) {

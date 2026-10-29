@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ToggleGroupRoot, type ToggleGroupRootProps } from "reka-ui";
+import type { HTMLAttributes } from "vue";
 import { cn } from "@/shared/presentation/lib/utils";
 
 interface Props extends ToggleGroupRootProps {
-  class?: any;
+  class?: HTMLAttributes["class"];
 }
 
 const props = defineProps<Props>();

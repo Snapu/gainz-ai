@@ -59,25 +59,20 @@ describe("Leveling Milestone Audit", () => {
     console.log("Title | Level | Actual Weeks | Actual Workouts | Status");
     console.log("---------------------------------------------------------");
 
+    let currentLevel = 1;
+
     for (const milestone of MILESTONES) {
       if (milestone.level === 1) continue;
 
       while (true) {
-        // Calculate progress every week for accuracy when close to milestone, otherwise every 4 weeks
-        const weeksToJump = weeks < 100 ? 1 : 4;
-
-        const progress = calculateUserProgress(logs, 3.5);
-
-        if (progress.level >= milestone.level) {
-          console.log(
-            `${milestone.title.padEnd(22)} | ${milestone.level.toString().padStart(5)} | ${weeks.toString().padStart(12)} | ${totalWorkouts.toString().padStart(15)} | ✅ PASS`,
-          );
-
-          // Verify title is logically consistent with progress
-          // Note: Title might be higher than milestone.title if we jumped levels in one week
-          expect(progress.level).toBeGreaterThanOrEqual(milestone.level);
-          break;
-        }
+        const remainingLevels = milestone.level - currentLevel;
+        // Adaptive step based on level distance: jump larger chunks when far, step 1-2 weeks when near
+        const weeksToJump =
+          remainingLevels > 10
+            ? Math.max(1, Math.floor(remainingLevels * 0.8))
+            : remainingLevels > 3
+              ? 2
+              : 1;
 
         // Simulate weeks in a chunk
         for (let wCount = 0; wCount < weeksToJump; wCount++) {
@@ -96,6 +91,20 @@ describe("Leveling Milestone Audit", () => {
         }
 
         if (weeks > 3000) throw new Error("Simulation runaway");
+
+        const progress = calculateUserProgress(logs, 3.5);
+        currentLevel = progress.level;
+
+        if (progress.level >= milestone.level) {
+          console.log(
+            `${milestone.title.padEnd(22)} | ${milestone.level.toString().padStart(5)} | ${weeks.toString().padStart(12)} | ${totalWorkouts.toString().padStart(15)} | ✅ PASS`,
+          );
+
+          // Verify title is logically consistent with progress
+          expect(progress.level).toBeGreaterThanOrEqual(milestone.level);
+          expect(weeks).toBeLessThanOrEqual(milestone.targetWeeks);
+          break;
+        }
       }
     }
     console.log("---------------------------------------------------------\n");

@@ -1,0 +1,6 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": ["scripts/simulate_leveling.ts"],
+  "project": ["src/**/*.{ts,vue}", "scripts/**/*.{ts,js}"],
+  "ignoreDependencies": ["tailwindcss"]
+}

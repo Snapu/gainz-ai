@@ -7,11 +7,12 @@ import {
   NumberFieldRoot,
   type NumberFieldRootProps,
 } from "reka-ui";
+import type { HTMLAttributes } from "vue";
 import { uiPressClass } from "@/shared/presentation/components/ui/styles";
 import { cn } from "@/shared/presentation/lib/utils";
 
 interface Props extends NumberFieldRootProps {
-  class?: any;
+  class?: HTMLAttributes["class"];
   label?: string;
   description?: string;
 }

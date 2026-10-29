@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { cva, type VariantProps } from "class-variance-authority";
 import { hapticTrigger } from "ios-haptics";
-import { type ComponentPublicInstance, ref, watchEffect } from "vue";
+import { type ComponentPublicInstance, type HTMLAttributes, ref, watchEffect } from "vue";
 import { cn } from "@/shared/presentation/lib/utils";
 
 const buttonVariants = cva(
@@ -39,7 +39,7 @@ interface Props {
   variant?: ButtonVariants["variant"];
   size?: ButtonVariants["size"];
   type?: "button" | "submit" | "reset";
-  class?: any;
+  class?: HTMLAttributes["class"];
   haptic?: boolean;
 }
 

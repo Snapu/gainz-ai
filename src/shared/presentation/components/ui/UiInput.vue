@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import type { HTMLAttributes } from "vue";
 import { uiFieldClass, uiFieldErrorClass } from "@/shared/presentation/components/ui/styles";
 import { cn } from "@/shared/presentation/lib/utils";
 
 defineOptions({ inheritAttrs: false });
 
 const props = defineProps<{
-  class?: any;
+  class?: HTMLAttributes["class"];
   error?: string;
 }>();
 

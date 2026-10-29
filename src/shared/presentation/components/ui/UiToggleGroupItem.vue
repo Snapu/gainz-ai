@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { cva, type VariantProps } from "class-variance-authority";
 import { ToggleGroupItem, type ToggleGroupItemProps } from "reka-ui";
+import type { HTMLAttributes } from "vue";
 import { cn } from "@/shared/presentation/lib/utils";
 
 const toggleGroupItemVariants = cva(
@@ -32,7 +33,7 @@ interface Props extends Omit<ToggleGroupItemProps, "value"> {
   value?: string | number;
   variant?: ToggleGroupItemVariants["variant"];
   size?: ToggleGroupItemVariants["size"];
-  class?: any;
+  class?: HTMLAttributes["class"];
 }
 
 const props = defineProps<Props>();

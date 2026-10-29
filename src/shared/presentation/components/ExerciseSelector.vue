@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Plus, Search, X } from "@lucide/vue";
 import { DialogClose, DialogTitle } from "reka-ui";
-import { computed, ref, watch } from "vue";
+import { computed, type HTMLAttributes, ref, watch } from "vue";
 import {
   uiFieldClass,
   uiIconButtonClass,
@@ -23,7 +23,7 @@ interface Props {
   options: string[];
   optionDetails?: Record<string, ExerciseSelectorOptionDetails>;
   placeholder?: string;
-  class?: any;
+  class?: HTMLAttributes["class"];
 }
 
 const props = withDefaults(defineProps<Props>(), {

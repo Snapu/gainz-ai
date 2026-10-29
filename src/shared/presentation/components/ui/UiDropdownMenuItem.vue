@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { DropdownMenuItem } from "reka-ui";
+import type { HTMLAttributes } from "vue";
 import { cn } from "@/shared/presentation/lib/utils";
 import { dropdownMenuItemVariants } from "./styles";
 
 const props = defineProps<{
-  class?: any;
+  class?: HTMLAttributes["class"];
   inset?: boolean;
 }>();
 </script>

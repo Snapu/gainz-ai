@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { HTMLAttributes } from "vue";
 import { uiSelectableItemClass } from "@/shared/presentation/components/ui/styles";
 import { cn } from "@/shared/presentation/lib/utils";
 import UiCard from "./ui/UiCard.vue";
@@ -17,8 +18,8 @@ export interface ClickableListItem {
 
 interface Props {
   items: ClickableListItem[];
-  class?: any;
-  itemClass?: any;
+  class?: HTMLAttributes["class"];
+  itemClass?: HTMLAttributes["class"];
   asCard?: boolean;
 }
 

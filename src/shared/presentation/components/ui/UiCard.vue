@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import type { HTMLAttributes } from "vue";
 import { uiPressClass } from "@/shared/presentation/components/ui/styles";
 import { cn } from "@/shared/presentation/lib/utils";
 
 interface Props {
   as?: string;
-  class?: any;
+  class?: HTMLAttributes["class"];
   /** 'list' — preset for grouped list containers (bg-card/40, divide-y, overflow-hidden) */
   variant?: "list";
 }
