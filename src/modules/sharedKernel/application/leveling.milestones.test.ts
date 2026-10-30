@@ -66,13 +66,10 @@ describe("Leveling Milestone Audit", () => {
 
       while (true) {
         const remainingLevels = milestone.level - currentLevel;
-        // Adaptive step based on level distance: jump larger chunks when far, step 1-2 weeks when near
-        const weeksToJump =
-          remainingLevels > 10
-            ? Math.max(1, Math.floor(remainingLevels * 0.8))
-            : remainingLevels > 3
-              ? 2
-              : 1;
+        // Conservative adaptive step: jump small chunks when far, step 1 week when near
+        // Max leveling speed is ~1.3 levels/week, so jumping floor(remainingLevels / 3) weeks
+        // can never leap over remainingLevels and ensures exact milestone week capture.
+        const weeksToJump = remainingLevels > 4 ? Math.max(1, Math.floor(remainingLevels / 3)) : 1;
 
         // Simulate weeks in a chunk
         for (let wCount = 0; wCount < weeksToJump; wCount++) {

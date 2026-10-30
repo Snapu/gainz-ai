@@ -89,20 +89,21 @@ export const useDeloadStore = defineStore("deload", () => {
       return okAsync(undefined);
     }
 
-    return ResultAsync.fromPromise(loadDeloadPhase(repository), () => undefined as never)
-      .map((result) => {
-        result.match(
-          (loadedPhase) => {
-            phase.value = loadedPhase;
-          },
-          (error) => {
-            if (error === "auth-failed") {
-              handleAuthError("deload-phase-load");
-            }
-          },
-        );
-        return undefined;
+    return ResultAsync.fromPromise(
+      Promise.resolve(loadDeloadPhase(repository)),
+      () => "load-failed" as const,
+    )
+      .andThen((r) => r)
+      .andTee((loadedPhase) => {
+        phase.value = loadedPhase;
       })
+      .orTee((error) => {
+        if (error === "auth-failed") {
+          handleAuthError("deload-phase-load");
+        }
+      })
+      .map(() => undefined)
+      .orElse(() => okAsync(undefined))
       .andTee(() => {
         isLoading.value = false;
       });

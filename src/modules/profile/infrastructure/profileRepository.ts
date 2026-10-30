@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/vue";
 import type { GoogleSpreadsheet } from "google-spreadsheet";
-import { err, errAsync, ok, okAsync, Result, ResultAsync } from "neverthrow";
+import { err, ok, okAsync, Result, ResultAsync } from "neverthrow";
 import { isAuthError } from "@/modules/platform/infrastructure";
 import type { UserProfileRepository } from "@/modules/profile/application";
 import { parseData } from "@/modules/sharedKernel/domain";
@@ -138,7 +138,7 @@ function migrateFromLocalStorageInfra(
         return okAsync<"migrated" | "skipped" | "no-data", "migration-failed">("no-data");
       }
 
-      const parseOldDataResult = Result.fromThrowable(
+      return Result.fromThrowable(
         () => JSON.parse(oldDataJson),
         (parseError) => {
           console.error("Failed to parse old userProfile localStorage:", parseError);
@@ -147,41 +147,38 @@ function migrateFromLocalStorageInfra(
           });
           return "migration-failed" as const;
         },
-      )().andThen((oldData) => {
-        if (!oldData || typeof oldData !== "object") {
-          return err("migration-failed" as const);
-        }
-        return ok(oldData as Record<string, unknown>);
-      });
-
-      if (parseOldDataResult.isErr()) {
-        return errAsync(parseOldDataResult.error);
-      }
-
-      const oldDataRecord = parseOldDataResult.value;
-      const apiKey =
-        typeof oldDataRecord.apiKey === "string" && oldDataRecord.apiKey.length > 0
-          ? oldDataRecord.apiKey
-          : undefined;
-      const { apiKey: _apiKey, ...profileData } = oldDataRecord;
-
-      if (apiKey) {
-        localStorage.setItem("userProfile:apiKey", apiKey);
-      }
-
-      return saveUserProfileInfra(profileData as UserProfile, doc)
-        .mapErr((error) => {
-          console.error("Failed to save migrated profile to spreadsheet", error);
-          Sentry.captureMessage("Failed to save migrated profile", {
-            level: "error",
-            tags: { scope: "user-profile-service", feature: "migration-save-profile" },
-          });
-          return "migration-failed" as const;
+      )()
+        .andThen((oldData) => {
+          if (!oldData || typeof oldData !== "object") {
+            return err("migration-failed" as const);
+          }
+          return ok(oldData as Record<string, unknown>);
         })
-        .map(() => {
-          localStorage.removeItem("userProfile");
-          console.log("User profile migrated from localStorage to spreadsheet");
-          return "migrated" as const;
+        .asyncAndThen((oldDataRecord) => {
+          const apiKey =
+            typeof oldDataRecord.apiKey === "string" && oldDataRecord.apiKey.length > 0
+              ? oldDataRecord.apiKey
+              : undefined;
+          const { apiKey: _apiKey, ...profileData } = oldDataRecord;
+
+          if (apiKey) {
+            localStorage.setItem("userProfile:apiKey", apiKey);
+          }
+
+          return saveUserProfileInfra(profileData as UserProfile, doc)
+            .mapErr((error) => {
+              console.error("Failed to save migrated profile to spreadsheet", error);
+              Sentry.captureMessage("Failed to save migrated profile", {
+                level: "error",
+                tags: { scope: "user-profile-service", feature: "migration-save-profile" },
+              });
+              return "migration-failed" as const;
+            })
+            .map(() => {
+              localStorage.removeItem("userProfile");
+              console.log("User profile migrated from localStorage to spreadsheet");
+              return "migrated" as const;
+            });
         });
     });
 }

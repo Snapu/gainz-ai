@@ -52,9 +52,12 @@ export class LocalStorageMessageRepository {
     sessionId: string,
     messages: CoachingMessage[],
   ): ResultType<void, "save-failed"> {
-    const sessionsMap: SessionsMap = getSessionsMap().unwrapOr({});
-    sessionsMap[sessionId] = messages;
-    return saveSessionsMap(sessionsMap);
+    return getSessionsMap()
+      .mapErr(() => "save-failed" as const)
+      .andThen((sessionsMap) => {
+        sessionsMap[sessionId] = messages;
+        return saveSessionsMap(sessionsMap);
+      });
   }
 
   public removeMessages(sessionId: string): void {

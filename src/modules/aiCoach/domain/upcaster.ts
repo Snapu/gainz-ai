@@ -58,7 +58,7 @@ function tryParseDurationSeconds(targetReps: string): number | undefined {
 
   const unit = splitReps(targetReps).unit.toLowerCase();
   if (unit.includes("hr")) return parsed * 3600;
-  if (unit.includes("min") || unit === "m") return parsed * 60;
+  if (unit.includes("min")) return parsed * 60;
   return parsed;
 }
 

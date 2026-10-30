@@ -63,25 +63,29 @@ export function aggregateLogsToSummary(logs: ExerciseLog[]): TrainingSummary[] {
     for (const [exerciseName, exerciseLogs] of byExercise) {
       const sets = exerciseLogs.length;
 
-      const repsLogs = exerciseLogs.flatMap((l) => (l.reps != null ? [l.reps] : []));
-      const totalReps = repsLogs.length > 0 ? repsLogs.reduce((sum, r) => sum + r, 0) : undefined;
+      let totalReps: number | undefined;
+      let maxWeight: number | undefined;
+      let totalVolume: number | undefined;
+      let totalDistance: number | undefined;
+      let totalDuration: number | undefined;
 
-      const weightLogs = exerciseLogs.flatMap((l) => (l.weight != null ? [l.weight] : []));
-      const maxWeight = weightLogs.length > 0 ? Math.max(...weightLogs) : undefined;
-
-      const volumeLogs = exerciseLogs.flatMap((l) =>
-        l.reps != null && l.weight != null ? [l.reps * l.weight] : [],
-      );
-      const totalVolume =
-        volumeLogs.length > 0 ? volumeLogs.reduce((sum, v) => sum + v, 0) : undefined;
-
-      const distanceLogs = exerciseLogs.flatMap((l) => (l.distance != null ? [l.distance] : []));
-      const totalDistance =
-        distanceLogs.length > 0 ? distanceLogs.reduce((sum, d) => sum + d, 0) : undefined;
-
-      const durationLogs = exerciseLogs.flatMap((l) => (l.duration != null ? [l.duration] : []));
-      const totalDuration =
-        durationLogs.length > 0 ? durationLogs.reduce((sum, d) => sum + d, 0) : undefined;
+      for (const l of exerciseLogs) {
+        if (l.reps != null) {
+          totalReps = (totalReps ?? 0) + l.reps;
+        }
+        if (l.weight != null) {
+          maxWeight = maxWeight !== undefined ? Math.max(maxWeight, l.weight) : l.weight;
+        }
+        if (l.reps != null && l.weight != null) {
+          totalVolume = (totalVolume ?? 0) + l.reps * l.weight;
+        }
+        if (l.distance != null) {
+          totalDistance = (totalDistance ?? 0) + l.distance;
+        }
+        if (l.duration != null) {
+          totalDuration = (totalDuration ?? 0) + l.duration;
+        }
+      }
 
       summaries.push({
         year,
@@ -165,7 +169,6 @@ export function summaryToExerciseLogs(summaries: TrainingSummary[]): ExerciseLog
     const setsPerDay = Math.floor(summary.sets / dates.length);
     const extraSets = summary.sets % dates.length;
 
-    let setsAllocated = 0;
     for (let i = 0; i < dates.length; i++) {
       const date = dates[i];
       if (!date) continue;
@@ -186,7 +189,6 @@ export function summaryToExerciseLogs(summaries: TrainingSummary[]): ExerciseLog
           rpe: 8,
           synthetic: true,
         });
-        setsAllocated++;
       }
     }
   }

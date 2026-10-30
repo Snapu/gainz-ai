@@ -55,11 +55,11 @@ export const useExerciseWeightMigrationStore = defineStore("exerciseWeightMigrat
 
     const result = await ResultAsync.combine([
       ResultAsync.fromPromise(
-        loadExerciseWeightMigrationReviews(migrationRepository),
+        Promise.resolve(loadExerciseWeightMigrationReviews(migrationRepository)),
         () => "load-failed" as const,
       ).andThen((r) => r),
       ResultAsync.fromPromise(
-        loadAllLogsForMigration(logsRepository),
+        Promise.resolve(loadAllLogsForMigration(logsRepository)),
         () => "load-failed" as const,
       ).andThen((r) => r),
     ]);

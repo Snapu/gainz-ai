@@ -42,8 +42,13 @@ function findSatisfiedSessionForDay(
   const dayOfWeek = date.getDay();
 
   const primaryCandidate = plan.getPlannedSessionForDay(dayOfWeek, weekNum);
+  const primaryKey = primaryCandidate
+    ? TrainingPlan.sessionKey(primaryCandidate.weekNumber, primaryCandidate.dayOfWeek)
+    : null;
   if (
     primaryCandidate &&
+    primaryKey &&
+    !newCompletedSessions.has(primaryKey) &&
     plan.isSessionSatisfiedByLogs(primaryCandidate, dayLogs, normalizeExerciseName, resolveMuscle)
   ) {
     return primaryCandidate;

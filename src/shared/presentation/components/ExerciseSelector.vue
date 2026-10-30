@@ -162,6 +162,7 @@ watch(isOpen, (val) => {
           v-for="option in filteredOptions"
           :key="option"
           :value="option"
+          @click="handleSelect(option)"
           class="flex flex-col items-start gap-1 p-4 text-left select-none"
         >
           <div class="flex w-full items-center justify-between gap-3">

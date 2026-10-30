@@ -119,4 +119,36 @@ describe("evaluateCompletedSessions", () => {
     expect(result.isPlanFullyCompleted).toBe(true);
     expect(result.hasChanged).toBe(true);
   });
+
+  it("does not re-select primary candidate if already completed and matches pending session via fallback", () => {
+    // Suppose on Tuesday (day 2), user does Bench Press (satisfying Wednesday's session2 out of order).
+    // Then on Wednesday (day 3), user does Squat (which satisfies Monday's session1).
+    // The primary candidate for Wednesday is session2, but session2 was already completed on Tuesday.
+    // It should NOT re-return session2, but fall through to complete session1!
+    const logs = [
+      // Tuesday logs (satisfies session 2 out of order)
+      { loggedAt: new Date("2026-01-06T12:00:00Z"), exerciseName: "Bench Press" },
+      { loggedAt: new Date("2026-01-06T12:05:00Z"), exerciseName: "Bench Press" },
+      { loggedAt: new Date("2026-01-06T12:10:00Z"), exerciseName: "Bench Press" },
+      // Wednesday logs (satisfies session 1 on session 2's planned day)
+      { loggedAt: new Date("2026-01-07T12:00:00Z"), exerciseName: "Squat" },
+      { loggedAt: new Date("2026-01-07T12:05:00Z"), exerciseName: "Squat" },
+      { loggedAt: new Date("2026-01-07T12:10:00Z"), exerciseName: "Squat" },
+    ];
+
+    const result = evaluateCompletedSessions(
+      plan,
+      new Set(),
+      logs,
+      normalize,
+      resolveMuscle,
+      cycleDate,
+    );
+
+    const session1Key = TrainingPlan.sessionKey(1, 1);
+    const session2Key = TrainingPlan.sessionKey(1, 3);
+    expect(result.newCompletedSessions.has(session1Key)).toBe(true);
+    expect(result.newCompletedSessions.has(session2Key)).toBe(true);
+    expect(result.isPlanFullyCompleted).toBe(true);
+  });
 });

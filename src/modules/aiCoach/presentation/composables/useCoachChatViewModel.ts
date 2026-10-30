@@ -80,13 +80,17 @@ export function useCoachChatViewModel() {
 
   onMounted(() => {
     orchestratorStore.ensureSessionAdvice().then((result) => {
-      result.orTee((error) => {
-        toast({
-          title: "AI Coaching Error",
-          description: getAiErrorDescription(error),
-          variant: "destructive",
+      result
+        .andTee(() => {
+          scrollToTop();
+        })
+        .orTee((error) => {
+          toast({
+            title: "AI Coaching Error",
+            description: getAiErrorDescription(error),
+            variant: "destructive",
+          });
         });
-      });
     });
 
     scrollToTop();
