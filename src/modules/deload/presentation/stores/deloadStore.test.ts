@@ -1,4 +1,4 @@
-import { err, ok } from "neverthrow";
+import { errAsync, okAsync } from "neverthrow";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -44,7 +44,7 @@ describe("useDeloadStore", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.clearAllMocks();
-    saveDeloadPhaseMock.mockResolvedValue(ok(undefined));
+    saveDeloadPhaseMock.mockReturnValue(okAsync(undefined));
   });
 
   it("sets loading false when no spreadsheet doc is available", async () => {
@@ -68,8 +68,8 @@ describe("useDeloadStore", () => {
 
     // Now set up getDoc and load mock for the manual load test
     getDocMock.mockReturnValue(doc);
-    loadDeloadPhaseMock.mockResolvedValueOnce(
-      ok({
+    loadDeloadPhaseMock.mockReturnValueOnce(
+      okAsync({
         startedAt: "2026-01-01T00:00:00.000Z",
         endsAt: "2026-01-08T00:00:00.000Z",
         fatigueRiskScore: 3,
@@ -83,7 +83,7 @@ describe("useDeloadStore", () => {
     expect(store.phase?.startedAt).toBe("2026-01-01T00:00:00.000Z");
     expect(saveDeloadPhaseMock).not.toHaveBeenCalled();
 
-    loadDeloadPhaseMock.mockResolvedValueOnce(err("auth-failed"));
+    loadDeloadPhaseMock.mockReturnValueOnce(errAsync("auth-failed"));
     await store.load();
 
     expect(handleAuthErrorMock).toHaveBeenCalledWith("deload-phase-load");

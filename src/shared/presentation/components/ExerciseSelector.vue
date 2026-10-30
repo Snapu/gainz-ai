@@ -155,7 +155,6 @@ watch(isOpen, (val) => {
         v-if="filteredOptions.length > 0"
         type="single"
         :model-value="modelValue"
-        @update:model-value="(val) => val && handleSelect(String(val))"
         class="gap-2"
       >
         <UiToggleGroupItem

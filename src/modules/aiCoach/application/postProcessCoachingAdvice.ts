@@ -50,6 +50,7 @@ export function postProcessCoachingAdvice(
   parsedCoachingAdvice: CoachingAdvice,
   phase: WorkoutPhase,
   deloadStatus: DeloadStatus,
+  referenceDate: Date = new Date(),
 ): CoachingAdvice {
   // Deep clone to guarantee input immutability
   const cleaned: CoachingAdvice = structuredClone(parsedCoachingAdvice);
@@ -83,9 +84,12 @@ export function postProcessCoachingAdvice(
       cleaned.recommendedWorkout === undefined &&
       cleaned.trainingPlan.sessions.length > 0
     ) {
-      const firstSession = cleaned.trainingPlan.sessions[0];
-      if (firstSession && firstSession.exercises.length > 0) {
-        cleaned.recommendedWorkout = firstSession.exercises.map((ex) => ({ ...ex }));
+      const todayDayOfWeek = referenceDate.getDay();
+      const matchingSession =
+        cleaned.trainingPlan.sessions.find((s) => s.dayOfWeek === todayDayOfWeek) ??
+        cleaned.trainingPlan.sessions[0];
+      if (matchingSession && matchingSession.exercises.length > 0) {
+        cleaned.recommendedWorkout = matchingSession.exercises.map((ex) => ({ ...ex }));
       }
     }
   }

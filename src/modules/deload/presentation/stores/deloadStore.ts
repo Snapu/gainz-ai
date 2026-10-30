@@ -6,7 +6,7 @@
  */
 
 import { useDebounceFn } from "@vueuse/core";
-import { okAsync, ResultAsync } from "neverthrow";
+import { okAsync, type ResultAsync } from "neverthrow";
 import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
 import { loadDeloadPhase, saveDeloadPhase } from "@/modules/deload/application";
@@ -89,11 +89,7 @@ export const useDeloadStore = defineStore("deload", () => {
       return okAsync(undefined);
     }
 
-    return ResultAsync.fromPromise(
-      Promise.resolve(loadDeloadPhase(repository)),
-      () => "load-failed" as const,
-    )
-      .andThen((r) => r)
+    return loadDeloadPhase(repository)
       .andTee((loadedPhase) => {
         phase.value = loadedPhase;
       })

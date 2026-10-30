@@ -209,4 +209,49 @@ describe("postProcessCoachingAdvice", () => {
     expect(deloadResult.recommendedWorkout?.[0]?.targetRpe).toBe(6.5);
     expect(deloadResult.trainingPlan?.sessions[0]?.exercises[0]?.targetRpe).toBe(6.5);
   });
+
+  it("backfills today's workout matching today's day of week when recommendedWorkout is omitted", () => {
+    const adviceWithoutRecommended: CoachingAdvice = {
+      coachMessage: "Here is your plan.",
+      trainingPlan: {
+        cycleWeeks: 1,
+        sessions: [
+          {
+            dayOfWeek: 1, // Monday
+            weekNumber: 1,
+            sessionLabel: "Day 1 (Mon)",
+            focusDescription: "Legs",
+            exercises: [{ exerciseName: "Squat", targetSets: 3, targetReps: "5" }],
+          },
+          {
+            dayOfWeek: 3, // Wednesday
+            weekNumber: 1,
+            sessionLabel: "Day 2 (Wed)",
+            focusDescription: "Chest",
+            exercises: [{ exerciseName: "Bench Press", targetSets: 3, targetReps: "8" }],
+          },
+        ],
+      },
+    };
+
+    // Reference date is Wednesday (day 3)
+    const wednesday = new Date("2026-01-07T12:00:00Z");
+    const resultWed = postProcessCoachingAdvice(
+      adviceWithoutRecommended,
+      "planning",
+      "none",
+      wednesday,
+    );
+    expect(resultWed.recommendedWorkout?.[0]?.exerciseName).toBe("Bench Press");
+
+    // Reference date on an unscheduled day (e.g. Tuesday = 2) falls back to sessions[0] (Monday)
+    const tuesday = new Date("2026-01-06T12:00:00Z");
+    const resultTue = postProcessCoachingAdvice(
+      adviceWithoutRecommended,
+      "planning",
+      "none",
+      tuesday,
+    );
+    expect(resultTue.recommendedWorkout?.[0]?.exerciseName).toBe("Squat");
+  });
 });
