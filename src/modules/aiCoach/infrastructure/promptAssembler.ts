@@ -115,6 +115,16 @@ function buildSessionSection(
   return `# session\n${parts.join("\n")}`;
 }
 
+function formatSummaryLine(s: TrainingSummary): string {
+  const parts: string[] = [`${s.sets}s`];
+  if (s.totalReps) parts.push(`${s.totalReps}r`);
+  if (s.maxWeight) parts.push(`max:${s.maxWeight}`);
+  if (s.totalVolume && s.totalReps && s.totalReps > 0) {
+    parts.push(`avg:${Math.round((s.totalVolume / s.totalReps) * 10) / 10}`);
+  }
+  return `  ${s.exerciseName}: ${parts.join(" ")}`;
+}
+
 function buildHistorySection(summaries: TrainingSummary[]): string {
   if (summaries.length === 0) return "";
   const lines: string[] = [];
@@ -129,13 +139,7 @@ function buildHistorySection(summaries: TrainingSummary[]): string {
     const workoutDays = entries[0]?.workoutDays ?? 0;
     lines.push(`${monthKey} (${workoutDays}d):`);
     for (const s of entries) {
-      const parts: string[] = [`${s.sets}s`];
-      if (s.totalReps) parts.push(`${s.totalReps}r`);
-      if (s.maxWeight) parts.push(`max:${s.maxWeight}`);
-      if (s.totalVolume && s.totalReps && s.totalReps > 0) {
-        parts.push(`avg:${Math.round((s.totalVolume / s.totalReps) * 10) / 10}`);
-      }
-      lines.push(`  ${s.exerciseName}: ${parts.join(" ")}`);
+      lines.push(formatSummaryLine(s));
     }
   }
   return `# history\n${lines.join("\n")}`;
@@ -166,6 +170,18 @@ function buildWorkloadSection(
   }
 }
 
+function getMidWorkoutNewLogs(
+  previousMessages: CoachingMessage[],
+  todayLogs: ExerciseLog[],
+): ExerciseLog[] {
+  const coachMessages = previousMessages.filter((m) => m.role === "coach");
+  if (coachMessages.length === 0) return [];
+
+  const lastCoach = coachMessages[coachMessages.length - 1];
+  const cutoff = lastCoach?.timestamp ? new Date(lastCoach.timestamp).getTime() : 0;
+  return todayLogs.filter((l) => l.loggedAt.getTime() > cutoff);
+}
+
 function buildUpdatesSection(
   options: CoachingAdviceRequest,
   context: AssemblePromptContext,
@@ -174,18 +190,18 @@ function buildUpdatesSection(
   const { previousMessages } = options;
   const { todayLogs, isMidWorkout } = context;
 
-  if (previousMessages.length > 0) {
-    if (isMidWorkout) {
-      const coachMessages = previousMessages.filter((m) => m.role === "coach");
-      if (coachMessages.length > 0) {
-        const lastCoach = coachMessages[coachMessages.length - 1];
-        const cutoff = lastCoach?.timestamp ? new Date(lastCoach.timestamp).getTime() : 0;
-        const newLogs = todayLogs.filter((l) => l.loggedAt.getTime() > cutoff);
-        if (newLogs.length > 0) sections.push(`# update\n${compactLogs(newLogs)}`);
-      }
+  if (previousMessages.length === 0) return;
+
+  if (isMidWorkout) {
+    const newLogs = getMidWorkoutNewLogs(previousMessages, todayLogs);
+    if (newLogs.length > 0) {
+      sections.push(`# update\n${compactLogs(newLogs)}`);
     }
-    const planSummary = buildPriorPlanSummary(previousMessages, todayLogs);
-    if (planSummary) sections.push(`# plan\n${planSummary}`);
+  }
+
+  const planSummary = buildPriorPlanSummary(previousMessages, todayLogs);
+  if (planSummary) {
+    sections.push(`# plan\n${planSummary}`);
   }
 }
 

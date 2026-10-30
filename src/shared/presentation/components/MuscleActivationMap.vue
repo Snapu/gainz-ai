@@ -158,7 +158,7 @@ const viewOptions = [
   { id: 1, label: "Posterior" },
 ] as const;
 
-const currentView = computed(() => views.value[currentViewIndex.value]!);
+const currentView = computed(() => views.value[currentViewIndex.value] ?? views.value[0]);
 const isMapImageLoaded = ref(false);
 
 const isDetailOpen = computed({

@@ -123,57 +123,10 @@ export class TrainingPlan {
     if (session.exercises.length === 0) return true;
 
     if (getPrimaryMuscleFn) {
-      // 1. Group planned volume by primary muscle OR canonical name
-      const plannedVolume = new Map<string, number>();
-      for (const ex of session.exercises) {
-        const muscle = getPrimaryMuscleFn(ex.exerciseName);
-        const key = muscle ? `muscle:${muscle}` : `name:${normalizeFn(ex.exerciseName)}`;
-        const current = plannedVolume.get(key) || 0;
-        plannedVolume.set(key, current + ex.targetSets);
-      }
-
-      if (plannedVolume.size > 0) {
-        // 2. Group logged volume by primary muscle OR canonical name
-        const loggedVolume = new Map<string, number>();
-        for (const log of logs) {
-          const muscle = getPrimaryMuscleFn(log.exerciseName);
-          const key = muscle ? `muscle:${muscle}` : `name:${normalizeFn(log.exerciseName)}`;
-          const current = loggedVolume.get(key) || 0;
-          loggedVolume.set(key, current + 1);
-        }
-
-        // 3. Evaluate by total volume satisfied (capped per requirement)
-        let totalPlannedSets = 0;
-        let totalSatisfiedSets = 0;
-        for (const [key, targetSets] of plannedVolume.entries()) {
-          totalPlannedSets += targetSets;
-          const doneSets = loggedVolume.get(key) || 0;
-          totalSatisfiedSets += Math.min(doneSets, targetSets);
-        }
-
-        if (totalPlannedSets === 0) return true;
-        return totalSatisfiedSets / totalPlannedSets >= 0.5;
-      }
+      return isSessionSatisfiedByMuscleVolume(session, logs, normalizeFn, getPrimaryMuscleFn);
     }
 
-    // Fallback: evaluate by canonical name
-    const completedSetsMap = new Map<string, number>();
-    for (const log of logs) {
-      const normalizedName = normalizeFn(log.exerciseName);
-      const count = completedSetsMap.get(normalizedName) || 0;
-      completedSetsMap.set(normalizedName, count + 1);
-    }
-
-    let completedExercisesCount = 0;
-    for (const ex of session.exercises) {
-      const normalizedName = normalizeFn(ex.exerciseName);
-      const doneSets = completedSetsMap.get(normalizedName) || 0;
-      if (doneSets >= ex.targetSets) {
-        completedExercisesCount++;
-      }
-    }
-
-    return completedExercisesCount / session.exercises.length >= 0.5;
+    return isSessionSatisfiedByExactExercises(session, logs, normalizeFn);
   }
 
   private static startOfDayMs(d: Date | string): number {
@@ -247,4 +200,68 @@ export class TrainingPlan {
     // 2. Fallback: match by day only
     return this.sessions.find((s) => s.dayOfWeek === dayOfWeek);
   }
+}
+
+function computeSessionVolumeKey(
+  exerciseName: string,
+  normalizeFn: (name: string) => string,
+  getPrimaryMuscleFn: (name: string) => string | undefined,
+): string {
+  const muscle = getPrimaryMuscleFn(exerciseName);
+  return muscle ? `muscle:${muscle}` : `name:${normalizeFn(exerciseName)}`;
+}
+
+function isSessionSatisfiedByMuscleVolume(
+  session: PlannedSession,
+  logs: { exerciseName: string }[],
+  normalizeFn: (name: string) => string,
+  getPrimaryMuscleFn: (name: string) => string | undefined,
+): boolean {
+  const plannedVolume = new Map<string, number>();
+  for (const ex of session.exercises) {
+    const key = computeSessionVolumeKey(ex.exerciseName, normalizeFn, getPrimaryMuscleFn);
+    plannedVolume.set(key, (plannedVolume.get(key) ?? 0) + ex.targetSets);
+  }
+
+  if (plannedVolume.size === 0) return true;
+
+  const loggedVolume = new Map<string, number>();
+  for (const log of logs) {
+    const key = computeSessionVolumeKey(log.exerciseName, normalizeFn, getPrimaryMuscleFn);
+    loggedVolume.set(key, (loggedVolume.get(key) ?? 0) + 1);
+  }
+
+  let totalPlannedSets = 0;
+  let totalSatisfiedSets = 0;
+  for (const [key, targetSets] of plannedVolume.entries()) {
+    totalPlannedSets += targetSets;
+    const doneSets = loggedVolume.get(key) ?? 0;
+    totalSatisfiedSets += Math.min(doneSets, targetSets);
+  }
+
+  if (totalPlannedSets === 0) return true;
+  return totalSatisfiedSets / totalPlannedSets >= 0.5;
+}
+
+function isSessionSatisfiedByExactExercises(
+  session: PlannedSession,
+  logs: { exerciseName: string }[],
+  normalizeFn: (name: string) => string,
+): boolean {
+  const completedSetsMap = new Map<string, number>();
+  for (const log of logs) {
+    const normalizedName = normalizeFn(log.exerciseName);
+    completedSetsMap.set(normalizedName, (completedSetsMap.get(normalizedName) ?? 0) + 1);
+  }
+
+  let completedExercisesCount = 0;
+  for (const ex of session.exercises) {
+    const normalizedName = normalizeFn(ex.exerciseName);
+    const doneSets = completedSetsMap.get(normalizedName) ?? 0;
+    if (doneSets >= ex.targetSets) {
+      completedExercisesCount++;
+    }
+  }
+
+  return completedExercisesCount / session.exercises.length >= 0.5;
 }

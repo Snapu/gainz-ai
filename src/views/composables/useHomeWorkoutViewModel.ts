@@ -41,6 +41,33 @@ interface GroupedSession {
   };
 }
 
+function findActiveGroupIndex(
+  groups: DisplayWorkoutGroup[],
+  getProgress: (name: string, targetSets: number) => { isCompleted: boolean },
+): number {
+  return groups.findIndex((g) => {
+    return !g.exercises.every((ex) => getProgress(ex.exerciseName, ex.targetSets).isCompleted);
+  });
+}
+
+function findNextExerciseIndexInGroup(
+  group: DisplayWorkoutGroup,
+  getProgress: (name: string, targetSets: number) => { done: number; isCompleted: boolean },
+): number {
+  let minDone = Infinity;
+  for (const ex of group.exercises) {
+    const { done, isCompleted } = getProgress(ex.exerciseName, ex.targetSets);
+    if (!isCompleted && done < minDone) {
+      minDone = done;
+    }
+  }
+
+  return group.exercises.findIndex((ex: DisplayExercise) => {
+    const { done, isCompleted } = getProgress(ex.exerciseName, ex.targetSets);
+    return !isCompleted && done === minDone;
+  });
+}
+
 export function useHomeWorkoutViewModel() {
   const router = useRouter();
   const trainingInsightsStore = useTrainingInsightsStore();
@@ -247,38 +274,19 @@ export function useHomeWorkoutViewModel() {
     const allGroups = allWorkoutGroups.value;
     if (!allGroups) return false;
 
-    const activeGroupIndex = allGroups.findIndex((g) => {
-      return !g.exercises.every(
-        (ex) => getExerciseProgress(ex.exerciseName, ex.targetSets).isCompleted,
-      );
-    });
-
+    const activeGroupIndex = findActiveGroupIndex(allGroups, getExerciseProgress);
     if (activeGroupIndex === -1 || gIndex !== activeGroupIndex) return false;
 
     const group = allGroups[gIndex];
-    if (!group) return false;
+    const exercise = group?.exercises[exIndex];
+    if (!group || !exercise) return false;
 
     // Highlight all uncompleted exercises in a superset together
     if (group.isSuperset) {
-      return !getExerciseProgress(
-        group.exercises[exIndex].exerciseName,
-        group.exercises[exIndex].targetSets,
-      ).isCompleted;
+      return !getExerciseProgress(exercise.exerciseName, exercise.targetSets).isCompleted;
     }
 
-    let minDone = Infinity;
-    for (const ex of group.exercises) {
-      const { done, isCompleted } = getExerciseProgress(ex.exerciseName, ex.targetSets);
-      if (isCompleted) continue;
-      if (done < minDone) minDone = done;
-    }
-
-    const nextExIndex = group.exercises.findIndex((ex: DisplayExercise) => {
-      const { done, isCompleted } = getExerciseProgress(ex.exerciseName, ex.targetSets);
-      return !isCompleted && done === minDone;
-    });
-
-    return exIndex === nextExIndex;
+    return exIndex === findNextExerciseIndexInGroup(group, getExerciseProgress);
   }
 
   function getLastSessionSummary(exerciseName: string): string | null {

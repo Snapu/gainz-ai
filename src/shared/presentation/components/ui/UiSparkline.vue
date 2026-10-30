@@ -47,8 +47,9 @@ const chartData = computed(() => {
     y: toY(v),
   }));
 
-  const last = points[points.length - 1]!;
-  const first = points[0]!;
+  const last = points[points.length - 1];
+  const first = points[0];
+  if (!last || !first) return null;
 
   const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
   const fillPath = `${linePath} L${last.x},${props.height} L${first.x},${props.height} Z`;

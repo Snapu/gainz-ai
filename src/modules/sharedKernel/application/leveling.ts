@@ -356,7 +356,7 @@ export function calculateUserProgress(
   const slidingWindowDuration = 30 * 24 * 60 * 60 * 1000; // 30 days buffer
 
   for (const weekKey of weekKeys) {
-    const weekLogs = logsByWeek.get(weekKey)!;
+    const weekLogs = logsByWeek.get(weekKey) ?? [];
     const weekEnd = new Date(weekKey + 7 * 24 * 60 * 60 * 1000);
 
     /* ---- 1. Readiness Decay (Missed Weeks) ---- */

@@ -25,10 +25,11 @@ function formatDateString(dateStr: string) {
 }
 
 function formatEventDate(dates: string[]) {
-  if (dates.length === 0) return "";
-  const first = dates[0]!;
+  const first = dates[0];
+  if (!first) return "";
   if (dates.length === 1) return formatDateString(first);
-  const last = dates[dates.length - 1]!;
+  const last = dates[dates.length - 1];
+  if (!last) return formatDateString(first);
   return `${formatDateString(first)} - ${formatDateString(last)}`;
 }
 </script>

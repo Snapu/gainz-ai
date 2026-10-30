@@ -292,9 +292,10 @@ function linearRegressionSlope(values: number[]): number {
   let sumXY = 0;
   let sumX2 = 0;
   for (let i = 0; i < n; i++) {
+    const val = values[i] ?? 0;
     sumX += i;
-    sumY += values[i]!;
-    sumXY += i * values[i]!;
+    sumY += val;
+    sumXY += i * val;
     sumX2 += i * i;
   }
   const denom = n * sumX2 - sumX * sumX;
@@ -321,14 +322,19 @@ export function calculateE1RMInsights(
 
   for (const log of filteredLogs) {
     const canonical = normalizeExerciseName(log.exerciseName);
-    if (!byExercise.has(canonical)) {
-      byExercise.set(canonical, new Map());
+    let dayLogs = byExercise.get(canonical);
+    if (!dayLogs) {
+      dayLogs = new Map();
+      byExercise.set(canonical, dayLogs);
       displayNames.set(canonical, log.exerciseName);
     }
     const dateKey = log.loggedAt.toDateString();
-    const dayLogs = byExercise.get(canonical)!;
-    if (!dayLogs.has(dateKey)) dayLogs.set(dateKey, []);
-    dayLogs.get(dateKey)?.push(log);
+    let currentDayLogs = dayLogs.get(dateKey);
+    if (!currentDayLogs) {
+      currentDayLogs = [];
+      dayLogs.set(dateKey, currentDayLogs);
+    }
+    currentDayLogs.push(log);
   }
 
   const result: Record<string, ExerciseE1RM> = {};
@@ -349,7 +355,8 @@ export function calculateE1RMInsights(
     // Alongside the best e1RM we now also capture the RPE of that specific set.
     // This is consumed by the AI's +5% adjustment for conservative estimates.
     const sessionData = sortedDays.flatMap((day) => {
-      const logsForDay = sessions.get(day)!;
+      const logsForDay = sessions.get(day);
+      if (!logsForDay) return [];
       let bestE1RM: number | null = null;
       let bestSetRPE: number | undefined;
 
@@ -369,7 +376,9 @@ export function calculateE1RMInsights(
 
     if (sessionData.length === 0) continue;
 
-    const lastLogDate = new Date(sortedDays[sortedDays.length - 1]!);
+    const lastDayStr = sortedDays[sortedDays.length - 1];
+    if (!lastDayStr) continue;
+    const lastLogDate = new Date(lastDayStr);
     const daysSinceLastLog = getLocalDayIndex(now) - getLocalDayIndex(lastLogDate);
 
     // Keep the last TREND_WINDOW_SIZE sessions.
@@ -408,7 +417,7 @@ export function calculateE1RMInsights(
     const rollingMaxIdx = recentWindow.lastIndexOf(rollingMax);
     const sessionsSinceMax = recentWindow.length - 1 - rollingMaxIdx;
     const decayedMax = rollingMax * (1 - ROLLING_MAX_DECAY_PER_SESSION * sessionsSinceMax);
-    const lastSessionE1RM = trend[trend.length - 1]!;
+    const lastSessionE1RM = trend[trend.length - 1] ?? 0;
     const currentE1RM = Math.max(decayedMax, lastSessionE1RM);
 
     // --- bestRPE: RPE of the set that produced the most recent session's best e1RM ---
@@ -483,11 +492,13 @@ export function calculateE1RMInsights(
       // Let's set swapRecommended = plateau since the criteria for a "true plateau" already include recency.
       const swapRecommended = plateau;
 
-      const firstEverDate = new Date(sortedDays[0]!);
-      const lastEverDate = new Date(sortedDays[sortedDays.length - 1]!);
+      const firstEverDay = sortedDays[0];
+      const lastEverDay = sortedDays[sortedDays.length - 1];
       const isEstablished =
+        firstEverDay != null &&
+        lastEverDay != null &&
         sortedDays.length >= 2 &&
-        getLocalDayIndex(lastEverDate) - getLocalDayIndex(firstEverDate) >= 14;
+        getLocalDayIndex(new Date(lastEverDay)) - getLocalDayIndex(new Date(firstEverDay)) >= 14;
       const rpeOverloadReady = bestRPE != null && bestRPE < 8 && isEstablished;
 
       result[displayName] = {

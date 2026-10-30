@@ -329,7 +329,8 @@ export function calculateWeeklyVolume(
         const adaptiveHours = baseHours * ratio;
 
         // The exact time of the last log for this muscle on this day
-        const sessionDate = dayLastTrained.get(mg)!;
+        const sessionDate = dayLastTrained.get(mg);
+        if (!sessionDate) continue;
         const targetTime = sessionDate.getTime() + adaptiveHours * 3600000;
 
         const currentDictating = recoveryDictatingSession.get(mg);
@@ -427,10 +428,11 @@ export function calculateMuscleGroupInsights(
 
       // We only consider the primary muscle group for trend aggregation
       const primaryMuscle = activation.primaryMuscle;
-      if (!muscleTrends.has(primaryMuscle)) {
-        muscleTrends.set(primaryMuscle, { improving: 0, dropping: 0, plateau: 0, stable: 0 });
+      let counts = muscleTrends.get(primaryMuscle);
+      if (!counts) {
+        counts = { improving: 0, dropping: 0, plateau: 0, stable: 0 };
+        muscleTrends.set(primaryMuscle, counts);
       }
-      const counts = muscleTrends.get(primaryMuscle)!;
 
       const trend = e1rm.trend;
       const current = trend[trend.length - 1] ?? e1rm.e1rm;

@@ -26,7 +26,8 @@ export function resolveCurrentSession(
 
   if (recentLogs.length === 0) return null;
 
-  const lastLog = recentLogs[recentLogs.length - 1]!;
+  const lastLog = recentLogs[recentLogs.length - 1];
+  if (!lastLog) return null;
   const msSinceLast = now - lastLog.loggedAt.getTime();
 
   if (msSinceLast > SESSION_INACTIVITY_MS) return null;

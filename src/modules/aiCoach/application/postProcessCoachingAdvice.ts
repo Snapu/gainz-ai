@@ -13,6 +13,39 @@ export function adviceStartsDeload(advice: CoachingAdvice | null | undefined): b
   return advice.startDeload === true;
 }
 
+function normalizeExerciseParameters<
+  T extends {
+    exerciseName: string;
+    targetSets: number;
+    targetReps?: string;
+    targetDurationSeconds?: number;
+    targetDistanceMeters?: number;
+    targetRpe?: number;
+    restSeconds?: number;
+    isMetabolicProtocol?: boolean;
+  },
+>(rawEx: T, deloadStatus: DeloadStatus): T {
+  const ex = upcastLegacyExercise({ ...rawEx });
+
+  let targetRpe = ex.targetRpe;
+  if (targetRpe != null) {
+    targetRpe = Math.max(6, Math.min(10, Math.round(targetRpe * 2) / 2));
+  } else if (ex.targetReps && !ex.targetDurationSeconds && !ex.targetDistanceMeters) {
+    targetRpe = deloadStatus === "active" ? 6.5 : 8.5;
+  }
+
+  let restSeconds = ex.restSeconds;
+  if (ex.targetReps && !ex.isMetabolicProtocol) {
+    restSeconds = clampRestSeconds(ex.targetReps, restSeconds);
+  }
+
+  return {
+    ...ex,
+    targetRpe,
+    restSeconds,
+  };
+}
+
 export function postProcessCoachingAdvice(
   parsedCoachingAdvice: CoachingAdvice,
   phase: WorkoutPhase,
@@ -32,62 +65,15 @@ export function postProcessCoachingAdvice(
   }
 
   if (Array.isArray(cleaned.recommendedWorkout)) {
-    // We map over the array to clone and modify each exercise
-    cleaned.recommendedWorkout = cleaned.recommendedWorkout.map((ex) => {
-      if (typeof ex !== "object" || !ex) return ex;
-
-      const updatedEx = { ...ex };
-
-      // 3. Rest period clamping based on training science
-      if (updatedEx.targetReps && !updatedEx.isMetabolicProtocol) {
-        updatedEx.restSeconds = clampRestSeconds(updatedEx.targetReps, updatedEx.restSeconds);
-      }
-
-      // 4. Target RPE normalization & defaulting for resistance exercises
-      if (updatedEx.targetRpe != null) {
-        updatedEx.targetRpe = Math.max(6, Math.min(10, Math.round(updatedEx.targetRpe * 2) / 2));
-      } else if (
-        updatedEx.targetReps &&
-        !updatedEx.targetDurationSeconds &&
-        !updatedEx.targetDistanceMeters
-      ) {
-        updatedEx.targetRpe = deloadStatus === "active" ? 6.5 : 8.5;
-      }
-
-      // 5. ACL Defense: Guard against AI returning old format despite prompt instructions
-      // TODO(TechDebt): Remove `upcastLegacyExercise` once we are confident the AI will
-      // never hallucinate string-based durations like `targetReps: "30s"`.
-      return upcastLegacyExercise(updatedEx);
-    });
-
-    // Sorting has been removed as per user request to keep the natural ordering from the AI
+    cleaned.recommendedWorkout = cleaned.recommendedWorkout
+      .filter((ex): ex is NonNullable<typeof ex> => typeof ex === "object" && ex !== null)
+      .map((ex) => normalizeExerciseParameters(ex, deloadStatus));
   }
 
   if (cleaned.trainingPlan?.sessions) {
     cleaned.trainingPlan.sessions = cleaned.trainingPlan.sessions.map((session) => ({
       ...session,
-      exercises: session.exercises.map((ex) => {
-        // TODO(TechDebt): Remove `upcastLegacyExercise`
-        const upcasted = upcastLegacyExercise(ex);
-        let targetRpe = upcasted.targetRpe;
-        if (targetRpe != null) {
-          targetRpe = Math.max(6, Math.min(10, Math.round(targetRpe * 2) / 2));
-        } else if (
-          upcasted.targetReps &&
-          !upcasted.targetDurationSeconds &&
-          !upcasted.targetDistanceMeters
-        ) {
-          targetRpe = deloadStatus === "active" ? 6.5 : 8.5;
-        }
-
-        return {
-          ...upcasted,
-          targetRpe,
-          restSeconds: upcasted.targetReps
-            ? clampRestSeconds(upcasted.targetReps, upcasted.restSeconds)
-            : upcasted.restSeconds,
-        };
-      }),
+      exercises: session.exercises.map((ex) => normalizeExerciseParameters(ex, deloadStatus)),
     }));
 
     // Backfill today's workout from the first planned session ONLY if recommendedWorkout was omitted

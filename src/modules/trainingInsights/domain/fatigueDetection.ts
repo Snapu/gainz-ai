@@ -234,17 +234,19 @@ export function calculateFatigueInsight(
     for (const data of Object.values(e1rmData)) {
       if (data.trend.length < 4) continue;
 
-      const lastLogDate = data.trendDates[data.trendDates.length - 1]!;
+      const lastLogDate = data.trendDates[data.trendDates.length - 1];
+      if (!lastLogDate) continue;
       const daysSinceLastLog = (targetDate.getTime() - lastLogDate.getTime()) / MS_PER_DAY;
 
       // If the exercise hasn't been trained recently,
       // any drop is likely detraining or an old drop, not a current fatigue indicator.
       if (daysSinceLastLog > ACUTE_FATIGUE_RECENCY_DAYS) continue;
 
-      const d2 = data.trend[data.trend.length - 1]!; // current
-      const d1 = data.trend[data.trend.length - 2]!; // previous
-      const b2 = data.trend[data.trend.length - 3]!; // baseline 2
-      const b1 = data.trend[data.trend.length - 4]!; // baseline 1
+      const d2 = data.trend[data.trend.length - 1]; // current
+      const d1 = data.trend[data.trend.length - 2]; // previous
+      const b2 = data.trend[data.trend.length - 3]; // baseline 2
+      const b1 = data.trend[data.trend.length - 4]; // baseline 1
+      if (d2 === undefined || d1 === undefined || b2 === undefined || b1 === undefined) continue;
 
       const baselineAvg = (b1 + b2) / 2;
       if (

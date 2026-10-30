@@ -254,7 +254,7 @@ describe("module architecture boundaries", () => {
           const match = /^\/?([^/]+)\/(domain|application|presentation)\/(.+)$/.exec(
             resolvedRelative,
           );
-          if (match && match[3] && match[3] !== "index.ts" && match[3] !== "index.vue") {
+          if (match?.[3] && match[3] !== "index.ts" && match[3] !== "index.vue") {
             const importedLayer = match[2];
 
             // What is the current layer?

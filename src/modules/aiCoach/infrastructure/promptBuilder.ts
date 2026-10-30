@@ -77,6 +77,26 @@ export function getTrainingPattern(exerciseLogs: ExerciseLog[]): string | null {
  * Set notation: `reps×kg@rpe` — fields are omitted when absent.
  * Examples: `10×50@8.5`, `10×50` (no RPE), `10r` (bodyweight), `500m`, `30min`
  */
+function formatSetEntry(s: ExerciseLog): string {
+  // Distance-only: 500m
+  if (typeof s.distance === "number" && typeof s.reps !== "number") {
+    const rpe = typeof s.rpe === "number" ? `@${s.rpe}` : "";
+    return `${s.distance}m${rpe}`;
+  }
+  // Duration-only: 30min
+  if (typeof s.duration === "number" && typeof s.reps !== "number") {
+    const rpe = typeof s.rpe === "number" ? `@${s.rpe}` : "";
+    return `${s.duration}min${rpe}`;
+  }
+  // Standard: reps×kg@rpe (each field optional)
+  const reps = typeof s.reps === "number" ? `${s.reps}` : "";
+  const weight = typeof s.weight === "number" ? `×${s.weight}` : "";
+  const rpe = typeof s.rpe === "number" ? `@${s.rpe}` : "";
+  // Bodyweight: no weight field → append 'r' suffix for clarity
+  const suffix = typeof s.weight !== "number" && typeof s.reps === "number" ? "r" : "";
+  return `${reps}${suffix}${weight}${rpe}`;
+}
+
 export function compactLogs(logs: ExerciseLog[]): string {
   if (logs.length === 0) return "(none)";
 
@@ -102,25 +122,7 @@ export function compactLogs(logs: ExerciseLog[]): string {
     }
 
     for (const [name, sets] of byExercise) {
-      const setEntries = sets.map((s) => {
-        // Distance-only: 500m
-        if (typeof s.distance === "number" && typeof s.reps !== "number") {
-          const rpe = typeof s.rpe === "number" ? `@${s.rpe}` : "";
-          return `${s.distance}m${rpe}`;
-        }
-        // Duration-only: 30min
-        if (typeof s.duration === "number" && typeof s.reps !== "number") {
-          const rpe = typeof s.rpe === "number" ? `@${s.rpe}` : "";
-          return `${s.duration}min${rpe}`;
-        }
-        // Standard: reps×kg@rpe (each field optional)
-        const reps = typeof s.reps === "number" ? `${s.reps}` : "";
-        const weight = typeof s.weight === "number" ? `×${s.weight}` : "";
-        const rpe = typeof s.rpe === "number" ? `@${s.rpe}` : "";
-        // Bodyweight: no weight field → append 'r' suffix for clarity
-        const suffix = typeof s.weight !== "number" && typeof s.reps === "number" ? "r" : "";
-        return `${reps}${suffix}${weight}${rpe}`;
-      });
+      const setEntries = sets.map(formatSetEntry);
       lines.push(`  ${name}: ${setEntries.join(", ")}`);
     }
   }
@@ -240,27 +242,34 @@ export function buildPriorPlanSummary(
   return `${progressText}\n\n${jsonText}`;
 }
 
+function extractExerciseNamesFromCoachMessage(content: string): string[] {
+  try {
+    const parsed = JSON.parse(content) as Record<string, unknown>;
+    if (!parsed || !Array.isArray(parsed.recommendedWorkout)) return [];
+    const names: string[] = [];
+    for (const ex of parsed.recommendedWorkout) {
+      if (
+        ex &&
+        typeof ex === "object" &&
+        "exerciseName" in ex &&
+        typeof ex.exerciseName === "string"
+      ) {
+        names.push(ex.exerciseName);
+      }
+    }
+    return names;
+  } catch (_e) {
+    return [];
+  }
+}
+
 function addNamesFromMessages(names: Set<string>, messages: CoachingMessage[]): void {
   const coachMessages = messages.filter((m) => m.role === "coach");
   for (let i = coachMessages.length - 1; i >= 0; i--) {
     const msg = coachMessages[i];
     if (!msg) continue;
-    try {
-      const parsed = JSON.parse(msg.content) as Record<string, unknown>;
-      if (parsed && Array.isArray(parsed.recommendedWorkout)) {
-        for (const ex of parsed.recommendedWorkout) {
-          if (
-            ex &&
-            typeof ex === "object" &&
-            "exerciseName" in ex &&
-            typeof ex.exerciseName === "string"
-          ) {
-            names.add(ex.exerciseName);
-          }
-        }
-      }
-    } catch (_e) {
-      // ignore parse errors
+    for (const name of extractExerciseNamesFromCoachMessage(msg.content)) {
+      names.add(name);
     }
   }
 }

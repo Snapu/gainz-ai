@@ -1,4 +1,4 @@
-import { TrainingPlan } from "../domain";
+import { type PlannedSession, TrainingPlan } from "../domain";
 
 export interface EvaluateSessionLog {
   loggedAt: Date;
@@ -11,85 +11,99 @@ export interface EvaluateCompletedSessionsResult {
   isPlanFullyCompleted: boolean;
 }
 
+function groupLogsByCycleDate(
+  plan: TrainingPlan,
+  logs: EvaluateSessionLog[],
+  referenceDate: Date,
+): Map<string, { date: Date; logs: EvaluateSessionLog[] }> {
+  const logsByDate = new Map<string, { date: Date; logs: EvaluateSessionLog[] }>();
+
+  for (const log of logs) {
+    if (!plan.isInCurrentCycle(log.loggedAt, referenceDate)) continue;
+
+    const key = `${log.loggedAt.getFullYear()}-${log.loggedAt.getMonth()}-${log.loggedAt.getDate()}`;
+    const existing = logsByDate.get(key) ?? { date: log.loggedAt, logs: [] };
+    existing.logs.push(log);
+    logsByDate.set(key, existing);
+  }
+
+  return logsByDate;
+}
+
+function findSatisfiedSessionForDay(
+  plan: TrainingPlan,
+  date: Date,
+  dayLogs: EvaluateSessionLog[],
+  newCompletedSessions: Set<string>,
+  normalizeExerciseName: (name: string) => string,
+  resolveMuscle: (name: string) => string | undefined,
+): PlannedSession | undefined {
+  const weekNum = plan.getCurrentWeekNumber(date);
+  const dayOfWeek = date.getDay();
+
+  const primaryCandidate = plan.getPlannedSessionForDay(dayOfWeek, weekNum);
+  if (
+    primaryCandidate &&
+    plan.isSessionSatisfiedByLogs(primaryCandidate, dayLogs, normalizeExerciseName, resolveMuscle)
+  ) {
+    return primaryCandidate;
+  }
+
+  // Fallback: Check if the logs satisfy ANY uncompleted session
+  return plan.sessions.find((s) => {
+    const sessionKey = TrainingPlan.sessionKey(s.weekNumber, s.dayOfWeek);
+    return (
+      !newCompletedSessions.has(sessionKey) &&
+      plan.isSessionSatisfiedByLogs(s, dayLogs, normalizeExerciseName, resolveMuscle)
+    );
+  });
+}
+
+function haveCompletedSessionsChanged(
+  currentSessions: Set<string>,
+  newSessions: Set<string>,
+): boolean {
+  if (newSessions.size !== currentSessions.size) return true;
+  for (const key of newSessions) {
+    if (!currentSessions.has(key)) return true;
+  }
+  return false;
+}
+
 export function evaluateCompletedSessions(
   plan: TrainingPlan,
   currentCompletedSessions: Set<string>,
   logs: EvaluateSessionLog[],
   normalizeExerciseName: (name: string) => string,
   resolveMuscle: (name: string) => string | undefined,
+  referenceDate: Date = new Date(),
 ): EvaluateCompletedSessionsResult {
-  // Reset completedSessions before evaluating, since we rely ENTIRELY on the current cycle's logs
   const newCompletedSessions = new Set<string>();
-
-  // Group logs by local date
-  const logsByDate = new Map<string, { date: Date; logs: EvaluateSessionLog[] }>();
-
-  const today = new Date();
-
-  for (const log of logs) {
-    if (!plan.isInCurrentCycle(log.loggedAt, today)) continue;
-
-    const key = `${log.loggedAt.getFullYear()}-${log.loggedAt.getMonth()}-${log.loggedAt.getDate()}`;
-    if (!logsByDate.has(key)) {
-      logsByDate.set(key, { date: log.loggedAt, logs: [] });
-    }
-    logsByDate.get(key)!.logs.push(log);
-  }
-
-  let changed = false;
+  const logsByDate = groupLogsByCycleDate(plan, logs, referenceDate);
 
   for (const { date, logs: dayLogs } of logsByDate.values()) {
-    const weekNum = plan.getCurrentWeekNumber(date);
-    const dayOfWeek = date.getDay();
-
-    let satisfiedSession = plan.getPlannedSessionForDay(dayOfWeek, weekNum);
-
-    if (
-      !satisfiedSession ||
-      !plan.isSessionSatisfiedByLogs(
-        satisfiedSession,
-        dayLogs,
-        normalizeExerciseName,
-        resolveMuscle,
-      )
-    ) {
-      // Fallback: Check if the logs satisfy ANY uncompleted session
-      const uncompletedSessions = plan.sessions.filter(
-        (s) => !newCompletedSessions.has(TrainingPlan.sessionKey(s.weekNumber, s.dayOfWeek)),
-      );
-
-      satisfiedSession = uncompletedSessions.find((s) =>
-        plan.isSessionSatisfiedByLogs(s, dayLogs, normalizeExerciseName, resolveMuscle),
-      );
-    }
+    const satisfiedSession = findSatisfiedSessionForDay(
+      plan,
+      date,
+      dayLogs,
+      newCompletedSessions,
+      normalizeExerciseName,
+      resolveMuscle,
+    );
 
     if (satisfiedSession) {
-      const sessionKey = TrainingPlan.sessionKey(
-        satisfiedSession.weekNumber,
-        satisfiedSession.dayOfWeek,
+      newCompletedSessions.add(
+        TrainingPlan.sessionKey(satisfiedSession.weekNumber, satisfiedSession.dayOfWeek),
       );
-      if (!newCompletedSessions.has(sessionKey)) {
-        newCompletedSessions.add(sessionKey);
-      }
     }
   }
 
-  if (newCompletedSessions.size !== currentCompletedSessions.size) {
-    changed = true;
-  } else {
-    for (const key of newCompletedSessions) {
-      if (!currentCompletedSessions.has(key)) {
-        changed = true;
-        break;
-      }
-    }
-  }
-
-  const isPlanFullyCompleted = changed ? plan.isFullyCompleted(newCompletedSessions) : false;
+  const hasChanged = haveCompletedSessionsChanged(currentCompletedSessions, newCompletedSessions);
+  const isPlanFullyCompleted = hasChanged ? plan.isFullyCompleted(newCompletedSessions) : false;
 
   return {
     newCompletedSessions,
-    hasChanged: changed,
+    hasChanged,
     isPlanFullyCompleted,
   };
 }

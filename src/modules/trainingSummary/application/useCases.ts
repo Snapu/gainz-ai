@@ -63,27 +63,25 @@ export function aggregateLogsToSummary(logs: ExerciseLog[]): TrainingSummary[] {
     for (const [exerciseName, exerciseLogs] of byExercise) {
       const sets = exerciseLogs.length;
 
-      const repsLogs = exerciseLogs.filter((l) => l.reps != null);
-      const totalReps =
-        repsLogs.length > 0 ? repsLogs.reduce((sum, l) => sum + l.reps!, 0) : undefined;
+      const repsLogs = exerciseLogs.flatMap((l) => (l.reps != null ? [l.reps] : []));
+      const totalReps = repsLogs.length > 0 ? repsLogs.reduce((sum, r) => sum + r, 0) : undefined;
 
-      const weightLogs = exerciseLogs.filter((l) => l.weight != null);
-      const maxWeight =
-        weightLogs.length > 0 ? Math.max(...weightLogs.map((l) => l.weight!)) : undefined;
+      const weightLogs = exerciseLogs.flatMap((l) => (l.weight != null ? [l.weight] : []));
+      const maxWeight = weightLogs.length > 0 ? Math.max(...weightLogs) : undefined;
 
-      const volumeLogs = exerciseLogs.filter((l) => l.reps != null && l.weight != null);
+      const volumeLogs = exerciseLogs.flatMap((l) =>
+        l.reps != null && l.weight != null ? [l.reps * l.weight] : [],
+      );
       const totalVolume =
-        volumeLogs.length > 0
-          ? volumeLogs.reduce((sum, l) => sum + l.reps! * l.weight!, 0)
-          : undefined;
+        volumeLogs.length > 0 ? volumeLogs.reduce((sum, v) => sum + v, 0) : undefined;
 
-      const distanceLogs = exerciseLogs.filter((l) => l.distance != null);
+      const distanceLogs = exerciseLogs.flatMap((l) => (l.distance != null ? [l.distance] : []));
       const totalDistance =
-        distanceLogs.length > 0 ? distanceLogs.reduce((sum, l) => sum + l.distance!, 0) : undefined;
+        distanceLogs.length > 0 ? distanceLogs.reduce((sum, d) => sum + d, 0) : undefined;
 
-      const durationLogs = exerciseLogs.filter((l) => l.duration != null);
+      const durationLogs = exerciseLogs.flatMap((l) => (l.duration != null ? [l.duration] : []));
       const totalDuration =
-        durationLogs.length > 0 ? durationLogs.reduce((sum, l) => sum + l.duration!, 0) : undefined;
+        durationLogs.length > 0 ? durationLogs.reduce((sum, d) => sum + d, 0) : undefined;
 
       summaries.push({
         year,

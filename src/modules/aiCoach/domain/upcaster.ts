@@ -42,6 +42,26 @@ function splitReps(reps: string): { value: string; unit: string } {
   return { value: reps, unit: "" };
 }
 
+function tryParseDistanceMeters(targetReps: string): number | undefined {
+  const lower = targetReps.toLowerCase().trim();
+  if (/m$/.test(lower) && !lower.includes("min") && !lower.includes("time")) {
+    return parseFirstRep(targetReps);
+  }
+  return undefined;
+}
+
+function tryParseDurationSeconds(targetReps: string): number | undefined {
+  if (!isDuration(targetReps)) return undefined;
+
+  const parsed = parseFirstRep(targetReps);
+  if (parsed === undefined) return undefined;
+
+  const unit = splitReps(targetReps).unit.toLowerCase();
+  if (unit.includes("hr")) return parsed * 3600;
+  if (unit.includes("min") || unit === "m") return parsed * 60;
+  return parsed;
+}
+
 /**
  * Upcaster: Converts legacy stringly-typed duration/distance in `targetReps`
  * into the new explicit numeric fields (`targetDurationSeconds`, `targetDistanceMeters`).
@@ -52,32 +72,18 @@ function splitReps(reps: string): { value: string; unit: string } {
  */
 export function upcastLegacyExercise<
   T extends { targetReps?: string; targetDurationSeconds?: number; targetDistanceMeters?: number },
->(ex: T): T {
+>(ex: T): T & { targetDurationSeconds?: number; targetDistanceMeters?: number } {
   if (!ex.targetReps) return ex;
   if (ex.targetDurationSeconds != null || ex.targetDistanceMeters != null) return ex;
 
-  const lower = ex.targetReps.toLowerCase().trim();
-
-  // Distance ("500m") - ensure we don't catch "30min" or "time"
-  if (/m$/.test(lower) && !lower.includes("min") && !lower.includes("time")) {
-    const parsed = parseFirstRep(ex.targetReps);
-    if (parsed) {
-      return { ...ex, targetDistanceMeters: parsed, targetReps: undefined };
-    }
+  const distanceMeters = tryParseDistanceMeters(ex.targetReps);
+  if (distanceMeters !== undefined) {
+    return { ...ex, targetDistanceMeters: distanceMeters, targetReps: undefined };
   }
 
-  // Duration ("30s", "1 min")
-  if (isDuration(ex.targetReps)) {
-    const parsed = parseFirstRep(ex.targetReps);
-    if (parsed !== undefined) {
-      const unit = splitReps(ex.targetReps).unit.toLowerCase();
-      let duration: number;
-      if (unit.includes("hr")) duration = parsed * 3600;
-      else if (unit.includes("min") || unit === "m") duration = parsed * 60;
-      else duration = parsed; // seconds
-
-      return { ...ex, targetDurationSeconds: duration, targetReps: undefined };
-    }
+  const durationSeconds = tryParseDurationSeconds(ex.targetReps);
+  if (durationSeconds !== undefined) {
+    return { ...ex, targetDurationSeconds: durationSeconds, targetReps: undefined };
   }
 
   return ex;
