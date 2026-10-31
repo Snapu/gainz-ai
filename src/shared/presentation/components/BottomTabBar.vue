@@ -13,7 +13,7 @@ const tabs = [
 </script>
 
 <template>
-  <nav class="relative w-full z-40 bg-background/95 backdrop-blur-xl border-t border-white/5 pb-safe shrink-0">
+  <nav class="relative w-full z-40 bg-background/95 backdrop-blur-xl border-t border-white/5 pb-safe shrink-0 select-none touch-none">
     <div class="flex items-center justify-around h-16 px-2">
       <router-link
         v-for="tab in tabs"

@@ -161,10 +161,10 @@ function skipWizard() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-background flex flex-col pt-safe">
+  <div class="h-full bg-background flex flex-col pt-safe overflow-hidden">
     <!-- Header -->
     <header 
-      class="flex items-center justify-between p-4 sticky top-0 bg-background/90 backdrop-blur-xl transition-all z-20"
+      class="flex items-center justify-between p-4 shrink-0 bg-background/90 backdrop-blur-xl transition-all z-20 select-none touch-none"
       :class="{ 'border-b border-white/5': isEditMode }"
     >
       <!-- Left: Back Button -->
@@ -209,7 +209,7 @@ function skipWizard() {
     </header>
 
     <!-- Content Area -->
-    <main class="flex-1 px-6 pb-32 flex flex-col mt-4">
+    <main class="flex-1 overflow-y-auto overscroll-y-contain px-6 pb-32 flex flex-col mt-4">
       <div class="flex-1 animate-in fade-in slide-in-from-right-4 duration-300" :key="currentStepIndex">
         <!-- Goal -->
         <template v-if="stepper.isCurrent('goal')">

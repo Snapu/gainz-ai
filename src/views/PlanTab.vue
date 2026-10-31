@@ -39,7 +39,7 @@ function getValidSupersetId(
       </template>
     </AppHeader>
 
-    <main class="flex-1 w-full max-w-2xl mx-auto px-4 pt-4 pb-8 overflow-y-auto no-scrollbar flex flex-col gap-5">
+    <main class="flex-1 w-full max-w-2xl mx-auto px-4 pt-4 pb-8 overflow-y-auto overscroll-y-contain no-scrollbar flex flex-col gap-5">
       <template v-if="(isLoading && !activePlan) || isRegenerating">
         <!-- Skeleton for Plan Tab -->
         <div class="flex items-center justify-between gap-4 mb-2">

@@ -46,7 +46,7 @@ void scrollContainerRef;
     <!-- Chat Messages Scroll Area -->
     <main
       ref="scrollContainerRef"
-      class="flex-1 min-h-0 px-4 pt-4 pb-4 overflow-y-auto no-scrollbar flex flex-col gap-4 w-full max-w-2xl mx-auto"
+      class="flex-1 min-h-0 px-4 pt-4 pb-4 overflow-y-auto overscroll-y-contain no-scrollbar flex flex-col gap-4 w-full max-w-2xl mx-auto"
     >
       <!-- Missing API Key Callout -->
       <div
@@ -331,15 +331,15 @@ void scrollContainerRef;
             rows="1"
             enterkeyhint="send"
             :disabled="isLoading"
-            placeholder="Ask Coach about your workout, fatigue, or swaps..."
-            class="min-h-[56px] max-h-36 py-3.5 pl-4 pr-14 text-base"
+            placeholder="Ask Coach anything..."
+            class="min-h-[52px] max-h-36 py-3.5 pl-4 pr-14 text-base placeholder:text-muted-foreground/60 placeholder:truncate leading-normal"
             @keydown.enter.exact.prevent="handleAskQuestion"
           />
           <UiButton
             type="button"
             size="icon"
             :variant="userQuestion.trim() ? 'default' : 'secondary'"
-            class="absolute right-2 bottom-2 h-10 w-10 rounded-full active:scale-95 transition-all"
+            class="absolute right-1.5 bottom-1.5 h-10 w-10 rounded-full active:scale-95 transition-all"
             :class="!userQuestion.trim() ? 'opacity-40' : 'shadow-sm'"
             :disabled="!userQuestion.trim() || isLoading"
             @click="handleAskQuestion"

@@ -25,7 +25,7 @@ function handleFabClick() {
 </script>
 
 <template>
-  <div class="h-screen h-[100dvh] w-full flex flex-col overflow-hidden bg-background">
+  <div class="h-full w-full flex flex-col overflow-hidden bg-background">
     <!-- Main content area -->
     <div class="flex-1 min-h-0 w-full relative overflow-hidden">
       <router-view v-slot="{ Component }">

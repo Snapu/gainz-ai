@@ -47,7 +47,7 @@ async function handleLogin() {
 </script>
 
 <template>
-  <div class="flex flex-col items-center justify-center min-h-screen bg-background p-6">
+  <div class="flex flex-col items-center justify-center h-full min-h-screen bg-background p-6 overflow-y-auto overscroll-y-contain">
     <div class="flex-1 flex flex-col items-center justify-center w-full max-w-md gap-12">
       <div class="text-center space-y-4">
         <h1 class="text-6xl font-black tracking-tighter text-foreground">Gainz<span class="text-primary">AI</span></h1>

@@ -7,15 +7,15 @@ const router = useRouter();
 </script>
 
 <template>
-  <div class="min-h-screen bg-background flex flex-col">
-    <header class="flex items-center p-4 border-b border-white/5 bg-background/80 backdrop-blur-md sticky top-0 z-10">
+  <div class="h-full bg-background flex flex-col overflow-hidden">
+    <header class="flex items-center p-4 border-b border-white/5 bg-background/80 backdrop-blur-md shrink-0 z-10 select-none touch-none">
       <UiButton variant="ghost" size="icon" @click="router.back()" class="shrink-0 -ml-2 mr-2">
         <ArrowLeft class="w-6 h-6" />
       </UiButton>
       <h1 class="text-xl font-bold truncate">Privacy Policy</h1>
     </header>
     
-    <main class="flex-1 p-6 text-foreground/80 space-y-8 max-w-3xl mx-auto">
+    <main class="flex-1 overflow-y-auto overscroll-y-contain p-6 text-foreground/80 space-y-8 max-w-3xl mx-auto">
       <section class="space-y-4">
         <h2 class="text-2xl font-bold text-foreground">Datenschutzerklärung / Privacy Policy</h2>
         <p class="text-sm italic">Letzte Aktualisierung / Last Updated: 13. Februar 2026</p>
