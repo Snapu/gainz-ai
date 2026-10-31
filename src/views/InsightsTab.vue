@@ -254,7 +254,7 @@ const isAllExercisesOpen = ref(false);
                       <span class="text-xs font-bold text-foreground tabular-nums">{{ metric.unit === 'reps' ? Math.round(metric.e1rm) : metric.e1rm.toFixed(1) }}</span>
                     </div>
                   </div>
-                  <UiBadge variant="success" class="flex items-center gap-1 text-micro font-bold px-2 shrink-0">
+                  <UiBadge variant="success" class="flex items-center gap-1">
                     <TrendingUp class="w-3 h-3" />
                     +{{ metric.deltaPct }}%
                   </UiBadge>
@@ -273,7 +273,7 @@ const isAllExercisesOpen = ref(false);
                       <span class="text-xs font-bold text-foreground tabular-nums">{{ metric.unit === 'reps' ? Math.round(metric.e1rm) : metric.e1rm.toFixed(1) }}</span>
                     </div>
                   </div>
-                  <UiBadge :variant="metric.status === 'plateau' ? 'warning' : 'danger'" class="flex items-center gap-1 text-micro font-bold px-2 shrink-0">
+                  <UiBadge :variant="metric.status === 'plateau' ? 'warning' : 'danger'" class="flex items-center gap-1">
                     <ArrowRight v-if="metric.status === 'plateau'" class="w-3 h-3" />
                     <TrendingDown v-else class="w-3 h-3" />
                     {{ metric.status === 'plateau' ? 'Plateau' : metric.deltaPct + '%' }}

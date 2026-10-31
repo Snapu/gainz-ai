@@ -170,13 +170,12 @@ watch(isOpen, (val) => {
             </span>
             <div
               v-if="optionDetails?.[option]?.meta?.length"
-              class="flex shrink-0 flex-wrap justify-end gap-2 text-xs font-semibold text-muted-foreground"
+              class="flex shrink-0 flex-wrap justify-end gap-1.5"
             >
               <UiBadge
                 v-for="meta in optionDetails[option].meta"
                 :key="meta.label"
-                :variant="meta.tone === 'primary' ? 'default' : 'secondary'"
-                class="uppercase tracking-wider text-xs"
+                :variant="meta.tone === 'primary' ? 'info' : 'surface'"
               >
                 {{ meta.label }}
               </UiBadge>

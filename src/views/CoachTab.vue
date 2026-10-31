@@ -111,7 +111,7 @@ void scrollContainerRef;
             :title="qp.prompt"
             :aria-label="qp.prompt"
             @click="applyQuickPrompt(qp.prompt)"
-            class="flex items-center justify-center gap-2 text-xs font-semibold px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/5 text-foreground transition-all duration-200 cursor-pointer active:scale-95 disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            class="inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-foreground transition-all duration-200 cursor-pointer active:scale-95 disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background whitespace-nowrap"
           >
             <Sparkles class="w-3.5 h-3.5 text-primary shrink-0" />
             <span class="truncate">{{ qp.label }}</span>
@@ -172,7 +172,7 @@ void scrollContainerRef;
                   </div>
                   <span class="text-xs font-bold text-foreground">Prescribed Workout</span>
                 </div>
-                <UiBadge variant="surface" class="uppercase tracking-wider text-xs">
+                <UiBadge variant="surface">
                   {{ message.recommendedWorkout.length }} Exercises
                 </UiBadge>
               </div>
@@ -317,7 +317,7 @@ void scrollContainerRef;
             :title="qp.prompt"
             :aria-label="qp.prompt"
             @click="applyQuickPrompt(qp.prompt)"
-            class="flex items-center justify-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/5 text-muted-foreground hover:text-foreground transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed active:scale-95 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background whitespace-nowrap"
+            class="inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-muted-foreground hover:text-foreground transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed active:scale-95 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background whitespace-nowrap"
           >
             <Sparkles class="w-3 h-3 text-primary shrink-0" />
             <span class="truncate max-w-[240px]">{{ qp.label }}</span>

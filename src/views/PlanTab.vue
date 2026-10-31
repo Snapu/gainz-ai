@@ -59,7 +59,7 @@ function getValidSupersetId(
           <div class="flex items-center justify-between gap-4">
             <div class="flex items-center gap-2">
               <h3 class="text-sm font-bold text-foreground">Current Training Cycle</h3>
-              <UiBadge variant="surface" class="uppercase tracking-wider whitespace-nowrap text-[10px] font-bold">{{ activePlan.cycleWeeks }} Week(s)</UiBadge>
+              <UiBadge variant="surface">{{ activePlan.cycleWeeks }} Week(s)</UiBadge>
             </div>
             <UiButton
               variant="secondary"
@@ -90,10 +90,10 @@ function getValidSupersetId(
                     <span class="text-[10px] font-bold text-muted-foreground uppercase tracking-wider shrink-0">Week {{ session.weekNumber }}</span>
                   </div>
                   
-                  <UiBadge v-if="isPlanSessionCompleted(session.weekNumber, session.dayOfWeek)" variant="success" class="uppercase tracking-wider shrink-0">
+                  <UiBadge v-if="isPlanSessionCompleted(session.weekNumber, session.dayOfWeek)" variant="success">
                     <CheckCircle2 class="w-3 h-3 mr-1" /> Done
                   </UiBadge>
-                  <UiBadge v-else-if="sIdx === activeSessionIndex" variant="info" class="uppercase tracking-wider shrink-0">
+                  <UiBadge v-else-if="sIdx === activeSessionIndex" variant="info">
                     Up Next
                   </UiBadge>
                 </div>
@@ -128,7 +128,7 @@ function getValidSupersetId(
                             <UiBadge
                               v-if="getValidSupersetId(ex, session.exercises) && getValidSupersetId(session.exercises[exIdx - 1], session.exercises) !== ex.supersetId"
                               variant="info"
-                              class="ml-1 uppercase tracking-widest text-[9px]"
+                              class="ml-1"
                             >
                               Superset {{ ex.supersetId }}
                             </UiBadge>

@@ -53,7 +53,7 @@ const { toasts, dismiss } = useToast();
       >
         <button type="button"
           @click="t.action.onClick"
-          class="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-white/20 bg-white/5 px-4 text-sm font-semibold transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50"
+          class="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-semibold text-foreground transition-colors hover:bg-white/10 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50"
         >
           {{ t.action.label }}
         </button>

@@ -24,7 +24,7 @@ export const uiSelectableItemClass =
 
 // ─── Badge ───────────────────────────────────────────────────────────────────
 export const badgeVariants = cva(
-  "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+  "inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
   {
     variants: {
       variant: {
@@ -39,8 +39,8 @@ export const badgeVariants = cva(
         warning: "bg-orange-500/10 text-orange-400 border border-orange-500/20",
         danger: "bg-red-500/10 text-red-400 border border-red-500/20",
         info: "bg-primary/10 text-primary border border-primary/20",
-        neutral: "bg-muted/30 text-muted-foreground border border-white/10",
-        surface: "bg-white/5 text-foreground/60 border border-white/10",
+        neutral: "bg-white/5 text-muted-foreground border border-white/10",
+        surface: "bg-white/5 text-muted-foreground border border-white/10",
       },
     },
     defaultVariants: {

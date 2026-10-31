@@ -81,11 +81,11 @@ const weeklyVolumeDeltaPct = computed(() => {
              <UiBadge
                v-if="deloadStore.active"
                variant="warning"
-               class="capitalize font-semibold text-[11px] px-1.5 py-0 h-5 shrink-0"
+               class="capitalize shrink-0"
              >
                Deload
              </UiBadge>
-             <UiBadge v-else :variant="phaseVariant" class="capitalize font-semibold text-[11px] px-1.5 py-0 h-5 shrink-0">
+             <UiBadge v-else :variant="phaseVariant" class="capitalize shrink-0">
                {{ insights?.phase ? insights.phase.toLowerCase() : 'maintain' }}
              </UiBadge>
              
