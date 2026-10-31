@@ -5,6 +5,7 @@ import AppHeader from "@/shared/presentation/components/AppHeader.vue";
 import GlobalHeaderActions from "@/shared/presentation/components/GlobalHeaderActions.vue";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
+import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 import UiTextarea from "@/shared/presentation/components/ui/UiTextarea.vue";
 
 const {
@@ -32,10 +33,10 @@ void scrollContainerRef;
 </script>
 
 <template>
-  <div class="h-full bg-background flex flex-col pt-safe relative">
+  <div class="h-full bg-background flex flex-col pt-safe relative overflow-hidden">
     
     <!-- Top Nav -->
-    <AppHeader>
+    <AppHeader class="shrink-0">
       <h1 class="text-lg font-black tracking-tight">AI Coach</h1>
       <template #actions>
         <GlobalHeaderActions />
@@ -110,7 +111,7 @@ void scrollContainerRef;
             :title="qp.prompt"
             :aria-label="qp.prompt"
             @click="applyQuickPrompt(qp.prompt)"
-            class="flex items-center justify-center gap-2 text-xs font-semibold px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-foreground transition-all duration-200 cursor-pointer active:scale-95 disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            class="flex items-center justify-center gap-2 text-xs font-semibold px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/5 text-foreground transition-all duration-200 cursor-pointer active:scale-95 disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             <Sparkles class="w-3.5 h-3.5 text-primary shrink-0" />
             <span class="truncate">{{ qp.label }}</span>
@@ -129,7 +130,7 @@ void scrollContainerRef;
             <span class="text-xs font-medium text-muted-foreground/60 tabular-nums">{{ message.formattedTime }}</span>
             <span class="text-xs font-bold text-muted-foreground">You</span>
           </div>
-          <div class="p-3 rounded-xl rounded-tr-none bg-primary/15 border border-primary/25 text-foreground text-sm font-semibold leading-relaxed shadow-sm whitespace-pre-wrap break-words">
+          <div class="p-3 rounded-xl rounded-tr-none bg-primary/10 border border-primary/20 text-foreground text-sm font-semibold leading-relaxed shadow-sm whitespace-pre-wrap break-words">
             {{ message.content }}
           </div>
         </div>
@@ -140,7 +141,7 @@ void scrollContainerRef;
           class="w-full flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-2 duration-200"
         >
           <!-- Content Card -->
-          <div class="w-full p-4 rounded-xl bg-card border border-white/5 shadow-sm text-sm font-medium text-foreground/90 leading-relaxed flex flex-col gap-3">
+          <UiCard class="w-full p-4 flex flex-col gap-3">
             <!-- Header bar inside the card -->
             <div class="flex items-center justify-between pb-2.5 border-b border-white/5">
               <div class="flex items-center gap-2">
@@ -162,7 +163,7 @@ void scrollContainerRef;
             <!-- Recommended Workout Card -->
             <div
               v-if="message.recommendedWorkout?.length"
-              class="mt-1 p-4 rounded-xl bg-white/5 border border-white/10 flex flex-col gap-3"
+              class="mt-1 p-4 rounded-xl bg-white/5 border border-white/5 flex flex-col gap-3"
             >
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
@@ -273,7 +274,7 @@ void scrollContainerRef;
                 <pre class="overflow-x-auto whitespace-pre-wrap break-all text-xs max-h-48 rounded-xl bg-black/30 p-3 font-mono text-muted-foreground/70">{{ message.requestPayload }}</pre>
               </div>
             </div>
-          </div>
+          </UiCard>
         </div>
       </template>
 
@@ -292,16 +293,16 @@ void scrollContainerRef;
           <span class="text-xs font-bold text-foreground">AI Coach</span>
           <span class="text-xs font-medium text-muted-foreground/60">Analyzing your workout...</span>
         </div>
-        <div class="px-4 py-3 rounded-xl bg-card border border-white/5 shadow-sm inline-flex items-center gap-2 self-start">
+        <UiCard class="px-4 py-3 inline-flex items-center gap-2 self-start">
           <span class="w-2 h-2 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]"></span>
           <span class="w-2 h-2 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]"></span>
           <span class="w-2 h-2 rounded-full bg-primary animate-bounce"></span>
-        </div>
+        </UiCard>
       </div>
     </main>
 
     <!-- Bottom Docked Actions & Input -->
-    <div class="shrink-0 border-t border-white/5 bg-background/95 backdrop-blur-xl p-3 z-20 transition-all duration-200">
+    <div class="shrink-0 border-t border-white/5 bg-background/95 backdrop-blur-xl px-4 py-3 z-20 transition-all duration-200">
       <div class="w-full max-w-2xl mx-auto flex flex-col gap-3">
         <!-- Quick Prompts -->
         <div
@@ -316,7 +317,7 @@ void scrollContainerRef;
             :title="qp.prompt"
             :aria-label="qp.prompt"
             @click="applyQuickPrompt(qp.prompt)"
-            class="flex items-center justify-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-muted-foreground hover:text-foreground transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed active:scale-95 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background whitespace-nowrap"
+            class="flex items-center justify-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/5 text-muted-foreground hover:text-foreground transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed active:scale-95 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background whitespace-nowrap"
           >
             <Sparkles class="w-3 h-3 text-primary shrink-0" />
             <span class="truncate max-w-[240px]">{{ qp.label }}</span>

@@ -25,14 +25,9 @@ function handleFabClick() {
 </script>
 
 <template>
-  <div class="h-screen h-[100dvh] w-full relative overflow-hidden bg-background">
+  <div class="h-screen h-[100dvh] w-full flex flex-col overflow-hidden bg-background">
     <!-- Main content area -->
-    <div
-      class="absolute inset-x-0 top-0"
-      :style="{
-        bottom: !isKeyboardVisible ? 'calc(4rem + 1px + env(safe-area-inset-bottom, 0px))' : '0px'
-      }"
-    >
+    <div class="flex-1 min-h-0 w-full relative overflow-hidden">
       <router-view v-slot="{ Component }">
         <transition name="fade" mode="out-in">
           <keep-alive :max="4">
@@ -83,7 +78,7 @@ function handleFabClick() {
     />
 
     <!-- Bottom Navigation Bar -->
-    <BottomTabBar v-show="!isKeyboardVisible" />
+    <BottomTabBar v-show="!isKeyboardVisible" class="shrink-0" />
   </div>
 </template>
 

@@ -31,7 +31,7 @@ const weeklyVolumeDeltaPct = computed(() => {
 
 <template>
   <UiCard 
-    class="w-full relative ring-1 ring-white/5 bg-card overflow-hidden p-0"
+    class="w-full relative ring-1 ring-white/5 overflow-hidden p-0"
   >
     <div class="flex flex-row min-h-[9rem]">
       

@@ -5,6 +5,7 @@ import AppHeader from "@/shared/presentation/components/AppHeader.vue";
 import GlobalHeaderActions from "@/shared/presentation/components/GlobalHeaderActions.vue";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
+import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 
 const {
   isLoading,
@@ -28,10 +29,10 @@ function getValidSupersetId(
 </script>
 
 <template>
-  <div class="h-full bg-background flex flex-col pt-safe relative">
+  <div class="h-full bg-background flex flex-col pt-safe relative overflow-hidden">
     
     <!-- Top Nav -->
-    <AppHeader>
+    <AppHeader class="shrink-0">
       <h1 class="text-lg font-black tracking-tight">Training Plan</h1>
       <template #actions>
         <GlobalHeaderActions />
@@ -46,11 +47,11 @@ function getValidSupersetId(
           <div class="h-8 w-24 bg-muted/20 animate-pulse rounded"></div>
         </div>
         <div class="flex flex-col gap-4 w-full">
-          <div v-for="i in 3" :key="i" class="rounded-xl border border-white/5 bg-card shadow-sm p-4 animate-pulse">
+          <UiCard v-for="i in 3" :key="i" class="p-4 animate-pulse">
             <div class="h-4 w-32 bg-muted/20 rounded mb-2"></div>
             <div class="h-3 w-48 bg-muted/20 rounded mb-4"></div>
             <div class="h-20 bg-muted/20 rounded w-full"></div>
-          </div>
+          </UiCard>
         </div>
       </template>
       <template v-else-if="activePlan">
@@ -73,13 +74,15 @@ function getValidSupersetId(
           </div>
           
           <div class="flex flex-col gap-4 w-full">
-            <div v-for="(session, sIdx) in activePlan.sessions" :key="sIdx" 
-                class="rounded-xl overflow-hidden border transition-all" 
-                :class="{ 
-                  'bg-primary/[0.02] border-primary/20 shadow-sm': sIdx === activeSessionIndex, 
-                  'bg-card border-white/5': sIdx !== activeSessionIndex,
-                  'opacity-60 grayscale-[0.3]': isPlanSessionCompleted(session.weekNumber, session.dayOfWeek)
-                }">
+            <UiCard
+              v-for="(session, sIdx) in activePlan.sessions"
+              :key="sIdx" 
+              class="p-0 transition-all overflow-hidden" 
+              :class="[ 
+                sIdx === activeSessionIndex && 'border-primary/30 ring-1 ring-primary/20', 
+                isPlanSessionCompleted(session.weekNumber, session.dayOfWeek) && 'opacity-60 grayscale-[0.3]'
+              ]"
+            >
               <div class="p-4">
                 <div class="flex items-start justify-between gap-3 mb-1">
                   <div class="flex items-center gap-2 flex-wrap min-w-0">
@@ -139,7 +142,7 @@ function getValidSupersetId(
                   </table>
                 </div>
               </div>
-            </div>
+            </UiCard>
           </div>
 
           <!-- Debug Buttons -->

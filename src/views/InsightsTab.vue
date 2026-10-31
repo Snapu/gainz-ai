@@ -38,10 +38,10 @@ const isAllExercisesOpen = ref(false);
 </script>
 
 <template>
-  <div class="h-full bg-background flex flex-col pt-safe relative">
+  <div class="h-full bg-background flex flex-col pt-safe relative overflow-hidden">
     
     <!-- Top Nav -->
-    <AppHeader>
+    <AppHeader class="shrink-0">
       <h1 class="text-lg font-black tracking-tight">Insights</h1>
       <template #actions>
         <GlobalHeaderActions />

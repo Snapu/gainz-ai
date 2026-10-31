@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Component, HTMLAttributes } from "vue";
+import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 import { cn } from "@/shared/presentation/lib/utils";
 
 const props = defineProps<{
@@ -11,7 +12,7 @@ const props = defineProps<{
 </script>
 
 <template>
-  <div :class="cn('flex flex-col items-center justify-center py-10 px-4 text-center bg-card rounded-xl border border-white/5 shadow-sm', props.class)">
+  <UiCard :class="cn('flex flex-col items-center justify-center py-10 px-4 text-center', props.class)">
     <div v-if="icon" class="mb-4 text-primary opacity-80">
       <component :is="icon" class="w-10 h-10" />
     </div>
@@ -20,5 +21,5 @@ const props = defineProps<{
     <div v-if="$slots.default" class="mt-5">
       <slot />
     </div>
-  </div>
+  </UiCard>
 </template>

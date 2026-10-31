@@ -14,6 +14,7 @@ import UserProgressCard from "@/shared/presentation/components/UserProgressCard.
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiBottomSheet from "@/shared/presentation/components/ui/UiBottomSheet.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
+import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 import { useHomeWorkoutViewModel } from "@/views/composables/useHomeWorkoutViewModel";
 
 const {
@@ -131,10 +132,10 @@ function handleGalleryScroll() {
 </script>
 
 <template>
-  <div class="h-full bg-background flex flex-col pt-safe relative">
+  <div class="h-full bg-background flex flex-col pt-safe relative overflow-hidden">
     
     <!-- Top Nav -->
-    <AppHeader>
+    <AppHeader class="shrink-0">
       <h1 class="text-2xl font-black italic tracking-tighter">Gainz<span class="text-primary">AI</span></h1>
       <template #actions>
         <GlobalHeaderActions />
@@ -151,9 +152,9 @@ function handleGalleryScroll() {
         class="w-full mx-0 mt-0"
       />
       <!-- Skeleton placeholder while summaries load -->
-      <div
+      <UiCard
         v-else
-        class="w-full h-48 rounded-xl bg-card border border-white/5 animate-pulse"
+        class="w-full h-48 animate-pulse"
       />
       
       <!-- TODAY'S WORKOUT SECTION -->
@@ -163,7 +164,7 @@ function handleGalleryScroll() {
             <div class="h-4 w-32 bg-muted/20 animate-pulse rounded"></div>
           </div>
           <div class="flex flex-col gap-3 mt-4">
-            <div v-for="i in 2" :key="i" class="w-full p-4 rounded-xl border border-white/5 shadow-sm bg-card animate-pulse">
+            <UiCard v-for="i in 2" :key="i" class="w-full p-4 animate-pulse">
               <div class="flex justify-between items-start mb-4">
                 <div class="h-5 w-40 bg-muted/20 rounded"></div>
                 <div class="h-8 w-8 bg-muted/20 rounded-full"></div>
@@ -173,7 +174,7 @@ function handleGalleryScroll() {
                 <div class="h-10 bg-muted/20 rounded col-span-1"></div>
                 <div class="h-10 bg-muted/20 rounded col-span-1"></div>
               </div>
-            </div>
+            </UiCard>
           </div>
         </template>
 
@@ -374,7 +375,7 @@ function handleGalleryScroll() {
             v-for="(exercise, exIndex) in group.exercises" 
             :key="exercise.exerciseName ?? exIndex"
             class="flex items-center justify-between w-full p-4 rounded-xl border transition-colors"
-            :class="isExerciseCompleted(exercise) ? 'bg-emerald-500/10 border-emerald-500/20 opacity-60' : (gIndex === activeGroupIndex ? 'bg-primary/10 border-primary/20' : 'bg-card border-white/5')"
+            :class="isExerciseCompleted(exercise) ? 'bg-emerald-500/10 border-emerald-500/20 opacity-60' : (gIndex === activeGroupIndex ? 'bg-primary/10 border-primary/20' : 'bg-white/5 border-white/5')"
           >
              <div class="flex flex-col min-w-0">
                <span class="text-sm font-semibold truncate text-foreground" :class="isExerciseCompleted(exercise) ? 'line-through decoration-muted-foreground/30' : ''">
