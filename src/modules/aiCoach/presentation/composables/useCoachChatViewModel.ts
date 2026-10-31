@@ -1,6 +1,11 @@
 import { computed, getCurrentInstance, nextTick, onActivated, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import type { CoachingAdvice, CoachingMessage } from "@/modules/aiCoach/domain";
+import {
+  type CoachingAdvice,
+  type CoachingMessage,
+  type SuggestedFollowUp,
+  sanitizeSuggestedFollowUps,
+} from "@/modules/aiCoach/domain";
 import {
   type DisplayExercise,
   type DisplayInsight,
@@ -24,15 +29,30 @@ export interface ChatBubbleMessage {
   scratchpad?: string | null;
   recommendedWorkout?: DisplayExercise[];
   requestPayload?: string | null;
+  suggestedFollowUps?: SuggestedFollowUp[];
 }
 
-export type QuickPromptIcon = "ArrowLeftRight" | "BatteryLow" | "Clock" | "ShieldAlert";
-
-interface QuickPromptItem {
+export interface QuickPromptItem {
   id: string;
   label: string;
   prompt: string;
-  icon: QuickPromptIcon;
+}
+
+function findFollowUpsInBubbles(bubbles: ChatBubbleMessage[]): QuickPromptItem[] {
+  const lastBubble = bubbles[bubbles.length - 1];
+  if (lastBubble?.role !== "coach") {
+    return [];
+  }
+  const followUps = sanitizeSuggestedFollowUps(lastBubble.suggestedFollowUps);
+  if (!followUps || followUps.length === 0) {
+    return [];
+  }
+
+  return followUps.map((sf, idx) => ({
+    id: `followup-${lastBubble.id}-${idx}`,
+    label: sf.label,
+    prompt: sf.prompt,
+  }));
 }
 
 /**
@@ -117,6 +137,7 @@ function toCoachBubble(
     scratchpad: parsedData?.scratchpad ?? null,
     recommendedWorkout: (parsedData?.recommendedWorkout as DisplayExercise[]) ?? undefined,
     requestPayload,
+    suggestedFollowUps: parsedData?.suggestedFollowUps,
   };
 }
 
@@ -136,34 +157,6 @@ export function useCoachChatViewModel() {
 
   const isLoading = computed<boolean>(() => chatStore.isLoading);
   const hasApiKey = computed<boolean>(() => Boolean(profileStore.apiKey));
-
-  const quickPrompts: QuickPromptItem[] = [
-    {
-      id: "swap",
-      label: "Swap Exercise",
-      prompt: "An exercise machine is occupied. What alternative exercise can I substitute today?",
-      icon: "ArrowLeftRight",
-    },
-    {
-      id: "fatigue",
-      label: "Feeling Fatigued",
-      prompt:
-        "I'm feeling unusually tired today. Should I adjust volume, intensity, or take a deload?",
-      icon: "BatteryLow",
-    },
-    {
-      id: "short-time",
-      label: "Short on Time",
-      prompt: "I only have 30 minutes to train today. How should I condense today's workout?",
-      icon: "Clock",
-    },
-    {
-      id: "deload",
-      label: "Deload Advice",
-      prompt: "Based on my recent volume and fatigue metrics, do you recommend a deload week?",
-      icon: "ShieldAlert",
-    },
-  ];
 
   function formatTime(d: Date | string): string {
     const date = typeof d === "string" ? new Date(d) : d;
@@ -213,6 +206,10 @@ export function useCoachChatViewModel() {
     return bubbles;
   });
 
+  const quickPrompts = computed<QuickPromptItem[]>(() => {
+    return findFollowUpsInBubbles(chatMessages.value);
+  });
+
   function handleAskQuestion(): void {
     const question = userQuestion.value.trim();
     if (!question || isLoading.value) return;
@@ -235,11 +232,9 @@ export function useCoachChatViewModel() {
     );
   }
 
-  function applyQuickPrompt(promptText: string, autoSend = true): void {
+  function applyQuickPrompt(promptText: string): void {
+    if (isLoading.value) return;
     userQuestion.value = promptText;
-    if (autoSend) {
-      handleAskQuestion();
-    }
   }
 
   function toggleScratchpad(id: string): void {

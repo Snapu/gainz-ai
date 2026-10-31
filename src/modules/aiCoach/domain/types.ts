@@ -56,11 +56,51 @@ export interface ExerciseCleanupResult {
   }>;
 }
 
+export interface SuggestedFollowUp {
+  label: string;
+  prompt: string;
+}
+
+/**
+ * Sanitizes and validates suggested follow-up prompts from any source (LLM, cache, store).
+ * Enforces non-empty strings, trims whitespace, deduplicates by prompt and label,
+ * and caps the array to a maximum of 4 suggestions.
+ */
+export function sanitizeSuggestedFollowUps(items: unknown): SuggestedFollowUp[] | undefined {
+  if (!Array.isArray(items)) return undefined;
+
+  const seenPrompts = new Set<string>();
+  const seenLabels = new Set<string>();
+  const sanitized: SuggestedFollowUp[] = [];
+
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    const sf = item as { label?: unknown; prompt?: unknown };
+    if (typeof sf.label !== "string" || typeof sf.prompt !== "string") continue;
+
+    const label = sf.label.trim();
+    const prompt = sf.prompt.trim();
+    const promptKey = prompt.toLowerCase();
+    const labelKey = label.toLowerCase();
+
+    if (!label || !prompt || seenPrompts.has(promptKey) || seenLabels.has(labelKey)) continue;
+
+    seenPrompts.add(promptKey);
+    seenLabels.add(labelKey);
+    sanitized.push({ label, prompt });
+
+    if (sanitized.length >= 4) break;
+  }
+
+  return sanitized.length > 0 ? sanitized : undefined;
+}
+
 export interface CoachingAdvice {
   scratchpad?: string;
   coachMessage: string;
   /** Set to true by AI when fatigue detection signals shouldDeload=true. App auto-starts the deload. */
   startDeload?: boolean;
+  suggestedFollowUps?: SuggestedFollowUp[];
   recommendedWorkout?: {
     exerciseName: string;
     targetSets: number;

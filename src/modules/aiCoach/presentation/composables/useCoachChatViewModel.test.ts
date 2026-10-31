@@ -153,16 +153,9 @@ describe("useCoachChatViewModel", () => {
     setActivePinia(createPinia());
   });
 
-  it("provides 4 balanced quick prompt chips without emojis", () => {
+  it("defaults to empty quick prompt chips when no LLM follow-ups exist", () => {
     const vm = useCoachChatViewModel();
-    expect(vm.quickPrompts).toHaveLength(4);
-
-    const emojiRegex = /\p{Extended_Pictographic}/u;
-    for (const qp of vm.quickPrompts) {
-      expect(qp.label).not.toMatch(emojiRegex);
-      expect(qp.prompt.length).toBeGreaterThan(10);
-      expect(["ArrowLeftRight", "BatteryLow", "Clock", "ShieldAlert"]).toContain(qp.icon);
-    }
+    expect(vm.quickPrompts.value).toEqual([]);
   });
 
   it("exposes reactive isLoading matching chatStore", () => {
@@ -322,7 +315,7 @@ describe("useCoachChatViewModel", () => {
     expect(mockToast).toHaveBeenCalled();
   });
 
-  it("applies quick prompts with auto-send", () => {
+  it("prefills userQuestion when quick prompt is applied without auto-sending", () => {
     const orchestratorStore = useAiOrchestratorStore();
     const vm = useCoachChatViewModel();
 
@@ -331,7 +324,221 @@ describe("useCoachChatViewModel", () => {
       .mockReturnValue(okAsync(undefined));
 
     vm.applyQuickPrompt("Swap bench press for dumbbell press");
-    expect(requestSpy).toHaveBeenCalledWith("Swap bench press for dumbbell press");
+    expect(vm.userQuestion.value).toBe("Swap bench press for dumbbell press");
+    expect(requestSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not overwrite userQuestion when applyQuickPrompt is called while loading", () => {
+    const chatStore = useCoachChatStore();
+    const vm = useCoachChatViewModel();
+
+    chatStore.isLoading = true;
+    vm.userQuestion.value = "Current text";
+    vm.applyQuickPrompt("New prompt");
+    expect(vm.userQuestion.value).toBe("Current text");
+  });
+
+  it("dynamically updates quickPrompts from latest coach advice suggestedFollowUps", () => {
+    const chatStore = useCoachChatStore();
+    const vm = useCoachChatViewModel();
+
+    // Initial state: empty when no suggestedFollowUps provided by LLM
+    expect(vm.quickPrompts.value).toEqual([]);
+
+    // Coach message with AI-generated suggestedFollowUps arrives
+    chatStore.messages = [
+      {
+        id: "msg-1",
+        role: "coach",
+        timestamp: "2026-10-31T10:00:00Z",
+        sessionId: "s1",
+        logsCount: 0,
+        content: JSON.stringify({
+          coachMessage: "Here is your push workout for today.",
+          suggestedFollowUps: [
+            {
+              label: "Swap Incline Dumbbells",
+              prompt: "Can we swap Incline Dumbbell Bench for an incline machine press?",
+            },
+            {
+              label: "Warmup Protocol",
+              prompt: "How many warmup sets should I do before the first working set?",
+            },
+            {
+              label: "Condense to 30m",
+              prompt:
+                "I only have 30 minutes to train today. How should I condense today's workout?",
+            },
+          ],
+        }),
+      },
+    ];
+
+    expect(vm.quickPrompts.value).toHaveLength(3);
+    expect(vm.quickPrompts.value[0].label).toBe("Swap Incline Dumbbells");
+    expect(vm.quickPrompts.value[0].prompt).toBe(
+      "Can we swap Incline Dumbbell Bench for an incline machine press?",
+    );
+    expect(vm.quickPrompts.value[1].label).toBe("Warmup Protocol");
+    expect(vm.quickPrompts.value[2].label).toBe("Condense to 30m");
+  });
+
+  it("deduplicates suggested follow-ups by prompt and ignores whitespace-only items", () => {
+    const chatStore = useCoachChatStore();
+    const vm = useCoachChatViewModel();
+
+    chatStore.messages = [
+      {
+        id: "msg-dup",
+        role: "coach",
+        timestamp: "2026-10-31T10:00:00Z",
+        sessionId: "s1",
+        logsCount: 0,
+        content: JSON.stringify({
+          coachMessage: "Here is your workout.",
+          suggestedFollowUps: [
+            { label: "Swap Bench", prompt: "Can we swap bench for dumbbells?" },
+            { label: "Swap Bench Again", prompt: "Can we swap bench for dumbbells?" },
+            { label: "   ", prompt: "Blank label prompt" },
+            { label: "Valid Label", prompt: "   " },
+            { label: "Warmup Sets", prompt: "How should I structure warmup sets?" },
+          ],
+        }),
+      },
+    ];
+
+    expect(vm.quickPrompts.value).toHaveLength(2);
+    expect(vm.quickPrompts.value[0].label).toBe("Swap Bench");
+    expect(vm.quickPrompts.value[1].label).toBe("Warmup Sets");
+  });
+
+  it("deduplicates follow-ups by label and caps at 4 items", () => {
+    const chatStore = useCoachChatStore();
+    const vm = useCoachChatViewModel();
+
+    chatStore.messages = [
+      {
+        id: "msg-many",
+        role: "coach",
+        timestamp: "2026-10-31T10:00:00Z",
+        sessionId: "s1",
+        logsCount: 0,
+        content: JSON.stringify({
+          coachMessage: "Here is your workout.",
+          suggestedFollowUps: [
+            { label: "Swap Bench", prompt: "Prompt A" },
+            { label: "swap bench", prompt: "Prompt B" },
+            { label: "Warmup", prompt: "Prompt C" },
+            { label: "Deload", prompt: "Prompt D" },
+            { label: "Time", prompt: "Prompt E" },
+            { label: "Nutrition", prompt: "Prompt F" },
+          ],
+        }),
+      },
+    ];
+
+    expect(vm.quickPrompts.value).toHaveLength(4);
+    expect(vm.quickPrompts.value.map((qp) => qp.label)).toEqual([
+      "Swap Bench",
+      "Warmup",
+      "Deload",
+      "Time",
+    ]);
+  });
+
+  it("does not resurrect stale follow-ups from older coach messages when latest coach message omits them", () => {
+    const chatStore = useCoachChatStore();
+    const vm = useCoachChatViewModel();
+
+    chatStore.messages = [
+      {
+        id: "msg-1",
+        role: "coach",
+        timestamp: "2026-10-31T10:00:00Z",
+        sessionId: "s1",
+        logsCount: 0,
+        content: JSON.stringify({
+          coachMessage: "First workout advice.",
+          suggestedFollowUps: [{ label: "Swap Bench", prompt: "Can we swap bench for dumbbells?" }],
+        }),
+      },
+      {
+        id: "msg-2",
+        role: "user",
+        timestamp: "2026-10-31T10:01:00Z",
+        sessionId: "s1",
+        logsCount: 0,
+        content: "Can we swap bench for dumbbells?",
+      },
+      {
+        id: "msg-3",
+        role: "coach",
+        timestamp: "2026-10-31T10:02:00Z",
+        sessionId: "s1",
+        logsCount: 0,
+        content: JSON.stringify({
+          coachMessage: "Sure! Use 24kg dumbbells for 3 sets of 10.",
+          // No suggestedFollowUps provided here
+        }),
+      },
+    ];
+
+    // Must be empty, NOT resurrecting "Swap Bench" from msg-1
+    expect(vm.quickPrompts.value).toEqual([]);
+  });
+
+  it("does not resurrect previous coach follow-ups when latest message is from the user", () => {
+    const chatStore = useCoachChatStore();
+    const vm = useCoachChatViewModel();
+
+    chatStore.messages = [
+      {
+        id: "msg-1",
+        role: "coach",
+        timestamp: "2026-10-31T10:00:00Z",
+        sessionId: "s1",
+        logsCount: 0,
+        content: JSON.stringify({
+          coachMessage: "First workout advice.",
+          suggestedFollowUps: [{ label: "Swap Bench", prompt: "Can we swap bench for dumbbells?" }],
+        }),
+      },
+      {
+        id: "msg-2",
+        role: "user",
+        timestamp: "2026-10-31T10:01:00Z",
+        sessionId: "s1",
+        logsCount: 0,
+        content: "Can we swap bench for dumbbells?",
+      },
+    ];
+
+    // Must be empty because the user has already responded
+    expect(vm.quickPrompts.value).toEqual([]);
+  });
+
+  it("returns empty quick prompts when coach message omits suggestedFollowUps (no fallback)", () => {
+    const chatStore = useCoachChatStore();
+    const vm = useCoachChatViewModel();
+
+    chatStore.messages = [
+      {
+        id: "legacy-msg-1",
+        role: "coach",
+        timestamp: "2026-10-31T10:00:00Z",
+        sessionId: "s1",
+        logsCount: 0,
+        content: JSON.stringify({
+          coachMessage: "Great session yesterday. Today we focus on Quads and Calves.",
+          recommendedWorkout: [
+            { exerciseName: "Barbell Back Squat", targetSets: 4, targetReps: "6-8" },
+            { exerciseName: "Leg Press", targetSets: 3, targetReps: "10-12" },
+          ],
+        }),
+      },
+    ];
+
+    expect(vm.quickPrompts.value).toEqual([]);
   });
 
   it("navigates to apikey setup and train tabs", () => {

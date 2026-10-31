@@ -39,6 +39,72 @@ describe("tryParseCoachingAdvice", () => {
     const content = JSON.stringify({ coachMessage: 42 });
     expect(tryParseCoachingAdvice(content)).toBeNull();
   });
+
+  it("safely parses and trims valid suggestedFollowUps", () => {
+    const content = JSON.stringify({
+      coachMessage: "Ready!",
+      suggestedFollowUps: [{ label: "  Swap Squats  ", prompt: "  Can we use Leg Press?  " }],
+    });
+    const result = tryParseCoachingAdvice(content);
+    expect(result?.suggestedFollowUps).toEqual([
+      { label: "Swap Squats", prompt: "Can we use Leg Press?" },
+    ]);
+  });
+
+  it("filters out empty or invalid items in suggestedFollowUps", () => {
+    const content = JSON.stringify({
+      coachMessage: "Ready!",
+      suggestedFollowUps: [
+        { label: "Valid", prompt: "Valid prompt" },
+        { label: "   ", prompt: "Blank label" },
+        { label: "Blank prompt", prompt: "   " },
+        null,
+        123,
+      ],
+    });
+    const result = tryParseCoachingAdvice(content);
+    expect(result?.suggestedFollowUps).toEqual([{ label: "Valid", prompt: "Valid prompt" }]);
+  });
+
+  it("deletes suggestedFollowUps when it is not an array", () => {
+    const content = JSON.stringify({
+      coachMessage: "Ready!",
+      suggestedFollowUps: "none",
+    });
+    const result = tryParseCoachingAdvice(content);
+    expect(result?.suggestedFollowUps).toBeUndefined();
+  });
+
+  it("sets suggestedFollowUps to undefined when array contains only empty items", () => {
+    const content = JSON.stringify({
+      coachMessage: "Ready!",
+      suggestedFollowUps: [{ label: " ", prompt: " " }],
+    });
+    const result = tryParseCoachingAdvice(content);
+    expect(result?.suggestedFollowUps).toBeUndefined();
+  });
+
+  it("deduplicates by label and caps at 4 items", () => {
+    const content = JSON.stringify({
+      coachMessage: "Ready!",
+      suggestedFollowUps: [
+        { label: "Swap 1", prompt: "Prompt 1" },
+        { label: "swap 1", prompt: "Prompt 2" },
+        { label: "Swap 2", prompt: "Prompt 3" },
+        { label: "Swap 3", prompt: "Prompt 4" },
+        { label: "Swap 4", prompt: "Prompt 5" },
+        { label: "Swap 5", prompt: "Prompt 6" },
+      ],
+    });
+    const result = tryParseCoachingAdvice(content);
+    expect(result?.suggestedFollowUps).toHaveLength(4);
+    expect(result?.suggestedFollowUps?.map((f) => f.label)).toEqual([
+      "Swap 1",
+      "Swap 2",
+      "Swap 3",
+      "Swap 4",
+    ]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -231,12 +297,51 @@ describe("renderMarkdown", () => {
 
   it("converts double newlines to paragraph breaks", () => {
     const result = renderMarkdown("line1\n\nline2");
-    expect(result).toContain("</p>");
-    expect(result).toContain('<p class="mt-3">');
+    expect(result).toContain("<p>line1</p>");
+    expect(result).toContain("<p>line2</p>");
+  });
+
+  it("converts single newlines to br tags", () => {
+    const result = renderMarkdown("line1\nline2");
+    expect(result).toContain("<br");
+  });
+
+  it("renders bullet points starting with asterisk into unordered lists", () => {
+    const result = renderMarkdown("* Item 1\n* Item 2");
+    expect(result).toContain("<ul>");
+    expect(result).toContain("<li>Item 1</li>");
+    expect(result).toContain("<li>Item 2</li>");
+    expect(result).toContain("</ul>");
+  });
+
+  it("renders bullet points starting with hyphen into unordered lists", () => {
+    const result = renderMarkdown("- Item A\n- Item B");
+    expect(result).toContain("<ul>");
+    expect(result).toContain("<li>Item A</li>");
+    expect(result).toContain("<li>Item B</li>");
+    expect(result).toContain("</ul>");
+  });
+
+  it("renders bold text inside bullet points correctly without asterisk collisions", () => {
+    const result = renderMarkdown("* **Bench Press**: 3 sets\n* **Incline Press**: 3 sets");
+    expect(result).toContain("<li><strong>Bench Press</strong>: 3 sets</li>");
+    expect(result).toContain("<li><strong>Incline Press</strong>: 3 sets</li>");
+  });
+
+  it("renders numbered lists into ordered lists", () => {
+    const result = renderMarkdown("1. First step\n2. Second step");
+    expect(result).toContain("<ol>");
+    expect(result).toContain("<li>First step</li>");
+    expect(result).toContain("<li>Second step</li>");
+    expect(result).toContain("</ol>");
+  });
+
+  it("returns empty string for empty input", () => {
+    expect(renderMarkdown("")).toBe("");
   });
 
   it("strips disallowed HTML tags (XSS protection)", () => {
-    const result = renderMarkdown('<script>alert("xss")</script>**safe**');
+    const result = renderMarkdown('<script>alert("xss")</script>\n\n**safe**');
     expect(result).not.toContain("<script>");
     expect(result).toContain("<strong>safe</strong>");
   });

@@ -1,7 +1,11 @@
 import DOMPurify from "dompurify";
-import type { CoachingAdvice } from "@/modules/aiCoach/presentation";
-
-import { type CoachingAdviceError, upcastLegacyExercise } from "../../domain";
+import { marked } from "marked";
+import {
+  type CoachingAdvice,
+  type CoachingAdviceError,
+  sanitizeSuggestedFollowUps,
+  upcastLegacyExercise,
+} from "../../domain";
 
 // ---------------------------------------------------------------------------
 // View-model types
@@ -48,6 +52,9 @@ export function tryParseCoachingAdvice(content: string): CoachingAdvice | null {
         // TODO(TechDebt): Remove `upcastLegacyExercise` once all legacy AI messages have
         // been cycled out of history (typically ~14 days) and we are confident the AI won't hallucinate.
         advice.recommendedWorkout = advice.recommendedWorkout.map((ex) => upcastLegacyExercise(ex));
+      }
+      if (advice.suggestedFollowUps !== undefined) {
+        advice.suggestedFollowUps = sanitizeSuggestedFollowUps(advice.suggestedFollowUps);
       }
       return advice;
     }
@@ -163,14 +170,17 @@ export function splitReps(reps?: string): { value: string; unit: string } {
 // Markdown rendering
 // ---------------------------------------------------------------------------
 
-/** Renders a minimal markdown subset (bold, italic, newlines) to safe HTML via DOMPurify. */
+/** Renders markdown (bold, italic, lists, newlines, etc.) to safe HTML via marked and DOMPurify. */
 export function renderMarkdown(text: string): string {
-  const html = text
-    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.*?)\*/g, "<em>$1</em>")
-    .replace(/\n\n/g, '</p><p class="mt-3">')
-    .replace(/\n/g, "<br/>");
-  return DOMPurify.sanitize(`<p>${html}</p>`, { ALLOWED_TAGS: ["p", "strong", "em", "br"] });
+  if (!text) return "";
+  const rawHtml = marked.parse(text, {
+    breaks: true,
+    gfm: true,
+    async: false,
+  }) as string;
+  return DOMPurify.sanitize(rawHtml, {
+    ALLOWED_TAGS: ["p", "strong", "em", "br", "ul", "ol", "li", "code", "blockquote"],
+  });
 }
 
 // ---------------------------------------------------------------------------

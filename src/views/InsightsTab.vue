@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Activity, ArrowRight, TrendingDown, TrendingUp, X } from "@lucide/vue";
+import { ArrowRight, TrendingDown, TrendingUp, X } from "@lucide/vue";
 import { DialogClose, DialogTitle } from "reka-ui";
 import { ref } from "vue";
 import { useInsightsTabViewModel } from "@/modules/trainingInsights/presentation";
@@ -30,7 +30,6 @@ const {
   allExerciseMetrics,
   totalExerciseCount,
   exerciseStatusNote,
-  coachAssessmentText,
   topImprovingExercises,
   attentionRequiredExercises,
 } = useInsightsTabViewModel();
@@ -50,18 +49,6 @@ const isAllExercisesOpen = ref(false);
     </AppHeader>
 
     <main class="flex-1 px-4 pt-6 pb-32 overflow-y-auto no-scrollbar flex flex-col gap-6">
-
-      <!-- Status Summary Hero -->
-      <div v-if="coachAssessmentText" class="shrink-0 rounded-xl bg-white/[0.03] border border-white/10 p-4">
-        <div class="flex gap-3 items-start">
-          <div class="mt-0.5 shrink-0 text-foreground/50">
-            <Activity class="w-4 h-4" />
-          </div>
-          <p class="flex-1 min-w-0 text-sm font-medium text-foreground/90 leading-relaxed">
-            {{ coachAssessmentText }}
-          </p>
-        </div>
-      </div>
 
       <!-- ── Section: Readiness ── -->
       <section>

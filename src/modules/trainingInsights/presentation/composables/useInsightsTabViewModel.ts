@@ -151,14 +151,6 @@ export function useInsightsTabViewModel() {
     return clampPct((acwr / 1.8) * 100);
   });
 
-  function formatTriggerLabel(trigger: string): string {
-    if (trigger === "tonnageSpike") return "Tonnage spike";
-    if (trigger === "volumeSpike") return "Volume spike";
-    if (trigger === "performanceDecline") return "Performance drop";
-    if (trigger === "volumeIncreasing") return "Volume ramp";
-    return trigger;
-  }
-
   const fatigueRiskToneClass = computed(() => {
     const score = insights.value.fatigue.riskScore;
     if (score >= 5) return "text-red-300";
@@ -375,27 +367,6 @@ export function useInsightsTabViewModel() {
     return `${parts.join(", ")}.`;
   });
 
-  const coachAssessmentText = computed(() => {
-    const fatigue = insights.value.fatigue;
-    if (fatigue.riskScore < 3 && fatigue.triggeredBy.length === 0) {
-      return "Your workload and recovery are balanced. Keep training consistently.";
-    }
-
-    let base = fatigue.reason || "Training volume and fatigue markers are elevated.";
-    if (
-      base.includes("Multiple fatigue triggers active") ||
-      base.includes("Sustained performance decline")
-    ) {
-      base = "Your risk of overtraining is high due to multiple fatigue signals.";
-    }
-
-    const triggers = fatigue.triggeredBy.map(formatTriggerLabel);
-    if (triggers.length > 0) {
-      return `${base} Triggers detected: ${triggers.join(", ")}.`;
-    }
-    return base;
-  });
-
   const topImprovingExercises = computed(() => {
     return activeExerciseMetrics.value
       .filter((m) => m.status === "improving")
@@ -424,7 +395,6 @@ export function useInsightsTabViewModel() {
     acwrValueLabel,
     acwrZone,
     acwrGaugePercent,
-    formatTriggerLabel,
     fatigueRiskToneClass,
     fatigueRiskLabel,
     fatigueRiskPercent,
@@ -446,7 +416,6 @@ export function useInsightsTabViewModel() {
     droppingExerciseCount,
     averageBestRPE,
     exerciseStatusNote,
-    coachAssessmentText,
     topImprovingExercises,
     attentionRequiredExercises,
   };

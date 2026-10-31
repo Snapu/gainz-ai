@@ -1,19 +1,6 @@
 <script setup lang="ts">
-import {
-  ArrowLeftRight,
-  ArrowRight,
-  ArrowUp,
-  BatteryLow,
-  ChevronDown,
-  Clock,
-  Copy,
-  Dumbbell,
-  Key,
-  ShieldAlert,
-  Sparkles,
-} from "@lucide/vue";
-import type { Component } from "vue";
-import { type QuickPromptIcon, useCoachChatViewModel } from "@/modules/aiCoach/presentation";
+import { ArrowRight, ArrowUp, ChevronDown, Copy, Dumbbell, Key, Sparkles } from "@lucide/vue";
+import { useCoachChatViewModel } from "@/modules/aiCoach/presentation";
 import AppHeader from "@/shared/presentation/components/AppHeader.vue";
 import GlobalHeaderActions from "@/shared/presentation/components/GlobalHeaderActions.vue";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
@@ -39,19 +26,6 @@ const {
   navigateToTrainTab,
   renderMarkdown,
 } = useCoachChatViewModel();
-
-function getPromptIcon(icon: QuickPromptIcon): Component {
-  switch (icon) {
-    case "ArrowLeftRight":
-      return ArrowLeftRight;
-    case "BatteryLow":
-      return BatteryLow;
-    case "Clock":
-      return Clock;
-    case "ShieldAlert":
-      return ShieldAlert;
-  }
-}
 
 // Used as a template ref; TS complains it is unused in script without this reference
 void scrollContainerRef;
@@ -126,19 +100,6 @@ void scrollContainerRef;
           <p class="text-xs font-medium text-muted-foreground leading-relaxed">
             Ask questions about your lifts, request exercise substitutions, adjust workout volume, or ask about recovery.
           </p>
-        </div>
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full max-w-lg mt-2">
-          <button
-            v-for="qp in quickPrompts"
-            :key="qp.id"
-            type="button"
-            :disabled="isLoading"
-            @click="applyQuickPrompt(qp.prompt)"
-            class="flex items-center justify-center gap-2 text-xs font-semibold px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-foreground transition-all duration-200 cursor-pointer active:scale-95 disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-          >
-            <component :is="getPromptIcon(qp.icon)" class="w-3.5 h-3.5 text-primary shrink-0" />
-            <span class="truncate">{{ qp.label }}</span>
-          </button>
         </div>
       </div>
 
@@ -329,19 +290,20 @@ void scrollContainerRef;
       <div class="w-full max-w-3xl mx-auto flex flex-col gap-3">
         <!-- Quick Prompts -->
         <div
-          v-if="!isKeyboardVisible && !userQuestion.trim() && chatMessages.length > 0"
-          class="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full transition-all duration-200"
+          v-if="!isKeyboardVisible && !userQuestion.trim() && quickPrompts.length > 0"
+          class="flex flex-wrap gap-2 py-1 w-full transition-all duration-200"
         >
           <button
             v-for="qp in quickPrompts"
             :key="qp.id"
             type="button"
             :disabled="isLoading"
+            :title="qp.prompt"
+            :aria-label="qp.prompt"
             @click="applyQuickPrompt(qp.prompt)"
-            class="flex items-center justify-center gap-2 text-xs font-semibold px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-muted-foreground hover:text-foreground transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed active:scale-95 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            class="flex items-center justify-center text-xs font-semibold px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-muted-foreground hover:text-foreground transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed active:scale-95 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background whitespace-nowrap"
           >
-            <component :is="getPromptIcon(qp.icon)" class="w-3.5 h-3.5 text-primary shrink-0" />
-            <span class="truncate">{{ qp.label }}</span>
+            <span class="truncate max-w-[240px]">{{ qp.label }}</span>
           </button>
         </div>
 
@@ -397,5 +359,35 @@ void scrollContainerRef;
 .coach-content :deep(strong) {
   color: var(--color-primary);
   font-weight: 700;
+}
+.coach-content :deep(ul) {
+  list-style-type: disc;
+  padding-left: 1.25rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.coach-content :deep(ol) {
+  list-style-type: decimal;
+  padding-left: 1.25rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.coach-content :deep(li) {
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+.coach-content :deep(li > p) {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+.coach-content :deep(li::marker) {
+  color: var(--color-primary);
+}
+.coach-content :deep(code) {
+  background-color: rgba(255, 255, 255, 0.08);
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.375rem;
+  font-family: monospace;
+  font-size: 0.85em;
 }
 </style>

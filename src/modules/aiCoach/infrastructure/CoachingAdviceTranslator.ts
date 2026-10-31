@@ -1,7 +1,7 @@
 import * as Sentry from "@sentry/vue";
 import { Result } from "neverthrow";
 import { z } from "zod";
-import type { CoachingAdvice, CoachingMode } from "../domain";
+import { type CoachingAdvice, type CoachingMode, sanitizeSuggestedFollowUps } from "../domain";
 
 function buildExerciseFields(
   muscleGroupSchema: z.ZodType<string>,
@@ -191,6 +191,36 @@ export function createCoachingAdviceJsonSchema(
       ),
   };
 
+  const suggestedFollowUpsSchema = z
+    .array(
+      z.object({
+        label: z
+          .string()
+          .describe(
+            "Concise 2-4 word chip label for mobile UI (e.g., 'Swap Leg Press', 'Warmup Sets', 'Condense to 30m').",
+          ),
+        prompt: z
+          .string()
+          .describe(
+            "Realistic, actionable question written strictly from the user's first-person perspective ('Can I...', 'Swap X for Y') that directly relates to the prescribed exercises, weights, or advice.",
+          ),
+      }),
+    )
+    .min(2)
+    .max(4)
+    .describe(
+      "2 to 4 context-aware follow-up questions or adjustments the athlete might want to ask next.",
+    );
+
+  const suggestedFollowUpsField =
+    mode === "planning" || !allowPlanUpdate
+      ? suggestedFollowUpsSchema
+      : suggestedFollowUpsSchema
+          .optional()
+          .describe(
+            "Include 2 to 4 context-aware follow-up questions only when proposing new workout changes or advice; omit during quick conversational reactions.",
+          );
+
   const recommendedWorkoutField =
     mode === "planning"
       ? z
@@ -207,6 +237,7 @@ export function createCoachingAdviceJsonSchema(
 
   const schema = z.object({
     ...baseFields,
+    suggestedFollowUps: suggestedFollowUpsField,
     recommendedWorkout: recommendedWorkoutField,
     ...(mode === "planning"
       ? { trainingPlan: trainingPlanSchema }
@@ -229,6 +260,7 @@ const coachingAdviceValidationSchema = z.object({
   scratchpad: z.string().optional(),
   coachMessage: z.string(),
   startDeload: z.boolean().optional(),
+  suggestedFollowUps: z.unknown().optional().transform(sanitizeSuggestedFollowUps),
   recommendedWorkout: z
     .array(
       z.object({

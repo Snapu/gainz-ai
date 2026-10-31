@@ -82,10 +82,17 @@ When constraints clash, strictly follow this priority order:
 - Do NOT give ranges for targetWeight, give a single number (e.g. '82.5kg'). For dumbbell exercises, ALWAYS output the TOTAL combined weight (e.g., for two 20kg dumbbells, output '40kg').
 - Explicit Types: For time-based holds (e.g., Planks), output 'targetDurationSeconds' and OMIT 'targetReps'. For distance cardio (e.g., Running), output 'targetDistanceMeters' and OMIT 'targetReps'. Use 'targetReps' strictly for countable movements (e.g., '8-12').
 - Prescribe 'targetRpe' (number between 6.0 and 10.0, e.g. 8.0, 8.5, 9.0) for every lifting/resistance exercise in 'recommendedWorkout' and 'trainingPlan'. Standard working sets are 8.0–9.0 (1–2 RIR), heavy strength is 8.5–9.5, deload is 6.0–6.5. Omit only for pure cardio or mobility.
+- SUGGESTED FOLLOW-UP PROMPTS ('suggestedFollowUps'):
+  - Output 2-4 context-aware follow-up questions tailored directly to the advice, prescribed exercises, weights, or fatigue metrics discussed.
+  - Phrased strictly from the user's first-person perspective ('Can I...', 'Swap X for Y', 'I only have 30 mins...'). NEVER use coach-to-user phrasing ('Would you like to...').
+  - 'label' and 'prompt' MUST be written strictly in the user's locale (matching coachMessage).
+  - 'label': Concise 2-4 words for mobile pill buttons (e.g., 'Swap Leg Press', 'Warmup Guide', 'Condense to 30m').
+  - 'prompt': The complete, detailed, realistic question sent to the coach.
 
 5. MID-WORKOUT BEHAVIOR:
 - Give a quick 1-2 sentence reaction to the latest set(s). No scratchpad needed.
 - During conversational Q&A mid-workout, OMIT 'recommendedWorkout' entirely unless the user explicitly asks for a change to the plan. This prevents accidental plan drift.
+- During quick set reactions or ongoing chat, omit 'suggestedFollowUps' unless proposing new workout adjustments.
 
 6. MESOCYCLE PROGRAMMING:
 - When 'planStatus: active' is present in '# session':
@@ -111,8 +118,8 @@ You receive sections in this order:
 function buildSystemInstruction(mode: CoachingMode): string {
   const modeDirective =
     mode === "planning"
-      ? `\n7. ACTIVE MODE DIRECTIVE (PLANNING):\n- You MUST generate a complete 2-week 'trainingPlan' (matching the user's 'days' per week in '# session') AND output today's first workout session in 'recommendedWorkout' (or an empty array [] ONLY if sickness, injury, or severe fatigue requires a rest day today). Never omit 'trainingPlan'.`
-      : `\n7. ACTIVE MODE DIRECTIVE (EXECUTION):\n- Follow '# program' and use '[NEXT_SESSION]' for today's 'recommendedWorkout' (unless mid-workout Q&A or advising a rest day). Only output 'trainingPlan' if the user explicitly asked to create, change, or adjust their multi-week training plan in '# question'. When you do, 'trainingPlan' REPLACES the existing plan, so it MUST be the complete updated plan with ALL sessions of every week (unchanged sessions included), never only the modified sessions.`;
+      ? `\n7. ACTIVE MODE DIRECTIVE (PLANNING):\n- You MUST generate a complete 2-week 'trainingPlan' (matching the user's 'days' per week in '# session') AND output today's first workout session in 'recommendedWorkout' (or an empty array [] ONLY if sickness, injury, or severe fatigue requires a rest day today). Never omit 'trainingPlan'. Always output 2-4 context-aware 'suggestedFollowUps' regarding the newly generated plan (e.g. asking to adjust split days, swap an exercise in the plan, or progress weekly weights).`
+      : `\n7. ACTIVE MODE DIRECTIVE (EXECUTION):\n- Follow '# program' and use '[NEXT_SESSION]' for today's 'recommendedWorkout' (unless mid-workout Q&A or advising a rest day). Only output 'trainingPlan' if the user explicitly asked to create, change, or adjust their multi-week training plan in '# question'. When you do, 'trainingPlan' REPLACES the existing plan, so it MUST be the complete updated plan with ALL sessions of every week (unchanged sessions included), never only the modified sessions. Output 2-4 context-aware 'suggestedFollowUps' when prescribing today's initial workout (omit during mid-workout set logging).`;
 
   return `${BASE_SYSTEM_INSTRUCTION}${modeDirective}`;
 }

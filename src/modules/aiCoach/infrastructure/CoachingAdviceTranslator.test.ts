@@ -25,6 +25,118 @@ describe("CoachingAdviceTranslator", () => {
     }
   });
 
+  it("successfully parses suggestedFollowUps in coaching advice", () => {
+    const validJsonWithFollowUps = JSON.stringify({
+      coachMessage: "Push day ready!",
+      suggestedFollowUps: [
+        { label: "Swap Bench Press", prompt: "Can we swap Bench Press for Dumbbells?" },
+        { label: "Warmup Sets", prompt: "How should I structure warmup sets for Bench?" },
+      ],
+    });
+
+    const result = translateCoachingAdviceJson(validJsonWithFollowUps);
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.suggestedFollowUps).toHaveLength(2);
+      expect(result.value.suggestedFollowUps?.[0].label).toBe("Swap Bench Press");
+      expect(result.value.suggestedFollowUps?.[0].prompt).toBe(
+        "Can we swap Bench Press for Dumbbells?",
+      );
+    }
+  });
+
+  it("handles null suggestedFollowUps gracefully without error", () => {
+    const validJsonWithNullFollowUps = JSON.stringify({
+      coachMessage: "Push day ready!",
+      suggestedFollowUps: null,
+    });
+
+    const result = translateCoachingAdviceJson(validJsonWithNullFollowUps);
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.suggestedFollowUps).toBeUndefined();
+    }
+  });
+
+  it("handles non-array suggestedFollowUps (string, object, number) gracefully without error", () => {
+    const jsonWithString = JSON.stringify({
+      coachMessage: "Push day ready!",
+      suggestedFollowUps: "none",
+    });
+    const resultString = translateCoachingAdviceJson(jsonWithString);
+    expect(resultString.isOk()).toBe(true);
+    if (resultString.isOk()) {
+      expect(resultString.value.suggestedFollowUps).toBeUndefined();
+    }
+
+    const jsonWithObj = JSON.stringify({
+      coachMessage: "Push day ready!",
+      suggestedFollowUps: { text: "none" },
+    });
+    const resultObj = translateCoachingAdviceJson(jsonWithObj);
+    expect(resultObj.isOk()).toBe(true);
+    if (resultObj.isOk()) {
+      expect(resultObj.value.suggestedFollowUps).toBeUndefined();
+    }
+  });
+
+  it("gracefully filters out follow-ups with empty or whitespace-only labels or prompts", () => {
+    const jsonWithFlawedFollowUps = JSON.stringify({
+      coachMessage: "Push day ready!",
+      suggestedFollowUps: [
+        { label: "Valid Label", prompt: "Valid question" },
+        { label: "   ", prompt: "   " },
+      ],
+    });
+
+    const result = translateCoachingAdviceJson(jsonWithFlawedFollowUps);
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.suggestedFollowUps).toEqual([
+        { label: "Valid Label", prompt: "Valid question" },
+      ]);
+    }
+  });
+
+  it("sets suggestedFollowUps to undefined when all follow-ups are whitespace or invalid", () => {
+    const invalidJson = JSON.stringify({
+      coachMessage: "Push day ready!",
+      suggestedFollowUps: [{ label: "   ", prompt: "   " }],
+    });
+
+    const result = translateCoachingAdviceJson(invalidJson);
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.suggestedFollowUps).toBeUndefined();
+    }
+  });
+
+  it("deduplicates follow-ups by label and caps at 4 items", () => {
+    const json = JSON.stringify({
+      coachMessage: "Push day ready!",
+      suggestedFollowUps: [
+        { label: "Swap Bench", prompt: "Prompt 1" },
+        { label: "swap bench", prompt: "Prompt 2" },
+        { label: "Item 2", prompt: "Prompt 3" },
+        { label: "Item 3", prompt: "Prompt 4" },
+        { label: "Item 4", prompt: "Prompt 5" },
+        { label: "Item 5", prompt: "Prompt 6" },
+      ],
+    });
+
+    const result = translateCoachingAdviceJson(json);
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.suggestedFollowUps).toHaveLength(4);
+      expect(result.value.suggestedFollowUps?.map((f) => f.label)).toEqual([
+        "Swap Bench",
+        "Item 2",
+        "Item 3",
+        "Item 4",
+      ]);
+    }
+  });
+
   it("returns invalid-json for completely malformed json string", () => {
     const result = translateCoachingAdviceJson("{ coachMessage: 'missing quotes' ");
     expect(result.isErr()).toBe(true);
@@ -85,11 +197,18 @@ describe("CoachingAdviceTranslator", () => {
     const planningSchema = createCoachingAdviceJsonSchema(["Chest", "Back"], "planning");
     expect(planningSchema.$schema).toBeUndefined();
     expect(planningSchema.required).toEqual(
-      expect.arrayContaining(["coachMessage", "trainingPlan", "recommendedWorkout"]),
+      expect.arrayContaining([
+        "coachMessage",
+        "trainingPlan",
+        "recommendedWorkout",
+        "suggestedFollowUps",
+      ]),
     );
 
     const executionSchema = createCoachingAdviceJsonSchema(["Chest", "Back"], "execution", false);
-    expect(executionSchema.required).toEqual(["coachMessage"]);
+    expect(executionSchema.required).toEqual(
+      expect.arrayContaining(["coachMessage", "suggestedFollowUps"]),
+    );
     expect(
       (executionSchema.properties as Record<string, unknown> | undefined)?.trainingPlan,
     ).toBeUndefined();
@@ -102,6 +221,8 @@ describe("CoachingAdviceTranslator", () => {
     expect(
       (chatExecutionSchema.properties as Record<string, unknown> | undefined)?.trainingPlan,
     ).toBeDefined();
+    expect(chatExecutionSchema.required).toEqual(["coachMessage"]);
+    expect(chatExecutionSchema.required).not.toContain("suggestedFollowUps");
 
     const recommendedProps = (
       (planningSchema.properties as Record<string, unknown>)?.recommendedWorkout as {
