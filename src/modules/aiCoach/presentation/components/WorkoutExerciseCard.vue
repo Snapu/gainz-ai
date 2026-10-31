@@ -140,7 +140,7 @@ const timerProgressPercent = computed(() => {
       <div class="flex items-start justify-between gap-3 w-full">
         <component
           :is="headingLevel ?? 'h3'"
-          class="text-lg font-bold text-foreground truncate transition-colors duration-300"
+          class="text-lg font-bold text-foreground leading-snug transition-colors duration-300 min-w-0"
         >
           {{ exercise.exerciseName }}
         </component>

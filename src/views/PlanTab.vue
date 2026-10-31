@@ -16,6 +16,15 @@ const {
   regeneratePlan,
   copyPlanJson,
 } = usePlanTabViewModel();
+
+function getValidSupersetId(
+  exercise: { supersetId?: string } | undefined,
+  allExercises: Array<{ supersetId?: string }>,
+): string | undefined {
+  if (!exercise?.supersetId) return undefined;
+  const count = allExercises.filter((e) => e.supersetId === exercise.supersetId).length;
+  return count > 1 ? exercise.supersetId : undefined;
+}
 </script>
 
 <template>
@@ -29,7 +38,7 @@ const {
       </template>
     </AppHeader>
 
-    <main class="flex-1 w-full max-w-2xl mx-auto px-4 pt-4 pb-28 overflow-y-auto no-scrollbar flex flex-col gap-5">
+    <main class="flex-1 w-full max-w-2xl mx-auto px-4 pt-4 pb-8 overflow-y-auto no-scrollbar flex flex-col gap-5">
       <template v-if="(isLoading && !activePlan) || isRegenerating">
         <!-- Skeleton for Plan Tab -->
         <div class="flex items-center justify-between gap-4 mb-2">
@@ -72,17 +81,19 @@ const {
                   'opacity-60 grayscale-[0.3]': isPlanSessionCompleted(session.weekNumber, session.dayOfWeek)
                 }">
               <div class="p-4">
-                <h4 class="font-bold text-sm text-foreground mb-1 flex items-center gap-2">
-                  {{ session.sessionLabel }} 
-                  <span class="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Week {{ session.weekNumber }}</span>
+                <div class="flex items-start justify-between gap-3 mb-1">
+                  <div class="flex items-center gap-2 flex-wrap min-w-0">
+                    <h4 class="font-bold text-sm text-foreground">{{ session.sessionLabel }}</h4>
+                    <span class="text-[10px] font-bold text-muted-foreground uppercase tracking-wider shrink-0">Week {{ session.weekNumber }}</span>
+                  </div>
                   
-                  <UiBadge v-if="isPlanSessionCompleted(session.weekNumber, session.dayOfWeek)" variant="outline" class="uppercase tracking-wider ml-auto text-emerald-500 border-emerald-500/20 bg-emerald-500/10">
+                  <UiBadge v-if="isPlanSessionCompleted(session.weekNumber, session.dayOfWeek)" variant="outline" class="uppercase tracking-wider shrink-0 text-emerald-500 border-emerald-500/20 bg-emerald-500/10">
                     <CheckCircle2 class="w-3 h-3 mr-1" /> Done
                   </UiBadge>
-                  <UiBadge v-else-if="sIdx === activeSessionIndex" variant="outline" class="uppercase tracking-wider ml-auto bg-primary/20 text-primary border-transparent">
+                  <UiBadge v-else-if="sIdx === activeSessionIndex" variant="outline" class="uppercase tracking-wider shrink-0 bg-primary/20 text-primary border-transparent">
                     Up Next
                   </UiBadge>
-                </h4>
+                </div>
                 <p class="text-xs text-muted-foreground mb-4 pb-3 border-b border-white/5">{{ session.focusDescription }}</p>
                 
                 <div class="w-full overflow-x-auto no-scrollbar">
@@ -99,16 +110,25 @@ const {
                       <tr v-for="(ex, exIdx) in session.exercises" :key="exIdx" class="text-foreground/90 relative group">
                         <td class="py-3 pr-2 pl-3 font-medium leading-tight relative">
                           <!-- Superset connecting line -->
-                          <div v-if="ex.supersetId" class="absolute left-0 w-[3px] bg-primary/30" :class="{
-                             'top-3 bottom-0 rounded-t-full': ex.supersetId && session.exercises[exIdx - 1]?.supersetId !== ex.supersetId,
-                             'top-0 bottom-3 rounded-b-full': ex.supersetId && session.exercises[exIdx + 1]?.supersetId !== ex.supersetId,
-                             'top-0 bottom-0': ex.supersetId && session.exercises[exIdx - 1]?.supersetId === ex.supersetId && session.exercises[exIdx + 1]?.supersetId === ex.supersetId,
-                             'top-3 bottom-3 rounded-full': ex.supersetId && session.exercises[exIdx - 1]?.supersetId !== ex.supersetId && session.exercises[exIdx + 1]?.supersetId !== ex.supersetId
-                          }"></div>
+                          <div
+                            v-if="getValidSupersetId(ex, session.exercises)"
+                            class="absolute left-0 w-[3px] bg-primary/40"
+                            :class="{
+                              'top-3 bottom-0 rounded-t-full': getValidSupersetId(session.exercises[exIdx - 1], session.exercises) !== ex.supersetId,
+                              'top-0 bottom-3 rounded-b-full': getValidSupersetId(session.exercises[exIdx + 1], session.exercises) !== ex.supersetId,
+                              'top-0 bottom-0': getValidSupersetId(session.exercises[exIdx - 1], session.exercises) === ex.supersetId && getValidSupersetId(session.exercises[exIdx + 1], session.exercises) === ex.supersetId
+                            }"
+                          ></div>
                           
                           <div class="flex flex-col items-start gap-1">
                             <span class="pl-1">{{ ex.exerciseName }}</span>
-                            <UiBadge v-if="ex.supersetId && session.exercises[exIdx - 1]?.supersetId !== ex.supersetId" variant="surface" class="ml-1 uppercase tracking-widest text-[9px] bg-primary/10 text-primary border-primary/20">Superset {{ ex.supersetId }}</UiBadge>
+                            <UiBadge
+                              v-if="getValidSupersetId(ex, session.exercises) && getValidSupersetId(session.exercises[exIdx - 1], session.exercises) !== ex.supersetId"
+                              variant="surface"
+                              class="ml-1 uppercase tracking-widest text-[9px] bg-primary/10 text-primary border-primary/20"
+                            >
+                              Superset {{ ex.supersetId }}
+                            </UiBadge>
                           </div>
                         </td>
                         <td class="py-3 px-2 whitespace-nowrap text-center">{{ ex.targetSets }}</td>

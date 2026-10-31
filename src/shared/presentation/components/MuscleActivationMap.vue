@@ -303,7 +303,7 @@ const sheetStyle = computed(() => {
       </div>
     </div>
 
-    <div ref="mapContainerRef" class="relative w-full aspect-[1/1.85] overflow-hidden rounded-xl">
+    <div ref="mapContainerRef" class="relative w-full aspect-[1/1.85] min-h-[480px] overflow-hidden rounded-xl">
       <div class="absolute inset-0 w-full h-full">
 
           <!-- IMAGE LAYER (Screen blended on the stacking context root to drop the black background) -->

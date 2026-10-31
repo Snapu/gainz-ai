@@ -48,7 +48,7 @@ const isAllExercisesOpen = ref(false);
       </template>
     </AppHeader>
 
-    <main class="flex-1 w-full max-w-2xl mx-auto px-4 pt-4 pb-28 overflow-y-auto no-scrollbar flex flex-col gap-5">
+    <main class="flex-1 w-full max-w-2xl mx-auto px-4 pt-4 pb-8 overflow-y-auto no-scrollbar flex flex-col gap-5">
 
       <!-- ── Section: Readiness ── -->
       <section>
@@ -196,11 +196,12 @@ const isAllExercisesOpen = ref(false);
               </span>
             </div>
           </div>
+        </UiCard>
+      </section>
 
-          <!-- Divider -->
-          <div class="w-full h-px bg-white/5 my-5"></div>
-
-          <!-- Local Muscle Map -->
+      <!-- ── Section: Local Activation ── -->
+      <section>
+        <UiCard class="p-4 overflow-visible">
           <div>
             <div class="flex items-center justify-between gap-2 mb-3">
               <div>
@@ -212,7 +213,6 @@ const isAllExercisesOpen = ref(false);
               <MuscleActivationMap :muscle-groups="insights.muscleGroups" />
             </div>
           </div>
-
         </UiCard>
       </section>
 

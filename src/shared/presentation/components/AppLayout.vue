@@ -27,7 +27,12 @@ function handleFabClick() {
 <template>
   <div class="h-screen h-[100dvh] w-full relative overflow-hidden bg-background">
     <!-- Main content area -->
-    <div :class="['absolute inset-0', !isKeyboardVisible ? 'pb-tab-bar' : 'pb-0']">
+    <div
+      class="absolute inset-x-0 top-0"
+      :style="{
+        bottom: !isKeyboardVisible ? 'calc(4rem + 1px + env(safe-area-inset-bottom, 0px))' : '0px'
+      }"
+    >
       <router-view v-slot="{ Component }">
         <transition name="fade" mode="out-in">
           <keep-alive :max="4">
@@ -40,7 +45,10 @@ function handleFabClick() {
     <!-- FAB & Timer Container -->
     <div
       v-show="!isKeyboardVisible && (route.name === 'home' || isResting)"
-      class="fixed bottom-20 right-6 z-50 pointer-events-none flex flex-col items-end gap-4 transition-all duration-200"
+      class="fixed right-5 z-50 pointer-events-none flex flex-col items-end gap-3 transition-all duration-200"
+      :style="{
+        bottom: 'calc(4.75rem + env(safe-area-inset-bottom, 0px))'
+      }"
     >
       <!-- Rest Timer Toast -->
       <Transition name="fade-slide">

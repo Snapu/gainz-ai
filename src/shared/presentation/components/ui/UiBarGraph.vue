@@ -98,10 +98,9 @@ const itemGroupIndices = computed(() => {
             :style="{ height: getBarHeight(item.value), backgroundColor: props.color }"
           >
             <span 
-              class="absolute left-1/2 -translate-x-1/2 text-xs font-bold tracking-tighter transition-opacity"
+              class="absolute left-1/2 -translate-x-1/2 text-[10px] font-bold tabular-nums tracking-tight transition-opacity"
               :class="[
-                direction === 'down' ? 'top-full mt-2' : 'bottom-full mb-1',
-                '-rotate-45',
+                direction === 'down' ? 'top-full mt-1.5' : 'bottom-full mb-1',
                 itemGroupIndices[idx] === 0 ? 'opacity-100' : 'opacity-80 group-hover:opacity-100'
               ]"
               :style="{ color: props.color }"
