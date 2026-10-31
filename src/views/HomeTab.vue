@@ -185,8 +185,16 @@ function handleGalleryScroll() {
               </div>
               <div class="flex items-center gap-2">
                 <template v-if="restTimerStore.isResting">
-                  <Timer class="w-4 h-4 text-emerald-500 animate-pulse" />
-                  <span class="text-sm font-bold tabular-nums text-emerald-500">{{ restTimerStore.formattedTime }}</span>
+                  <Timer
+                    class="w-4 h-4 animate-pulse"
+                    :class="restTimerStore.isOvertime ? 'text-destructive' : 'text-primary'"
+                  />
+                  <span
+                    class="text-sm font-bold tabular-nums"
+                    :class="restTimerStore.isOvertime ? 'text-destructive' : 'text-primary'"
+                  >
+                    {{ restTimerStore.formattedTime }}
+                  </span>
                 </template>
                 <UiBadge v-if="currentSessionElapsedText" variant="surface" class="uppercase tracking-wider">
                   <Timer class="w-3 h-3 mr-1.5 opacity-70" />
@@ -203,7 +211,7 @@ function handleGalleryScroll() {
               v-if="isWorkoutComplete"
               class="mb-4 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-3 animate-in fade-in duration-300"
             >
-              <CheckCircle2 class="w-5 h-5 text-emerald-500 shrink-0" />
+              <CheckCircle2 class="w-5 h-5 text-emerald-400 shrink-0" />
               <div class="flex flex-col">
                 <span class="text-sm font-bold text-foreground">Workout Complete!</span>
                 <span class="text-xs text-muted-foreground font-medium">All exercises completed for today.</span>
@@ -377,7 +385,7 @@ function handleGalleryScroll() {
                </span>
              </div>
              
-             <CheckCircle2 v-if="isExerciseCompleted(exercise)" class="w-5 h-5 text-emerald-500 shrink-0" />
+             <CheckCircle2 v-if="isExerciseCompleted(exercise)" class="w-5 h-5 text-emerald-400 shrink-0" />
              <div v-else-if="gIndex === activeGroupIndex" class="w-2 h-2 rounded-full bg-primary animate-pulse mr-1"></div>
           </div>
         </div>

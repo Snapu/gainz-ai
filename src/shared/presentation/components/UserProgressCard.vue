@@ -52,7 +52,7 @@ const weeklyVolumeDeltaPct = computed(() => {
             :size="40" 
             :stroke-width="4"
             track-class="text-white/20"
-            progress-class="text-primary drop-shadow-[0_0_8px_rgba(var(--primary),0.5)]"
+            progress-class="text-primary"
           >
             <div class="flex flex-col items-center justify-center">
               <span class="text-xs font-bold text-white/70 uppercase leading-none mb-0.5">Lvl</span>

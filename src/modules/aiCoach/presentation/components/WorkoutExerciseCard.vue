@@ -214,10 +214,10 @@ const timerProgressPercent = computed(() => {
                 :progress="(exercise.targetRpe / 10) * 100" 
                 :size="18" 
                 :stroke-width="2.5" 
-                progress-class="text-amber-500/80" 
-                track-class="text-amber-500/15" 
+                progress-class="text-orange-400" 
+                track-class="text-orange-500/20" 
               />
-              <span class="text-2xl font-bold tabular-nums text-amber-500/90 leading-none">{{ exercise.targetRpe }}</span>
+              <span class="text-2xl font-bold tabular-nums text-orange-400 leading-none">{{ exercise.targetRpe }}</span>
             </div>
             <div v-else class="text-2xl font-bold text-muted-foreground/30 text-right leading-none">-</div>
           </div>
@@ -274,7 +274,7 @@ const timerProgressPercent = computed(() => {
 
               <!-- Column 3: RPE & Chevron -->
               <div class="flex items-center justify-end gap-3 w-full min-w-0">
-                <span v-if="log.rpe" class="text-xs font-semibold text-amber-500/80 text-right whitespace-nowrap">
+                <span v-if="log.rpe" class="text-xs font-semibold text-orange-400 text-right whitespace-nowrap">
                   RPE {{ log.rpe }}
                 </span>
                 <span v-else class="text-xs font-semibold text-muted-foreground/30 text-right whitespace-nowrap">-</span>

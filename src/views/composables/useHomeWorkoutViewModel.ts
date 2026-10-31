@@ -401,12 +401,12 @@ export function useHomeWorkoutViewModel() {
           groupKey: l.loggedAt.toDateString(),
         })),
         label: "WEIGHT",
-        color: "oklch(0.87 0.2 150)",
+        color: "oklch(89% 0.2 135)",
       });
       metrics.push({
         items: recentLogs.map((l) => ({ value: l.reps ?? 0, groupKey: l.loggedAt.toDateString() })),
         label: "REPS",
-        color: "oklch(0.65 0.15 250)",
+        color: "oklch(0.8 0.1 230)",
       });
     } else if (isDurationBased) {
       metrics.push({
@@ -415,13 +415,13 @@ export function useHomeWorkoutViewModel() {
           groupKey: l.loggedAt.toDateString(),
         })),
         label: "TIME",
-        color: "oklch(0.87 0.2 150)",
+        color: "oklch(89% 0.2 135)",
       });
     } else {
       metrics.push({
         items: recentLogs.map((l) => ({ value: l.reps ?? 0, groupKey: l.loggedAt.toDateString() })),
         label: "REPS",
-        color: "oklch(0.87 0.2 150)",
+        color: "oklch(89% 0.2 135)",
       });
     }
 

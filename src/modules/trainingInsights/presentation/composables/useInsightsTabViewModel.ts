@@ -153,9 +153,9 @@ export function useInsightsTabViewModel() {
 
   const fatigueRiskToneClass = computed(() => {
     const score = insights.value.fatigue.riskScore;
-    if (score >= 5) return "text-red-300";
-    if (score >= 3) return "text-orange-300";
-    if (score >= 1) return "text-amber-200";
+    if (score >= 5) return "text-red-400";
+    if (score >= 3) return "text-orange-400";
+    if (score >= 1) return "text-orange-400/80";
     return "text-foreground/85";
   });
 

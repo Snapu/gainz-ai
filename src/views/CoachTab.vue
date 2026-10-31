@@ -1,13 +1,5 @@
 <script setup lang="ts">
-import {
-  ArrowRight,
-  ArrowUp,
-  ChevronDown,
-  Copy,
-  Dumbbell,
-  Key,
-  Sparkles,
-} from "@lucide/vue";
+import { ArrowRight, ArrowUp, ChevronDown, Copy, Dumbbell, Key, Sparkles } from "@lucide/vue";
 import { useCoachChatViewModel } from "@/modules/aiCoach/presentation";
 import AppHeader from "@/shared/presentation/components/AppHeader.vue";
 import GlobalHeaderActions from "@/shared/presentation/components/GlobalHeaderActions.vue";
@@ -58,10 +50,10 @@ void scrollContainerRef;
       <!-- Missing API Key Callout -->
       <div
         v-if="!hasApiKey"
-        class="w-full rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 flex flex-col gap-3 animate-in fade-in duration-300"
+        class="w-full rounded-xl border border-orange-500/20 bg-orange-500/10 p-4 flex flex-col gap-3 animate-in fade-in duration-300"
       >
         <div class="flex items-start gap-3">
-          <div class="p-2 rounded-full bg-amber-500/10 text-amber-500 shrink-0">
+          <div class="p-2 rounded-full bg-orange-500/10 text-orange-400 shrink-0">
             <Key class="w-4 h-4" />
           </div>
           <div class="flex flex-col gap-1">
@@ -74,7 +66,7 @@ void scrollContainerRef;
         <UiButton
           size="sm"
           variant="outline"
-          class="w-full text-xs font-semibold border-amber-500/30 text-amber-400 hover:bg-amber-500/10 active:scale-95"
+          class="w-full text-xs font-semibold border-orange-500/30 text-orange-400 hover:bg-orange-500/10 active:scale-95"
           @click="navigateToApiKeySetup"
         >
           Configure API Key

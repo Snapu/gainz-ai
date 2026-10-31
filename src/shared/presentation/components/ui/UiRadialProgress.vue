@@ -30,7 +30,7 @@ const center = computed(() => props.size / 2);
   <div class="relative" :style="{ width: `${size}px`, height: `${size}px` }">
     <!-- Radial Progress SVG -->
     <svg
-      class="absolute inset-0 w-full h-full -rotate-90 drop-shadow-[0_0_12px_rgba(var(--color-primary-rgb),0.4)]"
+      class="absolute inset-0 w-full h-full -rotate-90"
       :width="size"
       :height="size"
     >

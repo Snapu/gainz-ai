@@ -388,7 +388,7 @@ const sheetStyle = computed(() => {
                 >
                   {{ muscle.name }}
                 </span>
-                <Hourglass v-if="muscle.status && !muscle.status.recoveryReady" class="w-3 h-3 text-yellow-500 drop-shadow-md" />
+                <Hourglass v-if="muscle.status && !muscle.status.recoveryReady" class="w-3 h-3 text-orange-400 drop-shadow-md" />
               </div>
 
               <div class="flex items-center gap-1 mt-[2px]" :style="{ color: getLineColor(muscle.status?.landmark) }">
@@ -487,7 +487,7 @@ const sheetStyle = computed(() => {
                 <Timer class="w-4 h-4 text-muted-foreground/70" />
                 <span>Recovery</span>
               </div>
-              <div class="flex items-center gap-1 text-xs font-bold" :class="selectedDetail.recoveryReady ? 'text-green-400' : 'text-yellow-400'">
+              <div class="flex items-center gap-1 text-xs font-bold" :class="selectedDetail.recoveryReady ? 'text-emerald-400' : 'text-orange-400'">
                 <CheckCircle2 v-if="selectedDetail.recoveryReady" class="w-3.5 h-3.5" />
                 <Hourglass v-else class="w-3.5 h-3.5" />
                 <span>{{ selectedDetail.recoveryReady ? 'Ready to train' : 'Still recovering' }}</span>
@@ -497,17 +497,17 @@ const sheetStyle = computed(() => {
               <div class="h-2 bg-white/10 rounded-full overflow-hidden">
                 <div
                   class="h-full rounded-full transition-all duration-300"
-                  :class="selectedDetail.recoveryReady ? 'bg-green-400' : 'bg-yellow-400'"
+                  :class="selectedDetail.recoveryReady ? 'bg-emerald-500' : 'bg-orange-500'"
                   :style="{ width: Math.min(100, (selectedDetail.hoursSinceLastTrained / selectedDetail.recoveryHours) * 100) + '%' }"
                 ></div>
               </div>
               <div class="flex justify-between text-xs text-muted-foreground/50 font-mono mt-1">
                 <template v-if="!selectedDetail.recoveryReady">
-                  <span class="text-yellow-400/80">{{ Math.max(0, Math.round(selectedDetail.recoveryHours - selectedDetail.hoursSinceLastTrained)) }}h remaining</span>
+                  <span class="text-orange-400/80">{{ Math.max(0, Math.round(selectedDetail.recoveryHours - selectedDetail.hoursSinceLastTrained)) }}h remaining</span>
                   <span>{{ Math.round(selectedDetail.recoveryHours) }}h target</span>
                 </template>
                 <template v-else>
-                  <span class="text-green-400/80">Recovered</span>
+                  <span class="text-emerald-400/80">Recovered</span>
                   <span>{{ Math.round(selectedDetail.hoursSinceLastTrained) }}h elapsed</span>
                 </template>
               </div>

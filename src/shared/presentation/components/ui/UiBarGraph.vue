@@ -19,7 +19,7 @@ const props = withDefaults(defineProps<Props>(), {
   items: () => [],
   values: () => [],
   label: "",
-  color: "oklch(0.87 0.2 150)",
+  color: "oklch(89% 0.2 135)",
   direction: "up",
 });
 
