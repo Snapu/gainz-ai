@@ -242,6 +242,15 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+function toDate(val: unknown): Date {
+  if (val instanceof Date && !Number.isNaN(val.getTime())) return val;
+  if (typeof val === "string" || typeof val === "number") {
+    const d = new Date(val);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  return new Date();
+}
+
 /**
  * Normalize a date to YYYY-MM-DD.
  *
@@ -249,7 +258,8 @@ function clamp(value: number, min: number, max: number): number {
  * of how many exercises occurred on that day.
  */
 function toDayKey(date: Date): string {
-  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+  const d = toDate(date);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
 
 /**
@@ -261,7 +271,8 @@ function toDayKey(date: Date): string {
  * - mirrors real training cycles
  */
 function startOfWeek(date: Date): Date {
-  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const source = toDate(date);
+  const d = new Date(source.getFullYear(), source.getMonth(), source.getDate());
   const day = d.getDay() || 7; // Sunday → 7
   d.setDate(d.getDate() - day + 1);
   return d;
@@ -314,13 +325,19 @@ export function calculateUserProgress(
     };
   }
 
+  // Normalize log dates to ensure they are valid Date objects
+  const normalizedLogs = logs.map((l) => ({
+    ...l,
+    loggedAt: toDate(l.loggedAt),
+  }));
+
   // Sort logs chronologically (only if needed for performance)
-  const isSorted = logs.every(
-    (l, i) => i === 0 || l.loggedAt.getTime() >= logs[i - 1]?.loggedAt.getTime(),
+  const isSorted = normalizedLogs.every(
+    (l, i) => i === 0 || l.loggedAt.getTime() >= normalizedLogs[i - 1]?.loggedAt.getTime(),
   );
   const sortedLogs = isSorted
-    ? logs
-    : [...logs].sort((a, b) => a.loggedAt.getTime() - b.loggedAt.getTime());
+    ? normalizedLogs
+    : [...normalizedLogs].sort((a, b) => a.loggedAt.getTime() - b.loggedAt.getTime());
 
   // Group logs by week
   const logsByWeek = new Map<number, ExerciseLog[]>();

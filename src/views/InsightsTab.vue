@@ -53,12 +53,14 @@ const isAllExercisesOpen = ref(false);
     <main class="flex-1 w-full max-w-2xl mx-auto px-4 pt-4 pb-8 overflow-y-auto overscroll-y-contain no-scrollbar flex flex-col gap-5">
 
       <!-- ── Section: Level & Rank Hero ── -->
-      <UserProgressCard 
-        v-if="userProgress"
-        :progress="userProgress" 
-        :insights="insights" 
-        class="w-full mx-0 mt-0"
-      />
+      <section class="w-full">
+        <UserProgressCard 
+          v-if="userProgress"
+          :progress="userProgress" 
+          :insights="insights" 
+          class="w-full"
+        />
+      </section>
 
       <!-- ── Section: Readiness ── -->
       <section>

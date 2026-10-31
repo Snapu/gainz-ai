@@ -27,7 +27,7 @@ const center = computed(() => props.size / 2);
 </script>
 
 <template>
-  <div class="relative" :style="{ width: `${size}px`, height: `${size}px` }">
+  <div class="relative shrink-0" :style="{ width: `${size}px`, height: `${size}px` }">
     <!-- Radial Progress SVG -->
     <svg
       class="absolute inset-0 w-full h-full -rotate-90"

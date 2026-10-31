@@ -31,12 +31,12 @@ const weeklyVolumeDeltaPct = computed(() => {
 
 <template>
   <UiCard 
-    class="w-full overflow-hidden p-0"
+    class="w-full h-36 min-h-[9rem] shrink-0 overflow-hidden p-0"
   >
-    <div class="flex flex-row min-h-[9rem]">
+    <div class="flex flex-row h-full w-full">
       
       <!-- Rank: Avatar & Level Info (50% Width) -->
-      <div class="w-1/2 relative shrink-0 border-r border-border/50 overflow-hidden bg-muted/10">
+      <div class="w-1/2 h-full relative shrink-0 border-r border-white/5 overflow-hidden bg-muted/10">
         <img 
           v-if="progress?.avatar"
           :src="progress.avatar" 
@@ -47,7 +47,7 @@ const weeklyVolumeDeltaPct = computed(() => {
         <div class="absolute inset-0 bg-linear-to-t from-black/80 via-transparent to-transparent"></div>
         
         <!-- Level Progress -->
-        <div class="absolute bottom-4 left-4 flex items-center gap-2">
+        <div class="absolute bottom-3 left-3 flex items-center gap-2">
            <UiRadialProgress 
             :progress="progress?.progressPercent ?? 0" 
             :size="40" 
@@ -64,38 +64,38 @@ const weeklyVolumeDeltaPct = computed(() => {
       </div>
 
       <!-- Rank: Text & Training Info (Right Side) -->
-      <div class="w-1/2 flex flex-col justify-between p-4 bg-white/5">
+      <div class="w-1/2 h-full flex flex-col justify-between p-4 bg-white/5">
         
-        <div class="flex flex-col gap-1.5 text-left">
+        <div class="flex flex-col gap-1 text-left min-w-0">
           <span class="text-[10px] font-bold tracking-widest text-muted-foreground/60 uppercase">Rank</span>
-          <h2 class="text-xl font-black tracking-tight text-foreground leading-none mt-1">
+          <h2 class="text-lg font-black tracking-tight text-foreground leading-snug truncate">
             {{ progress?.title ?? 'Novice' }}
           </h2>
         </div>
 
         <!-- Training Info -->
-        <div class="flex flex-col mt-3 text-left">
-          <span class="text-[10px] font-bold tracking-widest text-muted-foreground/60 uppercase mb-1.5">Current Phase</span>
-          <div class="flex items-center gap-3">
+        <div class="flex flex-col mt-2 text-left min-w-0">
+          <span class="text-[10px] font-bold tracking-widest text-muted-foreground/60 uppercase mb-1">Current Phase</span>
+          <div class="flex items-center gap-2 flex-wrap">
             <!-- Phase Badge -->
              <UiBadge
                v-if="deloadStore.active"
                variant="warning"
-               class="capitalize font-semibold text-[11px] px-1.5 py-0 h-5"
+               class="capitalize font-semibold text-[11px] px-1.5 py-0 h-5 shrink-0"
              >
                Deload
              </UiBadge>
-             <UiBadge v-else :variant="phaseVariant" class="capitalize font-semibold text-[11px] px-1.5 py-0 h-5">
+             <UiBadge v-else :variant="phaseVariant" class="capitalize font-semibold text-[11px] px-1.5 py-0 h-5 shrink-0">
                {{ insights?.phase ? insights.phase.toLowerCase() : 'maintain' }}
              </UiBadge>
              
             <!-- Volume -->
-            <div class="flex items-center gap-1.5" v-if="insights?.fatigue?.loadWindow?.sets">
+            <div class="flex items-center gap-1.5 shrink-0" v-if="insights?.fatigue?.loadWindow?.sets">
               <span class="text-sm font-bold text-foreground">
                 {{ Math.round(insights.fatigue.loadWindow.sets.current) }} <span class="text-[10px] font-semibold text-muted-foreground">Sets</span>
               </span>
-              <TrendingUp v-if="weeklyVolumeDeltaPct !== null && (insights.fatigue.loadWindow.sets.current - insights.fatigue.loadWindow.sets.prior3WeekAvg) >= 0.5" class="w-3.5 h-3.5" :class="weeklyVolumeDeltaPct >= 30 ? 'text-orange-400' : 'text-emerald-400'" />
-              <TrendingDown v-else-if="weeklyVolumeDeltaPct !== null && (insights.fatigue.loadWindow.sets.prior3WeekAvg - insights.fatigue.loadWindow.sets.current) >= 0.5" class="w-3.5 h-3.5" :class="weeklyVolumeDeltaPct <= -20 ? 'text-foreground/50' : 'text-emerald-400'" />
+              <TrendingUp v-if="weeklyVolumeDeltaPct !== null && (insights.fatigue.loadWindow.sets.current - insights.fatigue.loadWindow.sets.prior3WeekAvg) >= 0.5" class="w-3.5 h-3.5 shrink-0" :class="weeklyVolumeDeltaPct >= 30 ? 'text-orange-400' : 'text-emerald-400'" />
+              <TrendingDown v-else-if="weeklyVolumeDeltaPct !== null && (insights.fatigue.loadWindow.sets.prior3WeekAvg - insights.fatigue.loadWindow.sets.current) >= 0.5" class="w-3.5 h-3.5 shrink-0" :class="weeklyVolumeDeltaPct <= -20 ? 'text-foreground/50' : 'text-emerald-400'" />
             </div>
           </div>
         </div>
