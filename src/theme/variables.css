@@ -146,3 +146,22 @@
     display: none; /* Chrome, Safari and Opera */
   }
 }
+
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@utility pl-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+@utility pr-safe {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+@utility pb-tab-bar {
+  padding-bottom: calc(4rem + 1px + env(safe-area-inset-bottom, 0px));
+}
+@utility pb-sheet {
+  padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
+}

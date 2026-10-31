@@ -8,6 +8,7 @@ const prefillData = ref<{
   exerciseName: string;
   reps?: number;
   weight?: number;
+  distance?: number;
   duration?: number;
   rpe?: number;
 } | null>(null);
@@ -33,6 +34,7 @@ export function useLogSheet() {
       exerciseName: string;
       reps?: number;
       weight?: number;
+      distance?: number;
       duration?: number;
       rpe?: number;
     },

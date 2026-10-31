@@ -1,47 +1,20 @@
 <script setup lang="ts">
-import type { PluginListenerHandle } from "@capacitor/core";
-import { Keyboard } from "@capacitor/keyboard";
 import { Plus } from "@lucide/vue";
 import { storeToRefs } from "pinia";
-import { onMounted, onUnmounted, ref } from "vue";
+import { useRoute } from "vue-router";
 import { useRestTimerStore } from "@/modules/platform/presentation";
 import { LogExerciseSheet } from "@/modules/trainingLogs/presentation";
 import RestTimerToast from "@/shared/presentation/components/RestTimerToast.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
+import { useKeyboard } from "../composables/useKeyboard";
 import { useLogSheet } from "../composables/useLogSheet";
 import BottomTabBar from "./BottomTabBar.vue";
 
 const restTimerStore = useRestTimerStore();
 const { isResting, formattedTime: formattedRestTime } = storeToRefs(restTimerStore);
 const logSheet = useLogSheet();
-
-const isKeyboardVisible = ref(false);
-const keyboardShowPromise = ref<Promise<PluginListenerHandle> | null>(null);
-const keyboardHidePromise = ref<Promise<PluginListenerHandle> | null>(null);
-
-onMounted(() => {
-  try {
-    keyboardShowPromise.value = Keyboard.addListener("keyboardWillShow", () => {
-      isKeyboardVisible.value = true;
-    });
-    keyboardHidePromise.value = Keyboard.addListener("keyboardWillHide", () => {
-      isKeyboardVisible.value = false;
-    });
-  } catch (e) {
-    console.warn("Keyboard plugin not available", e);
-  }
-});
-
-onUnmounted(async () => {
-  if (keyboardShowPromise.value) {
-    const listener = await keyboardShowPromise.value;
-    listener.remove();
-  }
-  if (keyboardHidePromise.value) {
-    const listener = await keyboardHidePromise.value;
-    listener.remove();
-  }
-});
+const route = useRoute();
+const { isKeyboardVisible } = useKeyboard();
 
 function handleFabClick() {
   if (isResting.value) {
@@ -52,9 +25,9 @@ function handleFabClick() {
 </script>
 
 <template>
-  <div class="h-screen w-full relative overflow-hidden bg-background">
+  <div class="h-screen h-[100dvh] w-full relative overflow-hidden bg-background">
     <!-- Main content area -->
-    <div class="absolute inset-0 pb-16">
+    <div :class="['absolute inset-0', !isKeyboardVisible ? 'pb-tab-bar' : 'pb-0']">
       <router-view v-slot="{ Component }">
         <transition name="fade" mode="out-in">
           <keep-alive :max="4">
@@ -65,7 +38,10 @@ function handleFabClick() {
     </div>
 
     <!-- FAB & Timer Container -->
-    <div v-show="!isKeyboardVisible" class="fixed bottom-20 right-6 z-50 pointer-events-none flex flex-col items-end gap-4">
+    <div
+      v-show="!isKeyboardVisible && route.name !== 'coach'"
+      class="fixed bottom-20 right-6 z-50 pointer-events-none flex flex-col items-end gap-4 transition-all duration-200"
+    >
       <!-- Rest Timer Toast -->
       <Transition name="fade-slide">
         <RestTimerToast

@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { Trash } from "@lucide/vue";
+import { Trash, X } from "@lucide/vue";
 import { storeToRefs } from "pinia";
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { useDeloadStore } from "@/modules/deload/presentation";
 import { useRestTimerStore } from "@/modules/platform/presentation";
 import type { ExerciseLog } from "@/modules/trainingLogs/presentation";
 import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
 import type { ExerciseSelectorOptionDetails } from "@/shared/presentation/components/ExerciseSelector.vue";
 import ExerciseSelector from "@/shared/presentation/components/ExerciseSelector.vue";
+import { uiIconButtonClass } from "@/shared/presentation/components/ui/styles";
 import UiBottomSheet from "@/shared/presentation/components/ui/UiBottomSheet.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiNumberField from "@/shared/presentation/components/ui/UiNumberField.vue";
@@ -20,6 +21,7 @@ const props = defineProps<{
     exerciseName: string;
     reps?: number;
     weight?: number;
+    distance?: number;
     duration?: number;
     rpe?: number;
   } | null;
@@ -52,9 +54,42 @@ const formDistance = ref<number | null>(null);
 const formDuration = ref<number | null>(null);
 const formRpe = ref<number>(deloadStore.active ? 6 : 8.5);
 const isRpeEnabled = ref(false);
-const skipHistoryAutoFill = ref(false);
+const isApplyingPrefill = ref(false);
 
 const isDumbbellExercise = computed(() => /kurzhantel|dumbbell/i.test(formExerciseName.value));
+
+interface ExerciseFormData {
+  exerciseName: string;
+  reps?: number | null;
+  weight?: number | null;
+  distance?: number | null;
+  duration?: number | null;
+  rpe?: number | null;
+}
+
+function applyFormData(data: ExerciseFormData | null | undefined) {
+  isApplyingPrefill.value = true;
+  if (data) {
+    formExerciseName.value = data.exerciseName;
+    formReps.value = data.reps ?? null;
+    formWeight.value = data.weight ?? null;
+    formDistance.value = data.distance ?? null;
+    formDuration.value = data.duration ?? null;
+    formRpe.value = data.rpe ?? (deloadStore.active ? 6 : 8.5);
+    isRpeEnabled.value = data.rpe != null;
+  } else {
+    formExerciseName.value = "";
+    formReps.value = null;
+    formWeight.value = null;
+    formDistance.value = null;
+    formDuration.value = null;
+    formRpe.value = deloadStore.active ? 6 : 8.5;
+    isRpeEnabled.value = false;
+  }
+  nextTick().then(() => {
+    isApplyingPrefill.value = false;
+  });
+}
 
 // Monitor when the sheet is opened, and either reset or apply prefill data
 watch(
@@ -62,50 +97,18 @@ watch(
   (isOpen) => {
     if (!isOpen) {
       formExerciseName.value = "";
-      skipHistoryAutoFill.value = false;
+      isApplyingPrefill.value = false;
       return;
     }
 
-    if (props.logToEdit) {
-      skipHistoryAutoFill.value = formExerciseName.value !== props.logToEdit.exerciseName;
-      formExerciseName.value = props.logToEdit.exerciseName;
-      formReps.value = props.logToEdit.reps ?? null;
-      formWeight.value = props.logToEdit.weight ?? null;
-      formDistance.value = props.logToEdit.distance ?? null;
-      formDuration.value = props.logToEdit.duration ?? null;
-      formRpe.value = props.logToEdit.rpe ?? (deloadStore.active ? 6 : 8.5);
-      isRpeEnabled.value = props.logToEdit.rpe != null;
-    } else if (props.prefillData) {
-      skipHistoryAutoFill.value = formExerciseName.value !== props.prefillData.exerciseName;
-      formExerciseName.value = props.prefillData.exerciseName;
-      formReps.value = props.prefillData.reps ?? null;
-      formWeight.value = props.prefillData.weight ?? null;
-      formDistance.value = null;
-      formDuration.value = props.prefillData.duration ?? null;
-      formRpe.value = props.prefillData.rpe ?? (deloadStore.active ? 6 : 8.5);
-      isRpeEnabled.value = props.prefillData.rpe != null;
-    } else {
-      formExerciseName.value = "";
-      formReps.value = null;
-      formWeight.value = null;
-      formDistance.value = null;
-      formDuration.value = null;
-      formRpe.value = deloadStore.active ? 6 : 8.5;
-      isRpeEnabled.value = false;
-      skipHistoryAutoFill.value = false;
-    }
+    applyFormData(props.logToEdit ?? props.prefillData);
   },
   { immediate: true },
 );
 
 // Auto-fill from historical metrics when name is selected unless skipped (prefilled from AI)
 watch(formExerciseName, (name) => {
-  if (!name) return;
-
-  if (skipHistoryAutoFill.value) {
-    skipHistoryAutoFill.value = false;
-    return;
-  }
+  if (!name || isApplyingPrefill.value) return;
 
   const lastLog = logsStore.lastLogForExercise(name);
   formReps.value = lastLog?.reps ?? null;
@@ -282,8 +285,25 @@ async function deleteLog() {
 </script>
 
 <template>
-  <UiBottomSheet v-model:open="internalOpen" :title="props.logToEdit ? 'Edit Exercise' : 'Log Exercise'">
-    <div class="flex flex-col gap-6 w-full">
+  <UiBottomSheet 
+    v-model:open="internalOpen" 
+    :title="props.logToEdit ? 'Edit Exercise' : 'Log Exercise'"
+    content-class="p-0 gap-0"
+  >
+    <template #header>
+      <div class="flex items-center justify-between px-6 pt-6 pb-2 shrink-0">
+        <h2 class="text-2xl font-bold tracking-tight">
+          {{ props.logToEdit ? 'Edit Exercise' : 'Log Exercise' }}
+        </h2>
+        <button type="button" @click="internalOpen = false" :class="uiIconButtonClass">
+          <X class="w-5 h-5 text-muted-foreground" />
+          <span class="sr-only">Close</span>
+        </button>
+      </div>
+    </template>
+
+    <!-- Scrollable Form Content -->
+    <div class="flex flex-col gap-5 overflow-y-auto px-6 py-4 no-scrollbar flex-1">
       <!-- Optimized Exercise Selection -->
       <ExerciseSelector
         v-model="formExerciseName"
@@ -331,7 +351,7 @@ async function deleteLog() {
       </div>
 
       <!-- RPE Slider -->
-      <div class="space-y-3 px-1 mt-2">
+      <div class="space-y-3 px-1 mt-1">
         <div class="flex items-center justify-between">
           <span class="text-xs font-bold uppercase tracking-widest text-muted-foreground/60">Effort (RPE)</span>
           <span class="text-xs font-bold transition-opacity duration-200" :class="isRpeEnabled ? 'text-primary' : 'text-primary/50 opacity-50'">
@@ -360,19 +380,22 @@ async function deleteLog() {
           />
         </div>
       </div>
+    </div>
 
-      <div class="flex gap-3 mt-4">
+    <!-- Docked Footer Action -->
+    <div class="px-6 pt-3 pb-safe shrink-0 bg-background/95 backdrop-blur z-10 border-t border-white/5">
+      <div class="flex gap-3 mb-4">
         <UiButton 
           v-if="props.logToEdit" 
           haptic
           variant="outline" 
-          class="h-16 rounded-xl px-6 border-destructive/20 text-destructive hover:bg-destructive/10" 
+          class="h-14 rounded-xl px-5 border-destructive/20 text-destructive hover:bg-destructive/10 active:scale-95 transition-transform" 
           @click="deleteLog"
           aria-label="Delete Set"
         >
           <Trash class="w-5 h-5" />
         </UiButton>
-        <UiButton haptic class="flex-1 h-16 rounded-xl text-lg" @click="saveLog">
+        <UiButton haptic class="flex-1 h-14 rounded-xl text-base font-bold shadow-lg shadow-primary/10 active:scale-95 transition-transform" @click="saveLog">
           {{ props.logToEdit ? 'Save Changes' : 'Save Set' }}
         </UiButton>
       </div>

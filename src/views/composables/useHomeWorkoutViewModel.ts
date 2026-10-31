@@ -1,6 +1,6 @@
 import { useNow, useTimeoutPoll } from "@vueuse/core";
 import { storeToRefs } from "pinia";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, getCurrentInstance, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import {
   type DisplayExercise,
@@ -66,6 +66,45 @@ function findNextExerciseIndexInGroup(
     const { done, isCompleted } = getProgress(ex.exerciseName, ex.targetSets);
     return !isCompleted && done === minDone;
   });
+}
+
+function resolveTargetRepsAndDuration(exercise: DisplayExercise) {
+  const durationSec = exercise.targetDurationSeconds;
+  return {
+    targetReps: durationSec != null ? undefined : parseFirstRep(exercise.targetReps),
+    targetDuration: durationSec != null ? Math.round((durationSec / 60) * 100) / 100 : undefined,
+  };
+}
+
+function resolvePrefillMetrics(
+  exercise: DisplayExercise,
+  lastLog?: ExerciseLog,
+): {
+  reps?: number;
+  duration?: number;
+  distance?: number;
+  weight?: number;
+  rpe?: number;
+} {
+  const { targetReps, targetDuration } = resolveTargetRepsAndDuration(exercise);
+
+  if (!lastLog) {
+    return {
+      reps: targetReps,
+      duration: targetDuration,
+      distance: exercise.targetDistanceMeters,
+      weight: parseWeight(exercise.targetWeight),
+      rpe: exercise.targetRpe,
+    };
+  }
+
+  return {
+    reps: lastLog.reps ?? targetReps,
+    duration: lastLog.duration ?? targetDuration,
+    distance: lastLog.distance ?? exercise.targetDistanceMeters,
+    weight: lastLog.weight ?? parseWeight(exercise.targetWeight),
+    rpe: lastLog.rpe,
+  };
 }
 
 export function useHomeWorkoutViewModel() {
@@ -390,23 +429,28 @@ export function useHomeWorkoutViewModel() {
   }
 
   function getTodaysLogsForExercise(exerciseName: string): ExerciseLog[] {
-    const currentSession = resolveCurrentSession(logsStore.exerciseLogs);
-    if (!currentSession) return [];
+    const currentSession = resolveCurrentSession(
+      logsStore.exerciseLogs,
+      currentReactiveTime.value.getTime(),
+    );
+    if (currentSession) {
+      return currentSession.logs
+        .filter((l) => l.exerciseName === exerciseName)
+        .sort((a, b) => a.loggedAt.getTime() - b.loggedAt.getTime());
+    }
 
-    return currentSession.logs
-      .filter((l) => l.exerciseName === exerciseName)
+    const today = new Date(currentReactiveTime.value);
+    today.setHours(0, 0, 0, 0);
+
+    return logsStore.exerciseLogs
+      .filter((l) => l.exerciseName === exerciseName && l.loggedAt.getTime() >= today.getTime())
       .sort((a, b) => a.loggedAt.getTime() - b.loggedAt.getTime());
   }
 
   function handleLogExercise(exercise: DisplayExercise) {
-    let reps: number | undefined;
-    let duration: number | undefined;
-
-    if (exercise.targetDurationSeconds != null) {
-      duration = Math.round((exercise.targetDurationSeconds / 60) * 100) / 100;
-    } else {
-      reps = parseFirstRep(exercise.targetReps);
-    }
+    const todaysLogs = getTodaysLogsForExercise(exercise.exerciseName);
+    const lastLog = todaysLogs[todaysLogs.length - 1];
+    const metrics = resolvePrefillMetrics(exercise, lastLog);
 
     const planned = chatStore.currentWorkoutPlan?.find(
       (ex) => ex.exerciseName === exercise.exerciseName,
@@ -416,10 +460,7 @@ export function useHomeWorkoutViewModel() {
     logSheet.openPrefilledLog(
       {
         exerciseName: exercise.exerciseName,
-        reps,
-        duration,
-        weight: parseWeight(exercise.targetWeight),
-        rpe: exercise.targetRpe,
+        ...metrics,
       },
       restSeconds,
     );
@@ -454,9 +495,11 @@ export function useHomeWorkoutViewModel() {
     return `${minutes} Min`;
   });
 
-  onMounted(() => {
-    orchestratorStore.ensureSessionAdvice();
-  });
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      orchestratorStore.ensureSessionAdvice();
+    });
+  }
 
   return {
     router,
