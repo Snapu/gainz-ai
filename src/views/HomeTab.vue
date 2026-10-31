@@ -135,32 +135,29 @@ function handleGalleryScroll() {
     
     <!-- Top Nav -->
     <AppHeader>
-      <h1 class="text-2xl font-black italic tracking-tighter">Gainz<span class="text-primary">AI</span></h1>
+      <h1 class="text-lg font-black tracking-tight">Train</h1>
       <template #actions>
         <GlobalHeaderActions />
       </template>
     </AppHeader>
 
-    <main class="flex-1 overflow-y-auto no-scrollbar flex flex-col relative">
+    <main class="flex-1 w-full max-w-2xl mx-auto px-4 pt-4 pb-28 overflow-y-auto no-scrollbar flex flex-col gap-5">
       
       <!-- Unified Journey HUD -->
-      <div class="px-4 pt-4 pb-2">
-        <UserProgressCard 
-          v-if="isSummaryReady"
-          :progress="userProgress" 
-          :insights="trainingInsights" 
-          class="w-full mx-0 mt-0"
-        />
-        <!-- Skeleton placeholder while summaries load -->
-        <div
-          v-else
-          class="w-full h-48 rounded-xl bg-card ring-1 ring-white/5 animate-pulse"
-        />
-      </div>
+      <UserProgressCard 
+        v-if="isSummaryReady"
+        :progress="userProgress" 
+        :insights="trainingInsights" 
+        class="w-full mx-0 mt-0"
+      />
+      <!-- Skeleton placeholder while summaries load -->
+      <div
+        v-else
+        class="w-full h-48 rounded-xl bg-card border border-white/5 animate-pulse"
+      />
       
-      <div class="flex-1 px-4 pb-32 flex flex-col gap-6 pt-2">
-        <!-- TODAY'S WORKOUT SECTION -->
-        <section>
+      <!-- TODAY'S WORKOUT SECTION -->
+      <section>
         <template v-if="chatStore.isLoading && !allWorkoutGroups?.length">
           <div class="mt-1 flex items-center justify-between gap-4">
             <div class="h-4 w-32 bg-muted/20 animate-pulse rounded"></div>
@@ -264,7 +261,7 @@ function handleGalleryScroll() {
                 <!-- Superset Header within Card Column -->
                 <div v-if="group.isSuperset" class="w-full flex items-center gap-3 mb-[-0.25rem]">
                   <div class="flex-1 h-px bg-primary/20 rounded-full"></div>
-                  <span class="text-[10px] font-bold uppercase tracking-widest text-primary bg-primary/10 px-3 py-1 rounded-full border border-primary/20">Superset</span>
+                  <UiBadge variant="info" class="text-micro font-bold px-3 py-0.5">Superset</UiBadge>
                   <div class="flex-1 h-px bg-primary/20 rounded-full"></div>
                 </div>
                 
@@ -349,7 +346,6 @@ function handleGalleryScroll() {
           />
         </div>
       </section>
-      </div>
     </main>
 
     <!-- Overview Sheet -->
@@ -362,7 +358,7 @@ function handleGalleryScroll() {
         >
           <div v-if="group.isSuperset" class="w-full flex items-center gap-3">
             <div class="flex-1 h-px bg-primary/10 rounded-full"></div>
-            <span class="text-[10px] font-bold uppercase tracking-widest text-primary/80">Superset</span>
+            <UiBadge variant="info" class="text-micro font-bold">Superset</UiBadge>
             <div class="flex-1 h-px bg-primary/10 rounded-full"></div>
           </div>
           
@@ -376,7 +372,7 @@ function handleGalleryScroll() {
                <span class="text-sm font-semibold truncate text-foreground" :class="isExerciseCompleted(exercise) ? 'line-through decoration-muted-foreground/30' : ''">
                  {{ exercise.exerciseName }}
                </span>
-               <span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 mt-1">
+               <span class="text-micro text-muted-foreground/60 mt-1">
                  {{ exercise.targetSets }} Sets
                </span>
              </div>

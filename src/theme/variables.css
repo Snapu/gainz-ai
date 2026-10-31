@@ -165,3 +165,10 @@
 @utility pb-sheet {
   padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
 }
+@utility text-micro {
+  font-size: 0.625rem;
+  line-height: 0.875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}

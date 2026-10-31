@@ -2,9 +2,12 @@
 import { ArrowRight, ArrowUp, ChevronDown, Copy, Dumbbell, Key, Sparkles } from "@lucide/vue";
 import { useCoachChatViewModel } from "@/modules/aiCoach/presentation";
 import AppHeader from "@/shared/presentation/components/AppHeader.vue";
+import EmptyState from "@/shared/presentation/components/EmptyState.vue";
+import ExerciseSummaryRow from "@/shared/presentation/components/ExerciseSummaryRow.vue";
 import GlobalHeaderActions from "@/shared/presentation/components/GlobalHeaderActions.vue";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
+import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 import UiTextarea from "@/shared/presentation/components/ui/UiTextarea.vue";
 
 const {
@@ -36,7 +39,7 @@ void scrollContainerRef;
     
     <!-- Top Nav -->
     <AppHeader>
-      <h1 class="text-lg font-black tracking-tight">AI Coach</h1>
+      <h1 class="text-lg font-black tracking-tight">Coach</h1>
       <template #actions>
         <GlobalHeaderActions />
       </template>
@@ -45,15 +48,15 @@ void scrollContainerRef;
     <!-- Chat Messages Scroll Area -->
     <main
       ref="scrollContainerRef"
-      class="flex-1 min-h-0 px-4 py-4 overflow-y-auto no-scrollbar flex flex-col gap-4 w-full max-w-3xl mx-auto"
+      class="flex-1 min-h-0 px-4 pt-4 pb-4 overflow-y-auto no-scrollbar flex flex-col gap-4 w-full max-w-2xl mx-auto"
     >
       <!-- Missing API Key Callout -->
       <div
         v-if="!hasApiKey"
-        class="w-full rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 flex flex-col gap-3 animate-in fade-in duration-300"
+        class="w-full rounded-xl border border-orange-500/20 bg-orange-500/10 p-4 flex flex-col gap-3 animate-in fade-in duration-300"
       >
         <div class="flex items-start gap-3">
-          <div class="p-2 rounded-full bg-amber-500/10 text-amber-500 shrink-0">
+          <div class="p-2 rounded-full bg-orange-500/15 text-orange-400 shrink-0">
             <Key class="w-4 h-4" />
           </div>
           <div class="flex flex-col gap-1">
@@ -66,7 +69,7 @@ void scrollContainerRef;
         <UiButton
           size="sm"
           variant="outline"
-          class="w-full text-xs font-semibold border-amber-500/30 text-amber-400 hover:bg-amber-500/10 active:scale-95"
+          class="w-full text-xs font-semibold border-orange-500/30 text-orange-400 hover:bg-orange-500/10 active:scale-95"
           @click="navigateToApiKeySetup"
         >
           Configure API Key
@@ -88,20 +91,13 @@ void scrollContainerRef;
       </div>
 
       <!-- Empty State -->
-      <div
+      <EmptyState
         v-else-if="!isLoading && chatMessages.length === 0"
-        class="flex-1 flex flex-col items-center justify-center text-center p-6 gap-5 my-auto animate-in fade-in duration-300"
-      >
-        <div class="w-16 h-16 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-sm">
-          <Sparkles class="w-8 h-8" />
-        </div>
-        <div class="flex flex-col gap-1 max-w-sm">
-          <h2 class="text-lg font-bold text-foreground">Your AI Strength Coach</h2>
-          <p class="text-xs font-medium text-muted-foreground leading-relaxed">
-            Ask questions about your lifts, request exercise substitutions, adjust workout volume, or ask about recovery.
-          </p>
-        </div>
-      </div>
+        :icon="Sparkles"
+        title="Your AI Strength Coach"
+        description="Ask questions about your lifts, request exercise substitutions, adjust workout volume, or ask about recovery."
+        class="my-auto py-12"
+      />
 
       <!-- Messages Stream -->
       <template v-for="message in chatMessages" :key="message.id">
@@ -125,7 +121,7 @@ void scrollContainerRef;
           class="w-full flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-2 duration-200"
         >
           <!-- Content Card -->
-          <div class="w-full p-4 rounded-xl bg-card border border-white/5 shadow-sm text-sm font-medium text-foreground/90 leading-relaxed flex flex-col gap-3">
+          <UiCard class="w-full p-4 text-sm font-medium text-foreground/90 leading-relaxed flex flex-col gap-3">
             <!-- Header bar inside the card -->
             <div class="flex items-center justify-between pb-2.5 border-b border-white/5">
               <div class="flex items-center gap-2">
@@ -162,24 +158,15 @@ void scrollContainerRef;
               </div>
 
               <div class="flex flex-col gap-2">
-                <div
+                <ExerciseSummaryRow
                   v-for="(ex, exIdx) in message.recommendedWorkout"
                   :key="`${ex.exerciseName}-${exIdx}`"
-                  class="text-xs text-muted-foreground font-medium flex items-center justify-between py-1 border-b border-white/5 last:border-0"
-                >
-                  <span class="truncate font-semibold text-foreground/90">{{ ex.exerciseName }}</span>
-                  <span class="shrink-0 font-bold text-primary tabular-nums ml-2">
-                    {{
-                      ex.targetReps
-                        ? `${ex.targetSets} × ${ex.targetReps}`
-                        : ex.targetDurationSeconds
-                          ? `${ex.targetSets} × ${ex.targetDurationSeconds}s`
-                          : ex.targetDistanceMeters
-                            ? `${ex.targetSets} × ${ex.targetDistanceMeters}m`
-                            : `${ex.targetSets} Sets`
-                    }}
-                  </span>
-                </div>
+                  :exercise-name="ex.exerciseName"
+                  :target-sets="ex.targetSets"
+                  :target-reps="ex.targetReps"
+                  :target-duration-seconds="ex.targetDurationSeconds"
+                  :target-distance-meters="ex.targetDistanceMeters"
+                />
               </div>
 
               <button
@@ -258,7 +245,7 @@ void scrollContainerRef;
                 <pre class="overflow-x-auto whitespace-pre-wrap break-all text-xs max-h-48 rounded-xl bg-black/30 p-3 font-mono text-muted-foreground/70">{{ message.requestPayload }}</pre>
               </div>
             </div>
-          </div>
+          </UiCard>
         </div>
       </template>
 
@@ -287,7 +274,7 @@ void scrollContainerRef;
 
     <!-- Bottom Docked Actions & Input -->
     <div class="shrink-0 border-t border-white/5 bg-background/95 backdrop-blur-xl p-3 z-20 transition-all duration-200">
-      <div class="w-full max-w-3xl mx-auto flex flex-col gap-3">
+      <div class="w-full max-w-2xl mx-auto flex flex-col gap-3">
         <!-- Quick Prompts -->
         <div
           v-if="!isKeyboardVisible && !userQuestion.trim() && quickPrompts.length > 0"

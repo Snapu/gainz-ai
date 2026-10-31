@@ -96,25 +96,30 @@ src/
 
 ### Typography
 
-- **Sizes**:
-  - `text-xs`: Small labels, captions (replaces `text-[9px]`, `text-[10px]`).
-  - `text-sm`: Standard labels, buttons, card/tab headers.
-  - `text-base`: Body text.
-  - `text-lg`: Prominent section headers, empty state titles.
-  - `text-xl`: Page titles.
-  - ❌ DO NOT use: Custom pixel sizes.
+- **Sizes & Scale**:
+  - `text-micro` (or `text-[10px] font-bold uppercase tracking-wider`): Allowed exclusively for micro-labels, stat keys ("SETS", "TONNAGE"), superset badges, and table column headers.
+  - `text-xs`: Helper text, timestamps, captions.
+  - `text-sm`: Controls, list items, button labels.
+  - `text-sm font-bold text-foreground`: Card/Section Headings (`<h3 class="text-sm font-bold text-foreground">Heading</h3>`).
+  - `text-base`: Body text, chat bubbles, notes.
+  - `text-lg font-black tracking-tight`: Top-level Tab Page Titles in `AppHeader`.
+  - `text-xl font-black tracking-tight`: Hero Card Titles (Rank, Mesocycle).
+  - `text-2xl font-black tabular-nums tracking-tight`: Primary KPI values (Sets, Volume, Timer, Level).
+  - `text-3xl font-black tabular-nums tracking-tight`: Hero KPI values (Readiness / Fatigue Score).
+  - ❌ DO NOT use: Custom pixel font sizes outside `text-micro`.
 - **Weights**:
   - `font-medium`: Helper text, metadata.
   - `font-semibold`: Controls, chips, form labels.
   - `font-bold`: Section titles, key values, emphasis.
-  - `font-black`: Hero/brand moments ONLY.
+  - `font-black`: Hero metrics, brand, and tab page titles.
   - ❌ DO NOT use `font-normal` in UI components.
-- **Card/Section Headings**: Use exactly `<h3 class="text-sm font-bold text-foreground">Heading</h3>`.
 
 ### Spacing & Layout
 
-- **Gaps**: `gap-2`, `gap-3`, `gap-4`, `gap-5`, `gap-6` (0.5rem steps).
-- **Padding**: `px-4 py-3` or `px-5 py-4` (Standard proportional sizes).
+- **Page Shell**: Top-level tab views must use:
+  `<main class="flex-1 w-full max-w-2xl mx-auto px-4 pt-4 pb-28 overflow-y-auto no-scrollbar flex flex-col gap-5">`
+- **Gaps**: `gap-2`, `gap-3`, `gap-4`, `gap-5`, `gap-6` (0.5rem steps). Standard section gap is `gap-5`.
+- **Card Padding**: Standard `p-4` (Hero cards use `p-5`).
 - **Margins**: `mb-3`, `mb-4`, `mt-2`.
 - ❌ DO NOT use: `gap-1.5`, `px-2 py-6`, `mb-5`.
 
@@ -124,8 +129,23 @@ src/
 - `shadow-lg`: Prominent depth (modals, dropdowns, floating panels).
 - ❌ DO NOT use: `shadow-md`, colored shadows, `shadow-inner`.
 
+### Surfaces & Status Colors
+
+- **Surfaces**:
+  - Level 1 (Cards): Always wrap standalone content blocks in `<UiCard>`. ❌ DO NOT hand-roll cards with `<div class="bg-card border-white/5">`.
+  - Level 2 (Nested insets/rows): Use `bg-white/5 border border-white/5 rounded-xl`.
+  - ❌ DO NOT use HTML `<table>` elements for training plans. Use `ExerciseSummaryRow` list layouts.
+- **Status Surfaces (Dark Mode)**:
+  - **Success**: `bg-emerald-500/10 border-emerald-500/20 text-emerald-400`
+  - **Warning**: `bg-orange-500/10 border-orange-500/20 text-orange-400`
+  - **Danger**: `bg-red-500/10 border-red-500/20 text-red-400`
+  - **Info / Accent**: `bg-primary/10 border-primary/20 text-primary`
+  - ❌ DO NOT use raw Tailwind colors like `amber-500`, `cyan-400`, or raw `oklch(...)` inline.
+
 ### Components
 
+- **Empty States**: Always use `<EmptyState>`. ❌ DO NOT create inline ad-hoc empty states.
+- **Section Headers**: Use `<SectionHeader title="..." subtitle="..." />` or standard `<h3 class="text-sm font-bold text-foreground">` with `mb-3`.
 - **Icon Buttons**: Use exactly `class="rounded-full p-2.5 bg-white/5 hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-primary active:scale-95"`.
 - **Selection**: Use `UiToggleGroup` + `UiToggleGroupItem` (default variant). Do not mix with `ClickableList` or create custom selection components.
 - **Chips/Badges**: Always use `<UiBadge>`. Never use custom spans with inline colors. Add `uppercase tracking-wider` for short statuses.

@@ -39,7 +39,7 @@ function handleFabClick() {
 
     <!-- FAB & Timer Container -->
     <div
-      v-show="!isKeyboardVisible && route.name !== 'coach'"
+      v-show="!isKeyboardVisible && (route.name === 'home' || isResting)"
       class="fixed bottom-20 right-6 z-50 pointer-events-none flex flex-col items-end gap-4 transition-all duration-200"
     >
       <!-- Rest Timer Toast -->
@@ -55,8 +55,9 @@ function handleFabClick() {
         />
       </Transition>
 
-      <!-- Primary FAB -->
+      <!-- Primary FAB (Train tab only) -->
       <UiButton 
+        v-if="route.name === 'home'"
         class="relative w-14 h-14 shrink-0 rounded-full shadow-lg active:scale-95 transition-all pointer-events-auto" 
         size="icon" 
         @click="handleFabClick"
