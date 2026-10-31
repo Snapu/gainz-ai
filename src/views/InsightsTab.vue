@@ -6,6 +6,7 @@ import { useInsightsTabViewModel } from "@/modules/trainingInsights/presentation
 import AppHeader from "@/shared/presentation/components/AppHeader.vue";
 import GlobalHeaderActions from "@/shared/presentation/components/GlobalHeaderActions.vue";
 import MuscleActivationMap from "@/shared/presentation/components/MuscleActivationMap.vue";
+import UserProgressCard from "@/shared/presentation/components/UserProgressCard.vue";
 import { uiIconButtonClass } from "@/shared/presentation/components/ui/styles";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiBottomSheet from "@/shared/presentation/components/ui/UiBottomSheet.vue";
@@ -14,6 +15,7 @@ import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 import UiSparkline from "@/shared/presentation/components/ui/UiSparkline.vue";
 
 const {
+  userProgress,
   deloadStore,
   insights,
   acwrValueLabel,
@@ -49,6 +51,14 @@ const isAllExercisesOpen = ref(false);
     </AppHeader>
 
     <main class="flex-1 w-full max-w-2xl mx-auto px-4 pt-4 pb-8 overflow-y-auto overscroll-y-contain no-scrollbar flex flex-col gap-5">
+
+      <!-- ── Section: Level & Rank Hero ── -->
+      <UserProgressCard 
+        v-if="userProgress"
+        :progress="userProgress" 
+        :insights="insights" 
+        class="w-full mx-0 mt-0"
+      />
 
       <!-- ── Section: Readiness ── -->
       <section>

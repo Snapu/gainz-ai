@@ -10,7 +10,6 @@ import AppHeader from "@/shared/presentation/components/AppHeader.vue";
 import EmptyState from "@/shared/presentation/components/EmptyState.vue";
 import GlobalHeaderActions from "@/shared/presentation/components/GlobalHeaderActions.vue";
 import SessionLogGroup from "@/shared/presentation/components/SessionLogGroup.vue";
-import UserProgressCard from "@/shared/presentation/components/UserProgressCard.vue";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiBottomSheet from "@/shared/presentation/components/ui/UiBottomSheet.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
@@ -20,9 +19,6 @@ import { useHomeWorkoutViewModel } from "@/views/composables/useHomeWorkoutViewM
 const {
   router,
   logsStore,
-  isSummaryReady,
-  userProgress,
-  trainingInsights,
   groupedLogs,
   collapsedSessions,
   toggleSession,
@@ -143,20 +139,6 @@ function handleGalleryScroll() {
     </AppHeader>
 
     <main class="flex-1 w-full max-w-2xl mx-auto px-4 pt-4 pb-8 overflow-y-auto overscroll-y-contain no-scrollbar flex flex-col gap-5">
-      
-      <!-- Unified Journey HUD -->
-      <UserProgressCard 
-        v-if="isSummaryReady"
-        :progress="userProgress" 
-        :insights="trainingInsights" 
-        class="w-full mx-0 mt-0"
-      />
-      <!-- Skeleton placeholder while summaries load -->
-      <UiCard
-        v-else
-        class="w-full h-48 animate-pulse"
-      />
-      
       <!-- TODAY'S WORKOUT SECTION -->
       <section>
         <template v-if="chatStore.isLoading && !allWorkoutGroups?.length">

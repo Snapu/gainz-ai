@@ -44,6 +44,17 @@ vi.mock("@/modules/platform/presentation", () => ({
   useExerciseMuscleMapStore: () => ({
     resolveMuscleActivation: () => null,
   }),
+  useUserProgressStore: () => ({
+    userProgress: {
+      level: 1,
+      title: "Iron Initiate",
+      progressPercent: 0,
+      avatar: "/assets/ranks/rank-1.png",
+      totalXp: 0,
+      currentLevelXp: 0,
+      targetLevelXp: 100,
+    },
+  }),
 }));
 
 vi.mock("@/modules/profile/presentation", () => ({

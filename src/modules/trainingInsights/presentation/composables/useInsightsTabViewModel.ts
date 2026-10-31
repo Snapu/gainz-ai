@@ -3,7 +3,7 @@ import { computed, onMounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useAiOrchestratorStore } from "@/modules/aiCoach/presentation";
 import { useDeloadStore } from "@/modules/deload/presentation";
-import { useExerciseMuscleMapStore } from "@/modules/platform/presentation";
+import { useExerciseMuscleMapStore, useUserProgressStore } from "@/modules/platform/presentation";
 import { useMetricsStore } from "@/modules/profile/presentation";
 import type { MuscleGroup } from "@/modules/sharedKernel/domain";
 import {
@@ -43,11 +43,14 @@ function clampPct(value: number): number {
 export function useInsightsTabViewModel() {
   const router = useRouter();
   const muscleMapStore = useExerciseMuscleMapStore();
+  const userProgressStore = useUserProgressStore();
   const deloadStore = useDeloadStore();
   const orchestratorStore = useAiOrchestratorStore();
   const trainingInsightsStore = useTrainingInsightsStore();
   const metricsStore = useMetricsStore();
   const { insights } = storeToRefs(trainingInsightsStore);
+
+  const userProgress = computed(() => userProgressStore.userProgress);
 
   onMounted(() => {
     void orchestratorStore.classifyExercisesIfNeeded();
@@ -387,6 +390,7 @@ export function useInsightsTabViewModel() {
 
   return {
     router,
+    userProgress,
     deloadStore,
     insights,
     maintenanceLikeCount,
