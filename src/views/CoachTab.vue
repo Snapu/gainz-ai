@@ -1,13 +1,18 @@
 <script setup lang="ts">
-import { ArrowRight, ArrowUp, ChevronDown, Copy, Dumbbell, Key, Sparkles } from "@lucide/vue";
+import {
+  ArrowRight,
+  ArrowUp,
+  ChevronDown,
+  Copy,
+  Dumbbell,
+  Key,
+  Sparkles,
+} from "@lucide/vue";
 import { useCoachChatViewModel } from "@/modules/aiCoach/presentation";
 import AppHeader from "@/shared/presentation/components/AppHeader.vue";
-import EmptyState from "@/shared/presentation/components/EmptyState.vue";
-import ExerciseSummaryRow from "@/shared/presentation/components/ExerciseSummaryRow.vue";
 import GlobalHeaderActions from "@/shared/presentation/components/GlobalHeaderActions.vue";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
-import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 import UiTextarea from "@/shared/presentation/components/ui/UiTextarea.vue";
 
 const {
@@ -39,7 +44,7 @@ void scrollContainerRef;
     
     <!-- Top Nav -->
     <AppHeader>
-      <h1 class="text-lg font-black tracking-tight">Coach</h1>
+      <h1 class="text-lg font-black tracking-tight">AI Coach</h1>
       <template #actions>
         <GlobalHeaderActions />
       </template>
@@ -53,10 +58,10 @@ void scrollContainerRef;
       <!-- Missing API Key Callout -->
       <div
         v-if="!hasApiKey"
-        class="w-full rounded-xl border border-orange-500/20 bg-orange-500/10 p-4 flex flex-col gap-3 animate-in fade-in duration-300"
+        class="w-full rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 flex flex-col gap-3 animate-in fade-in duration-300"
       >
         <div class="flex items-start gap-3">
-          <div class="p-2 rounded-full bg-orange-500/15 text-orange-400 shrink-0">
+          <div class="p-2 rounded-full bg-amber-500/10 text-amber-500 shrink-0">
             <Key class="w-4 h-4" />
           </div>
           <div class="flex flex-col gap-1">
@@ -69,7 +74,7 @@ void scrollContainerRef;
         <UiButton
           size="sm"
           variant="outline"
-          class="w-full text-xs font-semibold border-orange-500/30 text-orange-400 hover:bg-orange-500/10 active:scale-95"
+          class="w-full text-xs font-semibold border-amber-500/30 text-amber-400 hover:bg-amber-500/10 active:scale-95"
           @click="navigateToApiKeySetup"
         >
           Configure API Key
@@ -91,13 +96,35 @@ void scrollContainerRef;
       </div>
 
       <!-- Empty State -->
-      <EmptyState
+      <div
         v-else-if="!isLoading && chatMessages.length === 0"
-        :icon="Sparkles"
-        title="Your AI Strength Coach"
-        description="Ask questions about your lifts, request exercise substitutions, adjust workout volume, or ask about recovery."
-        class="my-auto py-12"
-      />
+        class="flex-1 flex flex-col items-center justify-center text-center p-6 gap-5 my-auto animate-in fade-in duration-300"
+      >
+        <div class="w-16 h-16 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-sm">
+          <Sparkles class="w-8 h-8" />
+        </div>
+        <div class="flex flex-col gap-1 max-w-sm">
+          <h2 class="text-lg font-bold text-foreground">Your AI Strength Coach</h2>
+          <p class="text-xs font-medium text-muted-foreground leading-relaxed">
+            Ask questions about your lifts, request exercise substitutions, adjust workout volume, or ask about recovery.
+          </p>
+        </div>
+        <div class="flex flex-wrap justify-center gap-2 w-full max-w-lg mt-2">
+          <button
+            v-for="qp in quickPrompts"
+            :key="qp.id"
+            type="button"
+            :disabled="isLoading"
+            :title="qp.prompt"
+            :aria-label="qp.prompt"
+            @click="applyQuickPrompt(qp.prompt)"
+            class="flex items-center justify-center gap-2 text-xs font-semibold px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-foreground transition-all duration-200 cursor-pointer active:scale-95 disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            <Sparkles class="w-3.5 h-3.5 text-primary shrink-0" />
+            <span class="truncate">{{ qp.label }}</span>
+          </button>
+        </div>
+      </div>
 
       <!-- Messages Stream -->
       <template v-for="message in chatMessages" :key="message.id">
@@ -121,7 +148,7 @@ void scrollContainerRef;
           class="w-full flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-2 duration-200"
         >
           <!-- Content Card -->
-          <UiCard class="w-full p-4 text-sm font-medium text-foreground/90 leading-relaxed flex flex-col gap-3">
+          <div class="w-full p-4 rounded-xl bg-card border border-white/5 shadow-sm text-sm font-medium text-foreground/90 leading-relaxed flex flex-col gap-3">
             <!-- Header bar inside the card -->
             <div class="flex items-center justify-between pb-2.5 border-b border-white/5">
               <div class="flex items-center gap-2">
@@ -158,15 +185,24 @@ void scrollContainerRef;
               </div>
 
               <div class="flex flex-col gap-2">
-                <ExerciseSummaryRow
+                <div
                   v-for="(ex, exIdx) in message.recommendedWorkout"
                   :key="`${ex.exerciseName}-${exIdx}`"
-                  :exercise-name="ex.exerciseName"
-                  :target-sets="ex.targetSets"
-                  :target-reps="ex.targetReps"
-                  :target-duration-seconds="ex.targetDurationSeconds"
-                  :target-distance-meters="ex.targetDistanceMeters"
-                />
+                  class="text-xs text-muted-foreground font-medium flex items-center justify-between py-1 border-b border-white/5 last:border-0"
+                >
+                  <span class="truncate font-semibold text-foreground/90">{{ ex.exerciseName }}</span>
+                  <span class="shrink-0 font-bold text-primary tabular-nums ml-2">
+                    {{
+                      ex.targetReps
+                        ? `${ex.targetSets} × ${ex.targetReps}`
+                        : ex.targetDurationSeconds
+                          ? `${ex.targetSets} × ${ex.targetDurationSeconds}s`
+                          : ex.targetDistanceMeters
+                            ? `${ex.targetSets} × ${ex.targetDistanceMeters}m`
+                            : `${ex.targetSets} Sets`
+                    }}
+                  </span>
+                </div>
               </div>
 
               <button
@@ -245,7 +281,7 @@ void scrollContainerRef;
                 <pre class="overflow-x-auto whitespace-pre-wrap break-all text-xs max-h-48 rounded-xl bg-black/30 p-3 font-mono text-muted-foreground/70">{{ message.requestPayload }}</pre>
               </div>
             </div>
-          </UiCard>
+          </div>
         </div>
       </template>
 
@@ -288,8 +324,9 @@ void scrollContainerRef;
             :title="qp.prompt"
             :aria-label="qp.prompt"
             @click="applyQuickPrompt(qp.prompt)"
-            class="flex items-center justify-center text-xs font-semibold px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-muted-foreground hover:text-foreground transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed active:scale-95 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background whitespace-nowrap"
+            class="flex items-center justify-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-muted-foreground hover:text-foreground transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed active:scale-95 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background whitespace-nowrap"
           >
+            <Sparkles class="w-3 h-3 text-primary shrink-0" />
             <span class="truncate max-w-[240px]">{{ qp.label }}</span>
           </button>
         </div>

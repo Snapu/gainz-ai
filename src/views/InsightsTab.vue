@@ -135,7 +135,7 @@ const isAllExercisesOpen = ref(false);
               <!-- KPI: Sets -->
               <div class="flex flex-col">
                 <div class="flex items-center gap-1.5">
-                  <div class="w-1.5 h-1.5 rounded-full bg-primary"></div>
+                  <div class="w-1.5 h-1.5 rounded-full" style="background-color: oklch(0.8 0.1 230)"></div>
                   <span class="text-micro text-muted-foreground font-bold">Sets</span>
                 </div>
                 <div class="flex items-end gap-1.5 mt-1">
@@ -151,7 +151,7 @@ const isAllExercisesOpen = ref(false);
               <!-- KPI: Tonnage -->
               <div class="flex flex-col">
                 <div class="flex items-center gap-1.5">
-                  <div class="w-1.5 h-1.5 rounded-full bg-orange-400"></div>
+                  <div class="w-1.5 h-1.5 rounded-full" style="background-color: oklch(0.8 0.15 60)"></div>
                   <span class="text-micro text-muted-foreground font-bold">Tonnage</span>
                 </div>
                 <div class="flex items-end gap-1.5 mt-1">

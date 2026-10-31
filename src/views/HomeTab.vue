@@ -135,7 +135,7 @@ function handleGalleryScroll() {
     
     <!-- Top Nav -->
     <AppHeader>
-      <h1 class="text-lg font-black tracking-tight">Train</h1>
+      <h1 class="text-2xl font-black italic tracking-tighter">Gainz<span class="text-primary">AI</span></h1>
       <template #actions>
         <GlobalHeaderActions />
       </template>

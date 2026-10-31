@@ -118,6 +118,7 @@ src/
 
 - **Page Shell**: Top-level tab views must use:
   `<main class="flex-1 w-full max-w-2xl mx-auto px-4 pt-4 pb-28 overflow-y-auto no-scrollbar flex flex-col gap-5">`
+- **Header Brand & Titles**: HomeTab displays the athletic brand hero logo (`<h1 class="text-2xl font-black italic tracking-tighter">Gainz<span class="text-primary">AI</span></h1>`). Other tabs display their full feature titles in `text-lg font-black tracking-tight` (`Training Plan`, `AI Coach`, `Insights`).
 - **Gaps**: `gap-2`, `gap-3`, `gap-4`, `gap-5`, `gap-6` (0.5rem steps). Standard section gap is `gap-5`.
 - **Card Padding**: Standard `p-4` (Hero cards use `p-5`).
 - **Margins**: `mb-3`, `mb-4`, `mt-2`.
@@ -132,15 +133,15 @@ src/
 ### Surfaces & Status Colors
 
 - **Surfaces**:
-  - Level 1 (Cards): Always wrap standalone content blocks in `<UiCard>`. ❌ DO NOT hand-roll cards with `<div class="bg-card border-white/5">`.
+  - Level 1 (Cards): Always wrap standalone content blocks in `<UiCard>`.
   - Level 2 (Nested insets/rows): Use `bg-white/5 border border-white/5 rounded-xl`.
-  - ❌ DO NOT use HTML `<table>` elements for training plans. Use `ExerciseSummaryRow` list layouts.
+  - Training Plans: Use dense, structured tables with hairline dividers (`divide-white/5`), uppercase micro-headers, and continuous vertical superset indicator lines for high-density program scanning.
 - **Status Surfaces (Dark Mode)**:
   - **Success**: `bg-emerald-500/10 border-emerald-500/20 text-emerald-400`
   - **Warning**: `bg-orange-500/10 border-orange-500/20 text-orange-400`
   - **Danger**: `bg-red-500/10 border-red-500/20 text-red-400`
   - **Info / Accent**: `bg-primary/10 border-primary/20 text-primary`
-  - ❌ DO NOT use raw Tailwind colors like `amber-500`, `cyan-400`, or raw `oklch(...)` inline.
+  - ❌ DO NOT use raw Tailwind colors like `amber-500`, `cyan-400`, or raw `oklch(...)` inline (except chart-coordinated legend dots).
 
 ### Components
 
