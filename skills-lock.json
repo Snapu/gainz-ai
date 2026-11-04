@@ -49,6 +49,12 @@
       "skillPath": ".agents/skills/neverthrow-elegant/SKILL.md",
       "computedHash": "3afb60a576dca3d1190a274608330c8b3868c850a677e006636636d1f23758a3"
     },
+    "ponytail": {
+      "source": "DietrichGebert/ponytail",
+      "sourceType": "github",
+      "skillPath": "skills/ponytail/SKILL.md",
+      "computedHash": "061f887d9e3e735f85db3be3655a8936a00f24d5fb65ac4ab74a968a770fe342"
+    },
     "ponytail-audit": {
       "source": "DietrichGebert/ponytail",
       "sourceType": "github",
@@ -61,6 +67,12 @@
       "skillPath": "skills/reka-ui/SKILL.md",
       "computedHash": "bbe41553fcae1ffb85c80cc9a40a115b8a744466f48ea2eb802d1ed2c0c7ff1b"
     },
+    "setup-matt-pocock-skills": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/setup-matt-pocock-skills/SKILL.md",
+      "computedHash": "50d6c45174f56a4323b24978f36fcc9169fae0b3abb026587bf636e468c4954c"
+    },
     "tdd": {
       "source": "mattpocock/skills",
       "sourceType": "github",
@@ -69,9 +81,15 @@
     },
     "to-spec": {
       "source": "mattpocock/skills",
-      "sourceType": "workspace",
-      "skillPath": ".agents/skills/to-spec/SKILL.md",
-      "computedHash": "ae92f1c5dd89f5acfe38e584d02c663896a4da3ff9d9453decb2f59e527d554e"
+      "sourceType": "github",
+      "skillPath": "skills/engineering/to-spec/SKILL.md",
+      "computedHash": "3fa1a0695d4ea242fae9e569e4d22aa1788623197abb33bfadafae7315789bbf"
+    },
+    "to-tickets": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/to-tickets/SKILL.md",
+      "computedHash": "5f871bdc46a9212222214ba399be4965374208af1bd7f48f1271bef72841dd31"
     },
     "vue-best-practices": {
       "source": "hyf0/vue-skills",

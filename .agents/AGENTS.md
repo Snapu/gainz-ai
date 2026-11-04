@@ -46,6 +46,45 @@ src/
 - **Tab View Orchestration**: Top-level tab views (`HomeTab.vue`, `InsightsTab.vue`, `PlanTab.vue`, `CoachTab.vue`) must delegate state and orchestration to view-model composables (`use*ViewModel`) and **never** call `use*Store()` directly.
 - **Delegate Decisions to Domain**: Infrastructure and presentation must **delegate** business decisions to the domain — never recompute them. If a domain aggregate already answers a question (e.g., `TrainingPlan` determining which session is next), outer layers must call that method rather than inlining duplicate logic.
 
+## Engineering Workflow: Pocock (Architect) → Ponytail (Implementer)
+
+All non-trivial feature development and refactoring follow a strict two-phase separation of concerns:
+
+### Phase 1: The Architect (Matt Pocock Philosophy)
+
+1. **Grill Ambiguities First**: If requirements or edge cases are unclear, ask 1–3 focused clarifying questions (`ask_question`) before locking in designs.
+2. **Ubiquitous Language & Bounded Contexts**: Align strictly with `GLOSSARY.md`. Assign ownership to the proper module (`aiCoach`, `trainingInsights`, etc.). Domain models must be pure.
+3. **Spec-Driven Design (`/to-spec`)**: Draft a concise specification across Gainz AI's 4 layers (`domain`, `application`, `infrastructure`, `presentation`).
+4. **Tracer-Bullet Ticket Slicing (`/to-tickets`)**: Slice the spec into granular, dependency-ordered tickets (`Depends on: #...`) that each fit comfortably within a single LLM context window.
+
+### Phase 2: The Implementer (Ponytail 5 Philosophy)
+
+1. **The 7-Rung Decision Ladder**: Stop at the first viable rung before writing code:
+   1. _Does this need to exist?_ (YAGNI – skip speculative features/helpers).
+   2. _Already in this codebase?_ (Reuse `@/shared/presentation/components/`, `@/modules/sharedKernel`, `cn()`).
+   3. _Stdlib does it?_ (Modern ES2024+ methods: `Object.groupBy`, `toSorted`, etc.).
+   4. _Native platform / Capacitor feature?_ (HTML5 elements, CSS container queries, native plugins).
+   5. _Installed dependency solves it?_ (`@vueuse/core`, `reka-ui`, `lucide-vue-next`, `neverthrow`, `zod`).
+   6. _Can it be one readable line?_ (Avoid multi-file wrapper wrappers).
+   7. _Only then:_ Write the minimum amount of custom code that works.
+2. **Red-Green-Refactor Loop (`/tdd`)**:
+   - Write one focused failing unit test (`*.test.ts`) at the public seam **first**.
+   - Write the minimum viable code to make it green.
+   - Run `pnpm test:unit` and verify `src/modules/architecture.boundaries.test.ts` remains green.
+3. **Non-Negotiable Safety Rails**:
+   - Never compromise on DDD layer isolation (`architecture.boundaries.test.ts`).
+   - Never swallow errors; use typed `neverthrow` Result/ResultAsync chains.
+   - Always validate external data through Zod schemas (ACL) at network/storage boundaries.
+   - Strictly adhere to Design Tokens (`rounded-xl`, `active:scale-95`, typography scale).
+
+## Agent skills
+
+### Issue tracker
+Issues and tracer-bullet tickets are tracked locally under `.agents/tickets/` with optional GitHub issue sync (`Snapu/gainz-ai`). See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+Single-context repository layout centered around `GLOSSARY.md` and strict DDD bounded contexts (`src/modules/*`). See `docs/agents/domain.md`.
+
 ## Key Integration Points
 
 - **AI (Google GenAI)**:
@@ -59,7 +98,7 @@ src/
 ## Coding Standards
 
 1. **TypeScript**: Strict mode (`~6.0.3`). Explicit return types for exported functions. NO `any` (use `unknown` and type guards).
-2. **Simplicity**: Do not over-engineer. Write lean, readable code. Avoid premature abstractions. Solve the immediate problem simply rather than building complex generic systems for hypothetical future needs.
+2. **Simplicity (Ponytail 5)**: The best code is the code you never wrote. Stop over-engineering. Enforce the 7-rung decision ladder (YAGNI → Codebase reuse → Stdlib → Native platform → Installed deps → One-liner → Minimal code). Avoid premature abstractions, duplicate helper functions, and wrapper layers that only pass calls through.
 3. **Vue & State**: `<script setup lang="ts">` exclusively. Props down, events up. Prefer local `ref`/`reactive` for UI state. Extract view orchestration and reusable logic to composables (`use*ViewModel`). Use Pinia ONLY for cross-component domain state (`defineStore` setup pattern).
 4. **Error Handling (`neverthrow`)**: Prefer `.map()`/`.andThen()`/`.orElse()`/`.andTee()` expressive chains over manual `.isErr()` branching. Use semantic error unions (e.g., `'missing-api-key' | 'coaching-request-failed'`) rather than generic strings or thrown exceptions.
 5. **Formatting/Linting**: Biome (`biome.json`). 2 spaces, 100 char line width, double quotes. Run `pnpm lint`, `pnpm format`, `pnpm type-check`, and `pnpm test:unit`.
