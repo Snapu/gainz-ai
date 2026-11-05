@@ -176,4 +176,33 @@ describe("WorkoutExerciseCard", () => {
     expect(container.textContent).toContain("reps");
     app.unmount();
   });
+
+  it("renders superset badge when isSuperset is true or exercise has supersetId", async () => {
+    const Host = defineComponent({
+      setup() {
+        return () =>
+          h(WorkoutExerciseCard, {
+            exercise: {
+              exerciseName: "Incline DB Press",
+              targetSets: 3,
+              targetReps: "8-10",
+              supersetId: "ss-1",
+            },
+            isCompleted: false,
+            isHighlighted: true,
+            isSuperset: true,
+            progress: { done: 0, isCompleted: false },
+          });
+      },
+    });
+
+    const container = document.createElement("div");
+    const app = createApp(Host);
+    app.mount(container);
+    await nextTick();
+
+    expect(container.textContent).toContain("Incline DB Press");
+    expect(container.textContent).toContain("Superset");
+    app.unmount();
+  });
 });

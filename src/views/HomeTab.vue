@@ -219,19 +219,13 @@ function handleGalleryScroll() {
                 :key="group.id"
                 class="w-[88vw] max-w-sm shrink-0 snap-center flex flex-col gap-4"
               >
-                <!-- Superset Header within Card Column -->
-                <div v-if="group.isSuperset" class="w-full flex items-center gap-3 mb-[-0.25rem]">
-                  <div class="flex-1 h-px bg-primary/20 rounded-full"></div>
-                  <UiBadge variant="info" class="text-micro font-bold px-3 py-0.5">Superset</UiBadge>
-                  <div class="flex-1 h-px bg-primary/20 rounded-full"></div>
-                </div>
-                
                 <WorkoutExerciseCard
                   v-for="(exercise, exIndex) in group.exercises"
                   :key="exercise.exerciseName"
                   :exercise="exercise"
                   :is-completed="isExerciseCompleted(exercise)"
                   :is-highlighted="isHighlighted(gIndex, exIndex)"
+                  :is-superset="group.isSuperset"
                   :progress="getExerciseProgress(exercise.exerciseName, exercise.targetSets)"
                   :last-session-summary="getLastSessionSummary(exercise.exerciseName)"
                   :progression-data="getExerciseProgression(exercise.exerciseName)"

@@ -2,6 +2,7 @@
 import { ChevronRight, Info, Play, RotateCcw, Sparkles, Square } from "@lucide/vue";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
+import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 import UiProgressionLine, {
   type ProgressionSessionItem,
@@ -16,6 +17,7 @@ const props = defineProps<{
   isHighlighted: boolean;
   progress: { done: number; isCompleted: boolean };
   headingLevel?: "h3" | "h4";
+  isSuperset?: boolean;
   lastSessionSummary?: string | null;
   progressionData?: ProgressionSessionItem[] | null;
   loggedSets?: ExerciseLog[];
@@ -27,6 +29,10 @@ const emit = defineEmits<{
   (e: "search", exerciseName: string): void;
   (e: "editLog", log: ExerciseLog): void;
 }>();
+
+const isSupersetExercise = computed(() => {
+  return Boolean(props.isSuperset || props.exercise.supersetId);
+});
 
 const isDurationExercise = computed(() => {
   return props.exercise.targetDurationSeconds != null;
@@ -140,12 +146,22 @@ const timerProgressPercent = computed(() => {
       
       <!-- 1. Exercise Name (Header) -->
       <div class="flex items-start justify-between gap-3 w-full">
-        <component
-          :is="headingLevel ?? 'h3'"
-          class="text-lg font-bold text-foreground leading-snug transition-colors duration-300 min-w-0"
-        >
-          {{ exercise.exerciseName }}
-        </component>
+        <div class="flex items-center gap-2 flex-wrap min-w-0">
+          <component
+            :is="headingLevel ?? 'h3'"
+            class="text-lg font-bold text-foreground leading-snug transition-colors duration-300 break-words"
+          >
+            {{ exercise.exerciseName }}
+          </component>
+
+          <UiBadge
+            v-if="isSupersetExercise"
+            variant="info"
+            class="text-[9px] font-bold px-1.5 py-0.5 uppercase tracking-wider shrink-0"
+          >
+            Superset
+          </UiBadge>
+        </div>
         
         <button
           @click.stop="emit('search', exercise.exerciseName)"
