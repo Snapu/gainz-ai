@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createApp, defineComponent, h, nextTick, ref } from "vue";
+import { createApp, defineComponent, h, nextTick } from "vue";
 import WorkoutExerciseCard from "./WorkoutExerciseCard.vue";
 
 describe("WorkoutExerciseCard", () => {
-  it("updates timerRemaining when targetDurationSeconds prop changes while timer is not running", async () => {
-    const targetDurationSeconds = ref(60);
-
+  it("renders duration target formatted in Sets × Time", async () => {
     const Host = defineComponent({
       setup() {
         return () =>
@@ -13,12 +11,9 @@ describe("WorkoutExerciseCard", () => {
             exercise: {
               exerciseName: "Plank",
               targetSets: 3,
-              targetReps: `${targetDurationSeconds.value}s`,
-              targetDurationSeconds: targetDurationSeconds.value,
+              targetDurationSeconds: 60,
             },
-            isCompleted: false,
             isHighlighted: true,
-            progress: { done: 0, isCompleted: false },
           });
       },
     });
@@ -28,12 +23,14 @@ describe("WorkoutExerciseCard", () => {
     app.mount(container);
     await nextTick();
 
-    expect(container.textContent).toContain("1:00");
+    expect(container.textContent).toContain("Sets × Time");
+    expect(container.textContent).toContain("3×1");
+    expect(container.textContent).toContain("min");
+    expect(container.textContent).not.toContain("Log Set 1");
+    expect(container.textContent).not.toContain("+ Add Extra Set");
 
-    targetDurationSeconds.value = 45;
-    await nextTick();
-
-    expect(container.textContent).toContain("0:45");
+    const card = container.firstElementChild;
+    expect(card?.className).toContain("border-primary/40");
     app.unmount();
   });
 
@@ -49,9 +46,7 @@ describe("WorkoutExerciseCard", () => {
               targetWeight: "56 kg",
               targetRpe: 9,
             },
-            isCompleted: false,
             isHighlighted: true,
-            progress: { done: 0, isCompleted: false },
             progressionData: [
               {
                 key: "s-1",
@@ -89,9 +84,7 @@ describe("WorkoutExerciseCard", () => {
               targetReps: "8",
               targetWeight: "BW",
             },
-            isCompleted: false,
             isHighlighted: true,
-            progress: { done: 0, isCompleted: false },
           });
       },
     });
@@ -115,9 +108,7 @@ describe("WorkoutExerciseCard", () => {
               targetSets: 3,
               targetReps: "10",
             },
-            isCompleted: false,
             isHighlighted: true,
-            progress: { done: 1, isCompleted: false },
             loggedSets: [
               {
                 id: "set-1",
@@ -151,9 +142,7 @@ describe("WorkoutExerciseCard", () => {
               targetSets: 3,
               targetReps: "5",
             },
-            isCompleted: false,
             isHighlighted: true,
-            progress: { done: 1, isCompleted: false },
             loggedSets: [
               {
                 id: "set-failed",
@@ -188,10 +177,8 @@ describe("WorkoutExerciseCard", () => {
               targetReps: "8-10",
               supersetId: "ss-1",
             },
-            isCompleted: false,
             isHighlighted: true,
             isSuperset: true,
-            progress: { done: 0, isCompleted: false },
           });
       },
     });

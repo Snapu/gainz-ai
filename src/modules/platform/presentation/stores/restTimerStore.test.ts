@@ -31,4 +31,38 @@ describe("useRestTimerStore", () => {
     store.start();
     expect(store.targetRestSeconds).toBeNull();
   });
+
+  it("formats time as a countdown when targetRestSeconds is set and not in overtime", () => {
+    const store = useRestTimerStore();
+    store.start(90);
+    store.restElapsed = 0;
+    expect(store.formattedTime).toBe("1:30");
+
+    store.restElapsed = 25;
+    expect(store.formattedTime).toBe("1:05");
+
+    store.restElapsed = 90;
+    expect(store.formattedTime).toBe("0:00");
+  });
+
+  it("formats time with a leading + when in overtime past targetRestSeconds", () => {
+    const store = useRestTimerStore();
+    store.start(90);
+    store.restElapsed = 95;
+    expect(store.isOvertime).toBe(true);
+    expect(store.formattedTime).toBe("+0:05");
+
+    store.restElapsed = 160;
+    expect(store.formattedTime).toBe("+1:10");
+  });
+
+  it("formats time as elapsed count-up when targetRestSeconds is null", () => {
+    const store = useRestTimerStore();
+    store.start();
+    store.restElapsed = 0;
+    expect(store.formattedTime).toBe("0:00");
+
+    store.restElapsed = 65;
+    expect(store.formattedTime).toBe("1:05");
+  });
 });

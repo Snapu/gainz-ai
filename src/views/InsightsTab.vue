@@ -40,7 +40,7 @@ const isAllExercisesOpen = ref(false);
     
     <!-- Top Nav -->
     <AppHeader class="shrink-0">
-      <h1 class="text-lg font-black tracking-tight">Insights</h1>
+      <h1 class="text-2xl font-black italic tracking-tighter">Gainz<span class="text-primary">AI</span></h1>
       <template #actions>
         <GlobalHeaderActions />
       </template>

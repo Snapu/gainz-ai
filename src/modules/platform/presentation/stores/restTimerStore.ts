@@ -53,16 +53,20 @@ export const useRestTimerStore = defineStore("restTimer", () => {
 
   const isResting = computed<boolean>(() => !!restStartTime.value);
 
-  const formattedTime = computed<string>(() => {
-    const m = Math.floor(restElapsed.value / 60)
-      .toString()
-      .padStart(2, "0");
-    const s = (restElapsed.value % 60).toString().padStart(2, "0");
-    return `${m}:${s}`;
-  });
-
   const isOvertime = computed<boolean>(() => {
     return targetRestSeconds.value !== null && restElapsed.value >= targetRestSeconds.value;
+  });
+
+  const formattedTime = computed<string>(() => {
+    const seconds =
+      targetRestSeconds.value === null
+        ? restElapsed.value
+        : Math.abs(targetRestSeconds.value - restElapsed.value);
+    const prefix =
+      targetRestSeconds.value !== null && restElapsed.value > targetRestSeconds.value ? "+" : "";
+    const m = Math.floor(seconds / 60);
+    const s = (seconds % 60).toString().padStart(2, "0");
+    return `${prefix}${m}:${s}`;
   });
 
   function start(duration?: number) {

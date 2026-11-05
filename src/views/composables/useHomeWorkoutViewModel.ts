@@ -1,5 +1,4 @@
 import { useNow, useTimeoutPoll } from "@vueuse/core";
-import { storeToRefs } from "pinia";
 import { computed, getCurrentInstance, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import {
@@ -13,15 +12,8 @@ import {
   useCoachChatStore,
   useTrainingPlanStore,
 } from "@/modules/aiCoach/presentation";
-import {
-  useRestTimerStore,
-  useSpreadsheetStore,
-  useTrainingSummaryStore,
-  useUserProgressStore,
-} from "@/modules/platform/presentation";
-import { WIZARD_STEPS } from "@/modules/profile/presentation";
-import { isoDateString, localeDateString } from "@/modules/sharedKernel/presentation";
-import { useTrainingInsightsStore } from "@/modules/trainingInsights/presentation";
+import { useRestTimerStore } from "@/modules/platform/presentation";
+import { isoDateString } from "@/modules/sharedKernel/presentation";
 import type { ExerciseLog } from "@/modules/trainingLogs/presentation";
 import {
   getSessionStartBoundary,
@@ -33,26 +25,6 @@ import type {
   ProgressionSetItem,
 } from "@/shared/presentation/components/ui/UiProgressionLine.vue";
 import { useLogSheet } from "@/shared/presentation/composables/useLogSheet";
-
-interface GroupedSession {
-  date: string;
-  logs: ExerciseLog[];
-  stats: {
-    sets: number;
-    volume: number;
-    durationMinutes: number;
-    exerciseCount: number;
-  };
-}
-
-function findActiveGroupIndex(
-  groups: DisplayWorkoutGroup[],
-  getProgress: (name: string, targetSets: number) => { isCompleted: boolean },
-): number {
-  return groups.findIndex((g) => {
-    return !g.exercises.every((ex) => getProgress(ex.exerciseName, ex.targetSets).isCompleted);
-  });
-}
 
 function findNextExerciseIndexInGroup(
   group: DisplayWorkoutGroup,
@@ -113,11 +85,7 @@ function resolvePrefillMetrics(
 
 export function useHomeWorkoutViewModel() {
   const router = useRouter();
-  const trainingInsightsStore = useTrainingInsightsStore();
   const logsStore = useExerciseLogsStore();
-  const summaryStore = useTrainingSummaryStore();
-  const userProgressStore = useUserProgressStore();
-  const spreadsheetStore = useSpreadsheetStore();
 
   const orchestratorStore = useAiOrchestratorStore();
   const chatStore = useCoachChatStore();
@@ -125,73 +93,6 @@ export function useHomeWorkoutViewModel() {
 
   const logSheet = useLogSheet();
   const restTimerStore = useRestTimerStore();
-
-  const { exerciseLogs } = storeToRefs(logsStore);
-  const { isInitialized: isSummaryReady } = storeToRefs(summaryStore);
-
-  const collapsedSessions = ref<Record<string, boolean>>({});
-
-  const userProgress = computed(() => userProgressStore.userProgress);
-  const trainingInsights = computed(() => trainingInsightsStore.insights);
-
-  // ---------------------------------------------------------------------------
-  // Logs List
-  // ---------------------------------------------------------------------------
-  const groupedLogs = computed(() => {
-    const groups: Record<string, ExerciseLog[]> = {};
-    const sorted = [...exerciseLogs.value].sort(
-      (a, b) => b.loggedAt.getTime() - a.loggedAt.getTime(),
-    );
-
-    for (const log of sorted) {
-      const dateStr = localeDateString(log.loggedAt);
-      if (!groups[dateStr]) groups[dateStr] = [];
-      groups[dateStr].push(log);
-    }
-
-    return Object.entries(groups).map(([date, logs]): GroupedSession => {
-      const volume = logs.reduce((acc, log) => acc + (log.weight ?? 0) * (log.reps ?? 0), 0);
-      const exerciseCount = new Set(logs.map((l) => l.exerciseName)).size;
-
-      const times = logs.map((l) => l.loggedAt.getTime());
-      const minTime = Math.min(...times);
-      const maxTime = Math.max(...times);
-      const durationMinutes = Math.round((maxTime - minTime) / 60000);
-
-      return {
-        date,
-        logs,
-        stats: {
-          sets: logs.length,
-          volume,
-          durationMinutes,
-          exerciseCount,
-        },
-      };
-    });
-  });
-
-  watch(
-    groupedLogs,
-    (newGroups) => {
-      if (newGroups.length > 0) {
-        for (let i = 1; i < newGroups.length; i++) {
-          const session = newGroups[i];
-          if (session) {
-            const date = session.date;
-            if (collapsedSessions.value[date] === undefined) {
-              collapsedSessions.value[date] = true;
-            }
-          }
-        }
-      }
-    },
-    { immediate: true },
-  );
-
-  function toggleSession(date: string) {
-    collapsedSessions.value[date] = !collapsedSessions.value[date];
-  }
 
   function editLog(log: ExerciseLog) {
     logSheet.openEditLog(log);
@@ -307,29 +208,13 @@ export function useHomeWorkoutViewModel() {
     return hasActivePlan.value && !planDerivedWorkout.value?.length;
   });
 
-  function isExerciseCompleted(exercise: DisplayExercise) {
-    return getExerciseProgress(exercise?.exerciseName || "", exercise?.targetSets || 1).isCompleted;
-  }
-
   function isHighlighted(gIndex: number, exIndex: number) {
-    if (restTimerStore.isResting) return false; // correctly wait for actual rest timer
-
-    const allGroups = allWorkoutGroups.value;
-    if (!allGroups) return false;
-
-    const activeGroupIndex = findActiveGroupIndex(allGroups, getExerciseProgress);
-    if (activeGroupIndex === -1 || gIndex !== activeGroupIndex) return false;
-
-    const group = allGroups[gIndex];
-    const exercise = group?.exercises[exIndex];
-    if (!group || !exercise) return false;
-
-    // Highlight all uncompleted exercises in a superset together
-    if (group.isSuperset) {
-      return !getExerciseProgress(exercise.exerciseName, exercise.targetSets).isCompleted;
+    if (restTimerStore.isResting || gIndex !== visibleGroupIndex.value) return false;
+    const exercise = allWorkoutGroups.value?.[gIndex]?.exercises[exIndex];
+    if (!exercise || getExerciseProgress(exercise.exerciseName, exercise.targetSets).isCompleted) {
+      return false;
     }
-
-    return exIndex === findNextExerciseIndexInGroup(group, getExerciseProgress);
+    return exercise.exerciseName === activeExerciseForDeck.value?.exerciseName;
   }
 
   function getLastSessionSummary(exerciseName: string): string | null {
@@ -506,6 +391,69 @@ export function useHomeWorkoutViewModel() {
     return `${minutes} Min`;
   });
 
+  const visibleGroupIndex = ref(0);
+  const selectedSupersetExerciseName = ref<string | null>(null);
+
+  watch([visibleGroupIndex, () => logsStore.exerciseLogs.length], () => {
+    selectedSupersetExerciseName.value = null;
+  });
+
+  function getActiveExerciseInGroup(group?: DisplayWorkoutGroup): DisplayExercise | null {
+    if (!group?.exercises?.length) return null;
+    const idx = findNextExerciseIndexInGroup(group, getExerciseProgress);
+    return idx === -1 ? (group.exercises[0] ?? null) : (group.exercises[idx] ?? null);
+  }
+
+  const activeGroupForDeck = computed(() => {
+    if (!allWorkoutGroups.value || allWorkoutGroups.value.length === 0) return null;
+    return allWorkoutGroups.value[visibleGroupIndex.value] ?? null;
+  });
+
+  const activeExerciseForDeck = computed(() => {
+    const group = activeGroupForDeck.value;
+    if (!group) return null;
+    if (group.isSuperset && selectedSupersetExerciseName.value) {
+      const selected = group.exercises.find(
+        (ex) => ex.exerciseName === selectedSupersetExerciseName.value,
+      );
+      if (selected) return selected;
+    }
+    return getActiveExerciseInGroup(group);
+  });
+
+  const supersetAlternatives = computed<DisplayExercise[]>(() => {
+    const group = activeGroupForDeck.value;
+    const current = activeExerciseForDeck.value;
+    if (!group?.isSuperset || !current) return [];
+    return group.exercises.filter((ex) => ex.exerciseName !== current.exerciseName);
+  });
+
+  function selectSupersetExercise(exerciseName: string) {
+    selectedSupersetExerciseName.value = exerciseName;
+  }
+
+  const activeExerciseProgress = computed(() => {
+    if (!activeExerciseForDeck.value) return null;
+    return getExerciseProgress(
+      activeExerciseForDeck.value.exerciseName,
+      activeExerciseForDeck.value.targetSets,
+    );
+  });
+
+  function handleDeckLogCurrent() {
+    if (activeExerciseForDeck.value) {
+      handleLogExercise(activeExerciseForDeck.value);
+    }
+  }
+
+  function handleLogArbitrary() {
+    logSheet.openNewLog();
+  }
+
+  function skipRest() {
+    restTimerStore.reset();
+  }
+
   if (getCurrentInstance()) {
     onMounted(() => {
       orchestratorStore.ensureSessionAdvice();
@@ -515,32 +463,28 @@ export function useHomeWorkoutViewModel() {
   return {
     router,
     logsStore,
-    spreadsheetStore,
     chatStore,
     hasActivePlan,
     isRestDay,
     isWorkoutComplete,
-    WIZARD_STEPS,
-    isSummaryReady,
-    userProgress,
-    trainingInsights,
-    groupedLogs,
-    collapsedSessions,
-    toggleSession,
     editLog,
-    activeWorkoutGroups,
     allWorkoutGroups,
-    completedExercises,
-    planDerivedWorkout,
     isCoachRestDay,
     currentSessionElapsedText,
     getExerciseProgress,
     getExerciseProgression,
-    isExerciseCompleted,
     isHighlighted,
     getLastSessionSummary,
     getTodaysLogsForExercise,
     handleLogExercise,
+    visibleGroupIndex,
+    activeExerciseForDeck,
+    activeExerciseProgress,
+    supersetAlternatives,
+    selectSupersetExercise,
+    handleDeckLogCurrent,
+    handleLogArbitrary,
+    skipRest,
     openGoogleSearch,
     requestOffDayWorkout,
     restTimerStore,

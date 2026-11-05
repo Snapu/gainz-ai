@@ -11,7 +11,8 @@ const props = defineProps<{
 defineEmits<(e: "dismiss") => void>();
 
 const progressPercent = computed(() => {
-  if (!props.targetRestSeconds) return 0;
+  if (!props.targetRestSeconds || props.targetRestSeconds <= 0) return 0;
+  if (props.isOvertime) return 0;
   return Math.min(100, Math.round(((props.restElapsed || 0) / props.targetRestSeconds) * 100));
 });
 </script>

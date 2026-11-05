@@ -60,6 +60,11 @@ const router = createRouter({
       component: () => import("../views/RestRecovery.vue"),
     },
     {
+      path: "/past-sessions",
+      name: "past-sessions",
+      component: () => import("../views/PastSessions.vue"),
+    },
+    {
       path: "/privacy",
       name: "privacy",
       component: () => import("../views/PrivacyPolicy.vue"),

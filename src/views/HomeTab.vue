@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { CheckCircle2, Coffee, Sparkles, Timer } from "@lucide/vue";
+import { useThrottleFn } from "@vueuse/core";
 import { computed, nextTick, onActivated, onMounted, ref, watch } from "vue";
 import {
   type DisplayExercise,
@@ -9,7 +10,7 @@ import {
 import AppHeader from "@/shared/presentation/components/AppHeader.vue";
 import EmptyState from "@/shared/presentation/components/EmptyState.vue";
 import GlobalHeaderActions from "@/shared/presentation/components/GlobalHeaderActions.vue";
-import SessionLogGroup from "@/shared/presentation/components/SessionLogGroup.vue";
+import TrainInteractionDeck from "@/shared/presentation/components/TrainInteractionDeck.vue";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiTelemetryLoader from "@/shared/presentation/components/ui/UiTelemetryLoader.vue";
@@ -17,10 +18,6 @@ import { useHomeWorkoutViewModel } from "@/views/composables/useHomeWorkoutViewM
 
 const {
   router,
-  logsStore,
-  groupedLogs,
-  collapsedSessions,
-  toggleSession,
   editLog,
   chatStore,
   isRestDay,
@@ -29,17 +26,21 @@ const {
   currentSessionElapsedText,
   getExerciseProgress,
   getExerciseProgression,
-  isExerciseCompleted,
   isHighlighted,
   getLastSessionSummary,
   getTodaysLogsForExercise,
-  handleLogExercise,
+  handleLogArbitrary,
+  skipRest,
+  visibleGroupIndex,
+  activeExerciseForDeck,
+  activeExerciseProgress,
+  supersetAlternatives,
+  selectSupersetExercise,
+  handleDeckLogCurrent,
   openGoogleSearch,
   restTimerStore,
   requestOffDayWorkout,
 } = useHomeWorkoutViewModel();
-
-const showPastSessions = ref(false);
 
 const galleryRef = ref<HTMLElement | null>(null);
 
@@ -54,8 +55,6 @@ const activeGroupIndex = computed(() => {
   const idx = allWorkoutGroups.value.findIndex((g) => !isGroupCompleted(g));
   return idx === -1 ? allWorkoutGroups.value.length - 1 : idx;
 });
-
-const visibleGroupIndex = ref(0);
 
 // Auto-scroll when active group changes
 watch(
@@ -77,6 +76,7 @@ onActivated(() => {
 });
 
 function scrollToGroup(idx: number) {
+  visibleGroupIndex.value = idx;
   if (galleryRef.value) {
     nextTick().then(() => {
       const container = galleryRef.value;
@@ -98,7 +98,7 @@ function scrollToGroup(idx: number) {
   }
 }
 
-function handleGalleryScroll() {
+const handleGalleryScroll = useThrottleFn(() => {
   if (!galleryRef.value) return;
   const containerRect = galleryRef.value.getBoundingClientRect();
   const containerCenter = containerRect.left + containerRect.width / 2;
@@ -122,7 +122,7 @@ function handleGalleryScroll() {
   if (visibleGroupIndex.value !== closestIdx) {
     visibleGroupIndex.value = closestIdx;
   }
-}
+}, 50);
 </script>
 
 <template>
@@ -136,36 +136,68 @@ function handleGalleryScroll() {
       </template>
     </AppHeader>
 
-    <main class="flex-1 w-full max-w-2xl mx-auto px-4 pt-4 pb-28 overflow-y-auto overscroll-y-contain no-scrollbar flex flex-col gap-5">
+    <main class="flex-1 w-full max-w-2xl mx-auto px-4 pb-6 overflow-y-auto overscroll-y-contain no-scrollbar flex flex-col gap-5">
       <!-- TODAY'S WORKOUT SECTION -->
       <section>
         <template v-if="chatStore.isLoading && !allWorkoutGroups?.length">
-          <UiTelemetryLoader text="Calibrating training session..." />
+          <div class="pt-4">
+            <UiTelemetryLoader text="Calibrating training session..." />
+          </div>
         </template>
 
         <template v-else>
           <div v-if="allWorkoutGroups?.length" class="flex flex-col w-full">
-            <div class="mb-4 flex items-center justify-between gap-4">
-              <div class="flex items-center gap-2">
-                <h3 class="text-sm font-bold text-foreground">Today's Workout</h3>
+            <!-- Sticky Heading & Stepper Bar -->
+            <div class="sticky top-0 z-20 bg-background/95 backdrop-blur-md pt-4 pb-2 -mx-4 px-4 mb-2">
+              <div class="mb-3 flex items-center justify-between gap-4">
+                <div class="flex items-center gap-2">
+                  <h3 class="text-sm font-bold text-foreground">Today's Workout</h3>
+                </div>
+                <div class="flex items-center gap-2">
+                  <template v-if="restTimerStore.isResting">
+                    <Timer
+                      class="w-4 h-4 animate-pulse"
+                      :class="restTimerStore.isOvertime ? 'text-destructive' : 'text-primary'"
+                    />
+                    <span
+                      class="text-sm font-bold tabular-nums"
+                      :class="restTimerStore.isOvertime ? 'text-destructive' : 'text-primary'"
+                    >
+                      {{ restTimerStore.formattedTime }}
+                    </span>
+                  </template>
+                  <UiBadge v-if="currentSessionElapsedText" variant="surface" class="uppercase tracking-wider">
+                    <Timer class="w-3 h-3 mr-1.5 opacity-70" />
+                    {{ currentSessionElapsedText }}
+                  </UiBadge>
+                </div>
               </div>
-              <div class="flex items-center gap-2">
-                <template v-if="restTimerStore.isResting">
-                  <Timer
-                    class="w-4 h-4 animate-pulse"
-                    :class="restTimerStore.isOvertime ? 'text-destructive' : 'text-primary'"
+
+              <!-- Segmented Stepper Bar -->
+              <div class="flex items-start gap-2 w-full px-1 min-h-[44px] -my-2 py-2">
+                <button
+                  v-for="(group, gIdx) in allWorkoutGroups"
+                  :key="group.id"
+                  type="button"
+                  @click="scrollToGroup(gIdx)"
+                  :aria-label="group.isSuperset ? `Superset ${gIdx + 1}` : group.exercises[0]?.exerciseName"
+                  class="flex-1 flex flex-col justify-start gap-1 pt-0.5 h-full min-h-[36px] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-95 transition-all group cursor-pointer"
+                >
+                  <div
+                    v-for="ex in group.exercises"
+                    :key="ex.exerciseName"
+                    class="h-1.5 w-full rounded-full transition-all duration-300"
+                    :class="[
+                      getExerciseProgress(ex.exerciseName, ex.targetSets).isCompleted
+                        ? (gIdx === visibleGroupIndex ? 'bg-emerald-500 ring-2 ring-emerald-500/30' : 'bg-emerald-500/80')
+                        : (gIdx === visibleGroupIndex
+                            ? 'bg-primary ring-2 ring-primary/30'
+                            : (gIdx === activeGroupIndex
+                                ? 'bg-primary/30 group-hover:bg-primary/50'
+                                : 'bg-white/10 group-hover:bg-white/20'))
+                    ]"
                   />
-                  <span
-                    class="text-sm font-bold tabular-nums"
-                    :class="restTimerStore.isOvertime ? 'text-destructive' : 'text-primary'"
-                  >
-                    {{ restTimerStore.formattedTime }}
-                  </span>
-                </template>
-                <UiBadge v-if="currentSessionElapsedText" variant="surface" class="uppercase tracking-wider">
-                  <Timer class="w-3 h-3 mr-1.5 opacity-70" />
-                  {{ currentSessionElapsedText }}
-                </UiBadge>
+                </button>
               </div>
             </div>
 
@@ -181,58 +213,27 @@ function handleGalleryScroll() {
               </div>
             </div>
 
-            <!-- Segmented Stepper Bar -->
-            <div class="flex items-start gap-1.5 w-full mb-4 px-1 min-h-[44px] -my-2 py-2">
-              <button
-                v-for="(group, gIdx) in allWorkoutGroups"
-                :key="group.id"
-                type="button"
-                @click="scrollToGroup(gIdx)"
-                :aria-label="group.isSuperset ? `Superset ${gIdx + 1}` : group.exercises[0]?.exerciseName"
-                class="flex-1 flex flex-col justify-start gap-1 pt-0.5 h-full min-h-[36px] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-95 transition-all group cursor-pointer"
-              >
-                <div
-                  v-for="ex in group.exercises"
-                  :key="ex.exerciseName"
-                  class="h-1.5 w-full rounded-full transition-all duration-300"
-                  :class="[
-                    getExerciseProgress(ex.exerciseName, ex.targetSets).isCompleted
-                      ? (gIdx === visibleGroupIndex ? 'bg-emerald-500 ring-2 ring-emerald-500/30' : 'bg-emerald-500/80')
-                      : (gIdx === visibleGroupIndex
-                          ? 'bg-primary ring-2 ring-primary/30'
-                          : (gIdx === activeGroupIndex
-                              ? 'bg-primary/30 group-hover:bg-primary/50'
-                              : 'bg-white/10 group-hover:bg-white/20'))
-                  ]"
-                />
-              </button>
-            </div>
-
             <!-- Swipe Gallery -->
             <div 
               ref="galleryRef"
               @scroll="handleGalleryScroll"
-              class="flex overflow-x-auto snap-x snap-mandatory no-scrollbar pb-6 -mx-4 px-4 gap-4 scroll-smooth"
+              class="flex overflow-x-auto snap-x snap-mandatory no-scrollbar pb-6 gap-4 scroll-smooth"
             >
               <div
                 v-for="(group, gIndex) in allWorkoutGroups"
                 :key="group.id"
-                class="w-[88vw] max-w-sm shrink-0 snap-center flex flex-col gap-4"
+                class="w-full shrink-0 snap-center flex flex-col gap-4"
               >
                 <WorkoutExerciseCard
                   v-for="(exercise, exIndex) in group.exercises"
                   :key="exercise.exerciseName"
                   :exercise="exercise"
-                  :is-completed="isExerciseCompleted(exercise)"
                   :is-highlighted="isHighlighted(gIndex, exIndex)"
                   :is-superset="group.isSuperset"
-                  :progress="getExerciseProgress(exercise.exerciseName, exercise.targetSets)"
                   :last-session-summary="getLastSessionSummary(exercise.exerciseName)"
                   :progression-data="getExerciseProgression(exercise.exerciseName)"
                   :logged-sets="getTodaysLogsForExercise(exercise.exerciseName)"
-                  :is-resting="restTimerStore.isResting"
                   :heading-level="group.isSuperset ? 'h4' : 'h3'"
-                  @log="handleLogExercise"
                   @editLog="editLog"
                   @search="openGoogleSearch"
                 />
@@ -246,11 +247,16 @@ function handleGalleryScroll() {
             :icon="Coffee"
             title="Rest Day"
             description="No training scheduled for today."
-            class="opacity-100"
+            class="opacity-100 mt-4"
           >
-            <UiButton variant="default" size="sm" class="text-xs" @click="requestOffDayWorkout">
-              Train Anyway
-            </UiButton>
+            <div class="flex items-center gap-2">
+              <UiButton variant="default" size="sm" class="text-xs" @click="requestOffDayWorkout">
+                Train Anyway
+              </UiButton>
+              <UiButton variant="outline" size="sm" class="text-xs" @click="handleLogArbitrary">
+                Log Exercise
+              </UiButton>
+            </div>
           </EmptyState>
           
           <!-- No plan at all -->
@@ -258,59 +264,37 @@ function handleGalleryScroll() {
             v-else
             :icon="Sparkles"
             title="No active workout"
-            class="opacity-100"
+            class="opacity-100 mt-4"
           >
-            <UiButton variant="outline" size="sm" class="mt-4" @click="router.push({ name: 'plan' })">
-              View Plan
-            </UiButton>
+            <div class="flex items-center gap-2 mt-4">
+              <UiButton variant="outline" size="sm" @click="router.push({ name: 'plan' })">
+                View Plan
+              </UiButton>
+              <UiButton variant="default" size="sm" class="text-xs" @click="handleLogArbitrary">
+                Log Exercise
+              </UiButton>
+            </div>
           </EmptyState>
         </template>
       </section>
-
-      <!-- Divider -->
-      <div class="w-full h-px bg-white/5 my-2"></div>
-
-      <!-- PAST LOGS SECTION -->
-      <section class="mt-4 flex flex-col items-center gap-4">
-        <UiButton 
-          variant="outline" 
-          size="sm" 
-          class="w-full max-w-[200px]" 
-          @click="showPastSessions = !showPastSessions"
-        >
-          {{ showPastSessions ? 'Hide Past Sessions' : 'View Past Sessions' }}
-        </UiButton>
-
-        <div v-if="showPastSessions" class="w-full flex flex-col gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
-          <SessionLogGroup
-            v-for="session in groupedLogs"
-            :key="session.date"
-            :date="session.date"
-            :logs="session.logs"
-            :stats="session.stats"
-            :is-collapsed="!!collapsedSessions[session.date]"
-            @toggle="toggleSession(session.date)"
-            @delete-log="logsStore.removeExerciseLog"
-            @edit-log="editLog"
-          />
-          
-          <EmptyState 
-            v-if="groupedLogs.length === 0"
-            title="No exercises yet."
-            description="Tap the + button to log your first set."
-          />
-        </div>
-      </section>
     </main>
+
+    <!-- Bottom Docked Actions & Interaction Deck -->
+    <TrainInteractionDeck
+      :current-exercise="activeExerciseForDeck"
+      :current-progress="activeExerciseProgress"
+      :superset-alternatives="supersetAlternatives"
+      :is-resting="restTimerStore.isResting"
+      :rest-formatted-time="restTimerStore.formattedTime"
+      :target-rest-seconds="restTimerStore.targetRestSeconds"
+      :rest-elapsed="restTimerStore.restElapsed"
+      :is-overtime="restTimerStore.isOvertime"
+      :is-workout-complete="isWorkoutComplete"
+      :is-rest-day="isRestDay"
+      @log-current="handleDeckLogCurrent"
+      @log-custom="handleLogArbitrary"
+      @skip-rest="skipRest"
+      @select-superset-exercise="selectSupersetExercise"
+    />
   </div>
 </template>
-
-<style scoped>
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-</style>

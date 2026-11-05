@@ -465,4 +465,92 @@ describe("useHomeWorkoutViewModel", () => {
       );
     });
   });
+
+  describe("deck & superset selection", () => {
+    it("resolves activeExerciseForDeck, supersetAlternatives, and isHighlighted in sync with selectSupersetExercise and resets on set log", async () => {
+      const { nextTick } = await import("vue");
+      const planStore = useTrainingPlanStore();
+      const logsStore = useExerciseLogsStore();
+      const currentDay = new Date().getDay();
+
+      planStore.setPlan(
+        TrainingPlan.create(new Date().toISOString(), 1, [
+          {
+            weekNumber: 1,
+            dayOfWeek: currentDay,
+            sessionLabel: "Upper Body Superset",
+            focusDescription: "Chest & Back",
+            exercises: [
+              {
+                exerciseName: "Bench Press",
+                targetSets: 2,
+                targetReps: "8",
+                targetWeight: "80kg",
+                supersetId: "ss-1",
+              },
+              {
+                exerciseName: "Barbell Row",
+                targetSets: 2,
+                targetReps: "8",
+                targetWeight: "70kg",
+                supersetId: "ss-1",
+              },
+              {
+                exerciseName: "Lateral Raise",
+                targetSets: 2,
+                targetReps: "12",
+              },
+            ],
+          },
+        ]),
+      );
+
+      const vm = useHomeWorkoutViewModel();
+
+      // Initially points to first exercise in the superset group (index 0)
+      expect(vm.visibleGroupIndex.value).toBe(0);
+      expect(vm.activeExerciseForDeck.value?.exerciseName).toBe("Bench Press");
+      expect(vm.supersetAlternatives.value.map((e) => e.exerciseName)).toEqual(["Barbell Row"]);
+      expect(vm.isHighlighted(0, 0)).toBe(true);
+      expect(vm.isHighlighted(0, 1)).toBe(false);
+      expect(vm.isHighlighted(1, 0)).toBe(false);
+
+      // Selecting the superset partner updates both the deck target and the highlighted card
+      vm.selectSupersetExercise("Barbell Row");
+      expect(vm.activeExerciseForDeck.value?.exerciseName).toBe("Barbell Row");
+      expect(vm.supersetAlternatives.value.map((e) => e.exerciseName)).toEqual(["Bench Press"]);
+      expect(vm.isHighlighted(0, 0)).toBe(false);
+      expect(vm.isHighlighted(0, 1)).toBe(true);
+
+      // handleDeckLogCurrent logs the selected superset exercise
+      vm.handleDeckLogCurrent();
+      expect(mockOpenPrefilledLog).toHaveBeenCalledWith(
+        expect.objectContaining({ exerciseName: "Barbell Row", weight: 70 }),
+        null,
+      );
+
+      // Logging a set resets selectedSupersetExerciseName back to natural superset rotation
+      logsStore.addExerciseLog({
+        id: "log-row-1",
+        exerciseName: "Barbell Row",
+        reps: 8,
+        weight: 70,
+        loggedAt: new Date(),
+      });
+      await nextTick();
+
+      // Bench Press now has 0 sets done while Barbell Row has 1, so Bench Press becomes active
+      expect(vm.activeExerciseForDeck.value?.exerciseName).toBe("Bench Press");
+      expect(vm.isHighlighted(0, 0)).toBe(true);
+      expect(vm.isHighlighted(0, 1)).toBe(false);
+
+      // Swiping to group 1 (Lateral Raise) updates deck target and highlight to group 1
+      vm.visibleGroupIndex.value = 1;
+      await nextTick();
+      expect(vm.activeExerciseForDeck.value?.exerciseName).toBe("Lateral Raise");
+      expect(vm.supersetAlternatives.value).toEqual([]);
+      expect(vm.isHighlighted(0, 0)).toBe(false);
+      expect(vm.isHighlighted(1, 0)).toBe(true);
+    });
+  });
 });

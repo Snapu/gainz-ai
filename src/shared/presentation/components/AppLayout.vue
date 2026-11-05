@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import { Plus } from "@lucide/vue";
 import { storeToRefs } from "pinia";
 import { useRoute } from "vue-router";
 import { useRestTimerStore } from "@/modules/platform/presentation";
 import { LogExerciseSheet } from "@/modules/trainingLogs/presentation";
 import RestTimerToast from "@/shared/presentation/components/RestTimerToast.vue";
-import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import { useKeyboard } from "../composables/useKeyboard";
 import { useLogSheet } from "../composables/useLogSheet";
 import BottomTabBar from "./BottomTabBar.vue";
@@ -15,13 +13,6 @@ const { isResting, formattedTime: formattedRestTime } = storeToRefs(restTimerSto
 const logSheet = useLogSheet();
 const route = useRoute();
 const { isKeyboardVisible } = useKeyboard();
-
-function handleFabClick() {
-  if (isResting.value) {
-    restTimerStore.reset();
-  }
-  logSheet.openNewLog();
-}
 </script>
 
 <template>
@@ -37,18 +28,17 @@ function handleFabClick() {
       </router-view>
     </div>
 
-    <!-- FAB & Timer Container -->
+    <!-- Rest Timer Toast (outside Train tab, which has its own docked interaction deck) -->
     <div
-      v-show="!isKeyboardVisible && (route.name === 'home' || isResting)"
+      v-show="!isKeyboardVisible"
       class="fixed right-5 z-50 pointer-events-none flex flex-col items-end gap-3 transition-all duration-200"
       :style="{
         bottom: 'calc(4.75rem + env(safe-area-inset-bottom, 0px))'
       }"
     >
-      <!-- Rest Timer Toast -->
       <Transition name="fade-slide">
         <RestTimerToast
-          v-if="isResting"
+          v-if="isResting && route.name !== 'home'"
           class="pointer-events-auto"
           :formatted-time="formattedRestTime"
           :is-overtime="restTimerStore.isOvertime"
@@ -57,16 +47,6 @@ function handleFabClick() {
           @dismiss="restTimerStore.reset()"
         />
       </Transition>
-
-      <!-- Primary FAB (Train tab only) -->
-      <UiButton 
-        v-if="route.name === 'home'"
-        class="relative w-14 h-14 shrink-0 rounded-full shadow-lg active:scale-95 transition-all pointer-events-auto" 
-        size="icon" 
-        @click="handleFabClick"
-      >
-        <Plus class="w-7 h-7" />
-      </UiButton>
     </div>
 
     <!-- Reusable Bottom Sheet Form -->

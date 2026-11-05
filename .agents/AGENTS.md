@@ -162,7 +162,7 @@ Single-context repository layout centered around `GLOSSARY.md` and strict DDD bo
 
 - **Page Shell**: Top-level tab views must use:
   `<main class="flex-1 w-full max-w-2xl mx-auto px-4 pt-4 pb-28 overflow-y-auto no-scrollbar flex flex-col gap-5">`
-- **Header Brand & Titles**: HomeTab displays the athletic brand hero logo (`<h1 class="text-2xl font-black italic tracking-tighter">Gainz<span class="text-primary">AI</span></h1>`). Other tabs display their full feature titles in `text-lg font-black tracking-tight` (`Training Plan`, `AI Coach`, `Insights`).
+- **Header Brand & Titles**: All main tabs (HomeTab, PlanTab, CoachTab, InsightsTab) display the athletic brand hero logo (`<h1 class="text-2xl font-black italic tracking-tighter">Gainz<span class="text-primary">AI</span></h1>`).
 - **Gaps**: `gap-2`, `gap-3`, `gap-4`, `gap-5`, `gap-6` (0.5rem steps). Standard section gap is `gap-5`.
 - **Card Padding**: Standard `p-4` (Hero cards use `p-5`).
 - **Margins**: `mb-3`, `mb-4`, `mt-2`.
