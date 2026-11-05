@@ -39,12 +39,12 @@ const formattedXP = computed(() => {
 
 <template>
   <UiCard 
-    class="w-full min-h-[10rem] shrink-0 overflow-hidden p-0"
+    class="w-full shrink-0 overflow-hidden p-0"
   >
-    <div class="flex flex-row w-full min-h-[10rem]">
+    <div class="flex flex-row w-full items-stretch">
       
       <!-- Rank: Avatar & Level Info (38% Width) -->
-      <div class="w-[38%] min-h-[10rem] relative shrink-0 border-r border-white/5 overflow-hidden bg-muted/10">
+      <div class="w-[38%] min-h-[9rem] relative shrink-0 border-r border-white/5 overflow-hidden bg-muted/10">
         <img 
           v-if="progress?.avatar"
           :src="progress.avatar" 
@@ -72,7 +72,7 @@ const formattedXP = computed(() => {
       </div>
 
       <!-- Rank: Text & Lifetime Telemetry (Flexible Width) -->
-      <div class="flex-1 h-full flex flex-col justify-between p-3.5 sm:p-4 bg-white/5">
+      <div class="flex-1 flex flex-col justify-between p-3.5 sm:p-4">
         
         <div class="flex flex-col gap-0.5 text-left min-w-0">
           <span class="text-[10px] font-bold tracking-widest text-muted-foreground/60 uppercase">Rank</span>
