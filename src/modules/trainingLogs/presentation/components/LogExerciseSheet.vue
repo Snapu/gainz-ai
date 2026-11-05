@@ -13,6 +13,7 @@ import UiBottomSheet from "@/shared/presentation/components/ui/UiBottomSheet.vue
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiNumberField from "@/shared/presentation/components/ui/UiNumberField.vue";
 import UiSparkline from "@/shared/presentation/components/ui/UiSparkline.vue";
+import { useKeyboard } from "@/shared/presentation/composables/useKeyboard";
 import { useToast } from "@/shared/presentation/composables/useToast";
 
 const props = defineProps<{
@@ -39,6 +40,7 @@ const deloadStore = useDeloadStore();
 const logsStore = useExerciseLogsStore();
 const restTimerStore = useRestTimerStore();
 const { toast } = useToast();
+const { isKeyboardVisible } = useKeyboard();
 
 const { exerciseLogs } = storeToRefs(logsStore);
 
@@ -291,7 +293,10 @@ async function deleteLog() {
     content-class="p-0 gap-0"
   >
     <template #header>
-      <div class="flex items-center justify-between px-6 pt-6 pb-2 shrink-0">
+      <div
+        class="flex items-center justify-between px-6 pb-2 shrink-0"
+        :class="isKeyboardVisible ? 'pt-3' : 'pt-6'"
+      >
         <h2 class="text-2xl font-bold tracking-tight">
           {{ props.logToEdit ? 'Edit Exercise' : 'Log Exercise' }}
         </h2>
@@ -383,8 +388,11 @@ async function deleteLog() {
     </div>
 
     <!-- Docked Footer Action -->
-    <div class="px-6 pt-3 pb-safe shrink-0 bg-background/95 backdrop-blur z-10 border-t border-white/5">
-      <div class="flex gap-3 mb-4">
+    <div
+      class="px-6 pt-3 shrink-0 bg-background/95 backdrop-blur z-10 border-t border-white/5"
+      :class="isKeyboardVisible ? 'pb-3' : 'pb-safe'"
+    >
+      <div class="flex gap-3" :class="isKeyboardVisible ? '' : 'mb-4'">
         <UiButton 
           v-if="props.logToEdit" 
           haptic
