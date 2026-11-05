@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { useIntersectionObserver, useResizeObserver } from "@vueuse/core";
+import { computed, onMounted, ref, watch } from "vue";
 
 export interface ProgressionSetItem {
   weight?: number | null;
@@ -24,10 +25,24 @@ const props = withDefaults(defineProps<Props>(), {
 
 const scrollContainer = ref<HTMLElement | null>(null);
 
-async function scrollToLatest() {
-  await nextTick();
-  if (scrollContainer.value) {
-    scrollContainer.value.scrollLeft = scrollContainer.value.scrollWidth;
+function scrollToLatest(behavior: ScrollBehavior = "instant") {
+  const performScroll = () => {
+    const el = scrollContainer.value;
+    if (!el) return;
+    const target = Math.max(0, el.scrollWidth - el.clientWidth);
+    if (typeof el.scrollTo === "function") {
+      el.scrollTo({ left: target, behavior });
+    } else {
+      el.scrollLeft = target;
+    }
+  };
+
+  if (typeof requestAnimationFrame !== "undefined") {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(performScroll);
+    });
+  } else {
+    performScroll();
   }
 }
 
@@ -35,11 +50,22 @@ const sessionsSignature = computed(() => {
   return props.sessions.map((s) => `${s.key}:${s.sets?.length ?? 0}`).join("|");
 });
 
-onMounted(scrollToLatest);
+onMounted(() => scrollToLatest("instant"));
+
 watch(sessionsSignature, (newSig, oldSig) => {
   if (newSig !== oldSig) {
-    void scrollToLatest();
+    scrollToLatest("instant");
   }
+});
+
+useIntersectionObserver(scrollContainer, ([entry]) => {
+  if (entry?.isIntersecting) {
+    scrollToLatest("instant");
+  }
+});
+
+useResizeObserver(scrollContainer, () => {
+  scrollToLatest("instant");
 });
 
 const validSessions = computed(() => {
@@ -203,7 +229,7 @@ const layout = computed(() => {
 <template>
   <div 
     ref="scrollContainer"
-    class="w-full overflow-x-auto no-scrollbar scroll-smooth overscroll-x-contain relative"
+    class="w-full overflow-x-auto no-scrollbar overscroll-x-contain relative"
   >
     <svg 
       :viewBox="`0 0 ${layout.totalWidth} ${SVG_HEIGHT}`"
