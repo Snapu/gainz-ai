@@ -12,9 +12,8 @@ import {
   DialogTitle,
   useForwardPropsEmits,
 } from "reka-ui";
-import { type CSSProperties, computed, type HTMLAttributes, nextTick, watch } from "vue";
+import type { CSSProperties, HTMLAttributes } from "vue";
 import { uiIconButtonClass } from "@/shared/presentation/components/ui/styles";
-import { useKeyboardHeight } from "@/shared/presentation/composables/useKeyboardHeight";
 import { cn } from "@/shared/presentation/lib/utils";
 
 const props = defineProps<
@@ -28,46 +27,19 @@ const props = defineProps<
 const emits = defineEmits<DialogRootEmits>();
 
 const forwarded = useForwardPropsEmits(props, emits);
-
-// Global Keyboard Handling
-const { keyboardHeight, visibleHeight, startTracking, stopTracking } = useKeyboardHeight();
-
-const dialogStyle = computed(() => ({
-  bottom: `${keyboardHeight.value}px`,
-  maxHeight: `${visibleHeight.value * 0.9}px`,
-  ...props.contentStyle,
-}));
-
-function handleOpenChange(isOpen: boolean) {
-  if (isOpen) {
-    nextTick().then(startTracking);
-  } else {
-    stopTracking();
-  }
-}
-
-// Ensure keyboard tracking starts when programmatic opens occur (v-model updates from parent)
-watch(
-  () => props.open,
-  (isOpen) => {
-    if (isOpen !== undefined) {
-      handleOpenChange(isOpen);
-    }
-  },
-);
 </script>
 
 <template>
-  <DialogRoot v-bind="forwarded" @update:open="handleOpenChange">
+  <DialogRoot v-bind="forwarded">
     <slot name="trigger" />
     <DialogPortal>
       <DialogOverlay v-if="!hideOverlay" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out" />
       <DialogContent 
         :class="cn(
-          'fixed left-0 right-0 z-50 flex flex-col gap-4 rounded-t-[2.5rem] border-t border-white/5 bg-background/95 backdrop-blur-xl p-6 sm:p-8 pb-sheet shadow-2xl data-[state=open]:animate-slide-in-from-bottom data-[state=closed]:animate-slide-out-to-bottom outline-none overflow-y-auto no-scrollbar transition-[bottom,max-height] duration-200',
+          'fixed bottom-0 left-0 right-0 z-50 flex max-h-[90vh] max-h-[90dvh] flex-col gap-4 rounded-t-[2.5rem] border-t border-white/5 bg-background/95 backdrop-blur-xl p-6 sm:p-8 pb-sheet shadow-2xl data-[state=open]:animate-slide-in-from-bottom data-[state=closed]:animate-slide-out-to-bottom outline-none overflow-y-auto no-scrollbar',
           props.contentClass
         )"
-        :style="dialogStyle"
+        :style="props.contentStyle"
         @close-auto-focus="(e: Event) => e.preventDefault()"
       >
         
