@@ -175,15 +175,13 @@ const timerProgressPercent = computed(() => {
 
       <!-- 2. Progression (Sub Header) -->
       <div v-if="progressionData && progressionData.length > 0" class="flex flex-col w-full mt-1">
-        <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center justify-between mb-1.5">
           <h4 class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Progression</h4>
           <span class="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-wider">
             History
           </span>
         </div>
-        <div class="w-full bg-white/5 border border-white/5 rounded-xl py-2 px-1">
-          <UiProgressionLine :sessions="progressionData" />
-        </div>
+        <UiProgressionLine :sessions="progressionData" class="w-full" />
       </div>
 
       <!-- 3. Target Today (Unified Telemetry Strip) -->
