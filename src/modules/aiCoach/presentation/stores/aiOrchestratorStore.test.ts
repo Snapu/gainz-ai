@@ -77,6 +77,8 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
   });
 
   it("evaluates completed sessions when activePlan is set after exerciseLogs is already loaded", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-26T12:00:00.000Z"));
     const planCreatedAt = "2026-10-26T08:00:00.000Z"; // Monday
     const plan = TrainingPlan.create(planCreatedAt, 1, [
       {
@@ -137,6 +139,7 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
     await nextTick();
 
     expect(planStore.completedSessions.has(TrainingPlan.sessionKey(1, 1))).toBe(true);
+    vi.useRealTimers();
   });
 
   it("resets currentPageIndex to 0 when coachMessages are cleared", async () => {

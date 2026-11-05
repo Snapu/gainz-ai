@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  getValidSupersetId,
   groupWorkout,
   isDuration,
+  isSupersetStart,
   parseFirstRep,
   parseWeight,
   renderMarkdown,
   setSegments,
+  shouldShowWeekBadge,
   splitReps,
   splitWeight,
+  supersetConnectorClass,
   titleClass,
   tryParseCoachingAdvice,
 } from "./aiCoachPageHelpers";
@@ -376,5 +380,74 @@ describe("setSegments", () => {
 
   it("returns at least 1 segment for negative sets", () => {
     expect(setSegments(-1)).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getValidSupersetId & shouldShowWeekBadge
+// ---------------------------------------------------------------------------
+describe("getValidSupersetId", () => {
+  it("returns supersetId when 2 or more exercises share the same id", () => {
+    const exercises = [{ supersetId: "ss-1" }, { supersetId: "ss-1" }, { supersetId: "ss-2" }];
+    expect(getValidSupersetId(exercises[0], exercises)).toBe("ss-1");
+  });
+
+  it("returns undefined for solitary superset exercises", () => {
+    const exercises = [{ supersetId: "ss-orphan" }, { supersetId: "ss-2" }];
+    expect(getValidSupersetId(exercises[0], exercises)).toBeUndefined();
+  });
+
+  it("returns undefined when exercise has no supersetId or is undefined", () => {
+    expect(getValidSupersetId(undefined, [])).toBeUndefined();
+    expect(getValidSupersetId({}, [{ supersetId: "ss-1" }])).toBeUndefined();
+  });
+});
+
+describe("shouldShowWeekBadge", () => {
+  it("returns false if label contains week or woche case-insensitively", () => {
+    expect(shouldShowWeekBadge("Woche 1 - Einheit 1")).toBe(false);
+    expect(shouldShowWeekBadge("Week 2 - Pull")).toBe(false);
+    expect(shouldShowWeekBadge("WEEK 3")).toBe(false);
+    expect(shouldShowWeekBadge("W1 - Push")).toBe(false);
+    expect(shouldShowWeekBadge("w2 session")).toBe(false);
+  });
+
+  it("returns true if label does not contain week or woche", () => {
+    expect(shouldShowWeekBadge("Push Session A")).toBe(true);
+    expect(shouldShowWeekBadge("Lower Body Focus")).toBe(true);
+    expect(shouldShowWeekBadge("")).toBe(true);
+    expect(shouldShowWeekBadge(undefined)).toBe(true);
+    expect(shouldShowWeekBadge(null)).toBe(true);
+  });
+});
+
+describe("supersetConnectorClass and isSupersetStart", () => {
+  const exercises = [
+    { supersetId: "ss-1" },
+    { supersetId: "ss-1" },
+    { supersetId: "ss-2" },
+    { supersetId: "ss-2" },
+    { supersetId: "ss-2" },
+    {},
+  ];
+
+  it("returns top rounded class for the first exercise in a pair", () => {
+    expect(supersetConnectorClass(0, exercises)).toBe("top-2 bottom-0 rounded-t-full");
+    expect(isSupersetStart(0, exercises)).toBe(true);
+  });
+
+  it("returns bottom rounded class for the last exercise in a pair", () => {
+    expect(supersetConnectorClass(1, exercises)).toBe("top-0 bottom-2 rounded-b-full");
+    expect(isSupersetStart(1, exercises)).toBe(false);
+  });
+
+  it("returns middle continuous class for the middle exercise in a triplet", () => {
+    expect(supersetConnectorClass(3, exercises)).toBe("top-0 bottom-0");
+    expect(isSupersetStart(3, exercises)).toBe(false);
+  });
+
+  it("returns empty string and false for non-superset exercises", () => {
+    expect(supersetConnectorClass(5, exercises)).toBe("");
+    expect(isSupersetStart(5, exercises)).toBe(false);
   });
 });

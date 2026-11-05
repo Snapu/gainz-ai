@@ -200,3 +200,56 @@ export function titleClass(isCompleted: boolean): string[] {
 export function setSegments(targetSets: number): unknown[] {
   return Array.from({ length: Math.max(1, targetSets) });
 }
+
+/**
+ * Returns supersetId if there are 2 or more exercises sharing this id in the list,
+ * preventing lonely/orphan single-exercise superset lines.
+ */
+export function getValidSupersetId(
+  exercise: { supersetId?: string } | undefined,
+  allExercises: Array<{ supersetId?: string }>,
+): string | undefined {
+  if (!exercise?.supersetId) return undefined;
+  const count = allExercises.filter((e) => e.supersetId === exercise.supersetId).length;
+  return count > 1 ? exercise.supersetId : undefined;
+}
+
+/**
+ * Returns whether a session card should show a separate "Week X" badge,
+ * avoiding duplicate labels like "Woche 1 - Einheit 1: Push Fokus" + "WEEK 1".
+ */
+export function shouldShowWeekBadge(sessionLabel?: string | null): boolean {
+  if (!sessionLabel) return true;
+  return !/\b(?:week|woche|w\d+)\b/i.test(sessionLabel);
+}
+
+/**
+ * Returns the CSS position classes for the superset indicator vertical line.
+ */
+export function supersetConnectorClass(
+  index: number,
+  exercises: Array<{ supersetId?: string }>,
+): string {
+  const current = getValidSupersetId(exercises[index], exercises);
+  if (!current) return "";
+  const prev = getValidSupersetId(exercises[index - 1], exercises);
+  const next = getValidSupersetId(exercises[index + 1], exercises);
+
+  if (prev !== current && next === current) {
+    return "top-2 bottom-0 rounded-t-full";
+  }
+  if (prev === current && next !== current) {
+    return "top-0 bottom-2 rounded-b-full";
+  }
+  return "top-0 bottom-0";
+}
+
+/**
+ * Returns whether the superset badge should be displayed on this exercise (first exercise of the pair/group).
+ */
+export function isSupersetStart(index: number, exercises: Array<{ supersetId?: string }>): boolean {
+  const current = getValidSupersetId(exercises[index], exercises);
+  if (!current) return false;
+  const prev = getValidSupersetId(exercises[index - 1], exercises);
+  return prev !== current;
+}

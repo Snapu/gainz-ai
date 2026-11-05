@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronRight, ExternalLink, Menu, Moon } from "@lucide/vue";
+import { Bed, ChevronRight, ExternalLink, Menu } from "@lucide/vue";
 import { useRouter } from "vue-router";
 import { useSpreadsheetStore } from "@/modules/platform/presentation";
 import { WIZARD_STEPS } from "@/modules/profile/presentation";
@@ -13,8 +13,8 @@ const spreadsheetStore = useSpreadsheetStore();
 
 <template>
   <div class="flex items-center gap-2">
-    <UiButton variant="ghost" size="icon" @click="router.push('/rest-recovery')">
-      <Moon class="w-5 h-5 text-muted-foreground" />
+    <UiButton variant="ghost" size="icon" aria-label="Rest & Recovery" @click="router.push('/rest-recovery')">
+      <Bed class="w-5 h-5 text-muted-foreground" />
     </UiButton>
     <UiDropdownMenu>
       <template #trigger>

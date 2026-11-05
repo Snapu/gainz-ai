@@ -28,6 +28,10 @@ import {
   resolveCurrentSession,
   useExerciseLogsStore,
 } from "@/modules/trainingLogs/presentation";
+import type {
+  ProgressionSessionItem,
+  ProgressionSetItem,
+} from "@/shared/presentation/components/ui/UiProgressionLine.vue";
 import { useLogSheet } from "@/shared/presentation/composables/useLogSheet";
 
 interface GroupedSession {
@@ -375,57 +379,64 @@ export function useHomeWorkoutViewModel() {
     return text;
   }
 
-  function getExerciseProgression(exerciseName: string) {
-    const pastLogs = logsStore.exerciseLogs.filter((l) => l.exerciseName === exerciseName);
+  const exerciseProgressions = computed(() => {
+    const map = new Map<string, ProgressionSessionItem[]>();
+    const logs = logsStore.exerciseLogs;
+    if (!logs.length) return map;
 
-    if (!pastLogs.length) return null;
-
-    const sortedLogs = [...pastLogs].sort((a, b) => a.loggedAt.getTime() - b.loggedAt.getTime());
-    if (sortedLogs.length < 2) return null;
-
-    const recentLogs = sortedLogs.slice(-12);
-
-    const isWeightBased = pastLogs.some((l) => l.weight != null);
-    const isDurationBased = !isWeightBased && pastLogs.some((l) => l.duration != null);
-
-    const metrics: Array<{
-      items: { value: number; groupKey: string }[];
-      label: string;
-      color: string;
-    }> = [];
-
-    if (isWeightBased) {
-      metrics.push({
-        items: recentLogs.map((l) => ({
-          value: l.weight ?? 0,
-          groupKey: l.loggedAt.toDateString(),
-        })),
-        label: "WEIGHT",
-        color: "oklch(89% 0.2 135)",
-      });
-      metrics.push({
-        items: recentLogs.map((l) => ({ value: l.reps ?? 0, groupKey: l.loggedAt.toDateString() })),
-        label: "REPS",
-        color: "oklch(0.8 0.1 230)",
-      });
-    } else if (isDurationBased) {
-      metrics.push({
-        items: recentLogs.map((l) => ({
-          value: l.duration ?? 0,
-          groupKey: l.loggedAt.toDateString(),
-        })),
-        label: "TIME",
-        color: "oklch(89% 0.2 135)",
-      });
-    } else {
-      metrics.push({
-        items: recentLogs.map((l) => ({ value: l.reps ?? 0, groupKey: l.loggedAt.toDateString() })),
-        label: "REPS",
-        color: "oklch(89% 0.2 135)",
-      });
+    const byExercise = new Map<string, ExerciseLog[]>();
+    for (const log of logs) {
+      let list = byExercise.get(log.exerciseName);
+      if (!list) {
+        list = [];
+        byExercise.set(log.exerciseName, list);
+      }
+      list.push(log);
     }
 
-    return metrics;
+    const formatter = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" });
+
+    for (const [exerciseName, pastLogs] of byExercise.entries()) {
+      if (pastLogs.length < 2) continue;
+
+      const sortedLogs = [...pastLogs].sort((a, b) => a.loggedAt.getTime() - b.loggedAt.getTime());
+      const recentLogs = sortedLogs.slice(-24);
+
+      const sessionsMap = new Map<string, { date: Date; sets: ProgressionSetItem[] }>();
+
+      for (const log of recentLogs) {
+        const key = log.loggedAt.toDateString();
+        let session = sessionsMap.get(key);
+        if (!session) {
+          session = { date: log.loggedAt, sets: [] };
+          sessionsMap.set(key, session);
+        }
+        session.sets.push({
+          weight: log.weight,
+          reps: log.reps,
+          duration: log.duration,
+        });
+      }
+
+      const sessions: ProgressionSessionItem[] = [];
+      for (const [key, val] of sessionsMap.entries()) {
+        sessions.push({
+          key,
+          dateLabel: formatter.format(val.date),
+          sets: val.sets,
+        });
+      }
+
+      if (sessions.length > 0) {
+        map.set(exerciseName, sessions);
+      }
+    }
+
+    return map;
+  });
+
+  function getExerciseProgression(exerciseName: string): ProgressionSessionItem[] | null {
+    return exerciseProgressions.value.get(exerciseName) ?? null;
   }
 
   function getTodaysLogsForExercise(exerciseName: string): ExerciseLog[] {

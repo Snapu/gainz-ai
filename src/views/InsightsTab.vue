@@ -23,14 +23,10 @@ const {
   fatigueRiskToneClass,
   fatigueRiskLabel,
   fatigueRiskPercent,
-  deloadStatusLabel,
-  deloadStatusToneClass,
   fatigueWeekRows,
-  weeklyDeltaLabel,
   setsDeltaPct,
   tonnageDeltaPct,
   allExerciseMetrics,
-  totalExerciseCount,
   exerciseStatusNote,
   topImprovingExercises,
   attentionRequiredExercises,
@@ -50,159 +46,163 @@ const isAllExercisesOpen = ref(false);
       </template>
     </AppHeader>
 
-    <main class="flex-1 w-full max-w-2xl mx-auto px-4 pt-4 pb-8 overflow-y-auto overscroll-y-contain no-scrollbar flex flex-col gap-5">
+    <main class="flex-1 w-full max-w-2xl mx-auto px-4 pt-4 pb-28 overflow-y-auto overscroll-y-contain no-scrollbar flex flex-col gap-5">
 
       <!-- ── Section: Level & Rank Hero ── -->
       <section class="w-full">
         <UserProgressCard 
           v-if="userProgress"
           :progress="userProgress" 
-          :insights="insights" 
           class="w-full"
         />
       </section>
 
-      <!-- ── Section: Readiness ── -->
-      <section>
-        <UiCard class="p-4 overflow-visible">
-          <!-- 1. Top Section: Core Status Banners -->
-          <div class="flex items-start justify-between gap-2 mb-4">
+      <!-- ── Section: Readiness & Workload Telemetry (Unified) ── -->
+      <section class="w-full">
+        <UiCard class="p-4 overflow-visible flex flex-col gap-4">
+          <!-- Header -->
+          <div class="flex items-start justify-between gap-2">
             <div>
-              <h3 class="text-sm font-bold text-foreground whitespace-nowrap">Readiness</h3>
-              <p class="text-xs text-muted-foreground mt-0.5">Overall recovery and fatigue</p>
+              <h3 class="text-sm font-bold text-foreground">Readiness & Workload</h3>
+              <p class="text-xs text-muted-foreground mt-0.5">Fatigue, volume & recovery telemetry</p>
             </div>
-            <div class="flex flex-col items-end gap-1.5">
-              <UiBadge
-                class="uppercase tracking-wider"
-                :variant="insights.phase === 'Deload' ? 'warning' : insights.phase === 'Build' ? 'info' : insights.phase === 'Maintain' ? 'success' : 'neutral'"
-              >
-                {{ insights.phase }}
-              </UiBadge>
-              <UiBadge
-                v-if="insights.phase !== 'Inactive' && deloadStatusLabel !== 'None'"
-                class="uppercase tracking-wider"
-                :variant="deloadStatusToneClass as any"
-              >
-                Deload: {{ deloadStatusLabel }}
-              </UiBadge>
-            </div>
+            <UiBadge
+              class="uppercase tracking-wider"
+              :variant="insights.phase === 'Deload' ? 'warning' : insights.phase === 'Build' ? 'info' : insights.phase === 'Maintain' ? 'success' : 'neutral'"
+            >
+              {{ insights.phase }}
+            </UiBadge>
           </div>
 
           <!-- Active Deload Banner -->
-          <div v-if="insights.deloadStatus === 'active'" class="mb-4 rounded-xl border border-orange-500/20 bg-orange-500/10 p-3">
+          <div v-if="insights.deloadStatus === 'active'" class="rounded-xl border border-orange-500/20 bg-orange-500/10 p-3">
             <div class="flex justify-between items-center mb-2">
               <div>
-                <p class="text-micro text-orange-400 font-bold">Active Deload</p>
+                <p class="text-micro text-orange-400 font-bold uppercase tracking-wider">Active Deload</p>
                 <p class="text-xs text-foreground/80 mt-0.5">{{ deloadStore.daysRemaining ?? 0 }}d remaining (Ends {{ insights.deloadEndsAt ? new Date(insights.deloadEndsAt).toLocaleDateString() : 'N/A' }})</p>
               </div>
               <UiButton
                 variant="ghost"
                 size="sm"
-                class="text-xs text-orange-400/70 border border-orange-500/20 hover:text-red-400 hover:border-red-400/30 h-7 px-2"
+                class="text-xs text-orange-400/80 border border-orange-500/20 hover:text-red-400 hover:border-red-400/30 h-7 px-2.5 active:scale-95"
                 @click="deloadStore.cancelDeload()"
               >
                 Stop
               </UiButton>
             </div>
             <div class="h-1.5 rounded-full bg-orange-900/30 overflow-hidden">
-              <div class="h-full rounded-full bg-orange-400/70 transition-all duration-300" :style="{ width: `${deloadStore.progressPercent ?? 0}%` }"></div>
+              <div class="h-full rounded-full bg-orange-400/80 transition-all duration-300" :style="{ width: `${deloadStore.progressPercent ?? 0}%` }"></div>
             </div>
           </div>
 
-          <!-- Risk Score & ACWR -->
-          <div class="flex flex-col mb-1">
-            <div class="flex items-center justify-between mb-1">
-              <span class="text-micro text-muted-foreground font-bold">Fatigue Risk</span>
-              <UiBadge v-if="insights.fatigue.shouldDeload" variant="warning" class="uppercase tracking-wider">
-                DELOAD ADVISED
-              </UiBadge>
+          <!-- Deload Advised Alert (when shouldDeload and not yet active) -->
+          <div v-else-if="insights.fatigue.shouldDeload" class="rounded-xl border border-orange-500/20 bg-orange-500/10 p-3 flex items-center justify-between gap-3">
+            <div class="flex flex-col">
+              <span class="text-micro text-orange-400 font-bold uppercase tracking-wider">Deload Advised</span>
+              <span class="text-xs text-foreground/80 mt-0.5">High systemic fatigue detected across multiple muscle groups.</span>
             </div>
-            <p class="text-3xl font-black tabular-nums tracking-tight mt-1" :class="fatigueRiskToneClass">
-              {{ fatigueRiskLabel }} <span class="text-base font-bold text-foreground/40">({{ fatigueRiskPercent }}%)</span>
-            </p>
-            <p class="text-xs text-muted-foreground mt-1 font-medium flex items-center gap-1.5">
-              <span>ACWR: {{ acwrValueLabel }}</span>
-              <span class="opacity-50">·</span> 
-              <span :class="insights.acwr !== null && insights.acwr <= 1.3 ? 'text-emerald-400' : 'text-orange-400'">{{ acwrZone.label }}</span>
-            </p>
+            <UiBadge variant="warning" class="uppercase tracking-wider shrink-0">
+              High Load
+            </UiBadge>
           </div>
-        </UiCard>
-      </section>
 
-      <!-- ── Section: Volume Analysis (Unified) ── -->
-      <section>
-        <UiCard class="p-4 overflow-visible flex flex-col gap-5">
-          <!-- Workload Header & KPIs -->
-          <div>
-            <div class="flex items-center justify-between gap-2 mb-4">
-              <div>
-                <h3 class="text-sm font-bold text-foreground">Volume Analysis</h3>
-              </div>
-              <UiBadge v-if="!insights.fatigue.hasSufficientHistory" variant="surface">
-                Not enough data
-              </UiBadge>
-            </div>
-            
-            <div class="flex gap-6 sm:gap-8">
-              <!-- KPI: Sets -->
-              <div class="flex flex-col">
-                <div class="flex items-center gap-1.5">
-                  <div class="w-1.5 h-1.5 rounded-full" style="background-color: oklch(0.8 0.1 230)"></div>
-                  <span class="text-micro text-muted-foreground font-bold">Sets</span>
-                </div>
-                <div class="flex items-end gap-1.5 mt-1">
-                  <span class="text-2xl font-black tabular-nums tracking-tight leading-none text-foreground">{{ Math.round(insights.fatigue.loadWindow.sets.current) }}</span>
-                  <span class="text-micro font-bold mb-[2px] flex items-center gap-0.5" :class="setsDeltaPct === null ? 'text-foreground/70' : setsDeltaPct >= 30 ? 'text-orange-400' : setsDeltaPct <= -20 ? 'text-foreground/50' : 'text-emerald-400'">
-                    <TrendingUp v-if="setsDeltaPct !== null && setsDeltaPct > 0" class="w-3 h-3" />
-                    <TrendingDown v-else-if="setsDeltaPct !== null && setsDeltaPct < 0" class="w-3 h-3" />
-                    {{ weeklyDeltaLabel.replace('+', '').replace('-', '') }}
-                  </span>
-                </div>
-              </div>
-
-              <!-- KPI: Tonnage -->
-              <div class="flex flex-col">
-                <div class="flex items-center gap-1.5">
-                  <div class="w-1.5 h-1.5 rounded-full" style="background-color: oklch(0.8 0.15 60)"></div>
-                  <span class="text-micro text-muted-foreground font-bold">Tonnage</span>
-                </div>
-                <div class="flex items-end gap-1.5 mt-1">
-                  <span class="text-2xl font-black tabular-nums tracking-tight leading-none text-foreground">{{ Math.round(insights.fatigue.loadWindow.tonnage.current) }}<span class="text-xs text-muted-foreground ml-0.5">kg</span></span>
-                  <span class="text-micro font-bold mb-[2px] flex items-center gap-0.5" :class="tonnageDeltaPct === null ? 'text-foreground/70' : tonnageDeltaPct >= 30 ? 'text-orange-400' : tonnageDeltaPct <= -20 ? 'text-foreground/50' : 'text-emerald-400'">
-                    <TrendingUp v-if="tonnageDeltaPct !== null && tonnageDeltaPct > 0" class="w-3 h-3" />
-                    <TrendingDown v-else-if="tonnageDeltaPct !== null && tonnageDeltaPct < 0" class="w-3 h-3" />
-                    {{ tonnageDeltaPct === null ? "-" : `${Math.abs(tonnageDeltaPct)}%` }}
-                  </span>
-                </div>
+          <!-- 3-Tile Telemetry Dashboard (matching Target Today pattern) -->
+          <div class="grid grid-cols-3 gap-2 sm:gap-3 w-full">
+            <!-- Tile 1: Fatigue & ACWR -->
+            <div class="flex flex-col justify-between p-2.5 sm:p-3 rounded-xl bg-white/5 border border-white/5 min-w-0">
+              <span class="text-micro font-bold text-muted-foreground/70 uppercase tracking-wider truncate">
+                Fatigue Risk
+              </span>
+              <div class="flex flex-col mt-1.5 min-w-0">
+                <span class="text-lg font-black tabular-nums tracking-tight truncate leading-tight" :class="fatigueRiskToneClass">
+                  {{ fatigueRiskLabel }} <span class="text-xs font-bold text-muted-foreground/50">({{ fatigueRiskPercent }}%)</span>
+                </span>
+                <span class="text-[10px] font-bold text-muted-foreground/60 mt-0.5 truncate">
+                  {{ insights.acwr !== null ? `ACWR ${acwrValueLabel} · ${acwrZone.label}` : 'No baseline' }}
+                </span>
               </div>
             </div>
 
-            <!-- Chart -->
-            <div class="relative w-full h-[64px] mt-4 mb-2 group">
-              <!-- Sets Line -->
+            <!-- Tile 2: Weekly Sets -->
+            <div class="flex flex-col justify-between p-2.5 sm:p-3 rounded-xl bg-white/5 border border-white/5 min-w-0">
+              <span class="text-micro font-bold text-muted-foreground/70 uppercase tracking-wider truncate">
+                Sets / Wk
+              </span>
+              <div class="flex flex-col mt-1.5 min-w-0">
+                <span class="text-lg font-black tabular-nums tracking-tight text-foreground truncate leading-tight">
+                  {{ Math.round(insights.fatigue.loadWindow.sets.current) }}
+                </span>
+                <span class="text-[10px] font-bold mt-0.5 flex items-center gap-0.5 truncate" :class="setsDeltaPct === null ? 'text-muted-foreground/60' : setsDeltaPct >= 30 ? 'text-orange-400' : setsDeltaPct <= -20 ? 'text-muted-foreground/50' : 'text-emerald-400'">
+                  <TrendingUp v-if="setsDeltaPct !== null && setsDeltaPct > 0" class="w-3 h-3 shrink-0" />
+                  <TrendingDown v-else-if="setsDeltaPct !== null && setsDeltaPct < 0" class="w-3 h-3 shrink-0" />
+                  {{ setsDeltaPct === null ? "-" : `${Math.abs(setsDeltaPct)}%` }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Tile 3: Weekly Tonnage -->
+            <div class="flex flex-col justify-between p-2.5 sm:p-3 rounded-xl bg-white/5 border border-white/5 min-w-0">
+              <span class="text-micro font-bold text-muted-foreground/70 uppercase tracking-wider truncate">
+                Tonnage
+              </span>
+              <div class="flex flex-col mt-1.5 min-w-0">
+                <div class="flex items-baseline truncate leading-tight">
+                  <span class="text-lg font-black tabular-nums tracking-tight text-foreground truncate">
+                    {{ Math.round(insights.fatigue.loadWindow.tonnage.current) }}
+                  </span>
+                  <span class="text-[10px] font-bold text-muted-foreground/60 ml-0.5 shrink-0">kg</span>
+                </div>
+                <span class="text-[10px] font-bold mt-0.5 flex items-center gap-0.5 truncate" :class="tonnageDeltaPct === null ? 'text-muted-foreground/60' : tonnageDeltaPct >= 30 ? 'text-orange-400' : tonnageDeltaPct <= -20 ? 'text-muted-foreground/50' : 'text-emerald-400'">
+                  <TrendingUp v-if="tonnageDeltaPct !== null && tonnageDeltaPct > 0" class="w-3 h-3 shrink-0" />
+                  <TrendingDown v-else-if="tonnageDeltaPct !== null && tonnageDeltaPct < 0" class="w-3 h-3 shrink-0" />
+                  {{ tonnageDeltaPct === null ? "-" : `${Math.abs(tonnageDeltaPct)}%` }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4-Week Load Sparkline Trend -->
+          <div class="flex flex-col w-full pt-1">
+            <div class="flex items-center justify-between text-[10px] font-bold text-muted-foreground/60 uppercase tracking-wider mb-2">
+              <div class="flex items-center gap-3">
+                <div class="flex items-center gap-1.5">
+                  <div class="w-1.5 h-1.5 rounded-full bg-primary"></div>
+                  <span>Sets Trend</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <div class="w-1.5 h-1.5 rounded-full bg-white/40"></div>
+                  <span>Tonnage Trend</span>
+                </div>
+              </div>
+              <span class="text-muted-foreground/40">Last 4 Weeks</span>
+            </div>
+
+            <div class="relative w-full h-[56px] group">
+              <!-- Sets Line (Primary Athletic Lime) -->
               <div class="absolute inset-0 w-full h-full">
                 <UiSparkline
                   :values="fatigueWeekRows.map(r => r.sets)"
                   :width="300"
-                  :height="64"
-                  color="oklch(0.8 0.1 230)"
-                  fillColor="oklch(0.8 0.1 230 / 0.1)"
+                  :height="56"
+                  color="var(--color-primary, #84cc16)"
+                  fillColor="rgba(132, 204, 22, 0.1)"
                 />
               </div>
-              <!-- Tonnage Line (No fill) -->
+              <!-- Tonnage Line (Clean Muted White) -->
               <div class="absolute inset-0 w-full h-full">
                 <UiSparkline
                   :values="fatigueWeekRows.map(r => r.tonnage)"
                   :width="300"
-                  :height="64"
-                  color="oklch(0.8 0.15 60)"
+                  :height="56"
+                  color="rgba(255, 255, 255, 0.4)"
                   fillColor="transparent"
                 />
               </div>
             </div>
-            <div class="flex items-center justify-between w-full mt-4 px-1">
+
+            <div class="flex items-center justify-between w-full mt-2 px-1">
               <span v-for="(row, i) in fatigueWeekRows" :key="row.key" 
-                    class="text-micro text-muted-foreground truncate flex-1"
+                    class="text-[10px] font-bold text-muted-foreground/50 truncate flex-1"
                     :class="i === 0 ? 'text-left' : i === fatigueWeekRows.length - 1 ? 'text-right' : 'text-center'">
                 {{ row.label.replace('Week ', 'W') }}
               </span>
@@ -237,24 +237,24 @@ const isAllExercisesOpen = ref(false);
               <p class="text-xs text-muted-foreground mt-0.5 line-clamp-1">Top progress & plateaus</p>
             </div>
             <UiButton variant="secondary" size="xs" @click="isAllExercisesOpen = true">
-              View All ({{ totalExerciseCount }})
+              View All ({{ allExerciseMetrics.length }})
             </UiButton>
           </div>
 
           <!-- Highlight Lists -->
-          <div class="flex flex-col gap-6">
+          <div class="flex flex-col gap-5">
             <div v-if="topImprovingExercises.length > 0">
-              <h4 class="text-micro text-muted-foreground mb-1.5 px-1">Top Progress</h4>
-              <div class="flex flex-col">
-                <div v-for="metric in topImprovingExercises" :key="metric.name" class="flex items-center justify-between py-3 px-2 -mx-1 rounded-lg border-b border-transparent hover:bg-white/5 transition-colors">
+              <h4 class="text-micro font-bold text-muted-foreground/70 uppercase tracking-wider mb-1 px-1">Top Progress</h4>
+              <div class="flex flex-col divide-y divide-white/5">
+                <div v-for="metric in topImprovingExercises" :key="metric.name" class="flex items-center justify-between py-2 px-1 hover:bg-white/5 transition-colors">
                   <div class="flex flex-col min-w-0 mr-3">
                     <p class="text-sm font-semibold text-foreground/90 truncate">{{ metric.name }}</p>
                     <div class="flex items-center gap-1.5 mt-0.5">
-                      <span class="text-micro text-muted-foreground">Est. {{ metric.unit === 'reps' ? 'Max' : '1RM' }}:</span>
+                      <span class="text-micro text-muted-foreground/60 uppercase">Est. {{ metric.unit === 'reps' ? 'Max' : '1RM' }}:</span>
                       <span class="text-xs font-bold text-foreground tabular-nums">{{ metric.unit === 'reps' ? Math.round(metric.e1rm) : metric.e1rm.toFixed(1) }}</span>
                     </div>
                   </div>
-                  <UiBadge variant="success" class="flex items-center gap-1">
+                  <UiBadge variant="success" class="flex items-center gap-1 tabular-nums font-bold">
                     <TrendingUp class="w-3 h-3" />
                     +{{ metric.deltaPct }}%
                   </UiBadge>
@@ -263,17 +263,17 @@ const isAllExercisesOpen = ref(false);
             </div>
 
             <div v-if="attentionRequiredExercises.length > 0">
-              <h4 class="text-micro text-muted-foreground mb-1.5 px-1">Needs Attention</h4>
-              <div class="flex flex-col">
-                <div v-for="metric in attentionRequiredExercises" :key="metric.name" class="flex items-center justify-between py-3 px-2 -mx-1 rounded-lg border-b border-transparent hover:bg-white/5 transition-colors">
+              <h4 class="text-micro font-bold text-muted-foreground/70 uppercase tracking-wider mb-1 px-1">Needs Attention</h4>
+              <div class="flex flex-col divide-y divide-white/5">
+                <div v-for="metric in attentionRequiredExercises" :key="metric.name" class="flex items-center justify-between py-2 px-1 hover:bg-white/5 transition-colors">
                   <div class="flex flex-col min-w-0 mr-3">
                     <p class="text-sm font-semibold text-foreground/90 truncate">{{ metric.name }}</p>
                     <div class="flex items-center gap-1.5 mt-0.5">
-                      <span class="text-micro text-muted-foreground">Est. {{ metric.unit === 'reps' ? 'Max' : '1RM' }}:</span>
+                      <span class="text-micro text-muted-foreground/60 uppercase">Est. {{ metric.unit === 'reps' ? 'Max' : '1RM' }}:</span>
                       <span class="text-xs font-bold text-foreground tabular-nums">{{ metric.unit === 'reps' ? Math.round(metric.e1rm) : metric.e1rm.toFixed(1) }}</span>
                     </div>
                   </div>
-                  <UiBadge :variant="metric.status === 'plateau' ? 'warning' : 'danger'" class="flex items-center gap-1">
+                  <UiBadge :variant="metric.status === 'plateau' ? 'warning' : 'danger'" class="flex items-center gap-1 tabular-nums font-bold">
                     <ArrowRight v-if="metric.status === 'plateau'" class="w-3 h-3" />
                     <TrendingDown v-else class="w-3 h-3" />
                     {{ metric.status === 'plateau' ? 'Plateau' : metric.deltaPct + '%' }}

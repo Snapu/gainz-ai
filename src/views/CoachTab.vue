@@ -1,11 +1,17 @@
 <script setup lang="ts">
 import { ArrowRight, ArrowUp, ChevronDown, Copy, Dumbbell, Key, Sparkles } from "@lucide/vue";
-import { useCoachChatViewModel } from "@/modules/aiCoach/presentation";
+import {
+  getValidSupersetId,
+  isSupersetStart,
+  supersetConnectorClass,
+  useCoachChatViewModel,
+} from "@/modules/aiCoach/presentation";
 import AppHeader from "@/shared/presentation/components/AppHeader.vue";
 import GlobalHeaderActions from "@/shared/presentation/components/GlobalHeaderActions.vue";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
+import UiTelemetryLoader from "@/shared/presentation/components/ui/UiTelemetryLoader.vue";
 import UiTextarea from "@/shared/presentation/components/ui/UiTextarea.vue";
 
 const {
@@ -74,19 +80,11 @@ void scrollContainerRef;
         </UiButton>
       </div>
 
-      <!-- Loading Skeleton -->
-      <div
+      <!-- Telemetry Loader -->
+      <UiTelemetryLoader
         v-if="isLoading && chatMessages.length === 0"
-        class="flex flex-col gap-4 py-6 w-full animate-pulse"
-      >
-        <div class="flex items-start gap-3">
-          <div class="w-8 h-8 rounded-full bg-muted/20 shrink-0"></div>
-          <div class="flex-1 flex flex-col gap-2">
-            <div class="h-3 w-24 bg-muted/20 rounded-lg"></div>
-            <div class="h-20 w-full bg-muted/20 rounded-xl"></div>
-          </div>
-        </div>
-      </div>
+        text="Analyzing training history..."
+      />
 
       <!-- Empty State -->
       <div
@@ -135,56 +133,62 @@ void scrollContainerRef;
           </div>
         </div>
 
-        <!-- Coach Bubble -->
+        <!-- Coach Message (Flat / Streamlined AI UI) -->
         <div
           v-else-if="message.role === 'coach'"
-          class="w-full flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-2 duration-200"
+          class="w-full flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-2 duration-200 py-1"
         >
-          <!-- Content Card -->
-          <UiCard class="w-full p-4 flex flex-col gap-3">
-            <!-- Header bar inside the card -->
-            <div class="flex items-center justify-between pb-2.5 border-b border-white/5">
-              <div class="flex items-center gap-2">
-                <div class="w-6 h-6 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
-                  <Sparkles class="w-3.5 h-3.5" />
-                </div>
-                <span class="text-xs font-bold text-foreground">AI Coach</span>
+          <!-- Message text directly on background -->
+          <div
+            class="coach-content text-sm leading-relaxed text-foreground/90 font-medium"
+            v-html="renderMarkdown(message.content)"
+          />
+
+          <!-- Recommended Workout Card (Standalone Level 1 Card) -->
+          <UiCard
+            v-if="message.recommendedWorkout?.length"
+            class="p-4 flex flex-col gap-2.5 shadow-sm"
+          >
+            <div class="flex items-center justify-between pb-2 border-b border-white/5">
+              <div class="flex items-center gap-1.5">
+                <Dumbbell class="w-3.5 h-3.5 text-primary" />
+                <span class="text-xs font-bold text-foreground">Prescribed Workout</span>
               </div>
-              <span class="text-xs font-medium text-muted-foreground/60 tabular-nums">
-                {{ message.formattedTime }}
-              </span>
+              <UiBadge variant="surface" class="uppercase tracking-wider text-[10px] px-1.5 py-0">
+                {{ message.recommendedWorkout.length }} Exercises
+              </UiBadge>
             </div>
 
-            <div
-              class="coach-content text-sm leading-relaxed text-foreground/90 font-medium"
-              v-html="renderMarkdown(message.content)"
-            />
-
-            <!-- Recommended Workout Card -->
-            <div
-              v-if="message.recommendedWorkout?.length"
-              class="mt-1 p-4 rounded-xl bg-white/5 border border-white/5 flex flex-col gap-3"
-            >
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                  <div class="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                    <Dumbbell class="w-3.5 h-3.5" />
-                  </div>
-                  <span class="text-xs font-bold text-foreground">Prescribed Workout</span>
-                </div>
-                <UiBadge variant="surface">
-                  {{ message.recommendedWorkout.length }} Exercises
-                </UiBadge>
-              </div>
-
-              <div class="flex flex-col gap-2">
+            <!-- Compact Single-Line Exercise Rows -->
+            <div class="flex flex-col divide-y divide-white/5 pl-2 relative">
+              <div
+                v-for="(ex, exIdx) in message.recommendedWorkout"
+                :key="`${ex.exerciseName}-${exIdx}`"
+                class="py-2 flex items-center justify-between gap-2 text-xs relative"
+              >
+                <!-- Superset Indicator Line -->
                 <div
-                  v-for="(ex, exIdx) in message.recommendedWorkout"
-                  :key="`${ex.exerciseName}-${exIdx}`"
-                  class="text-xs text-muted-foreground font-medium flex items-center justify-between py-1 border-b border-white/5 last:border-0"
-                >
-                  <span class="truncate font-semibold text-foreground/90">{{ ex.exerciseName }}</span>
-                  <span class="shrink-0 font-bold text-primary tabular-nums ml-2">
+                  v-if="getValidSupersetId(ex, message.recommendedWorkout)"
+                  class="absolute -left-2 w-[2px] bg-primary/40"
+                  :class="supersetConnectorClass(exIdx, message.recommendedWorkout)"
+                />
+
+                <div class="flex items-center gap-1.5 min-w-0 flex-1 pr-2">
+                  <span class="font-semibold text-foreground/90 truncate">
+                    {{ ex.exerciseName }}
+                  </span>
+                  <UiBadge
+                    v-if="isSupersetStart(exIdx, message.recommendedWorkout)"
+                    variant="info"
+                    class="text-[9px] px-1 py-0 uppercase tracking-wider shrink-0"
+                  >
+                    Superset
+                  </UiBadge>
+                </div>
+
+                <!-- Metrics: Sets × Reps + Optional Weight (NO RPE) -->
+                <div class="flex items-center gap-1.5 shrink-0 tabular-nums text-xs ml-2">
+                  <span class="font-bold text-foreground/80">
                     {{
                       ex.targetReps
                         ? `${ex.targetSets} × ${ex.targetReps}`
@@ -195,109 +199,107 @@ void scrollContainerRef;
                             : `${ex.targetSets} Sets`
                     }}
                   </span>
+                  <span v-if="ex.targetWeight" class="font-bold text-primary">
+                    {{ ex.targetWeight }}
+                  </span>
                 </div>
               </div>
+            </div>
 
+            <!-- Action Link -->
+            <button
+              type="button"
+              @click="navigateToTrainTab"
+              class="text-xs font-bold text-primary hover:underline flex items-center gap-1.5 self-start pt-1 cursor-pointer active:scale-95 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-lg"
+            >
+              <span>Open in Train Tab</span>
+              <ArrowRight class="w-3.5 h-3.5" />
+            </button>
+          </UiCard>
+
+          <!-- Expandable Disclosures: Rationale & Debug Data -->
+          <div v-if="message.scratchpad || message.requestPayload" class="pt-1 flex flex-col gap-2">
+            <div class="flex items-center gap-3 flex-wrap">
+              <!-- Coach Rationale Button -->
               <button
+                v-if="message.scratchpad"
                 type="button"
-                @click="navigateToTrainTab"
-                class="text-xs font-bold text-primary hover:underline flex items-center gap-2 self-start pt-1 cursor-pointer active:scale-95 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-lg"
+                :aria-expanded="openScratchpads.includes(message.id)"
+                :aria-controls="'scratchpad-' + message.id"
+                class="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground/60 hover:text-foreground transition-colors duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-lg py-1 px-1 -ml-1 active:scale-95"
+                @click="toggleScratchpad(message.id)"
               >
-                <span>Open in Train Tab</span>
-                <ArrowRight class="w-3 h-3" />
+                <ChevronDown
+                  class="w-3.5 h-3.5 transition-transform duration-200"
+                  :class="openScratchpads.includes(message.id) ? 'rotate-180 text-primary' : ''"
+                />
+                <span>Coach's Rationale</span>
+              </button>
+
+              <!-- Debug Data Button -->
+              <button
+                v-if="message.requestPayload"
+                type="button"
+                :aria-expanded="openRequestPayloads.includes(message.id)"
+                :aria-controls="'payload-' + message.id"
+                class="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground/40 hover:text-muted-foreground/80 transition-colors duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-lg py-1 px-1 active:scale-95"
+                @click="togglePayload(message.id)"
+              >
+                <ChevronDown
+                  class="w-3.5 h-3.5 transition-transform duration-200"
+                  :class="openRequestPayloads.includes(message.id) ? 'rotate-180 text-primary' : ''"
+                />
+                <span>Debug Data</span>
               </button>
             </div>
 
-            <!-- Expandable Disclosures: Rationale & Debug Data -->
-            <div v-if="message.scratchpad || message.requestPayload" class="border-t border-white/5 pt-2 mt-1 flex flex-col gap-2">
-              <div class="flex items-center gap-3 flex-wrap">
-                <!-- Coach Rationale Button -->
-                <button
-                  v-if="message.scratchpad"
-                  type="button"
-                  :aria-expanded="openScratchpads.includes(message.id)"
-                  :aria-controls="'scratchpad-' + message.id"
-                  class="flex items-center gap-2 text-xs font-semibold text-muted-foreground/70 hover:text-foreground transition-colors duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-xl py-1 px-1 -ml-1 active:scale-95"
-                  @click="toggleScratchpad(message.id)"
-                >
-                  <ChevronDown
-                    class="w-3.5 h-3.5 transition-transform duration-200"
-                    :class="openScratchpads.includes(message.id) ? 'rotate-180 text-primary' : ''"
-                  />
-                  <span>Coach's Rationale</span>
-                </button>
-
-                <!-- Debug Data Button -->
-                <button
-                  v-if="message.requestPayload"
-                  type="button"
-                  :aria-expanded="openRequestPayloads.includes(message.id)"
-                  :aria-controls="'payload-' + message.id"
-                  class="flex items-center gap-2 text-xs font-semibold text-muted-foreground/50 hover:text-muted-foreground/90 transition-colors duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-xl py-1 px-1 active:scale-95"
-                  @click="togglePayload(message.id)"
-                >
-                  <ChevronDown
-                    class="w-3.5 h-3.5 transition-transform duration-200"
-                    :class="openRequestPayloads.includes(message.id) ? 'rotate-180 text-primary' : ''"
-                  />
-                  <span>Debug Data</span>
-                </button>
-              </div>
-
-              <!-- Rationale Box -->
-              <div
-                v-if="message.scratchpad && openScratchpads.includes(message.id)"
-                :id="'scratchpad-' + message.id"
-                class="p-3 rounded-xl bg-white/5 border border-white/5 text-xs font-medium text-foreground/80 leading-relaxed animate-in fade-in duration-200"
-              >
-                <div class="text-xs uppercase font-bold tracking-wider text-muted-foreground/60 mb-1">Reasoning & Scratchpad</div>
-                <p class="whitespace-pre-wrap">{{ message.scratchpad }}</p>
-              </div>
-
-              <!-- Debug Data Box -->
-              <div
-                v-if="message.requestPayload && openRequestPayloads.includes(message.id)"
-                :id="'payload-' + message.id"
-                class="p-3 rounded-xl bg-muted/20 border border-white/5 text-xs font-mono text-muted-foreground/80 leading-relaxed animate-in fade-in duration-200 flex flex-col gap-2"
-              >
-                <div class="flex items-center justify-between">
-                  <span class="text-xs uppercase font-bold tracking-wider text-muted-foreground/60">Sent Prompt Payload</span>
-                  <button
-                    type="button"
-                    @click="copyPayload(message.requestPayload)"
-                    class="text-xs font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-lg"
-                  >
-                    <Copy class="w-3 h-3" />
-                    <span>Copy</span>
-                  </button>
-                </div>
-                <pre class="overflow-x-auto whitespace-pre-wrap break-all text-xs max-h-48 rounded-xl bg-black/30 p-3 font-mono text-muted-foreground/70">{{ message.requestPayload }}</pre>
-              </div>
+            <!-- Rationale Box -->
+            <div
+              v-if="message.scratchpad && openScratchpads.includes(message.id)"
+              :id="'scratchpad-' + message.id"
+              class="p-3.5 rounded-xl bg-white/5 border border-white/5 text-xs font-medium text-foreground/80 leading-relaxed animate-in fade-in duration-200"
+            >
+              <div class="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/50 mb-1">Reasoning & Scratchpad</div>
+              <p class="whitespace-pre-wrap">{{ message.scratchpad }}</p>
             </div>
-          </UiCard>
+
+            <!-- Debug Data Box -->
+            <div
+              v-if="message.requestPayload && openRequestPayloads.includes(message.id)"
+              :id="'payload-' + message.id"
+              class="p-3.5 rounded-xl bg-muted/20 border border-white/5 text-xs font-mono text-muted-foreground/80 leading-relaxed animate-in fade-in duration-200 flex flex-col gap-2"
+            >
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/50">Sent Prompt Payload</span>
+                <button
+                  type="button"
+                  @click="copyPayload(message.requestPayload)"
+                  class="text-xs font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-lg"
+                >
+                  <Copy class="w-3 h-3" />
+                  <span>Copy</span>
+                </button>
+              </div>
+              <pre class="overflow-x-auto whitespace-pre-wrap break-all text-xs max-h-48 rounded-xl bg-black/30 p-3 font-mono text-muted-foreground/70">{{ message.requestPayload }}</pre>
+            </div>
+          </div>
         </div>
       </template>
 
-      <!-- Active Typing Indicator Bubble -->
+      <!-- Active Typing Indicator -->
       <div
         v-if="isLoading && chatMessages.length > 0"
         role="status"
         aria-live="polite"
-        class="w-full flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300"
+        class="w-full flex items-center gap-2 text-xs text-muted-foreground animate-in fade-in duration-200 py-1"
       >
         <span class="sr-only">AI Coach is analyzing workout</span>
-        <div class="flex items-center gap-2">
-          <div class="w-6 h-6 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
-            <Sparkles class="w-3.5 h-3.5 animate-pulse" />
-          </div>
-          <span class="text-xs font-bold text-foreground">AI Coach</span>
-          <span class="text-xs font-medium text-muted-foreground/60">Analyzing your workout...</span>
+        <div class="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/5">
+          <span class="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]"></span>
+          <span class="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]"></span>
+          <span class="w-1.5 h-1.5 rounded-full bg-primary animate-bounce"></span>
+          <span class="text-xs text-muted-foreground/80 font-medium ml-1.5">Coach is thinking...</span>
         </div>
-        <UiCard class="px-4 py-3 inline-flex items-center gap-2 self-start">
-          <span class="w-2 h-2 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]"></span>
-          <span class="w-2 h-2 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]"></span>
-          <span class="w-2 h-2 rounded-full bg-primary animate-bounce"></span>
-        </UiCard>
       </div>
     </main>
 

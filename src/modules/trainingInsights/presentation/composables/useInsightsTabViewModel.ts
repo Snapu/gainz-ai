@@ -1,6 +1,5 @@
 import { storeToRefs } from "pinia";
 import { computed, onMounted, watch } from "vue";
-import { useRouter } from "vue-router";
 import { useAiOrchestratorStore } from "@/modules/aiCoach/presentation";
 import { useDeloadStore } from "@/modules/deload/presentation";
 import { useExerciseMuscleMapStore, useUserProgressStore } from "@/modules/platform/presentation";
@@ -8,7 +7,6 @@ import { useMetricsStore } from "@/modules/profile/presentation";
 import type { MuscleGroup } from "@/modules/sharedKernel/domain";
 import {
   MAX_FATIGUE_RISK_SCORE,
-  type MuscleGroupInsight,
   normalizeExerciseName,
   useTrainingInsightsStore,
 } from "@/modules/trainingInsights/presentation";
@@ -34,14 +32,7 @@ type ExerciseMetric = {
   unit: "kg" | "reps";
 };
 
-type MuscleGroupWithKey = MuscleGroupInsight & { muscleGroup: string };
-
-function clampPct(value: number): number {
-  return Math.max(0, Math.min(100, Math.round(value)));
-}
-
 export function useInsightsTabViewModel() {
-  const router = useRouter();
   const muscleMapStore = useExerciseMuscleMapStore();
   const userProgressStore = useUserProgressStore();
   const deloadStore = useDeloadStore();
@@ -76,29 +67,6 @@ export function useInsightsTabViewModel() {
     { immediate: true, deep: true },
   );
 
-  const muscleInsightsList = computed((): MuscleGroupWithKey[] => {
-    const result: MuscleGroupWithKey[] = [];
-    for (const [group, insight] of Object.entries(insights.value.muscleGroups)) {
-      if (insight !== undefined) {
-        result.push({ muscleGroup: group as MuscleGroup, ...(insight as MuscleGroupInsight) });
-      }
-    }
-    return result;
-  });
-
-  const maintenanceLikeCount = computed(
-    () =>
-      muscleInsightsList.value.filter(
-        (insight) => insight.landmark === "at_MEV" || insight.landmark === "at_MAV",
-      ).length,
-  );
-
-  const totalMuscleGroups = computed(() => muscleInsightsList.value.length);
-
-  const notRecoveredCount = computed(
-    () => muscleInsightsList.value.filter((insight) => !insight.recoveryReady).length,
-  );
-
   const acwrValueLabel = computed(() =>
     insights.value.acwr === null ? "No baseline" : insights.value.acwr.toFixed(2),
   );
@@ -121,7 +89,7 @@ export function useInsightsTabViewModel() {
       );
 
       return {
-        label: "Low Load",
+        label: "Low",
         range: "< 0.60",
         detail: hasRecentLogs
           ? "Low relative load — this is common when switching training phases or reducing volume."
@@ -132,7 +100,7 @@ export function useInsightsTabViewModel() {
 
     if (acwr <= 1.3) {
       return {
-        label: "Optimal Load",
+        label: "Optimal",
         range: "0.60 - 1.30",
         detail: "Workload is in the productive range for build/maintain progression.",
         toneClass: "success",
@@ -140,18 +108,12 @@ export function useInsightsTabViewModel() {
     }
 
     return {
-      label: "Elevated Load",
+      label: "Elevated",
       range: "> 1.30",
       detail:
         "Acute load is rising quickly vs your baseline. Normal during planned overreach — monitor recovery if unintentional.",
       toneClass: "warning",
     };
-  });
-
-  const acwrGaugePercent = computed(() => {
-    const acwr = insights.value.acwr;
-    if (acwr === null) return 0;
-    return clampPct((acwr / 1.8) * 100);
   });
 
   const fatigueRiskToneClass = computed(() => {
@@ -172,39 +134,6 @@ export function useInsightsTabViewModel() {
 
   const fatigueRiskPercent = computed(() => {
     return Math.round((insights.value.fatigue.riskScore / MAX_FATIGUE_RISK_SCORE) * 100);
-  });
-
-  const deloadStatusLabel = computed(() => {
-    if (insights.value.deloadStatus === "active") return "Active";
-    if (insights.value.deloadStatus === "completed") return "Completed";
-    if (insights.value.deloadStatus === "canceled") return "Stopped early";
-    return "None";
-  });
-
-  const deloadStatusToneClass = computed(() => {
-    if (insights.value.deloadStatus === "active") {
-      return "warning";
-    }
-    if (insights.value.deloadStatus === "completed") {
-      return "success";
-    }
-    if (insights.value.deloadStatus === "canceled") {
-      return "warning";
-    }
-    return "surface";
-  });
-
-  const deloadStatusNote = computed(() => {
-    if (insights.value.deloadStatus === "active") {
-      return `${deloadStore.daysRemaining ?? 0}d remaining in deload.`;
-    }
-    if (insights.value.deloadStatus === "completed") {
-      return "Latest deload has completed. Fatigue detection is active again.";
-    }
-    if (insights.value.deloadStatus === "canceled") {
-      return "Deload was stopped early. Monitor fatigue and ACWR closely.";
-    }
-    return "No deload cycle is currently recorded.";
   });
 
   const fatigueWeekRows = computed(() => {
@@ -237,27 +166,10 @@ export function useInsightsTabViewModel() {
     ];
   });
 
-  const maxSets = computed(() => {
-    const max = Math.max(...fatigueWeekRows.value.map((r) => r.sets));
-    return max > 0 ? max : 1;
-  });
-
-  const maxTonnage = computed(() => {
-    const max = Math.max(...fatigueWeekRows.value.map((r) => r.tonnage));
-    return max > 0 ? max : 1;
-  });
-
   const setsDeltaPct = computed(() => {
     const sets = insights.value.fatigue.loadWindow.sets;
     if (!sets.prior3WeekAvg) return null;
     return Math.round(((sets.current - sets.prior3WeekAvg) / sets.prior3WeekAvg) * 100);
-  });
-
-  const weeklyDeltaLabel = computed(() => {
-    const pct = setsDeltaPct.value;
-    if (pct === null) return "Not enough history";
-    if (pct > 0) return `+${pct}%`;
-    return `${pct}%`;
   });
 
   const tonnageDeltaPct = computed(() => {
@@ -334,33 +246,9 @@ export function useInsightsTabViewModel() {
   });
 
   const activeExerciseMetrics = computed(() => allExerciseMetrics.value.filter((m) => !m.isStale));
-  const staleExerciseMetrics = computed(() => allExerciseMetrics.value.filter((m) => m.isStale));
-
-  const totalExerciseCount = computed(() => activeExerciseMetrics.value.length);
-  const plateauExerciseCount = computed(
-    () => activeExerciseMetrics.value.filter((m) => m.status === "plateau").length,
-  );
-  const improvingExerciseCount = computed(
-    () => activeExerciseMetrics.value.filter((m) => m.status === "improving").length,
-  );
-  const droppingExerciseCount = computed(
-    () => activeExerciseMetrics.value.filter((m) => m.status === "dropping").length,
-  );
-  const averageBestRPE = computed(() => {
-    const vals = activeExerciseMetrics.value
-      .map((m) => m.bestRPE)
-      .filter((v): v is number => v !== null);
-    if (vals.length === 0) return null;
-    return vals.reduce((sum, v) => sum + v, 0) / vals.length;
-  });
 
   const exerciseStatusNote = computed(() => {
-    const { plateauPaused, plateauExerciseCount: _ } = {
-      plateauPaused: insights.value.plateauPaused,
-      plateauExerciseCount: activeExerciseMetrics.value.filter((m) => m.status === "plateau")
-        .length,
-    };
-    if (plateauPaused) return "Plateau & drop detection paused during deload.";
+    if (insights.value.plateauPaused) return "Plateau & drop detection paused during deload.";
     const plateaus = activeExerciseMetrics.value.filter((m) => m.status === "plateau").length;
     const improving = activeExerciseMetrics.value.filter((m) => m.status === "improving").length;
     if (plateaus === 0 && improving === 0) return "No significant strength trends detected yet.";
@@ -383,42 +271,27 @@ export function useInsightsTabViewModel() {
       .sort((a, b) => {
         if (a.status === "dropping" && b.status !== "dropping") return -1;
         if (b.status === "dropping" && a.status !== "dropping") return 1;
+        if (a.status === "dropping" && b.status === "dropping") {
+          return (a.deltaPct ?? 0) - (b.deltaPct ?? 0);
+        }
         return 0;
       })
       .slice(0, 3);
   });
 
   return {
-    router,
     userProgress,
     deloadStore,
     insights,
-    maintenanceLikeCount,
-    totalMuscleGroups,
-    notRecoveredCount,
     acwrValueLabel,
     acwrZone,
-    acwrGaugePercent,
     fatigueRiskToneClass,
     fatigueRiskLabel,
     fatigueRiskPercent,
-    deloadStatusLabel,
-    deloadStatusToneClass,
-    deloadStatusNote,
     fatigueWeekRows,
-    maxSets,
-    maxTonnage,
-    weeklyDeltaLabel,
     setsDeltaPct,
     tonnageDeltaPct,
-    activeExerciseMetrics,
-    staleExerciseMetrics,
     allExerciseMetrics,
-    totalExerciseCount,
-    plateauExerciseCount,
-    improvingExerciseCount,
-    droppingExerciseCount,
-    averageBestRPE,
     exerciseStatusNote,
     topImprovingExercises,
     attentionRequiredExercises,

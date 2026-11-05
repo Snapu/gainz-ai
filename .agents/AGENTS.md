@@ -5,6 +5,9 @@
 - **Stack**: Vue 3.5, Pinia 4, Capacitor 8, TypeScript 6, Tailwind CSS 4, Reka UI, Zod 4, `neverthrow`.
 - **Package Manager**: `pnpm` ONLY.
 - **Architecture**: Strict Domain-Driven Design (DDD), enforced automatically by `src/modules/architecture.boundaries.test.ts`. Model the business using ubiquitous language. Keep aggregates small. The domain layer must have NO external or infrastructure dependencies.
+- **Tone & Terminology**:
+  - **Athletic & Scientific Nüchternheit**: Use clear, objective sports science and fitness terminology (e.g., progressive overload, RPE, e1RM, volume landmarks, fatigue indicators, athlete profile).
+  - ❌ **NO Anime / Fantasy / Solo Leveling Jargon**: Strictly avoid terms like "Hunter", "Dungeon", "Awakening", "Quest", or roleplay mechanics in user-facing copy, prompts, or code comments. Keep the tone grounded, athletic, and professional.
 
 ## Architecture & Boundaries
 
@@ -80,9 +83,11 @@ All non-trivial feature development and refactoring follow a strict two-phase se
 ## Agent skills
 
 ### Issue tracker
+
 Issues and tracer-bullet tickets are tracked locally under `.agents/tickets/` with optional GitHub issue sync (`Snapu/gainz-ai`). See `docs/agents/issue-tracker.md`.
 
 ### Domain docs
+
 Single-context repository layout centered around `GLOSSARY.md` and strict DDD bounded contexts (`src/modules/*`). See `docs/agents/domain.md`.
 
 ## Key Integration Points
@@ -174,7 +179,7 @@ Single-context repository layout centered around `GLOSSARY.md` and strict DDD bo
 - **Surfaces**:
   - Level 1 (Cards): Always wrap standalone content blocks in `<UiCard>`.
   - Level 2 (Nested insets/rows): Use `bg-white/5 border border-white/5 rounded-xl`.
-  - Training Plans: Use dense, structured tables with hairline dividers (`divide-white/5`), uppercase micro-headers, and continuous vertical superset indicator lines for high-density program scanning.
+  - Training Plans: Use dense, structured row lists / flex rows with hairline dividers (`divide-white/5`), uppercase micro-headers, and continuous vertical superset indicator lines for mobile-optimized high-density scanning. (Do not use rigid HTML `<table>` elements).
 - **Status Surfaces (Dark Mode)**:
   - **Success**: `bg-emerald-500/10 border-emerald-500/20 text-emerald-400`
   - **Warning**: `bg-orange-500/10 border-orange-500/20 text-orange-400`
@@ -189,3 +194,19 @@ Single-context repository layout centered around `GLOSSARY.md` and strict DDD bo
 - **Icon Buttons**: Use exactly `class="rounded-full p-2.5 bg-white/5 hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-primary active:scale-95"`.
 - **Selection**: Use `UiToggleGroup` + `UiToggleGroupItem` (default variant). Do not mix with `ClickableList` or create custom selection components.
 - **Chips/Badges**: Always use `<UiBadge>`. Never use custom spans with inline colors. Add `uppercase tracking-wider` for short statuses.
+- **Loaders & Skeletons**: Always use `<UiTelemetryLoader text="..." />` for asynchronous loading and background calibration states. ❌ DO NOT use flashing grey skeleton placeholder boxes.
+- **Exercise Progression**: Use `<UiProgressionLine>` for set-by-set history curves. ❌ DO NOT use legacy bar charts (`UiBarGraph` has been removed).
+
+### Iconography & Directional Indicators
+
+- **Chevrons (`ChevronRight` / `ChevronDown`)**: Used exclusively for **hierarchical drill-downs, list navigation, and disclosure**:
+  - Tappable table/set rows that open a detail view/sheet (e.g. set log edit row).
+  - Submenu drill-downs (e.g. `GlobalHeaderActions`).
+  - Accordion / disclosure triggers (`ChevronDown`).
+  - ❌ DO NOT use chevrons on action execution buttons (e.g. `Log Set` action button must NOT have a `ChevronRight`).
+- **Arrows (`ArrowRight` / `ArrowLeft` / `ArrowUp`)**: Used exclusively for **context transitions, directional movement, and actions**:
+  - Cross-tab or cross-page transitions (e.g. `Open in Train Tab` uses `<ArrowRight class="w-3.5 h-3.5" />`).
+  - Submitting input forms (e.g. chat send uses `<ArrowUp class="w-5 h-5" />`).
+  - Back navigation in headers (`ArrowLeft`).
+  - Trend direction indicators in metrics (e.g. `ArrowRight` for flat plateau trend).
+- **Primary Action Buttons**: Action execution buttons (e.g. `Log Set 1`, `Save`, `Start`) should rely on clear typographic labels and appropriate variant styles without redundant trailing chevrons.

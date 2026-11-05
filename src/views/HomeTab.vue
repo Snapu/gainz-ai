@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Check, CheckCircle2, Coffee, List, Sparkles, Timer } from "@lucide/vue";
+import { CheckCircle2, Coffee, Sparkles, Timer } from "@lucide/vue";
 import { computed, nextTick, onActivated, onMounted, ref, watch } from "vue";
 import {
   type DisplayExercise,
@@ -11,9 +11,8 @@ import EmptyState from "@/shared/presentation/components/EmptyState.vue";
 import GlobalHeaderActions from "@/shared/presentation/components/GlobalHeaderActions.vue";
 import SessionLogGroup from "@/shared/presentation/components/SessionLogGroup.vue";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
-import UiBottomSheet from "@/shared/presentation/components/ui/UiBottomSheet.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
-import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
+import UiTelemetryLoader from "@/shared/presentation/components/ui/UiTelemetryLoader.vue";
 import { useHomeWorkoutViewModel } from "@/views/composables/useHomeWorkoutViewModel";
 
 const {
@@ -41,7 +40,6 @@ const {
 } = useHomeWorkoutViewModel();
 
 const showPastSessions = ref(false);
-const showOverviewSheet = ref(false);
 
 const galleryRef = ref<HTMLElement | null>(null);
 
@@ -138,26 +136,11 @@ function handleGalleryScroll() {
       </template>
     </AppHeader>
 
-    <main class="flex-1 w-full max-w-2xl mx-auto px-4 pt-4 pb-8 overflow-y-auto overscroll-y-contain no-scrollbar flex flex-col gap-5">
+    <main class="flex-1 w-full max-w-2xl mx-auto px-4 pt-4 pb-28 overflow-y-auto overscroll-y-contain no-scrollbar flex flex-col gap-5">
       <!-- TODAY'S WORKOUT SECTION -->
       <section>
         <template v-if="chatStore.isLoading && !allWorkoutGroups?.length">
-          <div class="mt-1 flex items-center justify-between gap-4">
-            <div class="h-4 w-32 bg-muted/20 animate-pulse rounded"></div>
-          </div>
-          <div class="flex flex-col gap-3 mt-4">
-            <UiCard v-for="i in 2" :key="i" class="w-full p-4 animate-pulse">
-              <div class="flex justify-between items-start mb-4">
-                <div class="h-5 w-40 bg-muted/20 rounded"></div>
-                <div class="h-8 w-8 bg-muted/20 rounded-full"></div>
-              </div>
-              <div class="grid grid-cols-3 gap-3">
-                <div class="h-10 bg-muted/20 rounded col-span-1"></div>
-                <div class="h-10 bg-muted/20 rounded col-span-1"></div>
-                <div class="h-10 bg-muted/20 rounded col-span-1"></div>
-              </div>
-            </UiCard>
-          </div>
+          <UiTelemetryLoader text="Calibrating training session..." />
         </template>
 
         <template v-else>
@@ -183,9 +166,6 @@ function handleGalleryScroll() {
                   <Timer class="w-3 h-3 mr-1.5 opacity-70" />
                   {{ currentSessionElapsedText }}
                 </UiBadge>
-                <UiButton variant="ghost" size="icon" class="w-8 h-8 rounded-full" @click="showOverviewSheet = true">
-                  <List class="w-4 h-4 text-muted-foreground" />
-                </UiButton>
               </div>
             </div>
 
@@ -201,41 +181,31 @@ function handleGalleryScroll() {
               </div>
             </div>
 
-            <!-- Dot-based Stepper -->
-            <div class="flex items-center w-full mb-6 px-1">
-              <template v-for="(group, gIdx) in allWorkoutGroups" :key="group.id">
-                
-                <!-- Group Container (No pill, just dots close together) -->
-                <div class="flex items-center gap-1.5 shrink-0">
-                  
-                  <button 
-                    v-for="ex in group.exercises"
-                    :key="ex.exerciseName"
-                    @click="scrollToGroup(gIdx)"
-                    class="relative shrink-0 transition-all duration-300 z-10 rounded-full focus-visible:outline-none flex items-center justify-center"
-                    :class="[
-                      getExerciseProgress(ex.exerciseName, ex.targetSets).isCompleted 
-                        ? (gIdx === visibleGroupIndex 
-                            ? 'w-4 h-4 bg-emerald-500 ring-2 ring-emerald-500/30 ring-offset-2 ring-offset-background text-background' 
-                            : 'w-3.5 h-3.5 bg-emerald-500/80 text-background')
-                        : (gIdx === visibleGroupIndex 
-                            ? 'w-3.5 h-3.5 bg-primary ring-2 ring-primary/30 ring-offset-2 ring-offset-background' 
-                            : (gIdx === activeGroupIndex 
-                                ? 'w-2.5 h-2.5 bg-primary/50' 
-                                : 'w-2.5 h-2.5 bg-white/20 hover:bg-white/40'))
-                    ]"
-                  >
-                    <Check v-if="getExerciseProgress(ex.exerciseName, ex.targetSets).isCompleted" class="w-full h-full p-[2px] opacity-90" stroke-width="4" />
-                  </button>
-                  
-                </div>
-
-                <!-- Connecting Line -->
-                <div v-if="gIdx < allWorkoutGroups.length - 1" class="flex-1 h-[2px] transition-colors duration-500 mx-2.5 z-0 rounded-full"
-                     :class="isGroupCompleted(group) ? 'bg-emerald-500/30' : 'bg-white/10'"
-                ></div>
-
-              </template>
+            <!-- Segmented Stepper Bar -->
+            <div class="flex items-start gap-1.5 w-full mb-4 px-1 min-h-[44px] -my-2 py-2">
+              <button
+                v-for="(group, gIdx) in allWorkoutGroups"
+                :key="group.id"
+                type="button"
+                @click="scrollToGroup(gIdx)"
+                :aria-label="group.isSuperset ? `Superset ${gIdx + 1}` : group.exercises[0]?.exerciseName"
+                class="flex-1 flex flex-col justify-start gap-1 pt-0.5 h-full min-h-[36px] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-95 transition-all group cursor-pointer"
+              >
+                <div
+                  v-for="ex in group.exercises"
+                  :key="ex.exerciseName"
+                  class="h-1.5 w-full rounded-full transition-all duration-300"
+                  :class="[
+                    getExerciseProgress(ex.exerciseName, ex.targetSets).isCompleted
+                      ? (gIdx === visibleGroupIndex ? 'bg-emerald-500 ring-2 ring-emerald-500/30' : 'bg-emerald-500/80')
+                      : (gIdx === visibleGroupIndex
+                          ? 'bg-primary ring-2 ring-primary/30'
+                          : (gIdx === activeGroupIndex
+                              ? 'bg-primary/30 group-hover:bg-primary/50'
+                              : 'bg-white/10 group-hover:bg-white/20'))
+                  ]"
+                />
+              </button>
             </div>
 
             <!-- Swipe Gallery -->
@@ -338,42 +308,6 @@ function handleGalleryScroll() {
         </div>
       </section>
     </main>
-
-    <!-- Overview Sheet -->
-    <UiBottomSheet v-model:open="showOverviewSheet" title="Workout Overview">
-      <div class="flex flex-col gap-6 w-full pt-4 pb-8">
-        <div
-          v-for="(group, gIndex) in allWorkoutGroups"
-          :key="group.id"
-          class="w-full flex flex-col gap-2"
-        >
-          <div v-if="group.isSuperset" class="w-full flex items-center gap-3">
-            <div class="flex-1 h-px bg-primary/10 rounded-full"></div>
-            <UiBadge variant="info" class="text-micro font-bold">Superset</UiBadge>
-            <div class="flex-1 h-px bg-primary/10 rounded-full"></div>
-          </div>
-          
-          <div 
-            v-for="(exercise, exIndex) in group.exercises" 
-            :key="exercise.exerciseName ?? exIndex"
-            class="flex items-center justify-between w-full p-4 rounded-xl border transition-colors"
-            :class="isExerciseCompleted(exercise) ? 'bg-emerald-500/10 border-emerald-500/20 opacity-60' : (gIndex === activeGroupIndex ? 'bg-primary/10 border-primary/20' : 'bg-white/5 border-white/5')"
-          >
-             <div class="flex flex-col min-w-0">
-               <span class="text-sm font-semibold truncate text-foreground" :class="isExerciseCompleted(exercise) ? 'line-through decoration-muted-foreground/30' : ''">
-                 {{ exercise.exerciseName }}
-               </span>
-               <span class="text-micro text-muted-foreground/60 mt-1">
-                 {{ exercise.targetSets }} Sets
-               </span>
-             </div>
-             
-             <CheckCircle2 v-if="isExerciseCompleted(exercise)" class="w-5 h-5 text-emerald-400 shrink-0" />
-             <div v-else-if="gIndex === activeGroupIndex" class="w-2 h-2 rounded-full bg-primary animate-pulse mr-1"></div>
-          </div>
-        </div>
-      </div>
-    </UiBottomSheet>
   </div>
 </template>
 

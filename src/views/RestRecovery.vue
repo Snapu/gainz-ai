@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { CalendarDate, getLocalTimeZone, today } from "@internationalized/date";
-import { ArrowLeft, Moon, Plus, X } from "@lucide/vue";
+import { ArrowLeft, Bed, Plus, X } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import type { AppEvent } from "@/modules/events/presentation";
@@ -93,7 +93,7 @@ function remove(id: string) {
     <main class="flex-1 px-6 py-6 overflow-y-auto pb-32">
       <EmptyState 
         v-if="sortedEvents.length === 0"
-        :icon="Moon"
+        :icon="Bed"
         title="No off days logged."
         description="Tap + to record a rest day, sickness, or injury."
       />
