@@ -686,5 +686,64 @@ describe("useHomeWorkoutViewModel", () => {
       // Must stay on Einheit A (Bench Press / Barbell Row) for the rest of today rather than jumping to Squat
       expect(vm.allWorkoutGroups.value?.[0]?.exercises[0]?.exerciseName).toBe("Bench Press");
     });
+
+    it("keeps active midnight-crossing workout and logs intact across midnight", () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-11-06T00:15:00"));
+
+      const chatStore = useCoachChatStore();
+      const logsStore = useExerciseLogsStore();
+
+      // Coach prescribed a workout on Thursday evening
+      chatStore.addMessage({
+        id: "coach-squat",
+        role: "coach",
+        content: JSON.stringify({
+          coachMessage: "Heavy leg day.",
+          recommendedWorkout: [{ exerciseName: "Squat", targetSets: 3, restSeconds: 180 }],
+        }),
+        timestamp: new Date("2026-11-05T23:25:00").toISOString(),
+        sessionId: "2026-11-05",
+        logsCount: 0,
+      });
+
+      // User logged 2 sets before midnight on Thursday and 1 set after midnight on Friday
+      logsStore.exerciseLogs = [
+        {
+          id: "1",
+          exerciseName: "Squat",
+          reps: 5,
+          weight: 100,
+          loggedAt: new Date("2026-11-05T23:30:00"),
+        },
+        {
+          id: "2",
+          exerciseName: "Squat",
+          reps: 5,
+          weight: 100,
+          loggedAt: new Date("2026-11-05T23:45:00"),
+        },
+        {
+          id: "3",
+          exerciseName: "Squat",
+          reps: 5,
+          weight: 100,
+          loggedAt: new Date("2026-11-06T00:05:00"),
+        },
+      ];
+
+      const vm = useHomeWorkoutViewModel();
+
+      // The coach's prescribed workout must still be active (not replaced or wiped at midnight)
+      expect(vm.allWorkoutGroups.value?.[0]?.exercises[0]?.exerciseName).toBe("Squat");
+
+      // Progress should count all 3 sets (2 before midnight + 1 after midnight)
+      const progress = vm.getExerciseProgress("Squat", 3);
+      expect(progress.done).toBe(3);
+      expect(progress.isCompleted).toBe(true);
+      expect(vm.isWorkoutComplete.value).toBe(true);
+
+      vi.useRealTimers();
+    });
   });
 });

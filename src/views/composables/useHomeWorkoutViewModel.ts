@@ -108,11 +108,23 @@ export function useHomeWorkoutViewModel() {
   // ---------------------------------------------------------------------------
   const currentReactiveTime = useNow({ scheduler: (cb) => useTimeoutPoll(cb, 60000) });
 
-  const todaysLogs = computed<ExerciseLog[]>(() => {
-    const today = new Date(currentReactiveTime.value);
-    today.setHours(0, 0, 0, 0);
+  const currentSession = computed(() =>
+    resolveCurrentSession(logsStore.exerciseLogs, currentReactiveTime.value.getTime()),
+  );
 
-    return logsStore.exerciseLogs.filter((log) => log.loggedAt.getTime() >= today.getTime());
+  const currentSessionDateIso = computed(() => {
+    if (currentSession.value) {
+      return isoDateString(currentSession.value.startTime);
+    }
+    return isoDateString(currentReactiveTime.value);
+  });
+
+  const todaysLogs = computed<ExerciseLog[]>(() => {
+    const boundary = getSessionStartBoundary(
+      currentSession.value,
+      currentReactiveTime.value.getTime(),
+    );
+    return logsStore.exerciseLogs.filter((log) => log.loggedAt.getTime() >= boundary);
   });
 
   const todayTargetSession = computed(() => {
@@ -139,7 +151,7 @@ export function useHomeWorkoutViewModel() {
   const todaysCoachWorkout = computed<DisplayExercise[] | undefined>(() =>
     resolveTodaysCoachWorkout({
       messages: chatStore.messages,
-      todayIso: isoDateString(currentReactiveTime.value),
+      todayIso: currentSessionDateIso.value,
       plan: planStore.activePlan,
       completedSessions: planStore.completedSessions,
       targetSession: todayTargetSession.value,
@@ -219,8 +231,10 @@ export function useHomeWorkoutViewModel() {
   }
 
   function getLastSessionSummary(exerciseName: string): string | null {
-    const currentSession = resolveCurrentSession(logsStore.exerciseLogs);
-    const sessionBoundary = getSessionStartBoundary(currentSession);
+    const sessionBoundary = getSessionStartBoundary(
+      currentSession.value,
+      currentReactiveTime.value.getTime(),
+    );
 
     const pastLogs = logsStore.exerciseLogs.filter(
       (l) => l.exerciseName === exerciseName && l.loggedAt.getTime() < sessionBoundary,

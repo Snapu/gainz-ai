@@ -3,9 +3,9 @@ import { ArrowLeft, History } from "@lucide/vue";
 import { storeToRefs } from "pinia";
 import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import { localeDateString } from "@/modules/sharedKernel/presentation";
 import {
   type ExerciseLog,
+  groupLogsIntoSessions,
   LogExerciseSheet,
   useExerciseLogsStore,
 } from "@/modules/trainingLogs/presentation";
@@ -16,6 +16,7 @@ import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import { useLogSheet } from "@/shared/presentation/composables/useLogSheet";
 
 interface GroupedSession {
+  id: string;
   date: string;
   logs: ExerciseLog[];
   stats: {
@@ -34,18 +35,11 @@ const logSheet = useLogSheet();
 const collapsedSessions = ref<Record<string, boolean>>({});
 
 const groupedLogs = computed(() => {
-  const groups: Record<string, ExerciseLog[]> = {};
-  const sorted = [...exerciseLogs.value].sort(
-    (a, b) => b.loggedAt.getTime() - a.loggedAt.getTime(),
-  );
+  const sessions = groupLogsIntoSessions(exerciseLogs.value);
+  const sortedSessions = [...sessions].reverse();
 
-  for (const log of sorted) {
-    const dateStr = localeDateString(log.loggedAt);
-    if (!groups[dateStr]) groups[dateStr] = [];
-    groups[dateStr].push(log);
-  }
-
-  return Object.entries(groups).map(([date, logs]): GroupedSession => {
+  return sortedSessions.map((session): GroupedSession => {
+    const logs = [...session.logs].sort((a, b) => b.loggedAt.getTime() - a.loggedAt.getTime());
     const volume = logs.reduce((acc, log) => acc + (log.weight ?? 0) * (log.reps ?? 0), 0);
     const exerciseCount = new Set(logs.map((l) => l.exerciseName)).size;
 
@@ -55,7 +49,8 @@ const groupedLogs = computed(() => {
     const durationMinutes = Math.round((maxTime - minTime) / 60000);
 
     return {
-      date,
+      id: `${session.sessionId}-${session.startTime.getTime()}`,
+      date: session.sessionDate,
       logs,
       stats: {
         sets: logs.length,
@@ -72,16 +67,16 @@ watch(
   (newGroups) => {
     for (let i = 1; i < newGroups.length; i++) {
       const session = newGroups[i];
-      if (session && collapsedSessions.value[session.date] === undefined) {
-        collapsedSessions.value[session.date] = true;
+      if (session && collapsedSessions.value[session.id] === undefined) {
+        collapsedSessions.value[session.id] = true;
       }
     }
   },
   { immediate: true },
 );
 
-function toggleSession(date: string) {
-  collapsedSessions.value[date] = !collapsedSessions.value[date];
+function toggleSession(id: string) {
+  collapsedSessions.value[id] = !collapsedSessions.value[id];
 }
 
 function editLog(log: ExerciseLog) {
@@ -109,12 +104,12 @@ function editLog(log: ExerciseLog) {
     >
       <SessionLogGroup
         v-for="session in groupedLogs"
-        :key="session.date"
+        :key="session.id"
         :date="session.date"
         :logs="session.logs"
         :stats="session.stats"
-        :is-collapsed="!!collapsedSessions[session.date]"
-        @toggle="toggleSession(session.date)"
+        :is-collapsed="!!collapsedSessions[session.id]"
+        @toggle="toggleSession(session.id)"
         @delete-log="logsStore.removeExerciseLog"
         @edit-log="editLog"
       />

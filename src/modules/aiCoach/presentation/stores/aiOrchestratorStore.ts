@@ -248,8 +248,9 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     );
     chatStore.addMessage(coachMessage);
 
+    const currentSession = resolveCurrentSession(exerciseLogsStore.exerciseLogs);
     chatStore.lastRequestState = {
-      date: isoDateString(new Date()),
+      date: currentSession ? isoDateString(currentSession.startTime) : isoDateString(new Date()),
       checksum: todayLogsChecksum,
     };
   }
@@ -265,7 +266,9 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
 
     const initialSession = resolveCurrentSession(exerciseLogsStore.exerciseLogs);
     const initialChecksum = getTodayLogsChecksum(initialSession);
-    const today = isoDateString(new Date());
+    const sessionDate = initialSession
+      ? isoDateString(initialSession.startTime)
+      : isoDateString(new Date());
     const initialEffectiveMode = resolveEffectiveCoachingMode({
       requestedMode: mode,
       hasActivePlan: Boolean(planStore.activePlan && planStore.activePlan.sessions.length > 0),
@@ -276,7 +279,7 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
       initialEffectiveMode === "execution" &&
       planStore.activePlan &&
       planStore.activePlan.sessions.length > 0 &&
-      chatStore.lastRequestState.date === today &&
+      chatStore.lastRequestState.date === sessionDate &&
       chatStore.lastRequestState.checksum === initialChecksum &&
       chatStore.messages.length > 0
     ) {
@@ -393,6 +396,9 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     const plan = planStore.activePlan;
     if (!plan || plan.sessions.length === 0 || chatStore.messages.length === 0) return;
 
+    const activeSession = resolveCurrentSession(exerciseLogsStore.exerciseLogs);
+    if (activeSession) return;
+
     const now = new Date();
     const todayIso = isoDateString(now);
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -439,6 +445,20 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     void ensureSessionAdvice();
   }
 
+  function checkAndRegenerateIfPlanCompleted(plan: TrainingPlan): boolean {
+    const activeSession = resolveCurrentSession(exerciseLogsStore.exerciseLogs);
+    if (activeSession || !plan.isFullyCompleted(planStore.completedSessions)) {
+      return false;
+    }
+
+    pendingEnsureSessionAdvice = false;
+    chatStore.clearMessages();
+    planStore.clearPlan();
+    planStore.clearCompletedSessions();
+    generateNewPlan();
+    return true;
+  }
+
   function syncCompletedSessionsFromLogs(): boolean {
     if (isLogsBusyAndEmpty()) return false;
 
@@ -457,19 +477,14 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
       return false;
     }
 
-    const { newCompletedSessions, hasChanged, isPlanFullyCompleted } = evaluatePlanProgress(plan);
+    const { newCompletedSessions, hasChanged } = evaluatePlanProgress(plan);
 
     if (hasChanged) {
       planStore.setCompletedSessions(newCompletedSessions);
+    }
 
-      if (isPlanFullyCompleted) {
-        pendingEnsureSessionAdvice = false;
-        chatStore.clearMessages();
-        planStore.clearPlan();
-        planStore.clearCompletedSessions();
-        generateNewPlan();
-        return true;
-      }
+    if (checkAndRegenerateIfPlanCompleted(plan)) {
+      return true;
     }
 
     flushPendingSessionAdvice();
@@ -484,6 +499,11 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
       return okAsync(undefined);
     }
     pendingEnsureSessionAdvice = false;
+
+    const activeSession = resolveCurrentSession(exerciseLogsStore.exerciseLogs);
+    if (activeSession) {
+      return okAsync(undefined);
+    }
 
     const planRegenerated = syncCompletedSessionsFromLogs();
     if (planRegenerated) {

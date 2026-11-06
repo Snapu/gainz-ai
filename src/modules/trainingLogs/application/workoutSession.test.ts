@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   getSessionStartBoundary,
+  groupLogsIntoSessions,
   resolveCurrentSession,
   SESSION_INACTIVITY_MS,
   SESSION_MAX_WINDOW_MS,
@@ -70,7 +71,7 @@ describe("resolveCurrentSession", () => {
 
   it("session.startTime is the earliest log in the window, not the latest", () => {
     const { now, minsAgo } = buildClock("2026-05-08T10:00:00");
-    const first = minsAgo(60);
+    const first = minsAgo(40);
     const last = minsAgo(5);
     const logs = [
       createLog("Squat", last), // intentionally out-of-order
@@ -136,12 +137,28 @@ describe("resolveCurrentSession", () => {
     const { now, minsAgo } = buildClock("2026-05-08T10:00:00");
     const logs = [
       createLog("Warmup", minsAgo(SESSION_MAX_WINDOW_MS / 60_000 + 30)), // outside window
-      createLog("Squat", minsAgo(60)),
+      createLog("Squat", minsAgo(35)),
       createLog("Bench Press", minsAgo(10)),
     ];
     const session = resolveCurrentSession(logs, now);
     expect(session).not.toBeNull();
     expect(session?.logs).toHaveLength(2); // only the 2 within the window
+  });
+
+  it("does not merge two distinct workouts within the 8-hour window into one session", () => {
+    const { now, minsAgo } = buildClock("2026-05-08T10:00:00");
+    const morningWorkoutLog = createLog("Morning Squat", minsAgo(4 * 60)); // 4 hours ago (ended 4h ago)
+    const currentWorkoutLog1 = createLog("Bench Press", minsAgo(20)); // current workout
+    const currentWorkoutLog2 = createLog("Incline DB", minsAgo(5)); // current workout
+
+    const session = resolveCurrentSession(
+      [morningWorkoutLog, currentWorkoutLog1, currentWorkoutLog2],
+      now,
+    );
+    expect(session).not.toBeNull();
+    expect(session?.startTime).toEqual(currentWorkoutLog1.loggedAt);
+    expect(session?.logs).toHaveLength(2);
+    expect(session?.logs.map((l) => l.exerciseName)).toEqual(["Bench Press", "Incline DB"]);
   });
 
   it("uses current time by default (no now param) without throwing", () => {
@@ -173,5 +190,71 @@ describe("getSessionStartBoundary", () => {
     ];
     const session = resolveCurrentSession(logs, now);
     expect(getSessionStartBoundary(session, now)).toBe(sessionStart.getTime());
+  });
+});
+
+describe("groupLogsIntoSessions", () => {
+  it("returns empty array for empty logs", () => {
+    expect(groupLogsIntoSessions([])).toEqual([]);
+  });
+
+  it("clusters logs within inactivity threshold into a single session", () => {
+    const log1 = createLog("Squat", new Date("2026-05-08T10:00:00"));
+    const log2 = createLog("Bench", new Date("2026-05-08T10:15:00"));
+    const log3 = createLog("Row", new Date("2026-05-08T10:35:00"));
+
+    const sessions = groupLogsIntoSessions([log1, log2, log3]);
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]?.logs).toHaveLength(3);
+    expect(sessions[0]?.startTime).toEqual(new Date("2026-05-08T10:00:00"));
+  });
+
+  it("splits logs into multiple sessions when gap exceeds inactivity threshold", () => {
+    const morningLog = createLog("Squat", new Date("2026-05-08T09:00:00"));
+    const eveningLog = createLog("Bench", new Date("2026-05-08T18:00:00"));
+
+    const sessions = groupLogsIntoSessions([morningLog, eveningLog]);
+    expect(sessions).toHaveLength(2);
+    expect(sessions[0]?.logs).toHaveLength(1);
+    expect(sessions[1]?.logs).toHaveLength(1);
+    expect(sessions[0]?.startTime).toEqual(new Date("2026-05-08T09:00:00"));
+    expect(sessions[1]?.startTime).toEqual(new Date("2026-05-08T18:00:00"));
+  });
+
+  it("groups midnight-crossing workout into a single session dated at start time", () => {
+    // Thursday evening to Friday early morning
+    const log1 = createLog("Squat", new Date("2026-05-08T23:30:00"));
+    const log2 = createLog("Bench", new Date("2026-05-08T23:50:00"));
+    const log3 = createLog("Plank", new Date("2026-05-09T00:10:00"));
+    const log4 = createLog("Plank", new Date("2026-05-09T00:15:00"));
+
+    const sessions = groupLogsIntoSessions([log1, log2, log3, log4]);
+    expect(sessions).toHaveLength(1);
+    const session = sessions[0];
+    expect(session?.logs).toHaveLength(4);
+    expect(session?.startTime).toEqual(new Date("2026-05-08T23:30:00"));
+    expect(session?.sessionId).toBe("2026-05-08");
+    // Date formatted as May 8, NOT May 9
+    const expectedDate = new Date("2026-05-08T23:30:00").toLocaleDateString(undefined, {
+      weekday: "long",
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+    });
+    expect(session?.sessionDate).toBe(expectedDate);
+  });
+
+  it("correctly identifies active (mid-workout) vs inactive (post-workout) sessions", () => {
+    const now = new Date("2026-05-09T00:20:00").getTime();
+    const log1 = createLog("Squat", new Date("2026-05-08T23:30:00"));
+    const log2 = createLog("Bench", new Date("2026-05-09T00:05:00")); // 15 min before now
+
+    const activeSessions = groupLogsIntoSessions([log1, log2], now);
+    expect(activeSessions[0]?.phase).toBe("mid-workout");
+
+    // If now is 1 hour later
+    const later = new Date("2026-05-09T01:10:00").getTime();
+    const inactiveSessions = groupLogsIntoSessions([log1, log2], later);
+    expect(inactiveSessions[0]?.phase).toBe("post-workout");
   });
 });

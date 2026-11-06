@@ -104,9 +104,11 @@ export const useCoachChatStore = defineStore("coachChat", () => {
   );
 
   const hasTodayCoachMessage = computed<boolean>(() => {
-    const today = isoDateString(now.value);
+    const targetDate = currentSessionId.value;
     return messages.value.some(
-      (m) => m.role === "coach" && isoDateString(new Date(m.timestamp)) === today,
+      (m) =>
+        m.role === "coach" &&
+        (m.sessionId === targetDate || isoDateString(new Date(m.timestamp)) === targetDate),
     );
   });
 

@@ -544,4 +544,190 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
       vi.useRealTimers();
     }
   });
+
+  it("does not trigger ensureSessionAdvice or generateNewPlan when an active workout is in progress (mid-workout protection)", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-11-06T00:15:00"));
+      mockApiKey.value = "test-key";
+
+      // Workout started Thursday 23:30, last log Friday 00:05 (active session)
+      mockExerciseLogs.value = [
+        {
+          id: "log-1",
+          exerciseName: "Squat",
+          reps: 5,
+          weight: 100,
+          loggedAt: new Date("2026-11-05T23:30:00"),
+        },
+        {
+          id: "log-2",
+          exerciseName: "Squat",
+          reps: 5,
+          weight: 100,
+          loggedAt: new Date("2026-11-06T00:05:00"),
+        },
+      ];
+
+      const orchestrator = useAiOrchestratorStore();
+      await orchestrator.ensureSessionAdvice();
+
+      // Must NOT request advice or generate a new plan while mid-workout
+      expect(mockAsk).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not wipe plan and generate a new plan mid-workout when last session in plan is completed", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-11-06T00:15:00"));
+      mockApiKey.value = "test-key";
+
+      const planStore = useTrainingPlanStore();
+      const plan = TrainingPlan.create("2026-11-01T00:00:00.000Z", 1, [
+        {
+          weekNumber: 1,
+          dayOfWeek: 4, // Thursday
+          sessionLabel: "Legs",
+          focusDescription: "Quads",
+          exercises: [{ exerciseName: "Squat", targetSets: 2 }],
+        },
+      ]);
+      planStore.setPlan(plan);
+
+      // User just completed the second set at 00:05, session is still active
+      mockExerciseLogs.value = [
+        {
+          id: "log-1",
+          exerciseName: "Squat",
+          reps: 5,
+          weight: 100,
+          loggedAt: new Date("2026-11-05T23:30:00"),
+        },
+        {
+          id: "log-2",
+          exerciseName: "Squat",
+          reps: 5,
+          weight: 100,
+          loggedAt: new Date("2026-11-06T00:05:00"),
+        },
+      ];
+
+      const orchestrator = useAiOrchestratorStore();
+      await orchestrator.ensureSessionAdvice();
+
+      // Plan should NOT be cleared and generateNewPlan should NOT be called mid-workout
+      expect(planStore.activePlan).not.toBeNull();
+      expect(mockAsk).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("regenerates plan after workout ends when plan was completed mid-workout (no deadlock)", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-11-06T00:15:00"));
+      mockApiKey.value = "test-key";
+      mockAsk.mockReturnValue(
+        okAsync({
+          advice: { coachMessage: "New cycle plan." },
+          requestPayload: "test payload",
+        }),
+      );
+
+      const planStore = useTrainingPlanStore();
+      const plan = TrainingPlan.create("2026-11-01T00:00:00.000Z", 1, [
+        {
+          weekNumber: 1,
+          dayOfWeek: 4, // Thursday
+          sessionLabel: "Legs",
+          focusDescription: "Quads",
+          exercises: [{ exerciseName: "Squat", targetSets: 2 }],
+        },
+      ]);
+      planStore.setPlan(plan);
+
+      // Mid-workout: completedSessions is updated to include the session, but activeSession is true
+      mockExerciseLogs.value = [
+        {
+          id: "log-1",
+          exerciseName: "Squat",
+          reps: 5,
+          weight: 100,
+          loggedAt: new Date("2026-11-05T23:30:00"),
+        },
+        {
+          id: "log-2",
+          exerciseName: "Squat",
+          reps: 5,
+          weight: 100,
+          loggedAt: new Date("2026-11-06T00:05:00"),
+        },
+      ];
+
+      const orchestrator = useAiOrchestratorStore();
+      await orchestrator.ensureSessionAdvice();
+
+      // During active workout: plan intact, mockAsk not called
+      expect(planStore.activePlan).not.toBeNull();
+      expect(mockAsk).not.toHaveBeenCalled();
+
+      // Time advances past inactivity window (55 minutes after last log at 00:05 -> 01:00)
+      vi.setSystemTime(new Date("2026-11-06T01:00:00"));
+
+      // Trigger ensureSessionAdvice after workout ended
+      await orchestrator.ensureSessionAdvice();
+
+      // Plan should be cleared and generateNewPlan called!
+      expect(planStore.activePlan).toBeNull();
+      expect(mockAsk).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("recognizes coach message generated past midnight matching m.sessionId in hasTodayCoachMessage", () => {
+    vi.useFakeTimers();
+    try {
+      // System time is 00:20 on Nov 6
+      vi.setSystemTime(new Date("2026-11-06T00:20:00"));
+
+      // Workout started Nov 5 at 23:30, so currentSessionId is "2026-11-05"
+      mockExerciseLogs.value = [
+        {
+          id: "log-1",
+          exerciseName: "Squat",
+          reps: 5,
+          weight: 100,
+          loggedAt: new Date("2026-11-05T23:30:00"),
+        },
+        {
+          id: "log-2",
+          exerciseName: "Squat",
+          reps: 5,
+          weight: 100,
+          loggedAt: new Date("2026-11-06T00:10:00"),
+        },
+      ];
+
+      const chatStore = useCoachChatStore();
+
+      // Coach message generated at 00:12 on Nov 6, with sessionId "2026-11-05"
+      chatStore.addMessage({
+        id: "msg-1",
+        role: "coach",
+        content: JSON.stringify({ coachMessage: "Keep pushing." }),
+        timestamp: new Date("2026-11-06T00:12:00").toISOString(),
+        sessionId: "2026-11-05",
+        logsCount: 2,
+      });
+
+      expect(chatStore.hasTodayCoachMessage).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

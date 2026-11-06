@@ -249,4 +249,38 @@ describe("evaluateCompletedSessions", () => {
     expect(result.newCompletedSessions.has(TrainingPlan.sessionKey(1, 1))).toBe(true);
     expect(result.newCompletedSessions.has(TrainingPlan.sessionKey(2, 1))).toBe(false);
   });
+
+  it("marks a session completed when workout sets cross midnight", () => {
+    const mondayNightPlan = TrainingPlan.create(planCreated.toISOString(), 1, [
+      {
+        dayOfWeek: 1,
+        weekNumber: 1,
+        sessionLabel: "Legs",
+        focusDescription: "Quads & Core",
+        exercises: [
+          { exerciseName: "Squat", targetSets: 2 },
+          { exerciseName: "Plank", targetSets: 1 },
+        ],
+      },
+    ]);
+
+    // User starts Squat at 23:45 Monday, finishes Plank at 00:10 Tuesday
+    const midnightCrossingLogs = [
+      { loggedAt: new Date("2026-01-05T23:45:00Z"), exerciseName: "Squat" },
+      { loggedAt: new Date("2026-01-05T23:55:00Z"), exerciseName: "Squat" },
+      { loggedAt: new Date("2026-01-06T00:10:00Z"), exerciseName: "Plank" },
+    ];
+
+    const result = evaluateCompletedSessions(
+      mondayNightPlan,
+      new Set(),
+      midnightCrossingLogs,
+      normalize,
+      resolveMuscle,
+      new Date("2026-01-06T12:00:00Z"),
+    );
+
+    expect(result.newCompletedSessions.has(TrainingPlan.sessionKey(1, 1))).toBe(true);
+    expect(result.isPlanFullyCompleted).toBe(true);
+  });
 });
