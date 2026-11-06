@@ -91,10 +91,10 @@ function editLog(log: ExerciseLog) {
         variant="ghost"
         size="icon"
         aria-label="Go Back"
-        class="mr-4 -ml-2"
+        class="mr-2 -ml-1"
         @click="router.back()"
       >
-        <ArrowLeft class="w-6 h-6" />
+        <ArrowLeft class="w-5 h-5" />
       </UiButton>
       <h1 class="text-xl font-bold tracking-tight flex-1">Past Sessions</h1>
     </AppHeader>

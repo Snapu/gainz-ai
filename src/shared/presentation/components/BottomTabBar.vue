@@ -14,7 +14,7 @@ const tabs = [
 
 <template>
   <nav class="relative w-full z-40 bg-background/95 backdrop-blur-xl border-t border-white/5 pb-safe shrink-0 select-none touch-none">
-    <div class="flex items-center justify-around h-16 px-2">
+    <div class="flex items-center justify-around h-13 px-2">
       <router-link
         v-for="tab in tabs"
         :key="tab.name"
@@ -22,8 +22,8 @@ const tabs = [
         class="flex flex-col items-center justify-center w-full h-full text-muted-foreground transition-colors duration-200"
         :class="{ 'text-primary': route.name === tab.name }"
       >
-        <component :is="tab.icon" class="w-6 h-6 mb-1" :class="{ 'stroke-[2.5]': route.name === tab.name }" />
-        <span class="text-xs font-bold tracking-wide" :class="route.name === tab.name ? 'text-primary' : 'text-muted-foreground/60'">
+        <component :is="tab.icon" class="w-5 h-5 mb-0.5" :class="{ 'stroke-[2.5]': route.name === tab.name }" />
+        <span class="text-[10px] font-bold uppercase tracking-wider" :class="route.name === tab.name ? 'text-primary' : 'text-muted-foreground/60'">
           {{ tab.label }}
         </span>
       </router-link>

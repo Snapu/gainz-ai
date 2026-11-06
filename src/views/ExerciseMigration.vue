@@ -77,7 +77,7 @@ async function applyDecision(
 <template>
   <div class="min-h-screen bg-background flex flex-col pt-safe">
     <AppHeader>
-      <UiButton variant="ghost" size="icon" @click="router.back()">
+      <UiButton variant="ghost" size="icon" @click="router.back()" aria-label="Go Back">
         <ArrowLeft class="w-5 h-5" />
       </UiButton>
       <div class="flex-1 min-w-0 ml-2">

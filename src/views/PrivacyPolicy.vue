@@ -8,9 +8,9 @@ const router = useRouter();
 
 <template>
   <div class="h-full bg-background flex flex-col overflow-hidden">
-    <header class="flex items-center p-4 border-b border-white/5 bg-background/80 backdrop-blur-md shrink-0 z-10 select-none touch-none">
-      <UiButton variant="ghost" size="icon" @click="router.back()" class="shrink-0 -ml-2 mr-2">
-        <ArrowLeft class="w-6 h-6" />
+    <header class="flex items-center h-13 px-4 border-b border-white/5 bg-background/80 backdrop-blur-md shrink-0 z-10 select-none touch-none">
+      <UiButton variant="ghost" size="icon" @click="router.back()" class="shrink-0 -ml-1 mr-2" aria-label="Go Back">
+        <ArrowLeft class="w-5 h-5" />
       </UiButton>
       <h1 class="text-xl font-bold truncate">Privacy Policy</h1>
     </header>

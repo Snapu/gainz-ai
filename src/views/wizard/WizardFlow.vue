@@ -164,7 +164,7 @@ function skipWizard() {
   <div class="h-full bg-background flex flex-col pt-safe overflow-hidden">
     <!-- Header -->
     <header 
-      class="flex items-center justify-between p-4 shrink-0 bg-background/90 backdrop-blur-xl transition-all z-20 select-none touch-none"
+      class="flex items-center justify-between h-13 px-4 shrink-0 bg-background/90 backdrop-blur-xl transition-all z-20 select-none touch-none"
       :class="{ 'border-b border-white/5': isEditMode }"
     >
       <!-- Left: Back Button -->
@@ -172,12 +172,13 @@ function skipWizard() {
         v-if="!stepper.isFirst.value || isEditMode"
         variant="ghost"
         size="icon"
-        class="rounded-full w-12 h-12 -ml-2"
+        class="rounded-full w-10 h-10 -ml-1"
+        aria-label="Back"
         @click="isEditMode ? skipWizard() : handleBack()"
       >
-        <ArrowLeft class="w-6 h-6" />
+        <ArrowLeft class="w-5 h-5" />
       </UiButton>
-      <div v-else class="w-12 h-12"></div>
+      <div v-else class="w-10 h-10"></div>
 
       <!-- Center: Progress or Title -->
       <div v-if="!isEditMode" class="flex gap-2 items-center mx-4 flex-1 justify-center max-w-[200px]">
@@ -205,7 +206,7 @@ function skipWizard() {
       >
         Skip
       </UiButton>
-      <div v-else class="w-12 h-12"></div>
+      <div v-else class="w-10 h-10"></div>
     </header>
 
     <!-- Content Area -->
