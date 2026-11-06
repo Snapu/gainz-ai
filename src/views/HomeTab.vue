@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { CheckCircle2, Coffee, Sparkles, Timer } from "@lucide/vue";
-import { useThrottleFn } from "@vueuse/core";
-import { computed, nextTick, onActivated, onMounted, ref, watch } from "vue";
+import { useDebounceFn, useThrottleFn } from "@vueuse/core";
+import { computed, nextTick, onActivated, onMounted, onUnmounted, ref, watch } from "vue";
 import {
   type DisplayExercise,
   type DisplayWorkoutGroup,
@@ -43,6 +43,8 @@ const {
 } = useHomeWorkoutViewModel();
 
 const galleryRef = ref<HTMLElement | null>(null);
+const isProgrammaticScrolling = ref(false);
+let programmaticScrollTimeout: ReturnType<typeof setTimeout> | null = null;
 
 function isGroupCompleted(group: DisplayWorkoutGroup) {
   return group.exercises.every(
@@ -56,73 +58,117 @@ const activeGroupIndex = computed(() => {
   return idx === -1 ? allWorkoutGroups.value.length - 1 : idx;
 });
 
-// Auto-scroll when active group changes
-watch(
-  activeGroupIndex,
-  async (newIdx) => {
-    scrollToGroup(newIdx);
-  },
-  { immediate: true },
-);
+function resetProgrammaticScroll() {
+  if (programmaticScrollTimeout) {
+    clearTimeout(programmaticScrollTimeout);
+    programmaticScrollTimeout = null;
+  }
+  isProgrammaticScrolling.value = false;
+}
 
-// Ensure we scroll to the active group when mounted (since immediate watcher might run before ref is bound)
-onMounted(() => {
-  scrollToGroup(activeGroupIndex.value);
-});
+function scrollContainerToChild(container: HTMLElement, idx: number, smooth: boolean) {
+  const child = container.children?.[idx] as HTMLElement | undefined;
+  if (!child) return;
 
-// Restore scroll position to the active group when returning to this view via keep-alive
-onActivated(() => {
-  scrollToGroup(activeGroupIndex.value);
-});
+  if (smooth) {
+    isProgrammaticScrolling.value = true;
+    if (programmaticScrollTimeout) clearTimeout(programmaticScrollTimeout);
+    programmaticScrollTimeout = setTimeout(resetProgrammaticScroll, 500);
+  }
 
-function scrollToGroup(idx: number) {
-  visibleGroupIndex.value = idx;
-  if (galleryRef.value) {
-    nextTick().then(() => {
-      const container = galleryRef.value;
-      if (!container) return;
-      const children = container.children;
-      if (children?.[idx]) {
-        const child = children[idx] as HTMLElement;
-        const containerRect = container.getBoundingClientRect();
-        const childRect = child.getBoundingClientRect();
-
-        const targetScrollLeft =
-          container.scrollLeft +
-          (childRect.left - containerRect.left) -
-          containerRect.width / 2 +
-          childRect.width / 2;
-        container.scrollTo({ left: targetScrollLeft, behavior: "smooth" });
-      }
-    });
+  if (typeof container.scrollTo === "function") {
+    container.scrollTo({ left: child.offsetLeft, behavior: smooth ? "smooth" : "instant" });
+  } else {
+    try {
+      container.scrollLeft = child.offsetLeft;
+    } catch {
+      // Fallback for jsdom/test environments
+    }
   }
 }
 
-const handleGalleryScroll = useThrottleFn(() => {
-  if (!galleryRef.value) return;
-  const containerRect = galleryRef.value.getBoundingClientRect();
-  const containerCenter = containerRect.left + containerRect.width / 2;
+function scrollToGroup(idx: number, smooth = true) {
+  if (!allWorkoutGroups.value || idx < 0 || idx >= allWorkoutGroups.value.length) return;
+  visibleGroupIndex.value = idx;
 
-  let closestIdx = visibleGroupIndex.value;
-  let minDistance = Infinity;
-
-  const children = galleryRef.value.children;
-  for (let i = 0; i < children.length; i++) {
-    const child = children[i] as HTMLElement;
-    const rect = child.getBoundingClientRect();
-    const childCenter = rect.left + rect.width / 2;
-    const distance = Math.abs(childCenter - containerCenter);
-
-    if (distance < minDistance) {
-      minDistance = distance;
-      closestIdx = i;
+  nextTick().then(() => {
+    if (galleryRef.value) {
+      scrollContainerToChild(galleryRef.value, idx, smooth);
     }
+  });
+}
+
+function syncVisibleGroupFromScroll() {
+  if (isProgrammaticScrolling.value) return;
+  const container = galleryRef.value;
+  const children = container?.children;
+  if (!container || !children?.length) return;
+  if (children.length <= 1) {
+    visibleGroupIndex.value = 0;
+    return;
   }
 
+  const diff = (children[1] as HTMLElement).offsetLeft - (children[0] as HTMLElement).offsetLeft;
+  const stepWidth = diff > 0 ? diff : container.clientWidth;
+  if (stepWidth <= 0) return;
+
+  const closestIdx = Math.max(
+    0,
+    Math.min(children.length - 1, Math.round(container.scrollLeft / stepWidth)),
+  );
   if (visibleGroupIndex.value !== closestIdx) {
     visibleGroupIndex.value = closestIdx;
   }
-}, 50);
+}
+
+const handleGalleryScrollThrottled = useThrottleFn(syncVisibleGroupFromScroll, 50);
+const handleGalleryScrollDebounced = useDebounceFn(() => {
+  resetProgrammaticScroll();
+  syncVisibleGroupFromScroll();
+}, 100);
+
+function handleGalleryScroll() {
+  handleGalleryScrollThrottled();
+  handleGalleryScrollDebounced();
+}
+
+function handleGalleryScrollEnd() {
+  resetProgrammaticScroll();
+  syncVisibleGroupFromScroll();
+}
+
+// Auto-scroll when active group changes
+watch(
+  activeGroupIndex,
+  (newIdx) => {
+    scrollToGroup(newIdx, true);
+  },
+  { flush: "post" },
+);
+
+// When workout groups finish loading asynchronously
+watch(
+  () => allWorkoutGroups.value?.length,
+  (length) => {
+    if (length) scrollToGroup(activeGroupIndex.value, false);
+  },
+  { flush: "post" },
+);
+
+onMounted(() => {
+  if (allWorkoutGroups.value?.length) {
+    scrollToGroup(activeGroupIndex.value, false);
+  }
+});
+
+onUnmounted(resetProgrammaticScroll);
+
+// Restore scroll position to the visible group when returning to this view via keep-alive
+onActivated(() => {
+  if (allWorkoutGroups.value?.length) {
+    scrollToGroup(visibleGroupIndex.value, false);
+  }
+});
 </script>
 
 <template>
@@ -179,8 +225,9 @@ const handleGalleryScroll = useThrottleFn(() => {
                   v-for="(group, gIdx) in allWorkoutGroups"
                   :key="group.id"
                   type="button"
-                  @click="scrollToGroup(gIdx)"
+                  @click="scrollToGroup(gIdx, true)"
                   :aria-label="group.isSuperset ? `Superset ${gIdx + 1}` : group.exercises[0]?.exerciseName"
+                  :aria-current="gIdx === visibleGroupIndex ? 'step' : undefined"
                   class="flex-1 flex flex-col justify-start gap-1 pt-0.5 h-full min-h-[36px] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-95 transition-all group cursor-pointer"
                 >
                   <div
@@ -192,9 +239,7 @@ const handleGalleryScroll = useThrottleFn(() => {
                         ? (gIdx === visibleGroupIndex ? 'bg-emerald-500 ring-2 ring-emerald-500/30' : 'bg-emerald-500/80')
                         : (gIdx === visibleGroupIndex
                             ? 'bg-primary ring-2 ring-primary/30'
-                            : (gIdx === activeGroupIndex
-                                ? 'bg-primary/30 group-hover:bg-primary/50'
-                                : 'bg-white/10 group-hover:bg-white/20'))
+                            : 'bg-white/10 group-hover:bg-white/20')
                     ]"
                   />
                 </button>
@@ -217,7 +262,8 @@ const handleGalleryScroll = useThrottleFn(() => {
             <div 
               ref="galleryRef"
               @scroll="handleGalleryScroll"
-              class="flex overflow-x-auto snap-x snap-mandatory no-scrollbar pb-6 gap-4 scroll-smooth"
+              @scrollend="handleGalleryScrollEnd"
+              class="relative flex overflow-x-auto snap-x snap-mandatory no-scrollbar pb-6 gap-4 scroll-smooth"
             >
               <div
                 v-for="(group, gIndex) in allWorkoutGroups"
