@@ -1,4 +1,4 @@
-import { type PlannedSession, TrainingPlan } from "../domain";
+import { TrainingPlan } from "../domain";
 
 export interface EvaluateSessionLog {
   loggedAt: Date;
@@ -15,7 +15,7 @@ function groupLogsByCycleDate(
   plan: TrainingPlan,
   logs: EvaluateSessionLog[],
   referenceDate: Date,
-): Map<string, { date: Date; logs: EvaluateSessionLog[] }> {
+): { date: Date; logs: EvaluateSessionLog[] }[] {
   const logsByDate = new Map<string, { date: Date; logs: EvaluateSessionLog[] }>();
 
   for (const log of logs) {
@@ -27,41 +27,7 @@ function groupLogsByCycleDate(
     logsByDate.set(key, existing);
   }
 
-  return logsByDate;
-}
-
-function findSatisfiedSessionForDay(
-  plan: TrainingPlan,
-  date: Date,
-  dayLogs: EvaluateSessionLog[],
-  newCompletedSessions: Set<string>,
-  normalizeExerciseName: (name: string) => string,
-  resolveMuscle: (name: string) => string | undefined,
-): PlannedSession | undefined {
-  const weekNum = plan.getCurrentWeekNumber(date);
-  const dayOfWeek = date.getDay();
-
-  const primaryCandidate = plan.getPlannedSessionForDay(dayOfWeek, weekNum);
-  const primaryKey = primaryCandidate
-    ? TrainingPlan.sessionKey(primaryCandidate.weekNumber, primaryCandidate.dayOfWeek)
-    : null;
-  if (
-    primaryCandidate &&
-    primaryKey &&
-    !newCompletedSessions.has(primaryKey) &&
-    plan.isSessionSatisfiedByLogs(primaryCandidate, dayLogs, normalizeExerciseName, resolveMuscle)
-  ) {
-    return primaryCandidate;
-  }
-
-  // Fallback: Check if the logs satisfy ANY uncompleted session
-  return plan.sessions.find((s) => {
-    const sessionKey = TrainingPlan.sessionKey(s.weekNumber, s.dayOfWeek);
-    return (
-      !newCompletedSessions.has(sessionKey) &&
-      plan.isSessionSatisfiedByLogs(s, dayLogs, normalizeExerciseName, resolveMuscle)
-    );
-  });
+  return [...logsByDate.values()].sort((a, b) => a.date.getTime() - b.date.getTime());
 }
 
 function haveCompletedSessionsChanged(
@@ -84,11 +50,10 @@ export function evaluateCompletedSessions(
   referenceDate: Date = new Date(),
 ): EvaluateCompletedSessionsResult {
   const newCompletedSessions = new Set<string>();
-  const logsByDate = groupLogsByCycleDate(plan, logs, referenceDate);
+  const chronologicalDayGroups = groupLogsByCycleDate(plan, logs, referenceDate);
 
-  for (const { date, logs: dayLogs } of logsByDate.values()) {
-    const satisfiedSession = findSatisfiedSessionForDay(
-      plan,
+  for (const { date, logs: dayLogs } of chronologicalDayGroups) {
+    const satisfiedSession = plan.findSatisfiedSession(
       date,
       dayLogs,
       newCompletedSessions,

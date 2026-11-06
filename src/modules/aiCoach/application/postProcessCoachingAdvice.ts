@@ -1,6 +1,7 @@
 import type { DeloadStatus } from "@/modules/trainingInsights/domain";
 import { clampRestSeconds } from "@/modules/trainingInsights/domain";
 import type { WorkoutPhase } from "@/modules/trainingLogs/application";
+import { TrainingPlan } from "../domain/trainingPlan";
 import type { CoachingAdvice } from "../domain/types";
 import { upcastLegacyExercise } from "../domain/upcaster";
 
@@ -46,11 +47,33 @@ function normalizeExerciseParameters<
   };
 }
 
+function backfillRecommendedWorkout(
+  rawPlan: NonNullable<CoachingAdvice["trainingPlan"]>,
+  completedSessionKeys: ReadonlySet<string>,
+  activePlan?: TrainingPlan | null,
+) {
+  if (rawPlan.sessions.length === 0) return undefined;
+  const planEntity = TrainingPlan.create(
+    new Date().toISOString(),
+    rawPlan.cycleWeeks,
+    rawPlan.sessions,
+  );
+  const effectiveCompletedKeys =
+    activePlan && planEntity.isStructuralReplacementFor(activePlan)
+      ? new Set<string>()
+      : completedSessionKeys;
+  const matchingSession =
+    planEntity.getNextUncompletedSession(effectiveCompletedKeys) ?? planEntity.sessions[0];
+  if (!matchingSession || matchingSession.exercises.length === 0) return undefined;
+  return matchingSession.exercises.map((ex) => ({ ...ex }));
+}
+
 export function postProcessCoachingAdvice(
   parsedCoachingAdvice: CoachingAdvice,
   phase: WorkoutPhase,
   deloadStatus: DeloadStatus,
-  referenceDate: Date = new Date(),
+  completedSessionKeys: ReadonlySet<string> = new Set(),
+  activePlan?: TrainingPlan | null,
 ): CoachingAdvice {
   // Deep clone to guarantee input immutability
   const cleaned: CoachingAdvice = structuredClone(parsedCoachingAdvice);
@@ -77,20 +100,14 @@ export function postProcessCoachingAdvice(
       exercises: session.exercises.map((ex) => normalizeExerciseParameters(ex, deloadStatus)),
     }));
 
-    // Backfill today's workout from the first planned session ONLY if recommendedWorkout was omitted
-    // during the full mesocycle planning phase (preserves an explicit empty array `[]` when the coach prescribes a rest day).
-    if (
-      phase === "planning" &&
-      cleaned.recommendedWorkout === undefined &&
-      cleaned.trainingPlan.sessions.length > 0
-    ) {
-      const todayDayOfWeek = referenceDate.getDay();
-      const matchingSession =
-        cleaned.trainingPlan.sessions.find((s) => s.dayOfWeek === todayDayOfWeek) ??
-        cleaned.trainingPlan.sessions[0];
-      if (matchingSession && matchingSession.exercises.length > 0) {
-        cleaned.recommendedWorkout = matchingSession.exercises.map((ex) => ({ ...ex }));
-      }
+    // Backfill today's workout from the next uncompleted session ONLY if recommendedWorkout was omitted
+    // during pre-workout planning (preserves an explicit empty array `[]` when the coach prescribes a rest day).
+    if (phase === "planning" && cleaned.recommendedWorkout === undefined) {
+      cleaned.recommendedWorkout = backfillRecommendedWorkout(
+        cleaned.trainingPlan,
+        completedSessionKeys,
+        activePlan,
+      );
     }
   }
 

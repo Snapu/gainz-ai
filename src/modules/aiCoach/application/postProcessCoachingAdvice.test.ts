@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { TrainingPlan } from "../domain/trainingPlan";
 import type { CoachingAdvice } from "../domain/types";
 import { postProcessCoachingAdvice } from "./postProcessCoachingAdvice";
 
@@ -210,7 +211,7 @@ describe("postProcessCoachingAdvice", () => {
     expect(deloadResult.trainingPlan?.sessions[0]?.exercises[0]?.targetRpe).toBe(6.5);
   });
 
-  it("backfills today's workout matching today's day of week when recommendedWorkout is omitted", () => {
+  it("backfills today's workout from the next uncompleted session when recommendedWorkout is omitted", () => {
     const adviceWithoutRecommended: CoachingAdvice = {
       coachMessage: "Here is your plan.",
       trainingPlan: {
@@ -234,24 +235,43 @@ describe("postProcessCoachingAdvice", () => {
       },
     };
 
-    // Reference date is Wednesday (day 3)
-    const wednesday = new Date("2026-01-07T12:00:00Z");
-    const resultWed = postProcessCoachingAdvice(
+    // When no sessions are completed yet, always picks the first uncompleted session (Day 1: Squat)
+    // regardless of what calendar weekday today is (e.g. Wednesday)
+    const resultUncompleted = postProcessCoachingAdvice(
       adviceWithoutRecommended,
       "planning",
       "none",
-      wednesday,
+      new Set(),
     );
-    expect(resultWed.recommendedWorkout?.[0]?.exerciseName).toBe("Bench Press");
+    expect(resultUncompleted.recommendedWorkout?.[0]?.exerciseName).toBe("Squat");
 
-    // Reference date on an unscheduled day (e.g. Tuesday = 2) falls back to sessions[0] (Monday)
-    const tuesday = new Date("2026-01-06T12:00:00Z");
-    const resultTue = postProcessCoachingAdvice(
+    // When W1-D1 is already completed, picks the next uncompleted session (W1-D3: Bench Press)
+    const resultNextInQueue = postProcessCoachingAdvice(
       adviceWithoutRecommended,
       "planning",
       "none",
-      tuesday,
+      new Set(["W1-D1"]),
     );
-    expect(resultTue.recommendedWorkout?.[0]?.exerciseName).toBe("Squat");
+    expect(resultNextInQueue.recommendedWorkout?.[0]?.exerciseName).toBe("Bench Press");
+
+    // When the returned plan is a structural replacement for activePlan (e.g. new split in execution mode),
+    // ignores old completedSessionKeys and starts from the new plan's first session (W1-D1: Squat)
+    const oldSingleSessionPlan = TrainingPlan.create("2026-10-01T00:00:00.000Z", 1, [
+      {
+        dayOfWeek: 1,
+        weekNumber: 1,
+        sessionLabel: "Old Day 1",
+        focusDescription: "Full Body",
+        exercises: [{ exerciseName: "Deadlift", targetSets: 3, targetReps: "5" }],
+      },
+    ]);
+    const resultStructuralReplacement = postProcessCoachingAdvice(
+      adviceWithoutRecommended,
+      "planning",
+      "none",
+      new Set(["W1-D1"]),
+      oldSingleSessionPlan,
+    );
+    expect(resultStructuralReplacement.recommendedWorkout?.[0]?.exerciseName).toBe("Squat");
   });
 });

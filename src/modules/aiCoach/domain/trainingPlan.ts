@@ -1,3 +1,4 @@
+import { exerciseNameKey } from "@/modules/sharedKernel/domain";
 import type { PlannedSession } from "./types";
 import { upcastLegacyExercise } from "./upcaster";
 
@@ -110,25 +111,6 @@ export class TrainingPlan {
     );
   }
 
-  /**
-   * Determines if a session is satisfied by the given logs by checking if at least 50%
-   * of the planned exercises (by canonical name and target sets) were completed.
-   */
-  public isSessionSatisfiedByLogs(
-    session: PlannedSession,
-    logs: { exerciseName: string }[],
-    normalizeFn: (name: string) => string = (name) => name,
-    getPrimaryMuscleFn?: (name: string) => string | undefined,
-  ): boolean {
-    if (session.exercises.length === 0) return true;
-
-    if (getPrimaryMuscleFn) {
-      return isSessionSatisfiedByMuscleVolume(session, logs, normalizeFn, getPrimaryMuscleFn);
-    }
-
-    return isSessionSatisfiedByExactExercises(session, logs, normalizeFn);
-  }
-
   private static startOfDayMs(d: Date | string): number {
     const date = new Date(d);
     return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
@@ -181,6 +163,117 @@ export class TrainingPlan {
    */
   public getNextUncompletedSession(completedKeys: ReadonlySet<string>): PlannedSession | undefined {
     return this.sessions.find((s) => !TrainingPlan.isCompleted(s, completedKeys));
+  }
+
+  /**
+   * Resolves the target planned session for today:
+   * - If today's logs already satisfy a completed session (checked newest-first), keeps that session active for the rest of today.
+   * - Otherwise, returns the next uncompleted session in sequence.
+   */
+  public getTodayTargetSession(
+    completedKeys: ReadonlySet<string>,
+    todaysLogs: { exerciseName: string }[] = [],
+    normalizeFn: (name: string) => string = exerciseNameKey,
+    getPrimaryMuscleFn?: (name: string) => string | undefined,
+  ): PlannedSession | undefined {
+    if (todaysLogs.length > 0) {
+      const completedReversed = [...this.sessions]
+        .reverse()
+        .filter((s) => TrainingPlan.isCompleted(s, completedKeys));
+
+      const exactTodayMatch = completedReversed.find((s) =>
+        isSessionSatisfiedByExactExercises(s, todaysLogs, normalizeFn),
+      );
+      if (exactTodayMatch) return exactTodayMatch;
+
+      if (getPrimaryMuscleFn) {
+        const muscleTodayMatch = completedReversed.find((s) =>
+          isSessionSatisfiedByMuscleVolume(s, todaysLogs, normalizeFn, getPrimaryMuscleFn),
+        );
+        if (muscleTodayMatch) return muscleTodayMatch;
+      }
+    }
+
+    return this.getNextUncompletedSession(completedKeys);
+  }
+
+  /**
+   * Resolves which uncompleted session in the plan is satisfied by a single day's logs.
+   * Prioritizes exact exercise matches before falling back to primary muscle volume,
+   * and prioritizes the next sequential session before weekday-matched or remaining sessions.
+   */
+  public findSatisfiedSession(
+    date: Date,
+    dayLogs: { exerciseName: string }[],
+    completedKeys: ReadonlySet<string>,
+    normalizeFn: (name: string) => string = exerciseNameKey,
+    getPrimaryMuscleFn?: (name: string) => string | undefined,
+  ): PlannedSession | undefined {
+    const weekNum = this.getCurrentWeekNumber(date);
+    const dayOfWeek = date.getDay();
+
+    const orderedCandidates: PlannedSession[] = [];
+    const seenKeys = new Set<string>();
+
+    const addCandidate = (candidate: PlannedSession | undefined) => {
+      if (!candidate) return;
+      const key = TrainingPlan.sessionKey(candidate.weekNumber, candidate.dayOfWeek);
+      if (completedKeys.has(key) || seenKeys.has(key)) return;
+      seenKeys.add(key);
+      orderedCandidates.push(candidate);
+    };
+
+    addCandidate(this.getNextUncompletedSession(completedKeys));
+    addCandidate(this.getPlannedSessionForDay(dayOfWeek, weekNum));
+    for (const session of this.sessions) {
+      addCandidate(session);
+    }
+
+    // Pass 1: Exact exercise match
+    const exactMatch = orderedCandidates.find((s) =>
+      isSessionSatisfiedByExactExercises(s, dayLogs, normalizeFn),
+    );
+    if (exactMatch) return exactMatch;
+
+    // Pass 2: Muscle volume fallback (when exercise substitutions occurred)
+    if (getPrimaryMuscleFn) {
+      return orderedCandidates.find((s) =>
+        isSessionSatisfiedByMuscleVolume(s, dayLogs, normalizeFn, getPrimaryMuscleFn),
+      );
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Determines whether a prescribed workout list matches a session that was already completed
+   * prior to the current target session (e.g. from a pre-sync startup race condition).
+   */
+  public isWorkoutFromCompletedSession(
+    workout: readonly { exerciseName: string }[],
+    completedKeys: ReadonlySet<string>,
+    targetSession?: PlannedSession,
+    normalizeFn: (name: string) => string = exerciseNameKey,
+  ): boolean {
+    if (workout.length === 0 || completedKeys.size === 0) return false;
+    const activeTarget = targetSession ?? this.getNextUncompletedSession(completedKeys);
+    if (!activeTarget) return false;
+
+    const workoutNames = workout.map((ex) => normalizeFn(ex.exerciseName));
+    const overlapRatio = (session: PlannedSession): number => {
+      if (session.exercises.length === 0) return 0;
+      const sessionNames = new Set(session.exercises.map((ex) => normalizeFn(ex.exerciseName)));
+      const matches = workoutNames.filter((name) => sessionNames.has(name)).length;
+      return matches / workoutNames.length;
+    };
+
+    if (overlapRatio(activeTarget) >= 0.5) return false;
+
+    const targetKey = TrainingPlan.sessionKey(activeTarget.weekNumber, activeTarget.dayOfWeek);
+    return this.sessions.some((s) => {
+      const key = TrainingPlan.sessionKey(s.weekNumber, s.dayOfWeek);
+      return key !== targetKey && completedKeys.has(key) && overlapRatio(s) >= 0.5;
+    });
   }
 
   /**

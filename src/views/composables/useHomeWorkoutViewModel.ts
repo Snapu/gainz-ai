@@ -7,13 +7,17 @@ import {
   groupWorkout,
   parseFirstRep,
   parseWeight,
-  tryParseCoachingAdvice,
+  resolveTodaysCoachWorkout,
   useAiOrchestratorStore,
   useCoachChatStore,
   useTrainingPlanStore,
 } from "@/modules/aiCoach/presentation";
-import { useRestTimerStore } from "@/modules/platform/presentation";
+import { useExerciseMuscleMapStore, useRestTimerStore } from "@/modules/platform/presentation";
 import { isoDateString } from "@/modules/sharedKernel/presentation";
+import {
+  getMuscleActivation,
+  normalizeExerciseName,
+} from "@/modules/trainingInsights/presentation";
 import type { ExerciseLog } from "@/modules/trainingLogs/presentation";
 import {
   getSessionStartBoundary,
@@ -93,6 +97,7 @@ export function useHomeWorkoutViewModel() {
 
   const logSheet = useLogSheet();
   const restTimerStore = useRestTimerStore();
+  const exerciseMuscleMapStore = useExerciseMuscleMapStore();
 
   function editLog(log: ExerciseLog) {
     logSheet.openEditLog(log);
@@ -103,17 +108,27 @@ export function useHomeWorkoutViewModel() {
   // ---------------------------------------------------------------------------
   const currentReactiveTime = useNow({ scheduler: (cb) => useTimeoutPoll(cb, 60000) });
 
-  const currentWeekNumber = computed<number>(() => {
-    if (!planStore.activePlan) return 1;
-    return planStore.activePlan.getCurrentWeekNumber(currentReactiveTime.value);
+  const todaysLogs = computed<ExerciseLog[]>(() => {
+    const today = new Date(currentReactiveTime.value);
+    today.setHours(0, 0, 0, 0);
+
+    return logsStore.exerciseLogs.filter((log) => log.loggedAt.getTime() >= today.getTime());
+  });
+
+  const todayTargetSession = computed(() => {
+    if (!planStore.activePlan) return undefined;
+    const resolveMuscle = (name: string) =>
+      getMuscleActivation(name, exerciseMuscleMapStore.learnedMap)?.primaryMuscle;
+    return planStore.activePlan.getTodayTargetSession(
+      planStore.completedSessions,
+      todaysLogs.value,
+      normalizeExerciseName,
+      resolveMuscle,
+    );
   });
 
   const planDerivedWorkout = computed<DisplayExercise[] | null>(() => {
-    if (!planStore.activePlan) return null;
-    const currentDay = currentReactiveTime.value.getDay();
-    const weekNum = currentWeekNumber.value;
-    const session = planStore.activePlan.getPlannedSessionForDay(currentDay, weekNum);
-    return (session?.exercises as DisplayExercise[]) ?? null;
+    return (todayTargetSession.value?.exercises as DisplayExercise[]) ?? null;
   });
 
   /**
@@ -121,22 +136,15 @@ export function useHomeWorkoutViewModel() {
    * prescribed a rest day; `undefined` means no coach message set a workout today
    * (e.g. mid-workout Q&A omits the field), so callers should fall back to the plan.
    */
-  const todaysCoachWorkout = computed<DisplayExercise[] | undefined>(() => {
-    const today = isoDateString(currentReactiveTime.value);
-    const coachMessagesList = chatStore.messages
-      .filter((m) => m.role === "coach")
-      .slice()
-      .reverse();
-    for (const msg of coachMessagesList) {
-      const msgDate = isoDateString(new Date(msg.timestamp));
-      if (msgDate !== today) break;
-      const parsed = tryParseCoachingAdvice(msg.content);
-      if (Array.isArray(parsed?.recommendedWorkout)) {
-        return parsed.recommendedWorkout as DisplayExercise[];
-      }
-    }
-    return undefined;
-  });
+  const todaysCoachWorkout = computed<DisplayExercise[] | undefined>(() =>
+    resolveTodaysCoachWorkout({
+      messages: chatStore.messages,
+      todayIso: isoDateString(currentReactiveTime.value),
+      plan: planStore.activePlan,
+      completedSessions: planStore.completedSessions,
+      targetSession: todayTargetSession.value,
+    }),
+  );
 
   const isCoachRestDay = computed<boolean>(() => todaysCoachWorkout.value?.length === 0);
 
@@ -145,15 +153,8 @@ export function useHomeWorkoutViewModel() {
   );
 
   const completedSetsMap = computed<Map<string, number>>(() => {
-    const today = new Date(currentReactiveTime.value);
-    today.setHours(0, 0, 0, 0);
-
-    const todaysLogs = logsStore.exerciseLogs.filter(
-      (log) => log.loggedAt.getTime() >= today.getTime(),
-    );
-
     const map = new Map<string, number>();
-    for (const log of todaysLogs) {
+    for (const log of todaysLogs.value) {
       map.set(log.exerciseName, (map.get(log.exerciseName) || 0) + 1);
     }
     return map;

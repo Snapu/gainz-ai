@@ -1,9 +1,13 @@
 import DOMPurify from "dompurify";
 import { marked } from "marked";
+import { isoDateString } from "@/modules/sharedKernel/domain";
 import {
   type CoachingAdvice,
   type CoachingAdviceError,
+  type CoachingMessage,
+  type PlannedSession,
   sanitizeSuggestedFollowUps,
+  type TrainingPlan,
   upcastLegacyExercise,
 } from "../../domain";
 
@@ -68,6 +72,140 @@ export function getAiErrorDescription(error: CoachingAdviceError | string): stri
   return error === "missing-api-key"
     ? "No API Key configured! Please add one in your profile."
     : "Failed to get AI response. Please try again.";
+}
+
+/**
+ * Extracts a human-readable user question from message content, filtering out
+ * internal automated request triggers and raw prompt context payloads.
+ */
+export function extractUserQuestion(content?: string | null): string | null {
+  if (!content) return null;
+  const trimmed = content.trim();
+  if (
+    !trimmed ||
+    trimmed === "AI request" ||
+    trimmed === "Please generate a new 2-week mesocycle plan."
+  ) {
+    return null;
+  }
+
+  // Check if content is an assembled system prompt payload (which always starts with # session and metadata/sections)
+  if (
+    (trimmed.startsWith("# session\n") || trimmed.startsWith("# session\r\n")) &&
+    (/(?:^|\r?\n)(?:date|mode|phase|status):/m.test(trimmed) ||
+      /(?:^|\r?\n)# (?:workload|muscles|exercises|e1rm|today|program|events|history|logs|update|profile)/m.test(
+        trimmed,
+      ))
+  ) {
+    const match = trimmed.match(
+      /(?:^|\r?\n)# question\r?\n([\s\S]*?)(?=(?:\r?\n){1,2}# (?:workload|muscles|exercises|e1rm|update|plan|profile|goals|today|program|events|history|logs|\d+d|all)(?:\r?\n|$)|$)/,
+    );
+    if (match?.[1]) {
+      const q = match[1].trim();
+      if (!q || q === "AI request" || q === "Please generate a new 2-week mesocycle plan.") {
+        return null;
+      }
+      return q;
+    }
+    // Assembled prompt payload without an explicit user question (automated daily advice/session trigger)
+    return null;
+  }
+
+  return trimmed;
+}
+
+function isStaleAutomatedWorkout(
+  workout: DisplayExercise[],
+  prevMsg: CoachingMessage | undefined,
+  plan: TrainingPlan | null | undefined,
+  completedSessions: ReadonlySet<string>,
+  targetSession: PlannedSession | undefined,
+): boolean {
+  const isAutomated = prevMsg?.role === "user" && extractUserQuestion(prevMsg.content) === null;
+  if (!isAutomated || !plan) return false;
+  return plan.isWorkoutFromCompletedSession(workout, completedSessions, targetSession);
+}
+
+interface TodayCoachWorkoutEntry {
+  msg: CoachingMessage;
+  prevMsg?: CoachingMessage;
+  workout: DisplayExercise[];
+  isStale: boolean;
+}
+
+function* iterateTodayCoachWorkouts(options: {
+  messages: readonly CoachingMessage[];
+  todayIso: string;
+  plan?: TrainingPlan | null;
+  completedSessions: ReadonlySet<string>;
+  targetSession?: PlannedSession;
+}): Generator<TodayCoachWorkoutEntry> {
+  const { messages, todayIso, plan, completedSessions, targetSession } = options;
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg?.role !== "coach") continue;
+    if (isoDateString(new Date(msg.timestamp)) !== todayIso) break;
+
+    const workout = tryParseCoachingAdvice(msg.content)?.recommendedWorkout as
+      | DisplayExercise[]
+      | undefined;
+    if (!Array.isArray(workout)) continue;
+
+    const prevMsg = messages[i - 1];
+    const isStale = isStaleAutomatedWorkout(
+      workout,
+      prevMsg,
+      plan,
+      completedSessions,
+      targetSession,
+    );
+    yield { msg, prevMsg, workout, isStale };
+  }
+}
+
+/**
+ * Returns the IDs of any automated user/coach message pairs from today whose prescribed
+ * workout belongs to an already-completed session rather than the current target session.
+ */
+export function findStaleTodayMessageIds(options: {
+  messages: readonly CoachingMessage[];
+  todayIso: string;
+  plan?: TrainingPlan | null;
+  completedSessions: ReadonlySet<string>;
+  targetSession?: PlannedSession;
+}): string[] {
+  const staleIds: string[] = [];
+
+  for (const { msg, prevMsg, isStale } of iterateTodayCoachWorkouts(options)) {
+    if (isStale) {
+      staleIds.push(msg.id);
+      if (prevMsg?.role === "user") {
+        staleIds.push(prevMsg.id);
+      }
+    }
+  }
+
+  return staleIds;
+}
+
+/**
+ * Extracts today's latest valid coach-prescribed workout from the message history,
+ * skipping automated responses that prescribed an already-completed session.
+ */
+export function resolveTodaysCoachWorkout(options: {
+  messages: readonly CoachingMessage[];
+  todayIso: string;
+  plan?: TrainingPlan | null;
+  completedSessions: ReadonlySet<string>;
+  targetSession?: PlannedSession;
+}): DisplayExercise[] | undefined {
+  for (const { workout, isStale } of iterateTodayCoachWorkouts(options)) {
+    if (!isStale) {
+      return workout;
+    }
+  }
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------

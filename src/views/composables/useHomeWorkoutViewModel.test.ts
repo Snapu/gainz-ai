@@ -553,4 +553,138 @@ describe("useHomeWorkoutViewModel", () => {
       expect(vm.isHighlighted(1, 0)).toBe(true);
     });
   });
+
+  describe("sequential plan workout & stale coach message protection", () => {
+    it("derives Today's Workout from the next uncompleted session (UP NEXT) rather than today's calendar weekday", () => {
+      const planStore = useTrainingPlanStore();
+      const currentDay = new Date().getDay();
+      const otherDay = (currentDay + 2) % 7;
+
+      // Session A is scheduled on today's weekday (currentDay), Session C is on another day (otherDay).
+      // Session A is already completed! So UP NEXT in the plan is Session C.
+      planStore.setPlan(
+        TrainingPlan.create(new Date().toISOString(), 1, [
+          {
+            weekNumber: 1,
+            dayOfWeek: currentDay,
+            sessionLabel: "Einheit A",
+            focusDescription: "Chest",
+            exercises: [{ exerciseName: "Incline DB Press", targetSets: 3, targetReps: "8" }],
+          },
+          {
+            weekNumber: 1,
+            dayOfWeek: otherDay,
+            sessionLabel: "Einheit C",
+            focusDescription: "Bench & Row",
+            exercises: [{ exerciseName: "Bench Press", targetSets: 3, targetReps: "6-8" }],
+          },
+        ]),
+      );
+      planStore.setCompletedSessions(new Set([TrainingPlan.sessionKey(1, currentDay)]));
+
+      const vm = useHomeWorkoutViewModel();
+      expect(vm.isRestDay.value).toBe(false);
+      expect(vm.allWorkoutGroups.value?.[0]?.exercises[0]?.exerciseName).toBe("Bench Press");
+    });
+
+    it("ignores a stale automated coach message whose workout matches a previously completed session instead of UP NEXT", () => {
+      const planStore = useTrainingPlanStore();
+      const chatStore = useCoachChatStore();
+
+      planStore.setPlan(
+        TrainingPlan.create("2026-11-01T08:00:00.000Z", 1, [
+          {
+            weekNumber: 1,
+            dayOfWeek: 1,
+            sessionLabel: "Einheit A",
+            focusDescription: "Incline & Pull-ups",
+            exercises: [
+              { exerciseName: "Schrägbankdrücken Kurzhanteln", targetSets: 3, targetReps: "6-8" },
+              { exerciseName: "Klimmzüge", targetSets: 3, targetReps: "6-8" },
+            ],
+          },
+          {
+            weekNumber: 1,
+            dayOfWeek: 5,
+            sessionLabel: "Einheit C",
+            focusDescription: "Bench & Row",
+            exercises: [
+              { exerciseName: "Bankdrücken", targetSets: 3, targetReps: "6-8" },
+              { exerciseName: "Seated Cable Row", targetSets: 3, targetReps: "8-10" },
+            ],
+          },
+        ]),
+      );
+      // Einheit A was completed earlier in the week
+      planStore.setCompletedSessions(new Set([TrainingPlan.sessionKey(1, 1)]));
+
+      // Simulate an automated request message (no user question) followed by a coach message
+      // that prescribed Einheit A due to the startup race condition
+      chatStore.addMessage({
+        id: "user-auto",
+        role: "user",
+        content: "# session\ndate: 2026-11-06 08:29\nstatus: Not started\nphase: planning",
+        timestamp: new Date().toISOString(),
+        sessionId: chatStore.currentSessionId,
+        logsCount: 0,
+      });
+      chatStore.addMessage({
+        id: "coach-stale",
+        role: "coach",
+        content: JSON.stringify({
+          coachMessage: "Focus on Schrägbankdrücken today.",
+          recommendedWorkout: [
+            { exerciseName: "Schrägbankdrücken Kurzhanteln", targetSets: 3, targetReps: "6-8" },
+            { exerciseName: "Klimmzüge", targetSets: 3, targetReps: "6-8" },
+          ],
+        }),
+        timestamp: new Date().toISOString(),
+        sessionId: chatStore.currentSessionId,
+        logsCount: 0,
+      });
+
+      const vm = useHomeWorkoutViewModel();
+      // Should fall back to UP NEXT (Einheit C: Bankdrücken) instead of showing stale Einheit A
+      expect(vm.allWorkoutGroups.value?.[0]?.exercises[0]?.exerciseName).toBe("Bankdrücken");
+    });
+
+    it("keeps today's session active when satisfied today via substituted exercises (muscle-volume fallback)", () => {
+      const planStore = useTrainingPlanStore();
+      const logsStore = useExerciseLogsStore();
+
+      planStore.setPlan(
+        TrainingPlan.create("2026-11-01T08:00:00.000Z", 1, [
+          {
+            weekNumber: 1,
+            dayOfWeek: 1,
+            sessionLabel: "Einheit A",
+            focusDescription: "Chest & Back",
+            exercises: [
+              { exerciseName: "Bench Press", targetSets: 2, targetReps: "8" },
+              { exerciseName: "Barbell Row", targetSets: 2, targetReps: "8" },
+            ],
+          },
+          {
+            weekNumber: 1,
+            dayOfWeek: 3,
+            sessionLabel: "Einheit B",
+            focusDescription: "Legs",
+            exercises: [{ exerciseName: "Squat", targetSets: 3, targetReps: "5" }],
+          },
+        ]),
+      );
+
+      // User logged a Chest substitute (Incline Bench Press) today, which satisfies 50% of Einheit A's muscle volume
+      const now = new Date();
+      logsStore.exerciseLogs = [
+        { id: "1", exerciseName: "Incline Bench Press", reps: 8, weight: 60, loggedAt: now },
+        { id: "2", exerciseName: "Incline Bench Press", reps: 8, weight: 60, loggedAt: now },
+      ];
+      planStore.setCompletedSessions(new Set([TrainingPlan.sessionKey(1, 1)]));
+
+      const vm = useHomeWorkoutViewModel();
+      // Must stay on Einheit A (Bench Press / Barbell Row) for the rest of today rather than jumping to Squat
+      expect(vm.allWorkoutGroups.value?.[0]?.exercises[0]?.exerciseName).toBe("Bench Press");
+    });
+  });
 });

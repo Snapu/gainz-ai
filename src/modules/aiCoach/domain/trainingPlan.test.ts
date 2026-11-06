@@ -214,7 +214,7 @@ describe("TrainingPlan", () => {
     });
   });
 
-  describe("isSessionSatisfiedByLogs", () => {
+  describe("findSatisfiedSession", () => {
     const sessionWithExercises: PlannedSession = {
       dayOfWeek: 1,
       weekNumber: 1,
@@ -226,13 +226,9 @@ describe("TrainingPlan", () => {
       ],
     };
 
-    it("returns true for a session with 0 exercises", () => {
-      const plan = TrainingPlan.create("2026-01-01T00:00:00Z", 2, [dummySession]);
-      expect(plan.isSessionSatisfiedByLogs(dummySession, [])).toBe(true);
-    });
-
-    it("evaluates satisfaction by exact exercise sets when no muscle resolver is provided", () => {
+    it("evaluates satisfaction by exact exercise sets using default exerciseNameKey normalization", () => {
       const plan = TrainingPlan.create("2026-01-01T00:00:00Z", 2, [sessionWithExercises]);
+      const monday = new Date("2026-01-05T10:00:00Z");
 
       // 3 sets of Bench Press completed (1 out of 2 exercises = 50% -> satisfied)
       const logsHalf = [
@@ -240,21 +236,16 @@ describe("TrainingPlan", () => {
         { exerciseName: "bench press" },
         { exerciseName: "bench press" },
       ];
-      expect(
-        plan.isSessionSatisfiedByLogs(sessionWithExercises, logsHalf, (name) => name.toLowerCase()),
-      ).toBe(true);
+      expect(plan.findSatisfiedSession(monday, logsHalf, new Set())).toEqual(sessionWithExercises);
 
-      // Only 2 sets of Bench Press (0 out of 2 exercises completed -> false)
+      // Only 2 sets of Bench Press (0 out of 2 exercises completed -> undefined)
       const logsInsufficient = [{ exerciseName: "bench press" }, { exerciseName: "bench press" }];
-      expect(
-        plan.isSessionSatisfiedByLogs(sessionWithExercises, logsInsufficient, (name) =>
-          name.toLowerCase(),
-        ),
-      ).toBe(false);
+      expect(plan.findSatisfiedSession(monday, logsInsufficient, new Set())).toBeUndefined();
     });
 
-    it("evaluates satisfaction by muscle volume when resolver is provided", () => {
+    it("falls back to muscle volume when exact exercise names do not match", () => {
       const plan = TrainingPlan.create("2026-01-01T00:00:00Z", 2, [sessionWithExercises]);
+      const monday = new Date("2026-01-05T10:00:00Z");
       const getMuscle = (name: string) => {
         if (name.toLowerCase().includes("bench")) return "chest";
         if (name.toLowerCase().includes("row") || name.toLowerCase().includes("pull"))
@@ -263,30 +254,32 @@ describe("TrainingPlan", () => {
       };
 
       // Planned: 3 chest sets, 3 back sets = 6 total sets.
-      // Logged: 3 chest sets (via Incline DB Press substitute) = 3 sets done out of 6 (50%) -> satisfied
+      // Logged: 3 chest sets (via Incline Bench Press substitute) = 3 sets done out of 6 (50%) -> satisfied
       const substituteLogs = [
         { exerciseName: "Incline Bench Press" },
         { exerciseName: "Incline Bench Press" },
         { exerciseName: "Incline Bench Press" },
       ];
       expect(
-        plan.isSessionSatisfiedByLogs(
-          sessionWithExercises,
+        plan.findSatisfiedSession(
+          monday,
           substituteLogs,
+          new Set(),
           (name) => name.toLowerCase(),
           getMuscle,
         ),
-      ).toBe(true);
+      ).toEqual(sessionWithExercises);
 
-      // Only 2 sets logged out of 6 (33%) -> false
+      // Only 2 sets logged out of 6 (33%) -> undefined
       expect(
-        plan.isSessionSatisfiedByLogs(
-          sessionWithExercises,
+        plan.findSatisfiedSession(
+          monday,
           substituteLogs.slice(0, 2),
+          new Set(),
           (name) => name.toLowerCase(),
           getMuscle,
         ),
-      ).toBe(false);
+      ).toBeUndefined();
     });
   });
 });

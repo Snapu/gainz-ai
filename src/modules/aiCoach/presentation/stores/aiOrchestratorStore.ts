@@ -35,6 +35,7 @@ import {
   useTrainingInsightsStore,
 } from "@/modules/trainingInsights/presentation";
 import { resolveCurrentSession, useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
+import { findStaleTodayMessageIds } from "../helpers/aiCoachPageHelpers";
 import { useCoachChatStore } from "./coachChatStore";
 import { useTrainingPlanStore } from "./trainingPlanStore";
 
@@ -95,6 +96,15 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
   let hasInitialized = false;
   let inFlightMode: CoachingMode | null = null;
   let pendingRequest: { question?: string; mode: CoachingMode } | null = null;
+  let pendingEnsureSessionAdvice = false;
+  let hasObservedLoadedLogs = false;
+
+  function isLogsBusyAndEmpty(): boolean {
+    return (
+      Boolean(exerciseLogsStore.isLoading || exerciseLogsStore.isRefreshing) &&
+      exerciseLogsStore.exerciseLogs.length === 0
+    );
+  }
 
   function isPlanningQueuedOrInFlight(): boolean {
     return inFlightMode === "planning" || pendingRequest?.mode === "planning";
@@ -379,13 +389,114 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     return runCoachingRequest("Please generate a new 2-week mesocycle plan.", "planning");
   }
 
+  function pruneStaleTodayCoachMessages(): void {
+    const plan = planStore.activePlan;
+    if (!plan || plan.sessions.length === 0 || chatStore.messages.length === 0) return;
+
+    const now = new Date();
+    const todayIso = isoDateString(now);
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const todaysLogs = exerciseLogsStore.exerciseLogs.filter(
+      (l) => l.loggedAt.getTime() >= startOfToday,
+    );
+    const resolveMuscle = (name: string) =>
+      getMuscleActivation(name, exerciseMuscleMapStore.learnedMap)?.primaryMuscle;
+    const targetSession = plan.getTodayTargetSession(
+      planStore.completedSessions,
+      todaysLogs,
+      normalizeExerciseName,
+      resolveMuscle,
+    );
+
+    const staleIds = findStaleTodayMessageIds({
+      messages: chatStore.messages,
+      todayIso,
+      plan,
+      completedSessions: planStore.completedSessions,
+      targetSession,
+    });
+    for (const id of staleIds) {
+      chatStore.removeMessage(id);
+    }
+  }
+
+  function evaluatePlanProgress(plan: TrainingPlan) {
+    const resolveMuscle = (name: string) =>
+      getMuscleActivation(name, exerciseMuscleMapStore.learnedMap)?.primaryMuscle;
+
+    return evaluateCompletedSessions(
+      plan,
+      planStore.completedSessions,
+      exerciseLogsStore.exerciseLogs,
+      normalizeExerciseName,
+      resolveMuscle,
+    );
+  }
+
+  function flushPendingSessionAdvice(): void {
+    if (!pendingEnsureSessionAdvice) return;
+    pendingEnsureSessionAdvice = false;
+    void ensureSessionAdvice();
+  }
+
+  function syncCompletedSessionsFromLogs(): boolean {
+    if (isLogsBusyAndEmpty()) return false;
+
+    if (exerciseLogsStore.exerciseLogs.length > 0) {
+      hasObservedLoadedLogs = true;
+    } else if (!hasObservedLoadedLogs && planStore.completedSessions.size > 0) {
+      // Avoid wiping persisted completedSessions when initial fetchRemote() resolved to []
+      // before spreadsheetStore.doc was ready or due to an offline/network error.
+      flushPendingSessionAdvice();
+      return false;
+    }
+
+    const plan = planStore.activePlan;
+    if (!plan) {
+      flushPendingSessionAdvice();
+      return false;
+    }
+
+    const { newCompletedSessions, hasChanged, isPlanFullyCompleted } = evaluatePlanProgress(plan);
+
+    if (hasChanged) {
+      planStore.setCompletedSessions(newCompletedSessions);
+
+      if (isPlanFullyCompleted) {
+        pendingEnsureSessionAdvice = false;
+        chatStore.clearMessages();
+        planStore.clearPlan();
+        planStore.clearCompletedSessions();
+        generateNewPlan();
+        return true;
+      }
+    }
+
+    flushPendingSessionAdvice();
+    return false;
+  }
+
   function ensureSessionAdvice(): ResultAsync<void, CoachingAdviceError> {
     initialize();
+
+    if (isLogsBusyAndEmpty()) {
+      pendingEnsureSessionAdvice = true;
+      return okAsync(undefined);
+    }
+    pendingEnsureSessionAdvice = false;
+
+    const planRegenerated = syncCompletedSessionsFromLogs();
+    if (planRegenerated) {
+      return okAsync(undefined);
+    }
 
     if (!planStore.activePlan || planStore.activePlan.sessions.length === 0) {
       return generateNewPlan();
     }
+
+    pruneStaleTodayCoachMessages();
     if (!chatStore.hasTodayCoachMessage) {
+      chatStore.lastRequestState = { date: "", checksum: "" };
       return requestAdvice();
     }
     return okAsync(undefined);
@@ -395,34 +506,13 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
   watch(
     [
       () => exerciseLogsStore.exerciseLogs,
+      () => exerciseLogsStore.isLoading,
+      () => exerciseLogsStore.isRefreshing,
       () => planStore.activePlan,
       () => exerciseMuscleMapStore.learnedMap,
     ],
     () => {
-      const plan = planStore.activePlan;
-      if (!plan) return;
-
-      const resolveMuscle = (name: string) =>
-        getMuscleActivation(name, exerciseMuscleMapStore.learnedMap)?.primaryMuscle;
-
-      const { newCompletedSessions, hasChanged, isPlanFullyCompleted } = evaluateCompletedSessions(
-        plan,
-        planStore.completedSessions,
-        exerciseLogsStore.exerciseLogs,
-        normalizeExerciseName,
-        resolveMuscle,
-      );
-
-      if (hasChanged) {
-        planStore.setCompletedSessions(newCompletedSessions);
-
-        if (isPlanFullyCompleted) {
-          chatStore.clearMessages();
-          planStore.clearPlan();
-          planStore.clearCompletedSessions();
-          generateNewPlan();
-        }
-      }
+      syncCompletedSessionsFromLogs();
     },
     { immediate: true },
   );

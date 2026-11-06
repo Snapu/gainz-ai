@@ -332,6 +332,8 @@ export function requestCoachingAdvice(
             attachThoughtIfMissing(parsed, thought),
             workoutPhase,
             insights.deloadStatus,
+            effectiveMode === "planning" ? new Set() : options.completedSessionKeys,
+            options.activePlan,
           ),
         ),
     )

@@ -151,4 +151,102 @@ describe("evaluateCompletedSessions", () => {
     expect(result.newCompletedSessions.has(session2Key)).toBe(true);
     expect(result.isPlanFullyCompleted).toBe(true);
   });
+
+  it("prioritizes exact exercise match on next uncompleted session over weekday muscle-volume match when two sessions share muscles", () => {
+    const upperA = {
+      dayOfWeek: 1, // Monday
+      weekNumber: 1,
+      sessionLabel: "Einheit A — Brust & V-Taper",
+      focusDescription: "Incline & Pull-ups",
+      exercises: [
+        { exerciseName: "Schrägbankdrücken Kurzhanteln", targetSets: 3 },
+        { exerciseName: "Klimmzüge", targetSets: 3 },
+      ],
+    };
+    const upperC = {
+      dayOfWeek: 5, // Friday
+      weekNumber: 1,
+      sessionLabel: "Einheit C — Kraft-Fundament",
+      focusDescription: "Flat Bench & Rows",
+      exercises: [
+        { exerciseName: "Bankdrücken", targetSets: 3 },
+        { exerciseName: "Seated Cable Row", targetSets: 3 },
+      ],
+    };
+    const splitPlan = TrainingPlan.create(planCreated.toISOString(), 1, [upperA, upperC]);
+
+    const muscleResolver = (name: string) => {
+      if (name.includes("bankdrücken") || name.includes("Bankdrücken")) return "Chest";
+      if (name.includes("Klimmzüge") || name.includes("Row")) return "Back";
+      return undefined;
+    };
+
+    // User performs Einheit A on Friday (dayOfWeek = 5, which is upperC's scheduled weekday)
+    const fridayLogsForUpperA = [
+      {
+        loggedAt: new Date("2026-01-09T12:00:00Z"),
+        exerciseName: "Schrägbankdrücken Kurzhanteln",
+      },
+      {
+        loggedAt: new Date("2026-01-09T12:03:00Z"),
+        exerciseName: "Schrägbankdrücken Kurzhanteln",
+      },
+      {
+        loggedAt: new Date("2026-01-09T12:06:00Z"),
+        exerciseName: "Schrägbankdrücken Kurzhanteln",
+      },
+      { loggedAt: new Date("2026-01-09T12:10:00Z"), exerciseName: "Klimmzüge" },
+      { loggedAt: new Date("2026-01-09T12:13:00Z"), exerciseName: "Klimmzüge" },
+      { loggedAt: new Date("2026-01-09T12:16:00Z"), exerciseName: "Klimmzüge" },
+    ];
+
+    const result = evaluateCompletedSessions(
+      splitPlan,
+      new Set(),
+      fridayLogsForUpperA,
+      normalize,
+      muscleResolver,
+      new Date("2026-01-09T15:00:00Z"),
+    );
+
+    // Must mark Einheit A (W1-D1) as completed, NOT Einheit C (W1-D5)
+    expect(result.newCompletedSessions.has(TrainingPlan.sessionKey(1, 1))).toBe(true);
+    expect(result.newCompletedSessions.has(TrainingPlan.sessionKey(1, 5))).toBe(false);
+  });
+
+  it("evaluates days in chronological order even when logs array is reverse-sorted", () => {
+    const upperW1 = {
+      dayOfWeek: 1,
+      weekNumber: 1,
+      sessionLabel: "W1 Upper",
+      focusDescription: "Chest",
+      exercises: [{ exerciseName: "Bench Press", targetSets: 2 }],
+    };
+    const upperW2 = {
+      dayOfWeek: 1,
+      weekNumber: 2,
+      sessionLabel: "W2 Upper",
+      focusDescription: "Chest",
+      exercises: [{ exerciseName: "Bench Press", targetSets: 2 }],
+    };
+    const twoWeekPlan = TrainingPlan.create(planCreated.toISOString(), 2, [upperW1, upperW2]);
+
+    // Logs passed newest-first (Wednesday Jan 7, while only 1 session was done)
+    const logsNewestFirst = [
+      { loggedAt: new Date("2026-01-07T12:05:00Z"), exerciseName: "Bench Press" },
+      { loggedAt: new Date("2026-01-07T12:00:00Z"), exerciseName: "Bench Press" },
+    ];
+
+    const result = evaluateCompletedSessions(
+      twoWeekPlan,
+      new Set(),
+      logsNewestFirst,
+      normalize,
+      resolveMuscle,
+      new Date("2026-01-08T12:00:00Z"),
+    );
+
+    expect(result.newCompletedSessions.has(TrainingPlan.sessionKey(1, 1))).toBe(true);
+    expect(result.newCompletedSessions.has(TrainingPlan.sessionKey(2, 1))).toBe(false);
+  });
 });
