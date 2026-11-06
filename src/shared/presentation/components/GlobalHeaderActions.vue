@@ -12,7 +12,7 @@ const spreadsheetStore = useSpreadsheetStore();
 </script>
 
 <template>
-  <div class="flex items-center gap-2">
+  <div class="flex items-center gap-1">
     <UiButton variant="ghost" size="icon" aria-label="Past Sessions" @click="router.push('/past-sessions')">
       <History class="w-5 h-5 text-muted-foreground" />
     </UiButton>
@@ -21,8 +21,8 @@ const spreadsheetStore = useSpreadsheetStore();
     </UiButton>
     <UiDropdownMenu>
       <template #trigger>
-        <UiButton variant="ghost" size="icon">
-          <Menu class="w-5 h-5" />
+        <UiButton variant="ghost" size="icon" aria-label="Menu">
+          <Menu class="w-5 h-5 text-muted-foreground" />
         </UiButton>
       </template>
       

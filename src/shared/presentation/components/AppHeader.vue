@@ -10,14 +10,14 @@ const props = defineProps<{
 <template>
   <header
     :class="cn(
-      'flex items-center justify-between p-4 sticky top-0 bg-background/90 z-50 backdrop-blur-xl border-b border-white/5 select-none touch-none',
+      'flex items-center justify-between h-13 px-4 sticky top-0 bg-background/90 z-50 backdrop-blur-xl border-b border-white/5 select-none touch-none',
       props.class
     )"
   >
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-2 min-h-0">
       <slot />
     </div>
-    <div class="flex items-center gap-2" v-if="$slots.actions">
+    <div class="flex items-center gap-1.5" v-if="$slots.actions">
       <slot name="actions" />
     </div>
   </header>

@@ -76,13 +76,13 @@ function remove(id: string) {
   <div class="min-h-screen bg-background flex flex-col pt-safe">
     <!-- Header -->
     <AppHeader>
-      <UiButton variant="ghost" size="icon" @click="router.back()" class="mr-4 -ml-2">
-        <ArrowLeft class="w-6 h-6" />
+      <UiButton variant="ghost" size="icon" @click="router.back()" class="mr-2 -ml-1" aria-label="Go Back">
+        <ArrowLeft class="w-5 h-5" />
       </UiButton>
       <h1 class="text-xl font-bold tracking-tight flex-1">Rest & Recovery</h1>
       <template #actions>
-        <UiButton variant="ghost" size="icon" @click="isAddOpen = true">
-          <Plus class="w-6 h-6" />
+        <UiButton variant="ghost" size="icon" @click="isAddOpen = true" aria-label="Add Rest Event">
+          <Plus class="w-5 h-5" />
         </UiButton>
       </template>
     </AppHeader>

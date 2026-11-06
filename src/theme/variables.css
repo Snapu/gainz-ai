@@ -193,7 +193,7 @@
   padding-right: env(safe-area-inset-right, 0px);
 }
 @utility pb-tab-bar {
-  padding-bottom: calc(4rem + 1px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(3.25rem + 1px + env(safe-area-inset-bottom, 0px));
 }
 @utility pb-sheet {
   padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));

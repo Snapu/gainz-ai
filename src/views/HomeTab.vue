@@ -176,7 +176,7 @@ onActivated(() => {
     
     <!-- Top Nav -->
     <AppHeader class="shrink-0">
-      <h1 class="text-2xl font-black italic tracking-tighter">Gainz<span class="text-primary">AI</span></h1>
+      <h1 class="text-2xl font-black italic tracking-tighter leading-none">Gainz<span class="text-primary">AI</span></h1>
       <template #actions>
         <GlobalHeaderActions />
       </template>
@@ -194,7 +194,7 @@ onActivated(() => {
         <template v-else>
           <div v-if="allWorkoutGroups?.length" class="flex flex-col w-full">
             <!-- Sticky Heading & Stepper Bar -->
-            <div class="sticky top-0 z-20 bg-background/95 backdrop-blur-md pt-4 pb-2 -mx-4 px-4 mb-2">
+            <div class="sticky top-0 z-20 bg-background/95 backdrop-blur-md pt-2 pb-2 -mx-4 px-4 mb-2">
               <div class="mb-3 flex items-center justify-between gap-4">
                 <div class="flex items-center gap-2">
                   <h3 class="text-sm font-bold text-foreground">Today's Workout</h3>

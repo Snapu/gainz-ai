@@ -43,7 +43,7 @@ void scrollContainerRef;
     
     <!-- Top Nav -->
     <AppHeader class="shrink-0">
-      <h1 class="text-2xl font-black italic tracking-tighter">Gainz<span class="text-primary">AI</span></h1>
+      <h1 class="text-2xl font-black italic tracking-tighter leading-none">Gainz<span class="text-primary">AI</span></h1>
       <template #actions>
         <GlobalHeaderActions />
       </template>
