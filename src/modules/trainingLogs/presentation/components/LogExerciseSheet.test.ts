@@ -24,6 +24,28 @@ const mockLogs: ExerciseLog[] = [
     duration: 2,
     loggedAt: new Date("2026-10-21T10:00:00Z"),
   },
+  {
+    id: "log-3",
+    exerciseName: "Bench Press",
+    weight: 85,
+    reps: 6,
+    rpe: 9.5,
+    loggedAt: new Date("2026-10-22T10:00:00Z"),
+  },
+  {
+    id: "log-4",
+    exerciseName: "Squat",
+    weight: 100,
+    reps: 5,
+    loggedAt: new Date("2026-10-21T10:00:00Z"),
+  },
+  {
+    id: "log-5",
+    exerciseName: "Squat",
+    weight: 105,
+    reps: 5,
+    loggedAt: new Date("2026-10-23T10:00:00Z"),
+  },
 ];
 
 vi.mock("ios-haptics", () => ({
@@ -43,15 +65,19 @@ vi.mock("@/modules/platform/presentation", () => ({
   }),
 }));
 
-vi.mock("@/modules/trainingLogs/presentation", () => ({
-  useExerciseLogsStore: () => ({
-    exerciseLogs: ref(mockLogs),
-    addExerciseLog: addExerciseLogMock,
-    updateExerciseLog: updateExerciseLogMock,
-    removeExerciseLog: vi.fn(),
-    lastLogForExercise: (name: string) => mockLogs.find((l) => l.exerciseName === name),
-  }),
-}));
+vi.mock("@/modules/trainingLogs/presentation", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/modules/trainingLogs/presentation")>();
+  return {
+    ...actual,
+    useExerciseLogsStore: () => ({
+      exerciseLogs: ref(mockLogs),
+      addExerciseLog: addExerciseLogMock,
+      updateExerciseLog: updateExerciseLogMock,
+      removeExerciseLog: vi.fn(),
+      lastLogForExercise: (name: string) => mockLogs.find((l) => l.exerciseName === name),
+    }),
+  };
+});
 
 vi.mock("@/shared/presentation/components/ui/UiBottomSheet.vue", () => ({
   default: defineComponent({
@@ -185,6 +211,59 @@ describe("LogExerciseSheet", () => {
     const savedLog = addExerciseLogMock.mock.calls[0]?.[0] as ExerciseLog;
     expect(savedLog.exerciseName).toBe("Plank");
     expect(savedLog.duration).toBe(2);
+    app.unmount();
+  });
+
+  it("renders progression container collapsed by default and expands on click", async () => {
+    const container = document.createElement("div");
+    const app = createApp(LogExerciseSheet, {
+      open: true,
+      prefillData: {
+        exerciseName: "Bench Press",
+        weight: 80,
+        reps: 8,
+      },
+    });
+    app.mount(container);
+    await nextTick();
+
+    const progressionButton = Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Progression"),
+    );
+    expect(progressionButton).toBeDefined();
+    expect(progressionButton?.getAttribute("aria-expanded")).toBe("false");
+    expect(progressionButton?.getAttribute("aria-controls")).toBe("exercise-progression-history");
+    expect(container.querySelector("#exercise-progression-history")).toBeDefined();
+    expect(progressionButton?.textContent).toContain("PR: 85 kg × 6");
+    expect(progressionButton?.textContent).toContain("History");
+
+    // Click to expand
+    progressionButton?.click();
+    await nextTick();
+
+    expect(progressionButton?.getAttribute("aria-expanded")).toBe("true");
+    expect(progressionButton?.textContent).toContain("Hide");
+
+    // Switching exercise to another multi-log exercise (Squat) resets collapsed state to false
+    selectedExerciseUpdater?.("Squat");
+    await nextTick();
+
+    const squatProgressionButton = Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Progression"),
+    );
+    expect(squatProgressionButton).toBeDefined();
+    expect(squatProgressionButton?.getAttribute("aria-expanded")).toBe("false");
+    expect(squatProgressionButton?.textContent).toContain("PR: 105 kg × 5");
+
+    // Switching to Plank (only 1 log) unmounts progression container completely
+    selectedExerciseUpdater?.("Plank");
+    await nextTick();
+
+    const plankProgressionButton = Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Progression"),
+    );
+    expect(plankProgressionButton).toBeUndefined();
+
     app.unmount();
   });
 });

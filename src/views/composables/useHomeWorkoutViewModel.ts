@@ -20,14 +20,12 @@ import {
 } from "@/modules/trainingInsights/presentation";
 import type { ExerciseLog } from "@/modules/trainingLogs/presentation";
 import {
+  buildExerciseProgression,
   getSessionStartBoundary,
   resolveCurrentSession,
   useExerciseLogsStore,
 } from "@/modules/trainingLogs/presentation";
-import type {
-  ProgressionSessionItem,
-  ProgressionSetItem,
-} from "@/shared/presentation/components/ui/UiProgressionLine.vue";
+import type { ProgressionSessionItem } from "@/shared/presentation/components/ui/UiProgressionLine.vue";
 import { useLogSheet } from "@/shared/presentation/composables/useLogSheet";
 
 function findNextExerciseIndexInGroup(
@@ -294,39 +292,8 @@ export function useHomeWorkoutViewModel() {
       list.push(log);
     }
 
-    const formatter = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" });
-
     for (const [exerciseName, pastLogs] of byExercise.entries()) {
-      if (pastLogs.length < 2) continue;
-
-      const sortedLogs = [...pastLogs].sort((a, b) => a.loggedAt.getTime() - b.loggedAt.getTime());
-      const recentLogs = sortedLogs.slice(-24);
-
-      const sessionsMap = new Map<string, { date: Date; sets: ProgressionSetItem[] }>();
-
-      for (const log of recentLogs) {
-        const key = log.loggedAt.toDateString();
-        let session = sessionsMap.get(key);
-        if (!session) {
-          session = { date: log.loggedAt, sets: [] };
-          sessionsMap.set(key, session);
-        }
-        session.sets.push({
-          weight: log.weight,
-          reps: log.reps,
-          duration: log.duration,
-        });
-      }
-
-      const sessions: ProgressionSessionItem[] = [];
-      for (const [key, val] of sessionsMap.entries()) {
-        sessions.push({
-          key,
-          dateLabel: formatter.format(val.date),
-          sets: val.sets,
-        });
-      }
-
+      const sessions = buildExerciseProgression(pastLogs);
       if (sessions.length > 0) {
         map.set(exerciseName, sessions);
       }

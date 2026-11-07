@@ -1,18 +1,22 @@
 <script setup lang="ts">
-import { Trash, X } from "@lucide/vue";
+import { ChevronDown, Trash, X } from "@lucide/vue";
 import { storeToRefs } from "pinia";
 import { computed, nextTick, ref, watch } from "vue";
 import { useDeloadStore } from "@/modules/deload/presentation";
 import { useRestTimerStore } from "@/modules/platform/presentation";
 import type { ExerciseLog } from "@/modules/trainingLogs/presentation";
-import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
+import {
+  buildExerciseProgression,
+  computeExercisePr,
+  useExerciseLogsStore,
+} from "@/modules/trainingLogs/presentation";
 import type { ExerciseSelectorOptionDetails } from "@/shared/presentation/components/ExerciseSelector.vue";
 import ExerciseSelector from "@/shared/presentation/components/ExerciseSelector.vue";
 import { uiIconButtonClass } from "@/shared/presentation/components/ui/styles";
 import UiBottomSheet from "@/shared/presentation/components/ui/UiBottomSheet.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiNumberField from "@/shared/presentation/components/ui/UiNumberField.vue";
-import UiSparkline from "@/shared/presentation/components/ui/UiSparkline.vue";
+import UiProgressionLine from "@/shared/presentation/components/ui/UiProgressionLine.vue";
 import { useKeyboard } from "@/shared/presentation/composables/useKeyboard";
 import { useToast } from "@/shared/presentation/composables/useToast";
 
@@ -57,6 +61,7 @@ const formDuration = ref<number | null>(null);
 const formRpe = ref<number>(deloadStore.active ? 6 : 8.5);
 const isRpeEnabled = ref(false);
 const isApplyingPrefill = ref(false);
+const isProgressionExpanded = ref(false);
 
 const isDumbbellExercise = computed(() => /kurzhantel|dumbbell/i.test(formExerciseName.value));
 
@@ -97,6 +102,7 @@ function applyFormData(data: ExerciseFormData | null | undefined) {
 watch(
   () => props.open,
   (isOpen) => {
+    isProgressionExpanded.value = false;
     if (!isOpen) {
       formExerciseName.value = "";
       isApplyingPrefill.value = false;
@@ -110,6 +116,7 @@ watch(
 
 // Auto-fill from historical metrics when name is selected unless skipped (prefilled from AI)
 watch(formExerciseName, (name) => {
+  isProgressionExpanded.value = false;
   if (!name || isApplyingPrefill.value) return;
 
   const lastLog = logsStore.lastLogForExercise(name);
@@ -203,38 +210,18 @@ const exerciseOptionDetails = computed<Record<string, ExerciseSelectorOptionDeta
   );
 });
 
-const exerciseStats = computed(() => {
-  const name = formExerciseName.value;
-  if (!name) return null;
+const exerciseLogsForCurrentName = computed(() => {
+  const name = formExerciseName.value.trim().toLowerCase();
+  if (!name) return [];
+  return exerciseLogs.value.filter((l) => l.exerciseName.trim().toLowerCase() === name);
+});
 
-  const logs = exerciseLogs.value
-    .filter((l) => l.exerciseName === name)
-    .sort((a, b) => b.loggedAt.getTime() - a.loggedAt.getTime());
+const exerciseProgression = computed(() => {
+  return buildExerciseProgression(exerciseLogsForCurrentName.value);
+});
 
-  if (logs.length === 0) return null;
-
-  const recent = logs.slice(0, 10);
-
-  function max(arr: typeof logs, key: keyof (typeof logs)[0]): number | null {
-    const vals = arr.map((l) => l[key]).filter((v): v is number => typeof v === "number");
-    return vals.length ? Math.max(...vals) : null;
-  }
-
-  return {
-    count: logs.length,
-    max: {
-      weight: max(logs, "weight"),
-      reps: max(logs, "reps"),
-    },
-    weightHistory: recent
-      .map((l) => l.weight)
-      .filter((v): v is number => typeof v === "number")
-      .reverse(),
-    repsHistory: recent
-      .map((l) => l.reps)
-      .filter((v): v is number => typeof v === "number")
-      .reverse(),
-  };
+const exercisePrSummary = computed(() => {
+  return computeExercisePr(exerciseLogsForCurrentName.value);
 });
 
 const rpeLabel = computed(() => {
@@ -318,33 +305,48 @@ async function deleteLog() {
         class="bg-card"
       />
 
-      <!-- Exercise Stats -->
+      <!-- Collapsible Progression History -->
       <div
-        v-if="exerciseStats && (exerciseStats.weightHistory.length >= 2 || exerciseStats.repsHistory.length >= 2)"
-        class="flex gap-3 p-3 rounded-xl bg-card/40 border border-white/5 backdrop-blur-sm"
+        v-if="exerciseProgression && exerciseProgression.length > 0"
+        class="rounded-xl border border-white/5 bg-white/5 overflow-hidden transition-all duration-200"
       >
-        <UiSparkline
-          v-if="exerciseStats.weightHistory.length >= 2"
-          :values="exerciseStats.weightHistory"
-          :reference-value="exerciseStats.max.weight"
-          reference-label="MAX"
-          label="Weight (kg)"
-          :width="140"
-          :height="48"
-          class="flex-1"
-        />
-        <UiSparkline
-          v-if="exerciseStats.repsHistory.length >= 2"
-          :values="exerciseStats.repsHistory"
-          :reference-value="exerciseStats.max.reps"
-          reference-label="MAX"
-          label="Reps"
-          :width="140"
-          :height="48"
-          color="oklch(0.7 0.15 250)"
-          fill-color="oklch(0.7 0.15 250 / 0.1)"
-          class="flex-1"
-        />
+        <button
+          type="button"
+          :aria-expanded="isProgressionExpanded"
+          aria-controls="exercise-progression-history"
+          @click="isProgressionExpanded = !isProgressionExpanded"
+          class="w-full flex items-center justify-between p-3 hover:bg-white/10 active:scale-95 transition-all text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        >
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">
+              Progression
+            </span>
+            <span
+              v-if="exercisePrSummary"
+              class="text-xs font-semibold text-primary truncate"
+            >
+              {{ exercisePrSummary }}
+            </span>
+          </div>
+
+          <div class="flex items-center gap-1.5 shrink-0 ml-2">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">
+              {{ isProgressionExpanded ? 'Hide' : 'History' }}
+            </span>
+            <ChevronDown
+              class="w-4 h-4 text-muted-foreground transition-transform duration-200"
+              :class="isProgressionExpanded ? 'rotate-180 text-primary' : ''"
+            />
+          </div>
+        </button>
+
+        <div
+          v-show="isProgressionExpanded"
+          id="exercise-progression-history"
+          class="px-3 pb-3 pt-1 border-t border-white/5 animate-in fade-in duration-200"
+        >
+          <UiProgressionLine :sessions="exerciseProgression" class="w-full" />
+        </div>
       </div>
       
       <!-- Metrics -->
