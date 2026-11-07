@@ -27,10 +27,19 @@ const defaultLocale = typeof navigator !== "undefined" ? navigator.language : "e
   <NumberFieldRoot
     v-bind="props"
     v-model="modelValue"
+    :step-snapping="props.stepSnapping ?? false"
     :locale="props.locale || defaultLocale"
     :class="cn('flex flex-col gap-2 w-full', props.class)"
   >
-    <label v-if="label" class="text-sm font-semibold text-muted-foreground ml-1">{{ label }}</label>
+    <div
+      v-if="label || $slots['label-trailing']"
+      class="flex items-center justify-between gap-2 min-h-5"
+    >
+      <label v-if="label" class="text-sm font-semibold text-muted-foreground ml-1 truncate">{{
+        label
+      }}</label>
+      <slot name="label-trailing" />
+    </div>
     <div class="flex h-14 w-full items-center justify-between overflow-hidden rounded-xl border border-input/50 bg-white/5 shadow-sm backdrop-blur-md transition-all duration-200 hover:border-primary/50 focus-within:outline-none focus-within:ring-2 focus-within:ring-primary focus-within:border-primary">
       <NumberFieldDecrement
         :class="cn(

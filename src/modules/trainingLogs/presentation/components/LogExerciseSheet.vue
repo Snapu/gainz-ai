@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronDown, Trash, X } from "@lucide/vue";
+import { ChevronDown, Plus, Trash, X } from "@lucide/vue";
 import { storeToRefs } from "pinia";
 import { computed, nextTick, ref, watch } from "vue";
 import { useDeloadStore } from "@/modules/deload/presentation";
@@ -54,6 +54,8 @@ const internalOpen = computed({
   set: (val) => emit("update:open", val),
 });
 
+const WEIGHT_STEPS = [2.5, 5, 0.5] as const;
+
 const formExerciseName = ref("");
 const formReps = ref<number | null>(null);
 const formWeight = ref<number | null>(null);
@@ -64,7 +66,19 @@ const isRpeEnabled = ref(false);
 const isApplyingPrefill = ref(false);
 const isProgressionExpanded = ref(false);
 
+const weightStep = ref<number>(2.5);
+const distanceUnit = ref<"m" | "km">("m");
+const durationUnit = ref<"min" | "sec">("min");
+const showExtraMetrics = ref(false);
+const lastConfiguredExerciseName = ref("");
+
+const distanceStep = computed(() => (distanceUnit.value === "m" ? 50 : 0.5));
+const durationStep = computed(() => (durationUnit.value === "min" ? 1 : 5));
+
 const isDumbbellExercise = computed(() => /kurzhantel|dumbbell/i.test(formExerciseName.value));
+
+const stepBadgeClass =
+  "text-micro font-bold uppercase tracking-wider text-primary bg-primary/10 border border-primary/20 hover:bg-white/10 active:scale-95 transition-all duration-200 rounded-lg px-2 py-0.5 cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 interface ExerciseFormData {
   exerciseName: string;
@@ -75,22 +89,97 @@ interface ExerciseFormData {
   rpe?: number | null;
 }
 
+function applyDistanceAndDuration(
+  rawDistance: number | null | undefined,
+  rawDuration: number | null | undefined,
+  preserveUnits = false,
+) {
+  if (!preserveUnits) {
+    distanceUnit.value =
+      rawDistance != null && rawDistance >= 1000 && rawDistance % 100 === 0 ? "km" : "m";
+    durationUnit.value = rawDuration != null && rawDuration > 0 && rawDuration < 1 ? "sec" : "min";
+  }
+
+  formDistance.value =
+    rawDistance != null
+      ? distanceUnit.value === "km"
+        ? Math.round(rawDistance) / 1000
+        : rawDistance
+      : null;
+
+  formDuration.value =
+    rawDuration != null
+      ? durationUnit.value === "sec"
+        ? Math.round(rawDuration * 60)
+        : rawDuration
+      : null;
+
+  showExtraMetrics.value = rawDistance != null || rawDuration != null;
+}
+
+function cycleWeightStep() {
+  const currentIdx = WEIGHT_STEPS.indexOf(weightStep.value as (typeof WEIGHT_STEPS)[number]);
+  weightStep.value = WEIGHT_STEPS[(currentIdx + 1) % WEIGHT_STEPS.length] ?? 2.5;
+}
+
+function toggleDistanceUnit() {
+  if (distanceUnit.value === "m") {
+    distanceUnit.value = "km";
+    if (formDistance.value != null) {
+      formDistance.value = Math.round(formDistance.value) / 1000;
+    }
+  } else {
+    distanceUnit.value = "m";
+    if (formDistance.value != null) {
+      formDistance.value = Math.round(formDistance.value * 1000);
+    }
+  }
+}
+
+function toggleDurationUnit() {
+  if (durationUnit.value === "min") {
+    durationUnit.value = "sec";
+    if (formDuration.value != null) {
+      formDuration.value = Math.round(formDuration.value * 60);
+    }
+  } else {
+    durationUnit.value = "min";
+    if (formDuration.value != null) {
+      formDuration.value = Math.round((formDuration.value / 60) * 100) / 100;
+    }
+  }
+}
+
 function applyFormData(data: ExerciseFormData | null | undefined) {
   isApplyingPrefill.value = true;
+  const normalizedName = data?.exerciseName?.trim().toLowerCase() ?? "";
+  const isSameExercise = Boolean(
+    normalizedName && normalizedName === lastConfiguredExerciseName.value,
+  );
+  if (normalizedName) {
+    lastConfiguredExerciseName.value = normalizedName;
+  }
+
+  if (!isSameExercise) {
+    weightStep.value = 2.5;
+  }
+
   if (data) {
     formExerciseName.value = data.exerciseName;
     formReps.value = data.reps ?? null;
     formWeight.value = data.weight ?? null;
-    formDistance.value = data.distance ?? null;
-    formDuration.value = data.duration ?? null;
+    applyDistanceAndDuration(
+      data.distance,
+      data.duration,
+      isSameExercise && showExtraMetrics.value,
+    );
     formRpe.value = data.rpe ?? (deloadStore.active ? 6 : 8.5);
     isRpeEnabled.value = data.rpe != null;
   } else {
     formExerciseName.value = "";
     formReps.value = null;
     formWeight.value = null;
-    formDistance.value = null;
-    formDuration.value = null;
+    applyDistanceAndDuration(null, null, false);
     formRpe.value = deloadStore.active ? 6 : 8.5;
     isRpeEnabled.value = false;
   }
@@ -120,11 +209,26 @@ watch(formExerciseName, (name) => {
   isProgressionExpanded.value = false;
   if (!name || isApplyingPrefill.value) return;
 
+  const normalizedName = name.trim().toLowerCase();
+  const isSameExercise = Boolean(
+    normalizedName && normalizedName === lastConfiguredExerciseName.value,
+  );
+  if (normalizedName) {
+    lastConfiguredExerciseName.value = normalizedName;
+  }
+
+  if (!isSameExercise) {
+    weightStep.value = 2.5;
+  }
+
   const lastLog = logsStore.lastLogForExercise(name);
   formReps.value = lastLog?.reps ?? null;
   formWeight.value = lastLog?.weight ?? null;
-  formDistance.value = lastLog?.distance ?? null;
-  formDuration.value = lastLog?.duration ?? null;
+  applyDistanceAndDuration(
+    lastLog?.distance,
+    lastLog?.duration,
+    isSameExercise && showExtraMetrics.value,
+  );
   formRpe.value = lastLog?.rpe ?? (deloadStore.active ? 6 : 8.5);
   isRpeEnabled.value = lastLog?.rpe != null;
 });
@@ -242,13 +346,27 @@ async function saveLog() {
     return;
   }
 
+  const canonicalDistance =
+    formDistance.value != null
+      ? distanceUnit.value === "km"
+        ? Math.round(formDistance.value * 1000)
+        : formDistance.value
+      : undefined;
+
+  const canonicalDuration =
+    formDuration.value != null
+      ? durationUnit.value === "sec"
+        ? Math.round((formDuration.value / 60) * 100) / 100
+        : formDuration.value
+      : undefined;
+
   const log: ExerciseLog = {
     id: props.logToEdit?.id || crypto.randomUUID(),
     exerciseName: formExerciseName.value,
     reps: formReps.value ?? undefined,
     weight: formWeight.value ?? undefined,
-    distance: formDistance.value ?? undefined,
-    duration: formDuration.value ?? undefined,
+    distance: canonicalDistance,
+    duration: canonicalDuration,
     rpe: isRpeEnabled.value ? formRpe.value : undefined,
     loggedAt: props.logToEdit?.loggedAt || new Date(),
   };
@@ -285,7 +403,7 @@ async function deleteLog() {
         class="flex items-center justify-between px-6 pb-2 shrink-0"
         :class="isKeyboardVisible ? 'pt-3' : 'pt-6'"
       >
-        <h2 class="text-2xl font-bold tracking-tight">
+        <h2 class="text-xl font-black tracking-tight">
           {{ props.logToEdit ? 'Edit Exercise' : 'Log Exercise' }}
         </h2>
         <button type="button" @click="internalOpen = false" :class="uiIconButtonClass">
@@ -319,7 +437,7 @@ async function deleteLog() {
           class="w-full flex items-center justify-between p-3.5 hover:bg-white/5 active:scale-95 transition-all text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           <div class="flex items-center gap-2.5 min-w-0">
-            <span class="text-xs font-bold uppercase tracking-widest text-muted-foreground/80">
+            <span class="text-micro font-bold uppercase tracking-wider text-muted-foreground/80">
               Progression
             </span>
             <UiBadge
@@ -352,26 +470,103 @@ async function deleteLog() {
       </div>
       
       <!-- Metrics -->
-      <div class="grid grid-cols-2 gap-4 shrink-0">
-        <UiNumberField v-model="formReps" label="Reps" :min="0" :step="1" />
-        <UiNumberField v-model="formWeight" label="Weight (kg)" :min="0" :step="0.5" :description="isDumbbellExercise ? 'Total (both hands)' : undefined" />
-        <UiNumberField v-model="formDistance" label="Distance (m)" :min="0" :step="10" />
-        <UiNumberField v-model="formDuration" label="Duration (min)" :min="0" :step="0.5" />
+      <div class="flex flex-col gap-3 shrink-0">
+        <div class="grid grid-cols-2 gap-4">
+          <UiNumberField v-model="formReps" label="Reps" :min="0" :step="1" />
+          <UiNumberField
+            v-model="formWeight"
+            label="Weight (kg)"
+            :min="0"
+            :step="weightStep"
+            :description="isDumbbellExercise ? 'Total (both hands)' : undefined"
+          >
+            <template #label-trailing>
+              <button
+                type="button"
+                data-testid="weight-step-toggle"
+                aria-label="Cycle weight step size"
+                :class="stepBadgeClass"
+                @click="cycleWeightStep"
+              >
+                ±{{ weightStep }}
+              </button>
+            </template>
+          </UiNumberField>
+        </div>
+
+        <div v-if="showExtraMetrics" class="grid grid-cols-2 gap-4 animate-in fade-in duration-200">
+          <UiNumberField
+            v-model="formDistance"
+            label="Distance"
+            :min="0"
+            :step="distanceStep"
+          >
+            <template #label-trailing>
+              <button
+                type="button"
+                data-testid="distance-unit-toggle"
+                aria-label="Toggle distance unit and step size"
+                :class="stepBadgeClass"
+                @click="toggleDistanceUnit"
+              >
+                {{ distanceUnit === 'm' ? 'm · ±50' : 'km · ±0.5' }}
+              </button>
+            </template>
+          </UiNumberField>
+
+          <UiNumberField
+            v-model="formDuration"
+            label="Duration"
+            :min="0"
+            :step="durationStep"
+          >
+            <template #label-trailing>
+              <button
+                type="button"
+                data-testid="duration-unit-toggle"
+                aria-label="Toggle duration unit and step size"
+                :class="stepBadgeClass"
+                @click="toggleDurationUnit"
+              >
+                {{ durationUnit === 'min' ? 'min · ±1' : 'sec · ±5' }}
+              </button>
+            </template>
+          </UiNumberField>
+        </div>
+
+        <button
+          v-else
+          type="button"
+          data-testid="toggle-extra-metrics"
+          class="self-start inline-flex items-center gap-1.5 rounded-xl bg-white/5 border border-white/5 px-3 py-1.5 text-micro font-bold uppercase tracking-wider text-muted-foreground hover:bg-white/10 hover:text-foreground active:scale-95 transition-all duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          @click="showExtraMetrics = true"
+        >
+          <Plus class="w-3.5 h-3.5" />
+          Distance &amp; Duration
+        </button>
       </div>
 
       <!-- RPE Slider -->
       <div class="space-y-3 px-1 mt-1 shrink-0">
         <div class="flex items-center justify-between">
-          <span class="text-xs font-bold uppercase tracking-widest text-muted-foreground/60">Effort (RPE)</span>
-          <span class="text-xs font-bold transition-opacity duration-200" :class="isRpeEnabled ? 'text-primary' : 'text-primary/50 opacity-50'">
-            {{ rpeLabel }}
+          <span class="text-micro font-bold uppercase tracking-wider text-muted-foreground/60">Effort (RPE)</span>
+          <span
+            class="text-xs font-bold transition-colors duration-200"
+            :class="isRpeEnabled ? 'text-primary' : 'text-muted-foreground/50'"
+          >
+            {{ isRpeEnabled ? rpeLabel : 'Optional' }}
           </span>
         </div>
         
         <div class="h-6 flex items-center gap-4">
-          <label class="relative inline-flex items-center cursor-pointer min-w-[36px] w-[36px] h-[20px]">
-            <input type="checkbox" v-model="isRpeEnabled" class="sr-only peer" />
-            <div class="w-full h-full bg-white/10 rounded-full peer peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-primary peer-checked:bg-primary transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-transform peer-checked:after:translate-x-[16px] shadow-sm"></div>
+          <label class="relative inline-flex items-center cursor-pointer shrink-0 w-9 h-5">
+            <input
+              type="checkbox"
+              v-model="isRpeEnabled"
+              aria-label="Enable RPE tracking"
+              class="sr-only peer"
+            />
+            <div class="w-full h-full bg-white/10 rounded-full peer peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-primary peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background peer-checked:bg-primary transition-colors duration-200 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-transform after:duration-200 peer-checked:after:translate-x-4 shadow-sm"></div>
           </label>
           
           <input 
@@ -379,13 +574,16 @@ async function deleteLog() {
             min="6" 
             max="10" 
             step="0.5" 
-            :disabled="!isRpeEnabled"
             v-model.number="formRpe"
+            aria-label="Effort (RPE)"
+            @input="isRpeEnabled = true"
+            @change="isRpeEnabled = true"
+            @click="isRpeEnabled = true"
             @pointerdown.stop
             @touchstart.stop
             @touchmove.stop
-            class="w-full h-2 bg-white/5 rounded-lg appearance-none accent-primary transition-opacity duration-200"
-            :class="isRpeEnabled ? 'cursor-pointer opacity-100' : 'cursor-not-allowed opacity-30'"
+            class="w-full h-2 bg-white/5 rounded-lg appearance-none accent-primary cursor-pointer transition-opacity duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            :class="isRpeEnabled ? 'opacity-100' : 'opacity-40 hover:opacity-70'"
           />
         </div>
       </div>

@@ -266,4 +266,202 @@ describe("LogExerciseSheet", () => {
 
     app.unmount();
   });
+
+  it("hides Distance and Duration by default for weight/rep exercises and expands via toggle or duration history", async () => {
+    const container = document.createElement("div");
+    const app = createApp(LogExerciseSheet, {
+      open: true,
+      prefillData: {
+        exerciseName: "Bench Press",
+        weight: 75,
+        reps: 8,
+      },
+    });
+    app.mount(container);
+    await nextTick();
+
+    const getLabels = () =>
+      Array.from(container.querySelectorAll("label")).map((l) => l.textContent?.trim());
+
+    expect(getLabels()).toContain("Reps");
+    expect(getLabels()).toContain("Weight (kg)");
+    expect(getLabels()).not.toContain("Distance");
+    expect(getLabels()).not.toContain("Duration");
+
+    // Click "+ Distance & Duration" toggle button
+    const expandMetricsBtn = container.querySelector<HTMLButtonElement>(
+      '[data-testid="toggle-extra-metrics"]',
+    );
+    expect(expandMetricsBtn).not.toBeNull();
+    expandMetricsBtn?.click();
+    await nextTick();
+
+    expect(getLabels()).toContain("Distance");
+    expect(getLabels()).toContain("Duration");
+
+    // Switching to Squat (weight/reps only) hides Distance & Duration again
+    selectedExerciseUpdater?.("Squat");
+    await nextTick();
+    expect(getLabels()).not.toContain("Distance");
+    expect(getLabels()).not.toContain("Duration");
+
+    // Switching to Plank (duration history) auto-expands Distance & Duration
+    selectedExerciseUpdater?.("Plank");
+    await nextTick();
+    expect(getLabels()).toContain("Distance");
+    expect(getLabels()).toContain("Duration");
+
+    app.unmount();
+  });
+
+  it("cycles weight step size between 2.5, 5, and 0.5 via the header badge", async () => {
+    const container = document.createElement("div");
+    const app = createApp(LogExerciseSheet, {
+      open: true,
+      prefillData: {
+        exerciseName: "Bench Press",
+        weight: 75,
+        reps: 8,
+      },
+    });
+    app.mount(container);
+    await nextTick();
+
+    const stepBadge = container.querySelector<HTMLButtonElement>(
+      '[data-testid="weight-step-toggle"]',
+    );
+    expect(stepBadge).not.toBeNull();
+    expect(stepBadge?.textContent?.trim()).toBe("±2.5");
+
+    stepBadge?.click();
+    await nextTick();
+    expect(stepBadge?.textContent?.trim()).toBe("±5");
+
+    stepBadge?.click();
+    await nextTick();
+    expect(stepBadge?.textContent?.trim()).toBe("±0.5");
+
+    stepBadge?.click();
+    await nextTick();
+    expect(stepBadge?.textContent?.trim()).toBe("±2.5");
+
+    app.unmount();
+  });
+
+  it("toggles Distance (m <-> km) and Duration (min <-> sec) units and saves canonical values", async () => {
+    const container = document.createElement("div");
+    const app = createApp(LogExerciseSheet, {
+      open: true,
+      prefillData: {
+        exerciseName: "Running",
+        distance: 500, // < 1000m -> starts in m mode
+        duration: 0.75, // < 1 min (45 sec) -> auto-starts in sec mode
+      },
+    });
+    app.mount(container);
+    await nextTick();
+
+    const distanceToggle = container.querySelector<HTMLButtonElement>(
+      '[data-testid="distance-unit-toggle"]',
+    );
+    const durationToggle = container.querySelector<HTMLButtonElement>(
+      '[data-testid="duration-unit-toggle"]',
+    );
+
+    expect(distanceToggle?.textContent?.trim()).toBe("m · ±50");
+    expect(durationToggle?.textContent?.trim()).toBe("sec · ±5");
+
+    // Toggle distance from m (500) to km (0.5)
+    distanceToggle?.click();
+    await nextTick();
+    expect(distanceToggle?.textContent?.trim()).toBe("km · ±0.5");
+
+    // Toggle duration from sec (45) to min (0.75) and back to sec (45)
+    durationToggle?.click();
+    await nextTick();
+    expect(durationToggle?.textContent?.trim()).toBe("min · ±1");
+
+    durationToggle?.click();
+    await nextTick();
+    expect(durationToggle?.textContent?.trim()).toBe("sec · ±5");
+
+    // Save set and verify canonical units (m and min) are persisted
+    const saveButton = Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Save Set"),
+    );
+    saveButton?.click();
+    await nextTick();
+
+    expect(addExerciseLogMock).toHaveBeenCalledOnce();
+    const savedLog = addExerciseLogMock.mock.calls[0]?.[0] as ExerciseLog;
+    expect(savedLog.distance).toBe(500);
+    expect(savedLog.duration).toBe(0.75);
+
+    app.unmount();
+  });
+
+  it("keeps multi-minute fractional durations in min mode and auto-infers km for >= 1000m distances", async () => {
+    const container = document.createElement("div");
+    const app = createApp(LogExerciseSheet, {
+      open: true,
+      prefillData: {
+        exerciseName: "Cycling",
+        distance: 1500,
+        duration: 12.5,
+      },
+    });
+    app.mount(container);
+    await nextTick();
+
+    const distanceToggle = container.querySelector<HTMLButtonElement>(
+      '[data-testid="distance-unit-toggle"]',
+    );
+    const durationToggle = container.querySelector<HTMLButtonElement>(
+      '[data-testid="duration-unit-toggle"]',
+    );
+
+    expect(distanceToggle?.textContent?.trim()).toBe("km · ±0.5");
+    expect(durationToggle?.textContent?.trim()).toBe("min · ±1");
+
+    app.unmount();
+  });
+
+  it("shows 'Optional' when RPE is disabled and auto-enables RPE when interacting with the slider", async () => {
+    const container = document.createElement("div");
+    const app = createApp(LogExerciseSheet, {
+      open: true,
+      prefillData: {
+        exerciseName: "Bench Press",
+        weight: 75,
+        reps: 8,
+      },
+    });
+    app.mount(container);
+    await nextTick();
+
+    expect(container.textContent).toContain("Optional");
+
+    const rangeInput = container.querySelector<HTMLInputElement>('input[type="range"]');
+    expect(rangeInput).not.toBeNull();
+    expect(rangeInput?.disabled).toBe(false);
+
+    if (rangeInput) {
+      rangeInput.value = "9";
+      rangeInput.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    await nextTick();
+
+    expect(container.textContent).toContain("9 - 1 Rep Left (1 RIR)");
+
+    const saveButton = Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Save Set"),
+    );
+    saveButton?.click();
+    await nextTick();
+
+    const savedLog = addExerciseLogMock.mock.calls[0]?.[0] as ExerciseLog;
+    expect(savedLog.rpe).toBe(9);
+
+    app.unmount();
+  });
 });
