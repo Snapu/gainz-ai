@@ -7,9 +7,7 @@ import {
   type DisplayWorkoutGroup,
   WorkoutExerciseCard,
 } from "@/modules/aiCoach/presentation";
-import AppHeader from "@/shared/presentation/components/AppHeader.vue";
 import EmptyState from "@/shared/presentation/components/EmptyState.vue";
-import GlobalHeaderActions from "@/shared/presentation/components/GlobalHeaderActions.vue";
 import TrainInteractionDeck from "@/shared/presentation/components/TrainInteractionDeck.vue";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
@@ -257,16 +255,7 @@ onActivated(() => {
 </script>
 
 <template>
-  <div class="h-full bg-background flex flex-col pt-safe relative overflow-hidden">
-    
-    <!-- Top Nav -->
-    <AppHeader class="shrink-0">
-      <h1 class="text-2xl font-black italic tracking-tighter leading-none">Gainz<span class="text-primary">AI</span></h1>
-      <template #actions>
-        <GlobalHeaderActions />
-      </template>
-    </AppHeader>
-
+  <div class="h-full bg-background flex flex-col relative overflow-hidden">
     <main
       ref="mainScrollRef"
       class="flex-1 w-full max-w-2xl mx-auto px-4 pb-6 overflow-y-auto overscroll-y-contain no-scrollbar flex flex-col gap-5"

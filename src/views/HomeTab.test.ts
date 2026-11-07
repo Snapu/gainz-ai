@@ -3,12 +3,6 @@ import { createApp, nextTick, ref } from "vue";
 import type { DisplayExercise, DisplayWorkoutGroup } from "@/modules/aiCoach/presentation";
 
 // Mock child components that are not under test
-vi.mock("@/shared/presentation/components/AppHeader.vue", () => ({
-  default: { template: "<header><slot /><slot name='actions' /></header>" },
-}));
-vi.mock("@/shared/presentation/components/GlobalHeaderActions.vue", () => ({
-  default: { template: "<div>Actions</div>" },
-}));
 vi.mock("@/shared/presentation/components/TrainInteractionDeck.vue", () => ({
   default: {
     name: "TrainInteractionDeck",

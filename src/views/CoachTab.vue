@@ -6,8 +6,6 @@ import {
   supersetConnectorClass,
   useCoachChatViewModel,
 } from "@/modules/aiCoach/presentation";
-import AppHeader from "@/shared/presentation/components/AppHeader.vue";
-import GlobalHeaderActions from "@/shared/presentation/components/GlobalHeaderActions.vue";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
@@ -39,16 +37,7 @@ void scrollContainerRef;
 </script>
 
 <template>
-  <div class="h-full bg-background flex flex-col pt-safe relative overflow-hidden">
-    
-    <!-- Top Nav -->
-    <AppHeader class="shrink-0">
-      <h1 class="text-2xl font-black italic tracking-tighter leading-none">Gainz<span class="text-primary">AI</span></h1>
-      <template #actions>
-        <GlobalHeaderActions />
-      </template>
-    </AppHeader>
-
+  <div class="h-full bg-background flex flex-col relative overflow-hidden">
     <!-- Chat Messages Scroll Area -->
     <main
       ref="scrollContainerRef"

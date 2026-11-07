@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { LogExerciseSheet } from "@/modules/trainingLogs/presentation";
+import AppHeader from "@/shared/presentation/components/AppHeader.vue";
+import GlobalHeaderActions from "@/shared/presentation/components/GlobalHeaderActions.vue";
 import { useKeyboard } from "../composables/useKeyboard";
 import { useLogSheet } from "../composables/useLogSheet";
 import BottomTabBar from "./BottomTabBar.vue";
@@ -9,7 +11,15 @@ const { isKeyboardVisible } = useKeyboard();
 </script>
 
 <template>
-  <div class="h-full w-full flex flex-col overflow-hidden bg-background">
+  <div class="h-full w-full flex flex-col overflow-hidden bg-background pt-safe">
+    <!-- Top Nav -->
+    <AppHeader class="shrink-0">
+      <h1 class="text-2xl font-black italic tracking-tighter leading-none">Gainz<span class="text-primary">AI</span></h1>
+      <template #actions>
+        <GlobalHeaderActions />
+      </template>
+    </AppHeader>
+
     <!-- Main content area -->
     <div class="flex-1 min-h-0 w-full relative overflow-hidden">
       <router-view v-slot="{ Component }">
