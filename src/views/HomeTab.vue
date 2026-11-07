@@ -35,6 +35,7 @@ const {
   activeExerciseForDeck,
   activeExerciseProgress,
   supersetAlternatives,
+  selectedSupersetExerciseName,
   selectSupersetExercise,
   handleDeckLogCurrent,
   openGoogleSearch,
@@ -43,8 +44,81 @@ const {
 } = useHomeWorkoutViewModel();
 
 const galleryRef = ref<HTMLElement | null>(null);
+const mainScrollRef = ref<HTMLElement | null>(null);
+const stickyHeaderRef = ref<HTMLElement | null>(null);
 const isProgrammaticScrolling = ref(false);
 let programmaticScrollTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function findExerciseCardElement(exerciseName: string): HTMLElement | null {
+  const activeSlide = galleryRef.value?.children[visibleGroupIndex.value] as
+    | HTMLElement
+    | undefined;
+  const container = activeSlide ?? mainScrollRef.value;
+  if (!container) return null;
+  const cards = container.querySelectorAll<HTMLElement>("[data-exercise-name]");
+  for (const card of cards) {
+    if (card.dataset.exerciseName === exerciseName) {
+      return card;
+    }
+  }
+  return null;
+}
+
+function computeHeaderOffset(headerEl: HTMLElement | null): number {
+  const height = headerEl?.offsetHeight ?? 0;
+  return height > 0 ? height + 8 : 0;
+}
+
+function applyScrollTop(el: HTMLElement, top: number, smooth: boolean) {
+  if (typeof el.scrollTo === "function") {
+    el.scrollTo({ top, behavior: smooth ? "smooth" : "instant" });
+  } else {
+    try {
+      el.scrollTop = top;
+    } catch {
+      // Fallback for jsdom
+    }
+  }
+}
+
+function scrollMainToElement(
+  mainEl: HTMLElement,
+  cardEl: HTMLElement,
+  headerEl: HTMLElement | null,
+  smooth: boolean,
+) {
+  const containerRect = mainEl.getBoundingClientRect();
+  const cardRect = cardEl.getBoundingClientRect();
+  const hasLayoutMetrics =
+    containerRect.height > 0 ||
+    cardRect.height > 0 ||
+    cardRect.top !== 0 ||
+    containerRect.top !== 0;
+
+  if (!hasLayoutMetrics) {
+    if (typeof cardEl.scrollIntoView === "function") {
+      cardEl.scrollIntoView({ behavior: smooth ? "smooth" : "instant", block: "nearest" });
+    }
+    return;
+  }
+
+  const headerOffset = computeHeaderOffset(headerEl);
+  const targetScrollTop = Math.max(
+    0,
+    mainEl.scrollTop + (cardRect.top - containerRect.top) - headerOffset,
+  );
+
+  if (Math.abs(targetScrollTop - mainEl.scrollTop) > 2) {
+    applyScrollTop(mainEl, targetScrollTop, smooth);
+  }
+}
+
+function scrollToExercise(exerciseName: string, smooth = true) {
+  const cardEl = findExerciseCardElement(exerciseName);
+  const mainEl = mainScrollRef.value;
+  if (!cardEl || !mainEl) return;
+  scrollMainToElement(mainEl, cardEl, stickyHeaderRef.value, smooth);
+}
 
 function isGroupCompleted(group: DisplayWorkoutGroup) {
   return group.exercises.every(
@@ -155,6 +229,17 @@ watch(
   { flush: "post" },
 );
 
+// Auto-scroll to selected superset exercise
+watch(
+  () => selectedSupersetExerciseName?.value,
+  (name) => {
+    if (name) {
+      scrollToExercise(name, true);
+    }
+  },
+  { flush: "post" },
+);
+
 onMounted(() => {
   if (allWorkoutGroups.value?.length) {
     scrollToGroup(activeGroupIndex.value, false);
@@ -182,7 +267,10 @@ onActivated(() => {
       </template>
     </AppHeader>
 
-    <main class="flex-1 w-full max-w-2xl mx-auto px-4 pb-6 overflow-y-auto overscroll-y-contain no-scrollbar flex flex-col gap-5">
+    <main
+      ref="mainScrollRef"
+      class="flex-1 w-full max-w-2xl mx-auto px-4 pb-6 overflow-y-auto overscroll-y-contain no-scrollbar flex flex-col gap-5"
+    >
       <!-- TODAY'S WORKOUT SECTION -->
       <section>
         <template v-if="chatStore.isLoading && !allWorkoutGroups?.length">
@@ -194,7 +282,10 @@ onActivated(() => {
         <template v-else>
           <div v-if="allWorkoutGroups?.length" class="flex flex-col w-full">
             <!-- Sticky Heading & Stepper Bar -->
-            <div class="sticky top-0 z-20 bg-background/95 backdrop-blur-md pt-2 pb-2 -mx-4 px-4 mb-2">
+            <div
+              ref="stickyHeaderRef"
+              class="sticky top-0 z-20 bg-background/95 backdrop-blur-md pt-2 pb-2 -mx-4 px-4 mb-2"
+            >
               <div class="mb-3 flex items-center justify-between gap-4">
                 <div class="flex items-center gap-2">
                   <h3 class="text-sm font-bold text-foreground">Today's Workout</h3>
@@ -273,6 +364,7 @@ onActivated(() => {
                 <WorkoutExerciseCard
                   v-for="(exercise, exIndex) in group.exercises"
                   :key="exercise.exerciseName"
+                  :data-exercise-name="exercise.exerciseName"
                   :exercise="exercise"
                   :is-highlighted="isHighlighted(gIndex, exIndex)"
                   :is-superset="group.isSuperset"

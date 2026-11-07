@@ -1,5 +1,5 @@
 import { useNow, useTimeoutPoll } from "@vueuse/core";
-import { computed, getCurrentInstance, onMounted, ref, watch } from "vue";
+import { computed, getCurrentInstance, onMounted, readonly, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import {
   type DisplayExercise,
@@ -496,6 +496,7 @@ export function useHomeWorkoutViewModel() {
     activeExerciseForDeck,
     activeExerciseProgress,
     supersetAlternatives,
+    selectedSupersetExerciseName: readonly(selectedSupersetExerciseName),
     selectSupersetExercise,
     handleDeckLogCurrent,
     handleLogArbitrary,
