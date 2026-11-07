@@ -229,12 +229,13 @@ const layout = computed(() => {
 <template>
   <div 
     ref="scrollContainer"
-    class="w-full overflow-x-auto no-scrollbar overscroll-x-contain relative"
+    class="w-full shrink-0 overflow-x-auto no-scrollbar overscroll-x-contain relative"
+    :style="{ height: `${SVG_HEIGHT}px`, minHeight: `${SVG_HEIGHT}px` }"
   >
     <svg 
       :viewBox="`0 0 ${layout.totalWidth} ${SVG_HEIGHT}`"
-      :style="{ width: `${layout.totalWidth}px`, height: `${SVG_HEIGHT}px` }"
-      class="overflow-visible select-none shrink-0"
+      :style="{ width: `${layout.totalWidth}px`, height: `${SVG_HEIGHT}px`, minHeight: `${SVG_HEIGHT}px` }"
+      class="overflow-visible select-none shrink-0 block"
     >
       <!-- 1. Inter-session dividers & bridges -->
       <template v-for="bridge in layout.bridges" :key="`${bridge.x1}-${bridge.x2}`">

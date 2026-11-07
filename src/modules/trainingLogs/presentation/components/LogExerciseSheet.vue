@@ -296,20 +296,20 @@ async function deleteLog() {
     </template>
 
     <!-- Scrollable Form Content -->
-    <div class="flex flex-col gap-5 overflow-y-auto px-6 py-4 no-scrollbar flex-1">
+    <div class="flex flex-col gap-5 overflow-y-auto px-6 py-4 no-scrollbar flex-1 min-h-0">
       <!-- Optimized Exercise Selection -->
       <ExerciseSelector
         v-model="formExerciseName"
         :options="exerciseOptions"
         :option-details="exerciseOptionDetails"
         placeholder="Select or Search Exercise..."
-        class="bg-card"
+        class="bg-card shrink-0"
       />
 
       <!-- Collapsible Progression History -->
       <div
         v-if="exerciseProgression && exerciseProgression.length > 0"
-        class="rounded-xl border border-white/5 bg-card/40 backdrop-blur-sm overflow-hidden transition-all duration-200"
+        class="rounded-xl border border-white/5 bg-card/40 backdrop-blur-sm overflow-hidden shrink-0"
       >
         <button
           type="button"
@@ -345,14 +345,14 @@ async function deleteLog() {
         <div
           v-show="isProgressionExpanded"
           id="exercise-progression-history"
-          class="px-3 pb-3 pt-2 border-t border-white/5 animate-in fade-in duration-200"
+          class="px-3 pb-3 pt-2 border-t border-white/5 shrink-0 animate-in fade-in duration-200"
         >
-          <UiProgressionLine :sessions="exerciseProgression" class="w-full" />
+          <UiProgressionLine :sessions="exerciseProgression" class="w-full shrink-0" />
         </div>
       </div>
       
       <!-- Metrics -->
-      <div class="grid grid-cols-2 gap-4">
+      <div class="grid grid-cols-2 gap-4 shrink-0">
         <UiNumberField v-model="formReps" label="Reps" :min="0" :step="1" />
         <UiNumberField v-model="formWeight" label="Weight (kg)" :min="0" :step="0.5" :description="isDumbbellExercise ? 'Total (both hands)' : undefined" />
         <UiNumberField v-model="formDistance" label="Distance (m)" :min="0" :step="10" />
@@ -360,7 +360,7 @@ async function deleteLog() {
       </div>
 
       <!-- RPE Slider -->
-      <div class="space-y-3 px-1 mt-1">
+      <div class="space-y-3 px-1 mt-1 shrink-0">
         <div class="flex items-center justify-between">
           <span class="text-xs font-bold uppercase tracking-widest text-muted-foreground/60">Effort (RPE)</span>
           <span class="text-xs font-bold transition-opacity duration-200" :class="isRpeEnabled ? 'text-primary' : 'text-primary/50 opacity-50'">
