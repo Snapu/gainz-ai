@@ -35,6 +35,7 @@ This glossary establishes the **Ubiquitous Language** for Gainz AI across all Bo
 ### `VolumeLandmarks` (Dr. Mike Israetel Hypertrophy Model)
 
 Scientific set thresholds per muscle group over a rolling weekly window:
+
 - **`MEV` (Minimum Effective Volume)**: The minimum weekly direct/effective sets required to stimulate muscle hypertrophy.
 - **`MAV` (Maximum Adaptive Volume)**: The optimal volume range (`mavLow` to `mavHigh`) yielding the greatest hypertrophic gains.
 - **`MRV` (Maximum Recoverable Volume)**: The upper limit of volume from which an athlete can recover. Exceeding MRV results in accumulated systemic fatigue and performance regression.

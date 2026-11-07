@@ -3,7 +3,7 @@ import { ArrowLeftRight, Play, Plus, RotateCcw, SkipForward } from "@lucide/vue"
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 
-export interface DeckExercise {
+interface DeckExercise {
   exerciseName: string;
   targetSets: number;
   targetReps?: string;
@@ -13,7 +13,7 @@ export interface DeckExercise {
   targetDistanceMeters?: number;
 }
 
-export interface DeckProgress {
+interface DeckProgress {
   done: number;
   isCompleted: boolean;
 }

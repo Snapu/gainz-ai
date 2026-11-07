@@ -1,1 +1,1 @@
-export type { CoachingAdvice, ExerciseCleanupResult } from "@/modules/aiCoach/domain";
+export type { ExerciseCleanupResult } from "@/modules/aiCoach/domain";
