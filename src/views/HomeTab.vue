@@ -118,6 +118,12 @@ function scrollToExercise(exerciseName: string, smooth = true) {
   scrollMainToElement(mainEl, cardEl, stickyHeaderRef.value, smooth);
 }
 
+function handleCardClick(isSuperset: boolean, exerciseName: string) {
+  if (!isSuperset) return;
+  if (activeExerciseForDeck.value?.exerciseName === exerciseName) return;
+  selectSupersetExercise(exerciseName);
+}
+
 function isGroupCompleted(group: DisplayWorkoutGroup) {
   return group.exercises.every(
     (ex: DisplayExercise) => getExerciseProgress(ex.exerciseName, ex.targetSets).isCompleted,
@@ -361,6 +367,8 @@ onActivated(() => {
                   :progression-data="getExerciseProgression(exercise.exerciseName)"
                   :logged-sets="getTodaysLogsForExercise(exercise.exerciseName)"
                   :heading-level="group.isSuperset ? 'h4' : 'h3'"
+                  :class="group.isSuperset && !isHighlighted(gIndex, exIndex) ? 'cursor-pointer hover:border-white/10 transition-colors' : ''"
+                  @click="handleCardClick(group.isSuperset, exercise.exerciseName)"
                   @editLog="editLog"
                   @search="openGoogleSearch"
                 />

@@ -42,6 +42,7 @@ const mockAllWorkoutGroups = ref<DisplayWorkoutGroup[] | null>(null);
 const mockVisibleGroupIndex = ref(0);
 const mockCompletedMap = ref(new Map<string, boolean>());
 const mockSupersetAlternatives = ref<DisplayExercise[]>([]);
+const mockActiveExerciseForDeck = ref<DisplayExercise | null>(null);
 const mockSelectedSupersetExerciseName = ref<string | null>(null);
 const mockSelectSupersetExercise = vi.fn((name: string) => {
   mockSelectedSupersetExerciseName.value = name;
@@ -68,7 +69,7 @@ vi.mock("@/views/composables/useHomeWorkoutViewModel", () => ({
     handleLogArbitrary: vi.fn(),
     skipRest: vi.fn(),
     visibleGroupIndex: mockVisibleGroupIndex,
-    activeExerciseForDeck: null,
+    activeExerciseForDeck: mockActiveExerciseForDeck,
     activeExerciseProgress: null,
     supersetAlternatives: mockSupersetAlternatives,
     selectedSupersetExerciseName: mockSelectedSupersetExerciseName,
@@ -434,6 +435,75 @@ describe("HomeTab Stepper Highlights", () => {
           behavior: "smooth",
         }),
       );
+
+      app.unmount();
+    });
+
+    it("selects the superset exercise when clicking on its card directly", async () => {
+      mockActiveExerciseForDeck.value = {
+        exerciseName: "Bench Press",
+        targetSets: 3,
+        targetReps: "8",
+      };
+
+      const container = document.createElement("div");
+      const app = createApp(HomeTab);
+      app.mount(container);
+      await nextTick();
+
+      const main = container.querySelector("main") as HTMLElement;
+      const scrollToSpy = vi.fn();
+      main.scrollTo = scrollToSpy;
+
+      main.getBoundingClientRect = () =>
+        ({ top: 50, height: 600, bottom: 650, left: 0, right: 400, width: 400 }) as DOMRect;
+
+      const cards = container.querySelectorAll<HTMLElement>("[data-exercise-name]");
+      expect(cards.length).toBe(2);
+
+      cards[1].getBoundingClientRect = () =>
+        ({ top: 350, height: 200, bottom: 550, left: 0, right: 400, width: 400 }) as DOMRect;
+
+      // Click the Barbell Row card (index 1) directly
+      cards[1].click();
+      await nextTick();
+
+      expect(mockSelectSupersetExercise).toHaveBeenCalledWith("Barbell Row");
+      expect(scrollToSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          behavior: "smooth",
+          top: expect.any(Number),
+        }),
+      );
+
+      app.unmount();
+    });
+
+    it("does not re-select or re-scroll when clicking an already active superset card", async () => {
+      mockActiveExerciseForDeck.value = {
+        exerciseName: "Bench Press",
+        targetSets: 3,
+        targetReps: "8",
+      };
+
+      const container = document.createElement("div");
+      const app = createApp(HomeTab);
+      app.mount(container);
+      await nextTick();
+
+      const main = container.querySelector("main") as HTMLElement;
+      const scrollToSpy = vi.fn();
+      main.scrollTo = scrollToSpy;
+
+      const cards = container.querySelectorAll<HTMLElement>("[data-exercise-name]");
+      expect(cards.length).toBe(2);
+
+      // Click the already active Bench Press card (index 0)
+      cards[0].click();
+      await nextTick();
+
+      expect(mockSelectSupersetExercise).not.toHaveBeenCalled();
+      expect(scrollToSpy).not.toHaveBeenCalled();
 
       app.unmount();
     });
