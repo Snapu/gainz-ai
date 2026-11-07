@@ -295,8 +295,9 @@ function skipWizard() {
           <p class="text-muted-foreground mb-10 text-lg">Any injuries, specific focus areas, or limitations?</p>
           <UiTextarea
             v-model="userProfile.freeUserInput"
+            auto-resize
             placeholder="e.g. Bad left knee, want to focus on explosive strength..."
-            class="min-h-[160px]"
+            class="min-h-[160px] overflow-hidden"
           />
         </template>
 
