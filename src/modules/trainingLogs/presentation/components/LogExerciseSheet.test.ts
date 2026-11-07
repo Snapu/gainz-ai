@@ -242,7 +242,7 @@ describe("LogExerciseSheet", () => {
     await nextTick();
 
     expect(progressionButton?.getAttribute("aria-expanded")).toBe("true");
-    expect(progressionButton?.textContent).toContain("Hide");
+    expect(progressionButton?.textContent).toContain("History");
 
     // Switching exercise to another multi-log exercise (Squat) resets collapsed state to false
     selectedExerciseUpdater?.("Squat");

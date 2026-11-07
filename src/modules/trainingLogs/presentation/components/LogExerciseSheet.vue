@@ -13,6 +13,7 @@ import {
 import type { ExerciseSelectorOptionDetails } from "@/shared/presentation/components/ExerciseSelector.vue";
 import ExerciseSelector from "@/shared/presentation/components/ExerciseSelector.vue";
 import { uiIconButtonClass } from "@/shared/presentation/components/ui/styles";
+import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiBottomSheet from "@/shared/presentation/components/ui/UiBottomSheet.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiNumberField from "@/shared/presentation/components/ui/UiNumberField.vue";
@@ -308,33 +309,34 @@ async function deleteLog() {
       <!-- Collapsible Progression History -->
       <div
         v-if="exerciseProgression && exerciseProgression.length > 0"
-        class="rounded-xl border border-white/5 bg-white/5 overflow-hidden transition-all duration-200"
+        class="rounded-xl border border-white/5 bg-card/40 backdrop-blur-sm overflow-hidden transition-all duration-200"
       >
         <button
           type="button"
           :aria-expanded="isProgressionExpanded"
           aria-controls="exercise-progression-history"
           @click="isProgressionExpanded = !isProgressionExpanded"
-          class="w-full flex items-center justify-between p-3 hover:bg-white/10 active:scale-95 transition-all text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          class="w-full flex items-center justify-between p-3.5 hover:bg-white/5 active:scale-95 transition-all text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-          <div class="flex items-center gap-2 min-w-0">
-            <span class="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <span class="text-xs font-bold uppercase tracking-widest text-muted-foreground/80">
               Progression
             </span>
-            <span
+            <UiBadge
               v-if="exercisePrSummary"
-              class="text-xs font-semibold text-primary truncate"
+              variant="outline"
+              class="text-micro font-bold uppercase tracking-wider text-primary border-primary/20 bg-primary/10 px-2 py-0.5 truncate"
             >
               {{ exercisePrSummary }}
-            </span>
+            </UiBadge>
           </div>
 
           <div class="flex items-center gap-1.5 shrink-0 ml-2">
-            <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">
-              {{ isProgressionExpanded ? 'Hide' : 'History' }}
+            <span class="text-micro font-bold uppercase tracking-wider text-muted-foreground/50">
+              History
             </span>
             <ChevronDown
-              class="w-4 h-4 text-muted-foreground transition-transform duration-200"
+              class="w-4 h-4 text-muted-foreground/60 transition-transform duration-200"
               :class="isProgressionExpanded ? 'rotate-180 text-primary' : ''"
             />
           </div>
@@ -343,7 +345,7 @@ async function deleteLog() {
         <div
           v-show="isProgressionExpanded"
           id="exercise-progression-history"
-          class="px-3 pb-3 pt-1 border-t border-white/5 animate-in fade-in duration-200"
+          class="px-3 pb-3 pt-2 border-t border-white/5 animate-in fade-in duration-200"
         >
           <UiProgressionLine :sessions="exerciseProgression" class="w-full" />
         </div>

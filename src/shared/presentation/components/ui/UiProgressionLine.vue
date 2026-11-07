@@ -115,9 +115,9 @@ const range = computed(() => {
 });
 
 // SVG dimensions & coordinates
-const SVG_HEIGHT = 96;
-const PADDING_TOP = 20;
-const PADDING_BOTTOM = 28;
+const SVG_HEIGHT = 120;
+const PADDING_TOP = 22;
+const PADDING_BOTTOM = 38;
 const GRAPH_HEIGHT = SVG_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
 const BASELINE_Y = PADDING_TOP + GRAPH_HEIGHT;
 
@@ -129,7 +129,7 @@ function getY(val: number): number {
 }
 
 const SET_GAP = 34;
-const SESSION_GAP = 30;
+const SESSION_GAP = 40;
 const MARGIN_LEFT = 20;
 const MARGIN_RIGHT = 20;
 
@@ -259,7 +259,7 @@ const layout = computed(() => {
           :x1="session.dividerX"
           :y1="PADDING_TOP - 8"
           :x2="session.dividerX"
-          :y2="SVG_HEIGHT - 16"
+          :y2="SVG_HEIGHT - 20"
           stroke="white"
           stroke-opacity="0.08"
           stroke-dasharray="2 3"
@@ -316,7 +316,7 @@ const layout = computed(() => {
         <!-- Session Date Label -->
         <text
           :x="session.centerX"
-          :y="SVG_HEIGHT - 4"
+          :y="SVG_HEIGHT - 8"
           text-anchor="middle"
           class="text-[9px] font-bold fill-muted-foreground/50 tracking-wider uppercase"
         >
