@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ArrowLeft } from "@lucide/vue";
 import { storeToRefs } from "pinia";
 import { computed } from "vue";
 import { useRouter } from "vue-router";
@@ -76,14 +75,7 @@ async function applyDecision(
 
 <template>
   <div class="min-h-screen bg-background flex flex-col pt-safe">
-    <AppHeader>
-      <UiButton variant="ghost" size="icon" @click="router.back()" aria-label="Go Back">
-        <ArrowLeft class="w-5 h-5" />
-      </UiButton>
-      <div class="flex-1 min-w-0 ml-2">
-        <h1 class="text-lg font-bold tracking-tight text-foreground">Weight Migration</h1>
-        <p class="text-xs text-muted-foreground/70 mt-0.5">{{ summaryText }}</p>
-      </div>
+    <AppHeader show-back title="Weight Migration" :subtitle="summaryText" @back="router.back()">
       <template #actions>
         <UiButton variant="ghost" size="sm" @click="migrationStore.refresh()">Refresh</UiButton>
       </template>

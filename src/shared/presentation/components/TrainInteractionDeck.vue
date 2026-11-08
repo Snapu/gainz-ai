@@ -2,6 +2,7 @@
 import { ArrowLeftRight, Play, Plus, RotateCcw, SkipForward } from "@lucide/vue";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
+import UiRadialProgress from "@/shared/presentation/components/ui/UiRadialProgress.vue";
 
 interface DeckExercise {
   exerciseName: string;
@@ -179,28 +180,30 @@ const emptyOrCompleteLabel = computed(() => {
         class="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 w-full transition-all duration-200"
       >
         <!-- Superset Alternative Exercise Selector Chips -->
-        <button
+        <UiButton
           v-for="alt in supersetAlternatives"
           :key="alt.exerciseName"
-          type="button"
+          variant="chip"
+          size="xs"
           data-testid="deck-superset-chip"
-          class="inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-muted-foreground hover:text-foreground transition-all duration-200 cursor-pointer active:scale-95 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background whitespace-nowrap"
+          class="shrink-0"
           @click="emit('selectSupersetExercise', alt.exerciseName)"
         >
           <ArrowLeftRight class="w-3.5 h-3.5 text-primary shrink-0" />
           <span>{{ alt.exerciseName }}</span>
-        </button>
+        </UiButton>
 
         <!-- Arbitrary Exercise Button (Shown when not in a full-width completion/rest state) -->
-        <button
-          type="button"
+        <UiButton
+          variant="chip"
+          size="xs"
           data-testid="deck-custom-exercise"
-          class="inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-muted-foreground hover:text-foreground transition-all duration-200 cursor-pointer active:scale-95 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background whitespace-nowrap"
+          class="shrink-0"
           @click="emit('logCustom')"
         >
           <Plus class="w-3.5 h-3.5 text-primary shrink-0" />
           <span>Log Custom Exercise</span>
-        </button>
+        </UiButton>
       </div>
 
       <!-- Tier 2: Main Container (Visually matched to CoachTab Input Container) -->
@@ -217,45 +220,32 @@ const emptyOrCompleteLabel = computed(() => {
 
           <!-- Right Cluster: Radial Countdown Ring + Skip Icon Button + Primary Action -->
           <div class="flex items-center gap-2 shrink-0">
-            <div
+            <UiRadialProgress
               data-testid="deck-timer-ring"
-              class="relative w-10 h-10 shrink-0 flex items-center justify-center"
+              :size="40"
+              :stroke-width="3.2"
+              :progress="100 - restProgressPercent"
+              track-class="text-white/10"
+              :progress-class="isOvertime ? 'text-destructive stroke-destructive ease-linear' : 'text-primary stroke-primary ease-linear'"
             >
-              <svg class="w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="44" class="stroke-white/10" stroke-width="8" fill="none" />
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="44"
-                  class="transition-all duration-300 ease-linear"
-                  :class="isOvertime ? 'stroke-destructive' : 'stroke-primary'"
-                  stroke-width="8"
-                  fill="none"
-                  stroke-linecap="round"
-                  :stroke-dasharray="276"
-                  :stroke-dashoffset="(276 * restProgressPercent) / 100"
-                />
-              </svg>
-              <div class="absolute inset-0 flex items-center justify-center">
-                <span
-                  class="text-micro font-black tabular-nums tracking-tight"
-                  :class="isOvertime ? 'text-destructive' : 'text-primary'"
-                >
-                  {{ restFormattedTime }}
-                </span>
-              </div>
-            </div>
+              <span
+                class="text-micro font-black tabular-nums tracking-tight"
+                :class="isOvertime ? 'text-destructive' : 'text-primary'"
+              >
+                {{ restFormattedTime }}
+              </span>
+            </UiRadialProgress>
 
-            <button
+            <UiButton
               v-if="!isWorkoutComplete"
-              type="button"
+              variant="secondary"
+              size="icon"
               data-testid="deck-skip-rest"
-              class="h-10 w-10 rounded-full flex items-center justify-center bg-white/10 text-foreground hover:bg-primary/20 hover:text-primary border border-white/5 transition-all duration-200 cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               aria-label="Skip Rest"
               @click="handleSkipRest"
             >
               <SkipForward class="w-4 h-4" />
-            </button>
+            </UiButton>
 
             <UiButton
               type="button"
@@ -318,45 +308,32 @@ const emptyOrCompleteLabel = computed(() => {
 
           <!-- Right Cluster: Radial Countdown Ring + Play/Reset + Primary Action -->
           <div class="flex items-center gap-2 shrink-0">
-            <div
+            <UiRadialProgress
               data-testid="deck-timer-ring"
-              class="relative w-10 h-10 shrink-0 flex items-center justify-center"
+              :size="40"
+              :stroke-width="3.2"
+              :progress="100 - timerProgressPercent"
+              track-class="text-white/10"
+              :progress-class="isTimerRunning ? 'text-primary stroke-primary opacity-100 ease-linear' : 'text-primary stroke-primary opacity-40 ease-linear'"
             >
-              <svg class="w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="44" class="stroke-white/10" stroke-width="8" fill="none" />
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="44"
-                  class="transition-all duration-300 ease-linear stroke-primary"
-                  :class="isTimerRunning ? 'opacity-100' : 'opacity-40'"
-                  stroke-width="8"
-                  fill="none"
-                  stroke-linecap="round"
-                  :stroke-dasharray="276"
-                  :stroke-dashoffset="(276 * timerProgressPercent) / 100"
-                />
-              </svg>
-              <div class="absolute inset-0 flex items-center justify-center">
-                <span
-                  class="text-micro font-black tabular-nums tracking-tight"
-                  :class="isTimerRunning ? 'text-primary' : 'text-foreground'"
-                >
-                  {{ timerFormatted }}
-                </span>
-              </div>
-            </div>
+              <span
+                class="text-micro font-black tabular-nums tracking-tight"
+                :class="isTimerRunning ? 'text-primary' : 'text-foreground'"
+              >
+                {{ timerFormatted }}
+              </span>
+            </UiRadialProgress>
 
-            <button
-              type="button"
+            <UiButton
+              variant="secondary"
+              size="icon"
               data-testid="deck-timer-toggle"
-              @click="toggleTimer"
-              class="h-10 w-10 rounded-full flex items-center justify-center bg-white/10 text-foreground hover:bg-primary/20 hover:text-primary border border-white/5 transition-all duration-200 cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               :aria-label="isTimerActiveOrDirty ? 'Reset Timer' : 'Start Timer'"
+              @click="toggleTimer"
             >
               <Play v-if="!isTimerActiveOrDirty" class="w-4 h-4 ml-0.5" fill="currentColor" />
               <RotateCcw v-else class="w-4 h-4" />
-            </button>
+            </UiButton>
 
             <UiButton
               type="button"

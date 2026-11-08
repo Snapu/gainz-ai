@@ -1,19 +1,13 @@
 <script setup lang="ts">
-import { ArrowLeft } from "@lucide/vue";
 import { useRouter } from "vue-router";
-import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
+import AppHeader from "@/shared/presentation/components/AppHeader.vue";
 
 const router = useRouter();
 </script>
 
 <template>
   <div class="h-full bg-background flex flex-col overflow-hidden">
-    <header class="flex items-center h-13 px-4 border-b border-white/5 bg-background/80 backdrop-blur-md shrink-0 z-10 select-none touch-none">
-      <UiButton variant="ghost" size="icon" @click="router.back()" class="shrink-0 -ml-1 mr-2" aria-label="Go Back">
-        <ArrowLeft class="w-5 h-5" />
-      </UiButton>
-      <h1 class="text-xl font-bold truncate">Privacy Policy</h1>
-    </header>
+    <AppHeader show-back title="Privacy Policy" class="shrink-0" @back="router.back()" />
     
     <main class="flex-1 overflow-y-auto overscroll-y-contain p-6 text-foreground/80 space-y-8 max-w-3xl mx-auto">
       <section class="space-y-4">

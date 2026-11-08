@@ -10,10 +10,8 @@ import {
   Timer,
   TrendingDown,
   TrendingUp,
-  X,
 } from "@lucide/vue";
 import { useScroll } from "@vueuse/core";
-import { DialogClose, DialogTitle } from "reka-ui";
 import { computed, onMounted, ref, watch } from "vue";
 import { useMetricsStore } from "@/modules/profile/presentation";
 import {
@@ -23,7 +21,6 @@ import {
   VOLUME_LANDMARKS,
   type VolumeLandmark,
 } from "@/modules/trainingInsights/presentation";
-import { uiIconButtonClass } from "@/shared/presentation/components/ui/styles";
 import UiBadge from "./ui/UiBadge.vue";
 import UiBottomSheet from "./ui/UiBottomSheet.vue";
 import UiSegmentedControl from "./ui/UiSegmentedControl.vue";
@@ -408,22 +405,23 @@ const sheetStyle = computed(() => {
       </div>
 
       <!-- ─── Detail Overlay (BottomSheet) ──────────────── -->
-      <UiBottomSheet v-model:open="isDetailOpen" :hide-overlay="true" :modal="false" contentClass="p-0 gap-0" :contentStyle="sheetStyle">
-        <template #header>
-          <!-- Header: name + landmark badge -->
-          <div v-if="selectedDetail" class="flex items-center gap-3 p-6 pb-4 border-b border-white/5 shrink-0 bg-background/95 backdrop-blur-xl z-10 sticky top-0">
-            <DialogTitle class="text-2xl font-bold tracking-tight text-foreground flex-1 capitalize">{{ selectedDetail.name.toLowerCase() }}</DialogTitle>
-            <UiBadge 
-              class="capitalize" 
-              :variant="selectedDetail.landmark === 'at_MAV' ? 'info' : selectedDetail.landmark === 'approaching_MRV' ? 'warning' : selectedDetail.landmark === 'above_MRV' ? 'danger' : 'surface'"
-            >
-              {{ getJargon(selectedDetail.landmark) }}
-            </UiBadge>
-            <DialogClose :class="uiIconButtonClass" class="ml-2">
-              <X class="w-5 h-5 text-muted-foreground" />
-              <span class="sr-only">Close</span>
-            </DialogClose>
-          </div>
+      <UiBottomSheet
+        v-model:open="isDetailOpen"
+        :hide-overlay="true"
+        :modal="false"
+        :title="selectedDetail?.name.toLowerCase()"
+        title-class="capitalize"
+        header-border
+        :contentStyle="sheetStyle"
+      >
+        <template #header-actions>
+          <UiBadge 
+            v-if="selectedDetail"
+            class="capitalize" 
+            :variant="selectedDetail.landmark === 'at_MAV' ? 'info' : selectedDetail.landmark === 'approaching_MRV' ? 'warning' : selectedDetail.landmark === 'above_MRV' ? 'danger' : 'surface'"
+          >
+            {{ getJargon(selectedDetail.landmark) }}
+          </UiBadge>
         </template>
 
         <div v-if="selectedDetail" class="flex flex-col pb-safe">

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { CalendarDate, getLocalTimeZone, today } from "@internationalized/date";
-import { ArrowLeft, Bed, Plus, X } from "@lucide/vue";
+import { Bed, Plus } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import type { AppEvent } from "@/modules/events/presentation";
@@ -8,7 +8,6 @@ import { useEventsStore } from "@/modules/events/presentation";
 import AppHeader from "@/shared/presentation/components/AppHeader.vue";
 import EmptyState from "@/shared/presentation/components/EmptyState.vue";
 import RestRecoveryItem from "@/shared/presentation/components/RestRecoveryItem.vue";
-import { uiIconButtonClass } from "@/shared/presentation/components/ui/styles";
 import UiBottomSheet from "@/shared/presentation/components/ui/UiBottomSheet.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
@@ -75,11 +74,7 @@ function remove(id: string) {
 <template>
   <div class="min-h-screen bg-background flex flex-col pt-safe">
     <!-- Header -->
-    <AppHeader>
-      <UiButton variant="ghost" size="icon" @click="router.back()" class="mr-2 -ml-1" aria-label="Go Back">
-        <ArrowLeft class="w-5 h-5" />
-      </UiButton>
-      <h1 class="text-xl font-bold tracking-tight flex-1">Rest & Recovery</h1>
+    <AppHeader show-back title="Rest & Recovery" @back="router.back()">
       <template #actions>
         <UiButton variant="ghost" size="icon" @click="isAddOpen = true" aria-label="Add Rest Event">
           <Plus class="w-5 h-5" />
@@ -112,17 +107,7 @@ function remove(id: string) {
     </main>
 
     <!-- Log Recovery Bottom Sheet -->
-    <UiBottomSheet v-model:open="isAddOpen" content-class="p-0 gap-0">
-      <template #header>
-        <div class="flex items-center justify-between p-6 pb-2 shrink-0">
-          <h2 class="text-2xl font-bold tracking-tight">Log Recovery</h2>
-          <button type="button" @click="isAddOpen = false" :class="uiIconButtonClass">
-            <X class="w-5 h-5 text-muted-foreground" />
-            <span class="sr-only">Close</span>
-          </button>
-        </div>
-      </template>
-
+    <UiBottomSheet v-model:open="isAddOpen" title="Log Recovery">
       <!-- Scrollable Content -->
       <div class="flex flex-col gap-6 overflow-y-auto px-6 py-4 no-scrollbar">
         <div>
@@ -145,12 +130,11 @@ function remove(id: string) {
         </div>
       </div>
 
-      <!-- Docked Footer Action -->
-      <div class="px-6 pb-safe pt-4 shrink-0 bg-background/95 backdrop-blur z-10 border-t border-white/5">
-        <UiButton haptic class="w-full h-14 rounded-xl text-base font-bold mb-6 shadow-lg shadow-lg/20 transition-all active:scale-95" @click="saveEvent">
+      <template #footer>
+        <UiButton haptic class="w-full h-14 rounded-xl text-base font-bold shadow-lg shadow-lg/20 transition-all active:scale-95" @click="saveEvent">
           Save Entry
         </UiButton>
-      </div>
+      </template>
     </UiBottomSheet>
   </div>
 </template>

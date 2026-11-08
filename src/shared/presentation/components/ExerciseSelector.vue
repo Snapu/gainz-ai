@@ -1,12 +1,7 @@
 <script setup lang="ts">
-import { Plus, Search, X } from "@lucide/vue";
-import { DialogClose, DialogTitle } from "reka-ui";
+import { Plus, Search } from "@lucide/vue";
 import { computed, type HTMLAttributes, ref, watch } from "vue";
-import {
-  uiFieldClass,
-  uiIconButtonClass,
-  uiPressClass,
-} from "@/shared/presentation/components/ui/styles";
+import { uiFieldClass, uiPressClass } from "@/shared/presentation/components/ui/styles";
 import { cn } from "@/shared/presentation/lib/utils";
 import UiBadge from "./ui/UiBadge.vue";
 import UiBottomSheet from "./ui/UiBottomSheet.vue";
@@ -74,7 +69,7 @@ watch(isOpen, (val) => {
 </script>
 
 <template>
-  <UiBottomSheet v-model:open="isOpen" content-class="p-0 gap-0">
+  <UiBottomSheet v-model:open="isOpen" title="Choose Exercise" title-class="italic">
     <!-- Trigger -->
     <template #trigger>
       <button
@@ -93,17 +88,8 @@ watch(isOpen, (val) => {
       </button>
     </template>
 
-    <template #header>
-      <!-- Header -->
-      <div class="flex items-center justify-between p-6 pb-2">
-        <DialogTitle class="text-2xl font-bold italic tracking-tight">
-          Choose <span class="text-primary">Exercise</span>
-        </DialogTitle>
-        <DialogClose :class="uiIconButtonClass">
-          <X class="w-5 h-5 text-muted-foreground" />
-          <span class="sr-only">Close</span>
-        </DialogClose>
-      </div>
+    <template #title>
+      Choose <span class="text-primary">Exercise</span>
     </template>
 
     <!-- Search Input (Not focused by default) -->

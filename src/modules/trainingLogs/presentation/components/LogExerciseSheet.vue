@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronDown, Plus, Trash, X } from "@lucide/vue";
+import { ChevronDown, Plus, Trash } from "@lucide/vue";
 import { storeToRefs } from "pinia";
 import { computed, nextTick, ref, watch } from "vue";
 import { useDeloadStore } from "@/modules/deload/presentation";
@@ -12,13 +12,11 @@ import {
 } from "@/modules/trainingLogs/presentation";
 import type { ExerciseSelectorOptionDetails } from "@/shared/presentation/components/ExerciseSelector.vue";
 import ExerciseSelector from "@/shared/presentation/components/ExerciseSelector.vue";
-import { uiIconButtonClass } from "@/shared/presentation/components/ui/styles";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiBottomSheet from "@/shared/presentation/components/ui/UiBottomSheet.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiNumberField from "@/shared/presentation/components/ui/UiNumberField.vue";
 import UiProgressionLine from "@/shared/presentation/components/ui/UiProgressionLine.vue";
-import { useKeyboard } from "@/shared/presentation/composables/useKeyboard";
 import { useToast } from "@/shared/presentation/composables/useToast";
 
 const props = defineProps<{
@@ -45,7 +43,6 @@ const deloadStore = useDeloadStore();
 const logsStore = useExerciseLogsStore();
 const restTimerStore = useRestTimerStore();
 const { toast } = useToast();
-const { isKeyboardVisible } = useKeyboard();
 
 const { exerciseLogs } = storeToRefs(logsStore);
 
@@ -76,9 +73,6 @@ const distanceStep = computed(() => (distanceUnit.value === "m" ? 50 : 0.5));
 const durationStep = computed(() => (durationUnit.value === "min" ? 1 : 5));
 
 const isDumbbellExercise = computed(() => /kurzhantel|dumbbell/i.test(formExerciseName.value));
-
-const stepBadgeClass =
-  "text-micro font-bold uppercase tracking-wider text-primary bg-primary/10 border border-primary/20 hover:bg-white/10 active:scale-95 transition-all duration-200 rounded-lg px-2 py-0.5 cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 interface ExerciseFormData {
   exerciseName: string;
@@ -396,23 +390,8 @@ async function deleteLog() {
   <UiBottomSheet 
     v-model:open="internalOpen" 
     :title="props.logToEdit ? 'Edit Exercise' : 'Log Exercise'"
-    content-class="p-0 gap-0"
+    title-class="text-xl font-black"
   >
-    <template #header>
-      <div
-        class="flex items-center justify-between px-6 pb-2 shrink-0"
-        :class="isKeyboardVisible ? 'pt-3' : 'pt-6'"
-      >
-        <h2 class="text-xl font-black tracking-tight">
-          {{ props.logToEdit ? 'Edit Exercise' : 'Log Exercise' }}
-        </h2>
-        <button type="button" @click="internalOpen = false" :class="uiIconButtonClass">
-          <X class="w-5 h-5 text-muted-foreground" />
-          <span class="sr-only">Close</span>
-        </button>
-      </div>
-    </template>
-
     <!-- Scrollable Form Content -->
     <div class="flex flex-col gap-5 overflow-y-auto px-6 py-4 no-scrollbar flex-1 min-h-0">
       <!-- Optimized Exercise Selection -->
@@ -481,15 +460,15 @@ async function deleteLog() {
             :description="isDumbbellExercise ? 'Total (both hands)' : undefined"
           >
             <template #label-trailing>
-              <button
-                type="button"
+              <UiButton
+                variant="tonal"
+                size="micro"
                 data-testid="weight-step-toggle"
                 aria-label="Cycle weight step size"
-                :class="stepBadgeClass"
                 @click="cycleWeightStep"
               >
                 ±{{ weightStep }}
-              </button>
+              </UiButton>
             </template>
           </UiNumberField>
         </div>
@@ -502,15 +481,15 @@ async function deleteLog() {
             :step="distanceStep"
           >
             <template #label-trailing>
-              <button
-                type="button"
+              <UiButton
+                variant="tonal"
+                size="micro"
                 data-testid="distance-unit-toggle"
                 aria-label="Toggle distance unit and step size"
-                :class="stepBadgeClass"
                 @click="toggleDistanceUnit"
               >
                 {{ distanceUnit === 'm' ? 'm · ±50' : 'km · ±0.5' }}
-              </button>
+              </UiButton>
             </template>
           </UiNumberField>
 
@@ -521,29 +500,30 @@ async function deleteLog() {
             :step="durationStep"
           >
             <template #label-trailing>
-              <button
-                type="button"
+              <UiButton
+                variant="tonal"
+                size="micro"
                 data-testid="duration-unit-toggle"
                 aria-label="Toggle duration unit and step size"
-                :class="stepBadgeClass"
                 @click="toggleDurationUnit"
               >
                 {{ durationUnit === 'min' ? 'min · ±1' : 'sec · ±5' }}
-              </button>
+              </UiButton>
             </template>
           </UiNumberField>
         </div>
 
-        <button
+        <UiButton
           v-else
-          type="button"
+          variant="chip"
+          size="xs"
           data-testid="toggle-extra-metrics"
-          class="self-start inline-flex items-center gap-1.5 rounded-xl bg-white/5 border border-white/5 px-3 py-1.5 text-micro font-bold uppercase tracking-wider text-muted-foreground hover:bg-white/10 hover:text-foreground active:scale-95 transition-all duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          class="self-start"
           @click="showExtraMetrics = true"
         >
-          <Plus class="w-3.5 h-3.5" />
-          Distance &amp; Duration
-        </button>
+          <Plus class="w-3.5 h-3.5 text-primary shrink-0" />
+          <span>Distance &amp; Duration</span>
+        </UiButton>
       </div>
 
       <!-- RPE Slider -->
@@ -589,12 +569,8 @@ async function deleteLog() {
       </div>
     </div>
 
-    <!-- Docked Footer Action -->
-    <div
-      class="px-6 pt-3 shrink-0 bg-background/95 backdrop-blur z-10 border-t border-white/5"
-      :class="isKeyboardVisible ? 'pb-3' : 'pb-safe'"
-    >
-      <div class="flex gap-3" :class="isKeyboardVisible ? '' : 'mb-4'">
+    <template #footer>
+      <div class="flex gap-3">
         <UiButton 
           v-if="props.logToEdit" 
           haptic
@@ -609,6 +585,6 @@ async function deleteLog() {
           {{ props.logToEdit ? 'Save Changes' : 'Save Set' }}
         </UiButton>
       </div>
-    </div>
+    </template>
   </UiBottomSheet>
 </template>

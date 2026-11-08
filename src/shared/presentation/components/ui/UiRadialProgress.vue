@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { cn } from "@/shared/presentation/lib/utils";
 
 const props = withDefaults(
   defineProps<{
@@ -53,7 +54,7 @@ const center = computed(() => props.size / 2);
         stroke="currentColor"
         :stroke-width="strokeWidth"
         stroke-linecap="round"
-        :class="[progressClass, 'transition-all duration-300 ease-out']"
+        :class="cn('transition-all duration-300 ease-out', progressClass)"
         :stroke-dasharray="circumference"
         :stroke-dashoffset="strokeDashoffset"
       />

@@ -5,7 +5,7 @@ import { type ComponentPublicInstance, type HTMLAttributes, ref, watchEffect } f
 import { cn } from "@/shared/presentation/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex cursor-pointer items-center justify-center whitespace-nowrap rounded-xl text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ring-offset-background",
+  "inline-flex cursor-pointer items-center justify-center whitespace-nowrap rounded-xl text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ring-offset-background",
   {
     variants: {
       variant: {
@@ -16,6 +16,9 @@ const buttonVariants = cva(
           "border border-white/10 bg-transparent hover:bg-white/5 hover:border-white/20 active:scale-95 hover:text-foreground",
         secondary:
           "bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-foreground active:scale-95 shadow-sm",
+        chip: "gap-1.5 bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-muted-foreground hover:text-foreground active:scale-95",
+        tonal:
+          "text-primary bg-primary/10 border border-primary/20 hover:bg-white/10 active:scale-95 shrink-0",
         ghost: "hover:bg-white/5 hover:text-foreground active:scale-95",
         link: "text-primary underline-offset-4 hover:underline flex",
       },
@@ -23,6 +26,7 @@ const buttonVariants = cva(
         default: "h-14 px-6 py-3 text-base",
         sm: "h-10 rounded-lg px-4 text-sm",
         xs: "h-8 rounded-lg px-3 text-xs",
+        micro: "rounded-lg px-2 py-0.5 text-micro font-bold uppercase tracking-wider",
         lg: "h-16 rounded-xl px-6 text-lg",
         icon: "h-10 w-10 rounded-full",
       },

@@ -1,1 +1,0 @@
-(function(){System.register([`./index-legacy-DOF5t7ub.js`],function(e,t){var n,r;return{setters:[function(e){n=e.tt}],execute:function(){r={name:`bed`,size:24,node:[[`path`,{d:`M2 4v16`,key:`vw9hq8`}],[`path`,{d:`M2 8h18a2 2 0 0 1 2 2v10`,key:`1dgv2r`}],[`path`,{d:`M2 17h20`,key:`18nfp3`}],[`path`,{d:`M6 8v9`,key:`1yriud`}]]},e(`t`,n(r))}}})})();

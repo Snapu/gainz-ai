@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import { ArrowRight, TrendingDown, TrendingUp, X } from "@lucide/vue";
-import { DialogClose, DialogTitle } from "reka-ui";
+import { ArrowRight, TrendingDown, TrendingUp } from "@lucide/vue";
 import { ref } from "vue";
 import { useInsightsTabViewModel } from "@/modules/trainingInsights/presentation";
 import MuscleActivationMap from "@/shared/presentation/components/MuscleActivationMap.vue";
 import UserProgressCard from "@/shared/presentation/components/UserProgressCard.vue";
-import { uiIconButtonClass } from "@/shared/presentation/components/ui/styles";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiBottomSheet from "@/shared/presentation/components/ui/UiBottomSheet.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
@@ -280,20 +278,13 @@ const isAllExercisesOpen = ref(false);
 
     </main>
 
-    <UiBottomSheet v-model:open="isAllExercisesOpen" content-class="p-0 gap-0 h-[85vh]">
-      <template #header>
-        <div class="flex items-center justify-between p-6 pb-4 border-b border-white/5 shrink-0 bg-background/95 backdrop-blur-xl z-10 sticky top-0">
-          <div>
-            <DialogTitle class="text-2xl font-bold tracking-tight">All Exercises</DialogTitle>
-            <p class="text-[10px] text-muted-foreground mt-0.5">{{ exerciseStatusNote }}</p>
-          </div>
-          <DialogClose :class="uiIconButtonClass">
-            <X class="w-5 h-5 text-muted-foreground" />
-            <span class="sr-only">Close</span>
-          </DialogClose>
-        </div>
-      </template>
-      
+    <UiBottomSheet
+      v-model:open="isAllExercisesOpen"
+      title="All Exercises"
+      :subtitle="exerciseStatusNote"
+      header-border
+      content-class="h-[85vh]"
+    >
       <div class="flex-1 overflow-y-auto no-scrollbar pb-safe">
         <template v-if="allExerciseMetrics.length > 0">
           <template v-for="(metric, index) in allExerciseMetrics" :key="metric.name">

@@ -1,11 +1,6 @@
 <script setup lang="ts">
 import { ArrowRight, ArrowUp, ChevronDown, Copy, Dumbbell, Key, Sparkles } from "@lucide/vue";
-import {
-  getValidSupersetId,
-  isSupersetStart,
-  supersetConnectorClass,
-  useCoachChatViewModel,
-} from "@/modules/aiCoach/presentation";
+import { useCoachChatViewModel, WorkoutExerciseList } from "@/modules/aiCoach/presentation";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
@@ -90,19 +85,20 @@ void scrollContainerRef;
           </p>
         </div>
         <div class="flex flex-wrap justify-center gap-2 w-full max-w-lg mt-2">
-          <button
+          <UiButton
             v-for="qp in quickPrompts"
             :key="qp.id"
-            type="button"
+            variant="chip"
+            size="xs"
             :disabled="isLoading"
             :title="qp.prompt"
             :aria-label="qp.prompt"
+            class="text-foreground"
             @click="applyQuickPrompt(qp.prompt)"
-            class="inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-foreground transition-all duration-200 cursor-pointer active:scale-95 disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background whitespace-nowrap"
           >
             <Sparkles class="w-3.5 h-3.5 text-primary shrink-0" />
             <span class="truncate">{{ qp.label }}</span>
-          </button>
+          </UiButton>
         </div>
       </div>
 
@@ -149,51 +145,7 @@ void scrollContainerRef;
             </div>
 
             <!-- Compact Single-Line Exercise Rows -->
-            <div class="flex flex-col divide-y divide-white/5 pl-2 relative">
-              <div
-                v-for="(ex, exIdx) in message.recommendedWorkout"
-                :key="`${ex.exerciseName}-${exIdx}`"
-                class="py-2 flex items-center justify-between gap-2 text-xs relative"
-              >
-                <!-- Superset Indicator Line -->
-                <div
-                  v-if="getValidSupersetId(ex, message.recommendedWorkout)"
-                  class="absolute -left-2 w-[2px] bg-primary/40"
-                  :class="supersetConnectorClass(exIdx, message.recommendedWorkout)"
-                />
-
-                <div class="flex items-center gap-1.5 min-w-0 flex-1 pr-2">
-                  <span class="font-semibold text-foreground/90 truncate">
-                    {{ ex.exerciseName }}
-                  </span>
-                  <UiBadge
-                    v-if="isSupersetStart(exIdx, message.recommendedWorkout)"
-                    variant="info"
-                    class="text-[9px] px-1 py-0 uppercase tracking-wider shrink-0"
-                  >
-                    Superset
-                  </UiBadge>
-                </div>
-
-                <!-- Metrics: Sets × Reps + Optional Weight (NO RPE) -->
-                <div class="flex items-center gap-1.5 shrink-0 tabular-nums text-xs ml-2">
-                  <span class="font-bold text-foreground/80">
-                    {{
-                      ex.targetReps
-                        ? `${ex.targetSets} × ${ex.targetReps}`
-                        : ex.targetDurationSeconds
-                          ? `${ex.targetSets} × ${ex.targetDurationSeconds}s`
-                          : ex.targetDistanceMeters
-                            ? `${ex.targetSets} × ${ex.targetDistanceMeters}m`
-                            : `${ex.targetSets} Sets`
-                    }}
-                  </span>
-                  <span v-if="ex.targetWeight" class="font-bold text-primary">
-                    {{ ex.targetWeight }}
-                  </span>
-                </div>
-              </div>
-            </div>
+            <WorkoutExerciseList :exercises="message.recommendedWorkout" />
 
             <!-- Action Link -->
             <button
@@ -300,19 +252,19 @@ void scrollContainerRef;
           v-if="!isKeyboardVisible && !userQuestion.trim() && quickPrompts.length > 0"
           class="flex flex-wrap gap-2 py-1 w-full transition-all duration-200"
         >
-          <button
+          <UiButton
             v-for="qp in quickPrompts"
             :key="qp.id"
-            type="button"
+            variant="chip"
+            size="xs"
             :disabled="isLoading"
             :title="qp.prompt"
             :aria-label="qp.prompt"
             @click="applyQuickPrompt(qp.prompt)"
-            class="inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-muted-foreground hover:text-foreground transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed active:scale-95 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background whitespace-nowrap"
           >
             <Sparkles class="w-3 h-3 text-primary shrink-0" />
             <span class="truncate max-w-[240px]">{{ qp.label }}</span>
-          </button>
+          </UiButton>
         </div>
 
         <div class="relative w-full">

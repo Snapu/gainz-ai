@@ -50,4 +50,27 @@ describe("AppHeader", () => {
     expect(header?.className).toContain("custom-class");
     unmount();
   });
+
+  it("renders back button, title, and subtitle props and emits back on click", () => {
+    let emittedBack = false;
+    const { container, unmount } = mountHeader(
+      {},
+      {
+        showBack: true,
+        title: "Past Sessions",
+        subtitle: "12 reviewed",
+        onBack: () => {
+          emittedBack = true;
+        },
+      },
+    );
+
+    expect(container.querySelector("h1")?.textContent).toBe("Past Sessions");
+    expect(container.querySelector("p")?.textContent).toBe("12 reviewed");
+    const backBtn = container.querySelector<HTMLButtonElement>('button[aria-label="Go Back"]');
+    expect(backBtn).not.toBeNull();
+    backBtn?.click();
+    expect(emittedBack).toBe(true);
+    unmount();
+  });
 });

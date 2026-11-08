@@ -84,7 +84,7 @@ vi.mock("@/shared/presentation/components/ui/UiBottomSheet.vue", () => ({
     props: ["open", "title"],
     emits: ["update:open"],
     setup(_props, { slots }) {
-      return () => h("div", slots.default?.());
+      return () => h("div", [slots.header?.(), slots.default?.(), slots.footer?.()]);
     },
   }),
 }));

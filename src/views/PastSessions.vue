@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowLeft, History } from "@lucide/vue";
+import { History } from "@lucide/vue";
 import { storeToRefs } from "pinia";
 import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
@@ -12,7 +12,6 @@ import {
 import AppHeader from "@/shared/presentation/components/AppHeader.vue";
 import EmptyState from "@/shared/presentation/components/EmptyState.vue";
 import SessionLogGroup from "@/shared/presentation/components/SessionLogGroup.vue";
-import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import { useLogSheet } from "@/shared/presentation/composables/useLogSheet";
 
 interface GroupedSession {
@@ -86,18 +85,7 @@ function editLog(log: ExerciseLog) {
 
 <template>
   <div class="min-h-screen bg-background flex flex-col pt-safe">
-    <AppHeader>
-      <UiButton
-        variant="ghost"
-        size="icon"
-        aria-label="Go Back"
-        class="mr-2 -ml-1"
-        @click="router.back()"
-      >
-        <ArrowLeft class="w-5 h-5" />
-      </UiButton>
-      <h1 class="text-xl font-bold tracking-tight flex-1">Past Sessions</h1>
-    </AppHeader>
+    <AppHeader show-back title="Past Sessions" @back="router.back()" />
 
     <main
       class="flex-1 w-full max-w-2xl mx-auto px-4 pt-4 pb-28 overflow-y-auto no-scrollbar flex flex-col gap-4"
