@@ -51,9 +51,22 @@ const exerciseCleanupValidationSchema = createExerciseCleanupSchema(z.string());
 function isServiceUnavailableError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const e = error as Record<string, unknown>;
-  if ((e.error as Record<string, unknown> | undefined)?.code === 503) return true;
-  if (e.status === 503 || e.status === "UNAVAILABLE") return true;
-  if (typeof e.message === "string" && /high demand|503|unavailable/i.test(e.message)) return true;
+  const nestedCode = (e.error as Record<string, unknown> | undefined)?.code;
+  if (nestedCode === 503 || nestedCode === 429) return true;
+  if (
+    e.status === 503 ||
+    e.status === 429 ||
+    e.status === "UNAVAILABLE" ||
+    e.status === "RESOURCE_EXHAUSTED"
+  ) {
+    return true;
+  }
+  if (
+    typeof e.message === "string" &&
+    /high demand|503|429|unavailable|resource_exhausted|rate limit/i.test(e.message)
+  ) {
+    return true;
+  }
   return false;
 }
 
@@ -70,7 +83,7 @@ export function classifyExercises(
   if (!apiKey) return errAsync("missing-api-key");
   if (exerciseNames.length === 0) return okAsync({ classifications: [] });
 
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey, apiVersion: "v1beta" });
 
   const prompt = `You are a fitness data expert. For each exercise name in the list below, classify it:
 
@@ -109,7 +122,7 @@ Important rules:
     }
 
     Sentry.captureMessage(
-      "Classification primary model unavailable, falling back to gemini-3.1-flash-lite-preview",
+      "Classification primary model unavailable, falling back to gemini-3.5-flash-lite",
       {
         level: "info",
         tags: { scope: "ai-service", feature: "model-fallback" },
@@ -119,7 +132,7 @@ Important rules:
 
     return ResultAsync.fromPromise(
       ai.models.generateContent({
-        model: "gemini-3.1-flash-lite-preview",
+        model: "gemini-3.5-flash-lite",
         contents: classifyContents,
         config: classifyConfig,
       }),

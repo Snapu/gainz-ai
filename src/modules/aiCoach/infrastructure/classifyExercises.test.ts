@@ -58,7 +58,10 @@ describe("classifyExercises", () => {
 
     const result = await classifyExercises(["Bench Press"], "test-api-key");
 
-    expect(googleGenAiMock.GoogleGenAI).toHaveBeenCalledWith({ apiKey: "test-api-key" });
+    expect(googleGenAiMock.GoogleGenAI).toHaveBeenCalledWith({
+      apiKey: "test-api-key",
+      apiVersion: "v1beta",
+    });
     expect(generateContentMock).toHaveBeenCalledTimes(1);
     expect(generateContentMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -80,7 +83,7 @@ describe("classifyExercises", () => {
     const result = await classifyExercises(["Bench Press"], "test-api-key");
 
     const models = generateContentMock.mock.calls.slice(-2).map((call) => call[0]?.model);
-    expect(models).toEqual(["gemini-2.5-flash", "gemini-3.1-flash-lite-preview"]);
+    expect(models).toEqual(["gemini-2.5-flash", "gemini-3.5-flash-lite"]);
     expect(captureMessageMock).toHaveBeenCalled();
     expect(result.isOk()).toBe(true);
   });

@@ -130,12 +130,29 @@ const baseAiConfig: GenerateContentConfig = {
   topP: 0.85,
 };
 
+const COACHING_MODELS = ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-3.5-flash-lite"] as const;
+
+type CoachingModel = (typeof COACHING_MODELS)[number];
+
 function isServiceUnavailableError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const e = error as Record<string, unknown>;
-  if ((e.error as Record<string, unknown> | undefined)?.code === 503) return true;
-  if (e.status === "UNAVAILABLE" || e.status === 503) return true;
-  if (typeof e.message === "string" && /high demand|503|unavailable/i.test(e.message)) return true;
+  const nestedCode = (e.error as Record<string, unknown> | undefined)?.code;
+  if (nestedCode === 503 || nestedCode === 429) return true;
+  if (
+    e.status === "UNAVAILABLE" ||
+    e.status === "RESOURCE_EXHAUSTED" ||
+    e.status === 503 ||
+    e.status === 429
+  ) {
+    return true;
+  }
+  if (
+    typeof e.message === "string" &&
+    /high demand|503|429|unavailable|resource_exhausted|rate limit/i.test(e.message)
+  ) {
+    return true;
+  }
   return false;
 }
 
@@ -189,7 +206,7 @@ async function executeAiRequest(
   responseJsonSchema: Record<string, unknown>,
   mode: CoachingMode,
 ): Promise<{ text: string; thought?: string }> {
-  const generateWithTimeout = async (model: "gemini-3.8-flash" | "gemini-2.5-flash") => {
+  const generateWithTimeout = async (model: CoachingModel) => {
     const controller = new AbortController();
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise<never>((_, reject) => {
@@ -224,33 +241,41 @@ async function executeAiRequest(
     }
   };
 
-  try {
-    return await generateWithTimeout("gemini-3.8-flash");
-  } catch (primaryErr) {
-    const isNotFound = isNotFoundError(primaryErr);
-    const isEmpty = isEmptyResponseError(primaryErr);
-    if (
-      isServiceUnavailableError(primaryErr) ||
-      isTimeoutError(primaryErr) ||
-      isNotFound ||
-      isEmpty
-    ) {
-      Sentry.captureMessage(
-        "Primary model unavailable/slow/not-found/empty, falling back to gemini-2.5-flash",
-        {
-          level: "info",
-          tags: { scope: "ai-service", feature: "model-fallback" },
-          extra: {
-            timedOut: isTimeoutError(primaryErr),
-            notFound: isNotFound,
-            emptyResponse: isEmpty,
+  let lastError: unknown;
+  for (let i = 0; i < COACHING_MODELS.length; i++) {
+    const model = COACHING_MODELS[i];
+    if (!model) break;
+    try {
+      return await generateWithTimeout(model);
+    } catch (err) {
+      lastError = err;
+      const nextModel = COACHING_MODELS[i + 1];
+      const isNotFound = isNotFoundError(err);
+      const isEmpty = isEmptyResponseError(err);
+      if (
+        nextModel &&
+        (isServiceUnavailableError(err) || isTimeoutError(err) || isNotFound || isEmpty)
+      ) {
+        Sentry.captureMessage(
+          `Model ${model} unavailable/slow/not-found/empty, falling back to ${nextModel}`,
+          {
+            level: "info",
+            tags: { scope: "ai-service", feature: "model-fallback" },
+            extra: {
+              fromModel: model,
+              toModel: nextModel,
+              timedOut: isTimeoutError(err),
+              notFound: isNotFound,
+              emptyResponse: isEmpty,
+            },
           },
-        },
-      );
-      return await generateWithTimeout("gemini-2.5-flash");
+        );
+        continue;
+      }
+      throw err;
     }
-    throw primaryErr;
   }
+  throw lastError;
 }
 
 function attachThoughtIfMissing(advice: CoachingAdvice, thought?: string): CoachingAdvice {
@@ -282,7 +307,7 @@ export function requestCoachingAdvice(
   const { apiKey, previousMessages, insights } = options;
   if (!apiKey) return errAsync("missing-api-key");
 
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey, apiVersion: "v1beta" });
   const context = assemblePromptContext(options.exerciseLogs, previousMessages);
   const { workoutPhase, isFirstMessage } = context;
 

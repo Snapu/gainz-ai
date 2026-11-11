@@ -74,6 +74,10 @@ describe("requestCoachingAdvice", () => {
       primaryFailure: () => generateContentMock.mockRejectedValueOnce({ status: 503 }),
     },
     {
+      label: "a 429 rate-limit error",
+      primaryFailure: () => generateContentMock.mockRejectedValueOnce({ status: 429 }),
+    },
+    {
       label: "a 404 error",
       primaryFailure: () => generateContentMock.mockRejectedValueOnce({ status: 404 }),
     },
@@ -127,6 +131,10 @@ describe("requestCoachingAdvice", () => {
 
       const result = await requestCoachingAdvice(createBaseRequest());
 
+      expect(googleGenAiMock.GoogleGenAI).toHaveBeenCalledWith({
+        apiKey: "test-api-key",
+        apiVersion: "v1beta",
+      });
       expect(generateContentMock).toHaveBeenCalledTimes(2);
       expect(generateContentMock.mock.calls[0]?.[0]?.model).toBe("gemini-3.8-flash");
       expect(generateContentMock.mock.calls[1]?.[0]?.model).toBe("gemini-2.5-flash");
@@ -142,6 +150,42 @@ describe("requestCoachingAdvice", () => {
       }
     },
   );
+
+  it("falls back to gemini-3.5-flash-lite when both gemini-3.8-flash and gemini-2.5-flash are unavailable", async () => {
+    const activePlan = TrainingPlan.create("2026-10-20T08:00:00.000Z", 2, [
+      {
+        dayOfWeek: 1,
+        weekNumber: 1,
+        sessionLabel: "Unit A",
+        focusDescription: "Legs",
+        exercises: [{ exerciseName: "Squat", targetSets: 3, targetReps: "5" }],
+      },
+    ]);
+
+    generateContentMock
+      .mockRejectedValueOnce({ status: 503 })
+      .mockRejectedValueOnce({ status: 503 })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          coachMessage: "Recovered via lite model!",
+          recommendedWorkout: [
+            { exerciseName: "Squat", targetSets: 3, targetReps: "5", restSeconds: 180 },
+          ],
+        }),
+      });
+
+    const result = await requestCoachingAdvice(
+      createBaseRequest({ mode: "execution", activePlan }),
+    );
+
+    expect(generateContentMock).toHaveBeenCalledTimes(3);
+    expect(generateContentMock.mock.calls.map((c) => c[0]?.model)).toEqual([
+      "gemini-3.8-flash",
+      "gemini-2.5-flash",
+      "gemini-3.5-flash-lite",
+    ]);
+    expect(result.isOk()).toBe(true);
+  });
 
   it("strips activePlan on explicit planning regeneration, but preserves # program when adjusting an existing plan via question", async () => {
     const existingPlan = TrainingPlan.create("2026-10-20T08:00:00.000Z", 2, [
