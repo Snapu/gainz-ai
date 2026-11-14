@@ -64,9 +64,9 @@ jobs:
           fi
 
       - name: Push Database Migrations
-        run: supabase db push
+        run: supabase db push --remote --yes
 
       - name: Deploy Edge Functions
         run: |
-          supabase functions deploy auth-token --no-verify-jwt
-          supabase functions deploy ai-coach --no-verify-jwt
+          supabase functions deploy auth-token --no-verify-jwt --yes
+          supabase functions deploy ai-coach --no-verify-jwt --yes
