@@ -25,7 +25,7 @@ describe("aiCoach application use-cases", () => {
     const runPromise = requestAdviceWithSingleRetry(
       makeService(ask),
       {
-        apiKey: "api-key",
+        accessToken: "access-token",
         userProfile: {} as never,
         insights: {} as never,
         exerciseLogs: [],
@@ -50,7 +50,7 @@ describe("aiCoach application use-cases", () => {
     const ask = vi.fn<AiCoachService["ask"]>().mockReturnValue(errAsync("coaching-request-failed"));
 
     const result = await requestAdviceWithSingleRetry(makeService(ask), {
-      apiKey: "api-key",
+      accessToken: "access-token",
       userProfile: {} as never,
       insights: {} as never,
       exerciseLogs: [],
@@ -62,11 +62,13 @@ describe("aiCoach application use-cases", () => {
     expect(result).toEqual(err("coaching-request-failed"));
   });
 
-  it("does not retry missing-api-key failures", async () => {
-    const ask = vi.fn<AiCoachService["ask"]>().mockReturnValue(errAsync("missing-api-key"));
+  it("does not retry unauthorized or rate-limit-exceeded failures", async () => {
+    const askUnauthorized = vi
+      .fn<AiCoachService["ask"]>()
+      .mockReturnValue(errAsync("unauthorized"));
 
-    const result = await requestAdviceWithSingleRetry(makeService(ask), {
-      apiKey: undefined,
+    const unauthorizedResult = await requestAdviceWithSingleRetry(makeService(askUnauthorized), {
+      accessToken: undefined,
       userProfile: {} as never,
       insights: {} as never,
       exerciseLogs: [],
@@ -74,7 +76,23 @@ describe("aiCoach application use-cases", () => {
       previousMessages: [],
     });
 
-    expect(ask).toHaveBeenCalledTimes(1);
-    expect(result).toEqual(err("missing-api-key"));
+    expect(askUnauthorized).toHaveBeenCalledTimes(1);
+    expect(unauthorizedResult).toEqual(err("unauthorized"));
+
+    const askRateLimited = vi
+      .fn<AiCoachService["ask"]>()
+      .mockReturnValue(errAsync("rate-limit-exceeded"));
+
+    const rateLimitedResult = await requestAdviceWithSingleRetry(makeService(askRateLimited), {
+      accessToken: "access-token",
+      userProfile: {} as never,
+      insights: {} as never,
+      exerciseLogs: [],
+      trainingSummaries: [],
+      previousMessages: [],
+    });
+
+    expect(askRateLimited).toHaveBeenCalledTimes(1);
+    expect(rateLimitedResult).toEqual(err("rate-limit-exceeded"));
   });
 });

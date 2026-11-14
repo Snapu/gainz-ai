@@ -55,6 +55,17 @@ function serializeForSheet(profile: UserProfile): Record<string, string> {
   };
 }
 
+export function purgeLegacyApiKeys(): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.removeItem("userProfile:apiKey");
+    localStorage.removeItem("apiKey");
+    localStorage.removeItem("profile:apiKey");
+  } catch {
+    // ignore localstorage errors
+  }
+}
+
 function loadUserProfileInfra(
   doc: GoogleSpreadsheet,
 ): ResultAsync<UserProfile | null, "load-failed" | "parse-data-failed" | "auth-failed"> {
@@ -117,8 +128,9 @@ function saveUserProfileInfra(
 
 function migrateFromLocalStorageInfra(
   doc: GoogleSpreadsheet,
-): ResultAsync<"migrated" | "skipped" | "no-data", "migration-failed"> {
-  const mapMigrationError = (error: unknown): "migration-failed" => {
+): ResultAsync<"migrated" | "skipped" | "no-data", "migration-failed" | "auth-failed"> {
+  const mapMigrationError = (error: unknown): "migration-failed" | "auth-failed" => {
+    if (error === "auth-failed") return "auth-failed";
     console.error("Migration failed:", error);
     Sentry.captureException(error, {
       tags: { scope: "user-profile-service", feature: "migration" },
@@ -130,12 +142,16 @@ function migrateFromLocalStorageInfra(
     .mapErr(mapMigrationError)
     .andThen((existingProfile) => {
       if (existingProfile !== null) {
-        return okAsync<"migrated" | "skipped" | "no-data", "migration-failed">("skipped");
+        return okAsync<"migrated" | "skipped" | "no-data", "migration-failed" | "auth-failed">(
+          "skipped",
+        );
       }
 
       const oldDataJson = localStorage.getItem("userProfile");
       if (!oldDataJson) {
-        return okAsync<"migrated" | "skipped" | "no-data", "migration-failed">("no-data");
+        return okAsync<"migrated" | "skipped" | "no-data", "migration-failed" | "auth-failed">(
+          "no-data",
+        );
       }
 
       return Result.fromThrowable(
@@ -155,24 +171,17 @@ function migrateFromLocalStorageInfra(
           return ok(oldData as Record<string, unknown>);
         })
         .asyncAndThen((oldDataRecord) => {
-          const apiKey =
-            typeof oldDataRecord.apiKey === "string" && oldDataRecord.apiKey.length > 0
-              ? oldDataRecord.apiKey
-              : undefined;
           const { apiKey: _apiKey, ...profileData } = oldDataRecord;
 
-          if (apiKey) {
-            localStorage.setItem("userProfile:apiKey", apiKey);
-          }
-
           return saveUserProfileInfra(profileData as UserProfile, doc)
-            .mapErr((error) => {
+            .mapErr((error): "migration-failed" | "auth-failed" => {
+              if (error === "auth-failed") return "auth-failed";
               console.error("Failed to save migrated profile to spreadsheet", error);
               Sentry.captureMessage("Failed to save migrated profile", {
                 level: "error",
                 tags: { scope: "user-profile-service", feature: "migration-save-profile" },
               });
-              return "migration-failed" as const;
+              return "migration-failed";
             })
             .map(() => {
               localStorage.removeItem("userProfile");

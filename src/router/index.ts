@@ -90,7 +90,12 @@ const router = createRouter({
 });
 
 router.beforeEach(async (to) => {
+  if (to.path === "/privacy" || to.path === "/impressum") {
+    return true;
+  }
+
   const authStore = useAuthStore();
+  await authStore.init();
   const userProfileStore = useUserProfileStore();
   const spreadsheetStore = useSpreadsheetStore();
 

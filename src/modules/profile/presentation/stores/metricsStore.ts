@@ -1,6 +1,7 @@
 import { useDebounceFn } from "@vueuse/core";
 import { defineStore } from "pinia";
 import { ref, watch } from "vue";
+import { retryOnAuthError } from "@/modules/auth/presentation";
 import { useSpreadsheetRepositoryFactory } from "@/modules/platform/presentation";
 import { loadMetrics, saveMetrics } from "@/modules/profile/application";
 import type {
@@ -11,14 +12,12 @@ import type {
 import { calculateMetricUpdates } from "@/modules/profile/domain";
 import { createMetricsRepository } from "@/modules/profile/infrastructure";
 import { isMuscleGroup, type MuscleGroup } from "@/modules/sharedKernel/domain";
-import { useAuthErrorHandler } from "@/shared/presentation/composables/useAuthErrorHandler";
 
 export const useMetricsStore = defineStore("physiologicalMetrics", () => {
   const metrics = ref<PhysiologicalMetricsMap>({} as PhysiologicalMetricsMap);
   const isLoading = ref(true);
 
   const { createRepository, getDoc } = useSpreadsheetRepositoryFactory(createMetricsRepository);
-  const { handleAuthError } = useAuthErrorHandler();
 
   watch(
     () => getDoc(),
@@ -30,6 +29,7 @@ export const useMetricsStore = defineStore("physiologicalMetrics", () => {
 
       void (async () => {
         if (!doc) {
+          metrics.value = {} as PhysiologicalMetricsMap;
           isLoading.value = false;
           return;
         }
@@ -42,19 +42,15 @@ export const useMetricsStore = defineStore("physiologicalMetrics", () => {
           return;
         }
 
-        const result = await loadMetrics(repository);
+        const result = await retryOnAuthError("metrics-load", () => loadMetrics(repository), {
+          fallbackError: "load-failed",
+          isCancelled: () => cancelled,
+        });
         if (cancelled) return;
 
-        result.match(
-          (loadedMetrics) => {
-            metrics.value = loadedMetrics;
-          },
-          (error) => {
-            if (error === "auth-failed") {
-              handleAuthError("metrics-load");
-            }
-          },
-        );
+        if (result.isOk()) {
+          metrics.value = result.value;
+        }
 
         isLoading.value = false;
       })();
@@ -66,11 +62,8 @@ export const useMetricsStore = defineStore("physiologicalMetrics", () => {
     const repository = createRepository();
     if (!repository) return;
 
-    const result = await saveMetrics(metrics.value, repository);
-    result.orTee((error) => {
-      if (error === "auth-failed") {
-        handleAuthError("metrics-save");
-      }
+    await retryOnAuthError("metrics-save", () => saveMetrics(metrics.value, repository), {
+      fallbackError: "save-failed",
     });
   }, 2000);
 

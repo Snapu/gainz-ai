@@ -1,10 +1,5 @@
 import { okAsync, type ResultAsync } from "neverthrow";
-import {
-  type ExerciseLogRepository,
-  findPastYearLogSheets,
-  loadExerciseLogs,
-  loadLogsFromYear,
-} from "@/modules/trainingLogs/application";
+import type { ExerciseLogHistoryReader } from "@/modules/trainingLogs/application";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 
 import {
@@ -70,13 +65,13 @@ export function applyExerciseWeightMigrationDecision(
 }
 
 export function loadAllLogsForMigration(
-  logsRepository: ExerciseLogRepository,
+  logsReader: ExerciseLogHistoryReader,
 ): ResultAsync<
   ExerciseLog[],
   "load-failed" | "parse-data-failed" | "sheet-not-found" | "auth-failed"
 > {
-  return loadExerciseLogs(logsRepository).andThen((currentYearLogs) => {
-    const years = findPastYearLogSheets(logsRepository);
+  return logsReader.loadCurrentYearLogs().andThen((currentYearLogs) => {
+    const years = logsReader.findPastYears();
     return years.reduce<
       ResultAsync<
         ExerciseLog[],
@@ -85,7 +80,7 @@ export function loadAllLogsForMigration(
     >(
       (allLogsResult, year) =>
         allLogsResult.andThen((logs) =>
-          loadLogsFromYear(year, logsRepository).map((yearLogs) => [...logs, ...yearLogs]),
+          logsReader.loadYearLogs(year).map((yearLogs) => [...logs, ...yearLogs]),
         ),
       okAsync([...currentYearLogs]),
     );

@@ -1,3 +1,4 @@
+export * from "./coachingMessage";
 export * from "./coachingMode";
 export * from "./trainingPlan";
 export * from "./types";

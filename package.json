@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "vite",
     "build": "run-p type-check \"build-only {@}\" --",
-    "docs": "rm -rf dist docs && pnpm build && cp -r dist docs",
     "preview": "vite preview",
     "test:unit": "vitest --no-watch",
     "build-only": "vite build",
@@ -19,7 +18,7 @@
     "@capacitor/app": "^8.1.2",
     "@capacitor/core": "^8.6.0",
     "@capacitor/keyboard": "^8.0.6",
-    "@google/genai": "^3.0.0",
+    "@capacitor/preferences": "^8.0.1",
     "@internationalized/date": "^3.12.4",
     "@lucide/vue": "^1.70.0",
     "@sentry/vue": "^11.11.0",

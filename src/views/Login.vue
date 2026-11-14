@@ -22,7 +22,7 @@ async function handleLogin() {
         if (error === "missing-scopes") {
           toast({
             title: "Missing Permissions",
-            description: "Please grant Google Drive and Spreadsheets permissions to continue.",
+            description: "Please grant Google Drive permissions to continue.",
             variant: "destructive",
           });
         } else {

@@ -13,7 +13,7 @@ import type { TrainingPlan } from "./trainingPlan";
 export type CoachingMode = "planning" | "execution";
 
 export interface CoachingAdviceRequest {
-  apiKey: string | undefined;
+  accessToken: string | undefined;
   userProfile: UserProfile;
   insights: TrainingInsights;
   exerciseLogs: ExerciseLog[];
@@ -38,7 +38,8 @@ export type CoachingMessage = {
 };
 
 export type CoachingAdviceError =
-  | "missing-api-key"
+  | "unauthorized"
+  | "rate-limit-exceeded"
   | "generate-content-stream-failed"
   | "coaching-request-failed";
 

@@ -191,7 +191,10 @@ export class ExerciseLogsSheetsRepository {
 
   loadYear(
     year: number,
-  ): ResultAsync<ExerciseLog[], "load-failed" | "parse-data-failed" | "sheet-not-found"> {
+  ): ResultAsync<
+    ExerciseLog[],
+    "load-failed" | "parse-data-failed" | "sheet-not-found" | "auth-failed"
+  > {
     const sheetName = LOGS_SHEET_PREFIX + year;
     const sheet = this.doc.sheetsByTitle[sheetName];
 
@@ -209,6 +212,10 @@ export class ExerciseLogsSheetsRepository {
         });
       },
       (error) => {
+        if (isAuthError(error)) {
+          console.error(`Auth failed during load logs from year ${year}. Error:`, error);
+          return "auth-failed" as const;
+        }
         console.error(`Failed to load logs from year ${year}. Error:`, error);
         return "load-failed" as const;
       },

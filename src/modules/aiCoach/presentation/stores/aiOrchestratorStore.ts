@@ -21,12 +21,10 @@ import {
   TrainingPlan,
 } from "@/modules/aiCoach/domain";
 import { createAiCoachService } from "@/modules/aiCoach/infrastructure";
+import { useAuthStore } from "@/modules/auth/presentation";
 import { useDeloadStore } from "@/modules/deload/presentation";
 import { useEventsStore } from "@/modules/events/presentation";
-import {
-  useExerciseMuscleMapStore,
-  useTrainingSummaryStore,
-} from "@/modules/platform/presentation";
+import { useExerciseMuscleMapStore } from "@/modules/platform/presentation";
 import { useUserProfileStore } from "@/modules/profile/presentation";
 import { isoDateString } from "@/modules/sharedKernel/domain";
 import {
@@ -35,6 +33,7 @@ import {
   useTrainingInsightsStore,
 } from "@/modules/trainingInsights/presentation";
 import { resolveCurrentSession, useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
+import { useTrainingSummaryStore } from "@/modules/trainingSummary/presentation";
 import { findStaleTodayMessageIds } from "../helpers/aiCoachPageHelpers";
 import { useCoachChatStore } from "./coachChatStore";
 import { useTrainingPlanStore } from "./trainingPlanStore";
@@ -83,6 +82,7 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
   const chatStore = useCoachChatStore();
   const planStore = useTrainingPlanStore();
 
+  const authStore = useAuthStore();
   const userProfileStore = useUserProfileStore();
   const exerciseLogsStore = useExerciseLogsStore();
   const trainingSummaryStore = useTrainingSummaryStore();
@@ -127,10 +127,7 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     chatStore.initialize();
   }
 
-  function classifyExercisesIfNeeded(): ResultAsync<void, never> {
-    const apiKey = userProfileStore.apiKey;
-    if (!apiKey) return okAsync(undefined);
-
+  function getUnclassifiedExercises(): string[] {
     const seen = new Set<string>();
     const unclassified: string[] = [];
     for (const log of exerciseLogsStore.exerciseLogs) {
@@ -141,14 +138,56 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
         unclassified.push(log.exerciseName);
       }
     }
+    return unclassified;
+  }
+
+  function resolveAccessToken(): ResultAsync<string, CoachingAdviceError> {
+    return authStore.ensureValidIdToken().mapErr((err): CoachingAdviceError => {
+      if (err === "refresh-token-invalid" || !authStore.refreshToken) {
+        authStore.logout();
+        return "unauthorized";
+      }
+      return "coaching-request-failed";
+    });
+  }
+
+  function refreshAuthAfterUnauthorized(): ResultAsync<string, CoachingAdviceError> {
+    if (!authStore.refreshToken) {
+      authStore.logout();
+      return errAsync("unauthorized");
+    }
+
+    return authStore
+      .refreshSession(true)
+      .map((freshToken) => authStore.idToken ?? freshToken)
+      .mapErr((refreshErr): CoachingAdviceError => {
+        if (refreshErr === "refresh-token-invalid" || !authStore.refreshToken) {
+          authStore.logout();
+          return "unauthorized";
+        }
+        return "coaching-request-failed";
+      });
+  }
+
+  function classifyExercisesIfNeeded(
+    explicitAccessToken?: string,
+  ): ResultAsync<void, "unauthorized"> {
+    const unclassified = getUnclassifiedExercises();
     if (unclassified.length === 0) return okAsync(undefined);
 
-    return classifyExerciseNames(aiCoachService, unclassified, apiKey)
-      .andTee((cleanupResult) => {
-        exerciseMuscleMapStore.applyCleanupResults(cleanupResult);
-      })
-      .map(() => undefined)
+    const tokenResult = explicitAccessToken ? okAsync(explicitAccessToken) : resolveAccessToken();
+    return tokenResult
+      .andThen((accessToken) =>
+        classifyExerciseNames(aiCoachService, unclassified, accessToken)
+          .andTee((cleanupResult) => {
+            exerciseMuscleMapStore.applyCleanupResults(cleanupResult);
+          })
+          .map(() => undefined),
+      )
       .orElse((error) => {
+        if (error === "unauthorized") {
+          return errAsync("unauthorized" as const);
+        }
         Sentry.captureMessage("AI store exercise pre-classification failed", {
           level: "warning",
           tags: { scope: "ai-store", feature: "exercise-preclassification" },
@@ -255,15 +294,69 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     };
   }
 
+  function executeCoachingAttempt(
+    accessToken: string,
+    question: string | undefined,
+    mode: CoachingMode,
+  ): ResultAsync<{ advice: CoachingAdvice; requestPayload: string }, CoachingAdviceError> {
+    let activeQuestion = question;
+    let activeMode = mode;
+    if (pendingRequest?.mode === "planning") {
+      activeQuestion = pendingRequest.question ?? activeQuestion;
+      activeMode = "planning";
+      pendingRequest = null;
+    }
+
+    const currentId = chatStore.currentSessionId;
+    const currentSession = resolveCurrentSession(exerciseLogsStore.exerciseLogs);
+    const todayLogsCount = getTodayLogsCount(aiCoachService, currentSession);
+    const todayLogsChecksum = getTodayLogsChecksum(currentSession);
+    const effectiveMode = resolveEffectiveCoachingMode({
+      requestedMode: activeMode,
+      hasActivePlan: Boolean(planStore.activePlan && planStore.activePlan.sessions.length > 0),
+    });
+    inFlightMode = effectiveMode;
+
+    const previousMessages = [...chatStore.messages];
+    const userMessage = createUserMessagePlaceholder(currentId, todayLogsCount, todayLogsChecksum);
+    if (activeQuestion) {
+      userMessage.content = activeQuestion;
+    }
+    const userMessageId = userMessage.id;
+    chatStore.addMessage(userMessage);
+
+    return requestAdviceWithSingleRetry(aiCoachService, {
+      accessToken,
+      userProfile: userProfileStore.userProfile,
+      insights: trainingInsightsStore.insights,
+      exerciseLogs: exerciseLogsStore.exerciseLogs,
+      trainingSummaries: trainingSummaryStore.summaries,
+      previousMessages,
+      events: eventsStore.events,
+      question: activeQuestion,
+      mode: activeMode,
+      activePlan: planStore.activePlan ?? undefined,
+      completedSessionKeys: planStore.completedSessions,
+    })
+      .andTee((result) => {
+        handleCoachingSuccess(
+          result,
+          userMessageId,
+          currentId,
+          todayLogsCount,
+          todayLogsChecksum,
+          effectiveMode === "planning",
+        );
+      })
+      .orTee(() => {
+        chatStore.removeMessage(userMessageId);
+      });
+  }
+
   function runCoachingRequest(
     question?: string,
     mode: CoachingMode = "execution",
   ): ResultAsync<void, CoachingAdviceError> {
-    const apiKey = userProfileStore.apiKey;
-    if (!apiKey) {
-      return errAsync("missing-api-key" as CoachingAdviceError);
-    }
-
     const initialSession = resolveCurrentSession(exerciseLogsStore.exerciseLogs);
     const initialChecksum = getTodayLogsChecksum(initialSession);
     const sessionDate = initialSession
@@ -290,65 +383,25 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     pendingRequest = null;
     inFlightMode = initialEffectiveMode;
 
-    return classifyExercisesIfNeeded()
-      .andThen(() => {
-        let activeQuestion = question;
-        let activeMode = mode;
-        if (pendingRequest?.mode === "planning") {
-          activeQuestion = pendingRequest.question ?? activeQuestion;
-          activeMode = "planning";
-          pendingRequest = null;
-        }
-
-        const currentId = chatStore.currentSessionId;
-        const currentSession = resolveCurrentSession(exerciseLogsStore.exerciseLogs);
-        const todayLogsCount = getTodayLogsCount(aiCoachService, currentSession);
-        const todayLogsChecksum = getTodayLogsChecksum(currentSession);
-        const effectiveMode = resolveEffectiveCoachingMode({
-          requestedMode: activeMode,
-          hasActivePlan: Boolean(planStore.activePlan && planStore.activePlan.sessions.length > 0),
-        });
-        inFlightMode = effectiveMode;
-
-        const previousMessages = [...chatStore.messages];
-        const userMessage = createUserMessagePlaceholder(
-          currentId,
-          todayLogsCount,
-          todayLogsChecksum,
-        );
-        if (activeQuestion) {
-          userMessage.content = activeQuestion;
-        }
-        const userMessageId = userMessage.id;
-        chatStore.addMessage(userMessage);
-
-        return requestAdviceWithSingleRetry(aiCoachService, {
-          apiKey,
-          userProfile: userProfileStore.userProfile,
-          insights: trainingInsightsStore.insights,
-          exerciseLogs: exerciseLogsStore.exerciseLogs,
-          trainingSummaries: trainingSummaryStore.summaries,
-          previousMessages,
-          events: eventsStore.events,
-          question: activeQuestion,
-          mode: activeMode,
-          activePlan: planStore.activePlan ?? undefined,
-          completedSessionKeys: planStore.completedSessions,
-        })
-          .andTee((result) => {
-            handleCoachingSuccess(
-              result,
-              userMessageId,
-              currentId,
-              todayLogsCount,
-              todayLogsChecksum,
-              effectiveMode === "planning",
+    return resolveAccessToken()
+      .andThen((accessToken) =>
+        classifyExercisesIfNeeded(accessToken)
+          .andThen(() => executeCoachingAttempt(accessToken, question, mode))
+          .orElse((error) => {
+            if (error !== "unauthorized") {
+              return errAsync(error);
+            }
+            return refreshAuthAfterUnauthorized().andThen((freshToken) =>
+              classifyExercisesIfNeeded(freshToken)
+                .andThen(() => executeCoachingAttempt(freshToken, question, mode))
+                .orTee((retryErr) => {
+                  if (retryErr === "unauthorized") {
+                    authStore.logout();
+                  }
+                }),
             );
-          })
-          .orTee(() => {
-            chatStore.removeMessage(userMessageId);
-          });
-      })
+          }),
+      )
       .map(() => undefined)
       .andTee(() => {
         void drainPendingRequest();

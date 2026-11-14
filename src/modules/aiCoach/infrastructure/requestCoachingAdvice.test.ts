@@ -1,24 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { calculateTrainingInsights } from "@/modules/trainingInsights/domain";
 import { type CoachingAdviceRequest, TrainingPlan } from "../domain";
 
-const { generateContentMock, captureMessageMock, captureExceptionMock } = vi.hoisted(() => ({
-  generateContentMock: vi.fn(),
+const { captureMessageMock, captureExceptionMock } = vi.hoisted(() => ({
   captureMessageMock: vi.fn(),
   captureExceptionMock: vi.fn(),
 }));
 
-const googleGenAiMock = vi.hoisted(() => ({
-  GoogleGenAI: vi.fn(function GoogleGenAI() {
-    return {
-      models: {
-        generateContent: generateContentMock,
-      },
-    };
-  }),
-}));
-
-vi.mock("@google/genai", () => googleGenAiMock);
 vi.mock("@sentry/vue", () => ({
   addBreadcrumb: vi.fn(),
   captureMessage: captureMessageMock,
@@ -31,7 +19,7 @@ function createBaseRequest(overrides: Partial<CoachingAdviceRequest> = {}): Coac
   const insights = calculateTrainingInsights([]);
 
   return {
-    apiKey: "test-api-key",
+    accessToken: "test-access-token",
     userProfile: {
       workoutDaysPerWeek: 3,
       fitnessGoal: ["build_muscle"],
@@ -46,145 +34,112 @@ function createBaseRequest(overrides: Partial<CoachingAdviceRequest> = {}): Coac
 }
 
 describe("requestCoachingAdvice", () => {
+  const fetchMock = vi.fn();
+
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    vi.stubGlobal("fetch", fetchMock);
   });
 
-  it("returns missing-api-key without calling the model when apiKey is empty", async () => {
-    const result = await requestCoachingAdvice(createBaseRequest({ apiKey: "" }));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("returns unauthorized without calling the backend when accessToken is empty", async () => {
+    const result = await requestCoachingAdvice(createBaseRequest({ accessToken: "" }));
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
-      expect(result.error).toBe("missing-api-key");
+      expect(result.error).toBe("unauthorized");
     }
-    expect(generateContentMock).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it.each([
-    {
-      label: "an empty response",
-      primaryFailure: () =>
-        generateContentMock.mockResolvedValueOnce({
-          text: "   ",
-          candidates: [{ finishReason: "MAX_TOKENS" }],
-        }),
-    },
-    {
-      label: "a 503 error",
-      primaryFailure: () => generateContentMock.mockRejectedValueOnce({ status: 503 }),
-    },
-    {
-      label: "a 429 rate-limit error",
-      primaryFailure: () => generateContentMock.mockRejectedValueOnce({ status: 429 }),
-    },
-    {
-      label: "a 404 error",
-      primaryFailure: () => generateContentMock.mockRejectedValueOnce({ status: 404 }),
-    },
-  ])(
-    "falls back from gemini-3.8-flash to gemini-2.5-flash on $label",
-    async ({ primaryFailure }) => {
-      const validPlanningJson = JSON.stringify({
-        coachMessage: "Your new plan is ready!",
-        recommendedWorkout: [
-          {
-            exerciseName: "Bench Press",
-            targetSets: 3,
-            targetReps: "8-10",
-            restSeconds: 120,
-            primaryMuscle: "Chest",
-          },
-        ],
-        trainingPlan: {
-          cycleWeeks: 2,
-          sessions: [
-            {
-              dayOfWeek: 1,
-              weekNumber: 1,
-              sessionLabel: "Unit A",
-              focusDescription: "Push",
-              exercises: [
-                {
-                  exerciseName: "Bench Press",
-                  targetSets: 3,
-                  targetReps: "8-10",
-                  restSeconds: 120,
-                  primaryMuscle: "Chest",
-                },
-              ],
-            },
-          ],
+  it("calls the Supabase ai-coach Edge Function and attaches thought to scratchpad if missing", async () => {
+    const validPlanningJson = JSON.stringify({
+      coachMessage: "Your new plan is ready!",
+      recommendedWorkout: [
+        {
+          exerciseName: "Bench Press",
+          targetSets: 3,
+          targetReps: "8-10",
+          restSeconds: 120,
+          primaryMuscle: "Chest",
         },
-      });
-
-      primaryFailure();
-      generateContentMock.mockResolvedValueOnce({
-        text: validPlanningJson,
-        candidates: [
+      ],
+      trainingPlan: {
+        cycleWeeks: 2,
+        sessions: [
           {
-            content: {
-              parts: [{ thought: true, text: "Planned 3 sets of Bench Press." }],
-            },
+            dayOfWeek: 1,
+            weekNumber: 1,
+            sessionLabel: "Unit A",
+            focusDescription: "Push",
+            exercises: [
+              {
+                exerciseName: "Bench Press",
+                targetSets: 3,
+                targetReps: "8-10",
+                restSeconds: 120,
+                primaryMuscle: "Chest",
+              },
+            ],
           },
         ],
-      });
-
-      const result = await requestCoachingAdvice(createBaseRequest());
-
-      expect(googleGenAiMock.GoogleGenAI).toHaveBeenCalledWith({
-        apiKey: "test-api-key",
-        apiVersion: "v1beta",
-      });
-      expect(generateContentMock).toHaveBeenCalledTimes(2);
-      expect(generateContentMock.mock.calls[0]?.[0]?.model).toBe("gemini-3.8-flash");
-      expect(generateContentMock.mock.calls[1]?.[0]?.model).toBe("gemini-2.5-flash");
-      expect(captureMessageMock).toHaveBeenCalledWith(
-        expect.stringContaining("falling back to gemini-2.5-flash"),
-        expect.anything(),
-      );
-
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value.advice.scratchpad).toBe("Planned 3 sets of Bench Press.");
-        expect(result.value.advice.trainingPlan?.sessions).toHaveLength(1);
-      }
-    },
-  );
-
-  it("falls back to gemini-3.5-flash-lite when both gemini-3.8-flash and gemini-2.5-flash are unavailable", async () => {
-    const activePlan = TrainingPlan.create("2026-10-20T08:00:00.000Z", 2, [
-      {
-        dayOfWeek: 1,
-        weekNumber: 1,
-        sessionLabel: "Unit A",
-        focusDescription: "Legs",
-        exercises: [{ exerciseName: "Squat", targetSets: 3, targetReps: "5" }],
       },
-    ]);
+    });
 
-    generateContentMock
-      .mockRejectedValueOnce({ status: 503 })
-      .mockRejectedValueOnce({ status: 503 })
-      .mockResolvedValueOnce({
-        text: JSON.stringify({
-          coachMessage: "Recovered via lite model!",
-          recommendedWorkout: [
-            { exerciseName: "Squat", targetSets: 3, targetReps: "5", restSeconds: 180 },
-          ],
-        }),
-      });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        text: validPlanningJson,
+        thought: "Planned 3 sets of Bench Press.",
+      }),
+    });
 
-    const result = await requestCoachingAdvice(
-      createBaseRequest({ mode: "execution", activePlan }),
-    );
+    const result = await requestCoachingAdvice(createBaseRequest());
 
-    expect(generateContentMock).toHaveBeenCalledTimes(3);
-    expect(generateContentMock.mock.calls.map((c) => c[0]?.model)).toEqual([
-      "gemini-3.8-flash",
-      "gemini-2.5-flash",
-      "gemini-3.5-flash-lite",
-    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/functions/v1/ai-coach");
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer test-access-token");
+
     expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.advice.scratchpad).toBe("Planned 3 sets of Bench Press.");
+      expect(result.value.advice.trainingPlan?.sessions).toHaveLength(1);
+    }
+  });
+
+  it("maps HTTP 429 from the Edge Function to rate-limit-exceeded", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 429,
+      json: async () => ({ error: "rate-limit-exceeded" }),
+    });
+
+    const result = await requestCoachingAdvice(createBaseRequest());
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBe("rate-limit-exceeded");
+    }
+  });
+
+  it("maps HTTP 401 from the Edge Function to unauthorized", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      json: async () => ({ error: "unauthorized" }),
+    });
+
+    const result = await requestCoachingAdvice(createBaseRequest());
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBe("unauthorized");
+    }
   });
 
   it("strips activePlan on explicit planning regeneration, but preserves # program when adjusting an existing plan via question", async () => {
@@ -199,31 +154,33 @@ describe("requestCoachingAdvice", () => {
     ]);
 
     const mockPlanResponse = {
-      text: JSON.stringify({
-        coachMessage: "Rebuilt plan!",
-        recommendedWorkout: [
-          { exerciseName: "Deadlift", targetSets: 3, targetReps: "5", restSeconds: 180 },
-        ],
-        trainingPlan: {
-          cycleWeeks: 2,
-          sessions: [
-            {
-              dayOfWeek: 1,
-              weekNumber: 1,
-              sessionLabel: "New Session",
-              focusDescription: "Pull",
-              exercises: [
-                { exerciseName: "Deadlift", targetSets: 3, targetReps: "5", restSeconds: 180 },
-              ],
-            },
+      ok: true,
+      status: 200,
+      json: async () => ({
+        text: JSON.stringify({
+          coachMessage: "Rebuilt plan!",
+          recommendedWorkout: [
+            { exerciseName: "Deadlift", targetSets: 3, targetReps: "5", restSeconds: 180 },
           ],
-        },
+          trainingPlan: {
+            cycleWeeks: 2,
+            sessions: [
+              {
+                dayOfWeek: 1,
+                weekNumber: 1,
+                sessionLabel: "New Session",
+                focusDescription: "Pull",
+                exercises: [
+                  { exerciseName: "Deadlift", targetSets: 3, targetReps: "5", restSeconds: 180 },
+                ],
+              },
+            ],
+          },
+        }),
       }),
     };
 
-    generateContentMock
-      .mockResolvedValueOnce(mockPlanResponse)
-      .mockResolvedValueOnce(mockPlanResponse);
+    fetchMock.mockResolvedValueOnce(mockPlanResponse).mockResolvedValueOnce(mockPlanResponse);
 
     const explicitRegenResult = await requestCoachingAdvice(
       createBaseRequest({
@@ -255,12 +212,16 @@ describe("requestCoachingAdvice", () => {
   });
 
   it("returns generate-content-stream-failed and captures Sentry once when planning response omits trainingPlan", async () => {
-    generateContentMock.mockResolvedValueOnce({
-      text: JSON.stringify({
-        coachMessage: "Today's workout only",
-        recommendedWorkout: [
-          { exerciseName: "Squat", targetSets: 3, targetReps: "8", restSeconds: 120 },
-        ],
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        text: JSON.stringify({
+          coachMessage: "Today's workout only",
+          recommendedWorkout: [
+            { exerciseName: "Squat", targetSets: 3, targetReps: "8", restSeconds: 120 },
+          ],
+        }),
       }),
     });
 
@@ -271,5 +232,177 @@ describe("requestCoachingAdvice", () => {
       expect(result.error).toBe("generate-content-stream-failed");
     }
     expect(captureExceptionMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("compacts previous messages to user question and coachMessage, preventing char explosion", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        text: JSON.stringify({
+          coachMessage: "Sure, leg press is a great alternative.",
+          recommendedWorkout: [
+            { exerciseName: "Leg Press", targetSets: 3, targetReps: "10-12", restSeconds: 90 },
+          ],
+        }),
+      }),
+    });
+
+    const previousMessages = [
+      {
+        id: "msg-1",
+        role: "user" as const,
+        content:
+          "# session\ndate: 2026-11-12\n# question\nCan I swap squat for leg press?\n# workload\n...",
+        sessionId: "session-1",
+        timestamp: new Date().toISOString(),
+        logsCount: 0,
+      },
+      {
+        id: "msg-2",
+        role: "coach" as const,
+        content: JSON.stringify({
+          coachMessage: "Yes, leg press works well.",
+          recommendedWorkout: [],
+        }),
+        sessionId: "session-1",
+        timestamp: new Date().toISOString(),
+        logsCount: 0,
+      },
+    ];
+
+    await requestCoachingAdvice(
+      createBaseRequest({
+        previousMessages,
+        question: "How heavy should I go?",
+      }),
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const requestCallBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(requestCallBody.contents).toHaveLength(3);
+    // User turn 1: only extracted question
+    expect(requestCallBody.contents[0]).toEqual({
+      role: "user",
+      parts: [{ text: "Can I swap squat for leg press?" }],
+    });
+    // Model turn 1: extracted coachMessage
+    expect(requestCallBody.contents[1]).toEqual({
+      role: "model",
+      parts: [{ text: "Yes, leg press works well." }],
+    });
+    // User turn 2: current fresh assembled prompt
+    expect(requestCallBody.contents[2].role).toBe("user");
+    expect(requestCallBody.contents[2].parts[0].text).toContain("How heavy should I go?");
+  });
+
+  it("caps conversation history to at most 40 total turns and 50,000 total characters", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        text: JSON.stringify({
+          coachMessage: "Bounded history works.",
+          recommendedWorkout: [],
+        }),
+      }),
+    });
+
+    const manyMessages = Array.from({ length: 46 }, (_, idx) => ({
+      id: `msg-${idx}`,
+      role: (idx % 2 === 0 ? "user" : "coach") as "user" | "coach",
+      content:
+        idx % 2 === 0
+          ? `# question\nTurn ${idx} ${"x".repeat(2_000)}`
+          : `Reply ${idx} ${"y".repeat(2_000)}`,
+      sessionId: "session-1",
+      timestamp: new Date().toISOString(),
+      logsCount: 0,
+    }));
+
+    await requestCoachingAdvice(
+      createBaseRequest({
+        previousMessages: manyMessages,
+        question: "Latest question",
+      }),
+    );
+
+    const requestCallBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(requestCallBody.contents.length).toBeLessThanOrEqual(40);
+    const totalChars = requestCallBody.contents.reduce(
+      (sum: number, item: { parts: Array<{ text: string }> }) => sum + item.parts[0].text.length,
+      0,
+    );
+    expect(totalChars).toBeLessThanOrEqual(50_000);
+    expect(requestCallBody.contents[0].role).toBe("user");
+    for (let i = 1; i < requestCallBody.contents.length; i++) {
+      expect(requestCallBody.contents[i].role).not.toBe(requestCallBody.contents[i - 1].role);
+    }
+    expect(requestCallBody.contents.at(-1)?.parts[0].text).toContain("Latest question");
+    expect(requestCallBody.contents.at(-2)?.parts[0].text).toContain("Reply 45");
+    expect(requestCallBody.contents.at(-3)?.parts[0].text).toContain("Turn 44");
+  });
+
+  it("normalizes leading model turns and trailing unpaired user turns before sending", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        text: JSON.stringify({
+          coachMessage: "Normalized turns.",
+          recommendedWorkout: [],
+        }),
+      }),
+    });
+
+    await requestCoachingAdvice(
+      createBaseRequest({
+        previousMessages: [
+          {
+            id: "leading-model",
+            role: "coach",
+            content: "Orphan model intro",
+            sessionId: "session-1",
+            timestamp: new Date().toISOString(),
+            logsCount: 0,
+          },
+          {
+            id: "u1",
+            role: "user",
+            content: "# question\nValid user turn",
+            sessionId: "session-1",
+            timestamp: new Date().toISOString(),
+            logsCount: 0,
+          },
+          {
+            id: "m1",
+            role: "coach",
+            content: "Valid model reply",
+            sessionId: "session-1",
+            timestamp: new Date().toISOString(),
+            logsCount: 0,
+          },
+          {
+            id: "trailing-user",
+            role: "user",
+            content: "# question\nUnanswered trailing turn",
+            sessionId: "session-1",
+            timestamp: new Date().toISOString(),
+            logsCount: 0,
+          },
+        ],
+        question: "Current active turn",
+      }),
+    );
+
+    const requestCallBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(requestCallBody.contents.map((item: { role: string }) => item.role)).toEqual([
+      "user",
+      "model",
+      "user",
+    ]);
+    expect(requestCallBody.contents[0].parts[0].text).toContain("Valid user turn");
+    expect(requestCallBody.contents[1].parts[0].text).toBe("Valid model reply");
+    expect(requestCallBody.contents[2].parts[0].text).toContain("Current active turn");
   });
 });

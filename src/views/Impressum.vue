@@ -12,7 +12,7 @@ const router = useRouter();
     <main class="flex-1 overflow-y-auto overscroll-y-contain p-6 text-foreground/80 space-y-8 max-w-3xl mx-auto">
       <section class="space-y-4">
         <h2 class="text-2xl font-bold text-foreground">Impressum</h2>
-        <p class="font-semibold">Angaben gemäß § 5 TMG</p>
+        <p class="font-semibold">Angaben gemäß § 5 Digitale-Dienste-Gesetz (DDG)</p>
         
         <div class="bg-white/5 rounded-xl p-6 font-mono text-sm leading-relaxed border border-white/5">
           Sabahattin Giritli<br />

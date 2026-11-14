@@ -12,7 +12,7 @@ const router = useRouter();
     <main class="flex-1 overflow-y-auto overscroll-y-contain p-6 text-foreground/80 space-y-8 max-w-3xl mx-auto">
       <section class="space-y-4">
         <h2 class="text-2xl font-bold text-foreground">Datenschutzerklärung / Privacy Policy</h2>
-        <p class="text-sm italic">Letzte Aktualisierung / Last Updated: 13. Februar 2026</p>
+        <p class="text-sm italic">Letzte Aktualisierung / Last Updated: 12. November 2026</p>
         <p>
           Diese Datenschutzerklärung gilt für die Gainz AI App (nachfolgend "App" oder "Anwendung") 
           und erläutert, welche personenbezogenen Daten wir erheben, wie wir diese verarbeiten 
@@ -50,7 +50,6 @@ const router = useRouter();
               <li><strong>Trainingsort</strong> (workoutLocation): Fitnessstudio, Zuhause, Beides</li>
               <li><strong>Verfügbare Ausrüstung</strong> (equipmentAccess): z.B. Hanteln, Klimmzugstange, etc.</li>
               <li><strong>Freitextangaben</strong> (freeUserInput): zusätzliche Informationen, die Sie freiwillig bereitstellen</li>
-              <li><strong>Google Generative AI API-Schlüssel</strong> (apiKey): falls von Ihnen bereitgestellt</li>
             </ul>
           </div>
 
@@ -67,25 +66,27 @@ const router = useRouter();
 
         <div class="space-y-2">
           <h3 class="text-lg font-medium text-foreground">2.2 Automatisch erhobene Daten</h3>
-          <h4 class="font-medium text-foreground">Lokale Speicherung (LocalStorage)</h4>
-          <p>Die App speichert Daten im lokalen Speicher Ihres Browsers/Geräts:</p>
+          <h4 class="font-medium text-foreground">Lokale und gerätespezifische Speicherung</h4>
+          <p>Die App speichert Daten im lokalen Speicher Ihres Browsers bzw. im sicheren Gerätespeicher (LocalStorage im Web, native Preferences auf iOS/Android):</p>
           <ul class="list-disc pl-5 space-y-1">
             <li>Benutzerprofildaten</li>
             <li>Trainingsprotokoll-Einträge</li>
-            <li>Google OAuth Access Token und Ablaufzeit</li>
+            <li>Google OAuth Access Token, Refresh Token und Ablaufzeit</li>
             <li>Setup-Status</li>
             <li>KI-Unterhaltungen (begrenzt auf 7 Tage)</li>
           </ul>
         </div>
 
         <div class="space-y-2 border-l-2 border-primary/50 pl-4 py-2 bg-primary/5">
-          <h3 class="text-lg font-medium text-foreground">2.3 Keine Datenerhebung auf eigenen Servern</h3>
-          <p><strong>Wichtig:</strong> Die App speichert keine Daten auf eigenen Servern des Anbieters. Alle Daten werden ausschließlich:</p>
+          <h3 class="text-lg font-medium text-foreground">2.3 Speicherung und Backend-Verarbeitung</h3>
+          <p><strong>Wichtig:</strong> Ihre Trainingsprotokolle und Ihr Benutzerprofil werden nicht dauerhaft auf Servern des Anbieters gespeichert, sondern verbleiben:</p>
           <ul class="list-disc pl-5 space-y-1 font-medium">
             <li>lokal auf Ihrem Gerät (LocalStorage)</li>
             <li>in Ihrer eigenen Google Drive Tabelle (Google Spreadsheets)</li>
-            <li>bei Nutzung der KI-Funktionen an Google Generative AI gesendet</li>
           </ul>
+          <p class="text-sm mt-2">
+            Für den OAuth-Token-Austausch, die Weiterleitung von KI-Anfragen an Google Generative AI sowie zur Durchsetzung täglicher Nutzungslimits (Rate-Limiting anhand Ihrer pseudonymen Google-Konto-ID und eines Tageszählers) nutzt die App ein Backend auf Basis von <strong>Supabase</strong> (Hosting-Region EU Central / Frankfurt am Main, Deutschland).
+          </p>
         </div>
       </section>
 
@@ -106,13 +107,13 @@ const router = useRouter();
         </div>
 
         <div class="space-y-2">
-          <h3 class="text-lg font-medium text-foreground">3.3 Google Drive / Spreadsheets Integration</h3>
+          <h3 class="text-lg font-medium text-foreground">3.3 Google Drive Integration & Scopes</h3>
           <p><strong>Zweck:</strong> Speicherung und Synchronisation Ihrer Trainingsdaten in Ihrer eigenen Google Drive Tabelle</p>
           <p><strong>Rechtsgrundlage:</strong> Art. 6 Abs. 1 lit. a DSGVO (Einwilligung)</p>
-          <p class="font-medium">Erforderliche Berechtigungen:</p>
+          <p class="font-medium">Erforderliche Berechtigungen (OAuth Scopes):</p>
           <ul class="list-disc pl-5 space-y-1">
-            <li>Zugriff auf Google Spreadsheets</li>
-            <li>Zugriff auf Google Drive (Metadaten und Dateierstellung)</li>
+            <li><code>https://www.googleapis.com/auth/drive.file</code>: Erstellen und Bearbeiten ausschließlich von Dateien, die von Gainz AI erstellt oder durch den Nutzer explizit mit der App geöffnet wurden (kein Vollzugriff auf Ihr Google Drive oder fremde Dateien).</li>
+            <li><code>openid</code>: Sichere Authentifizierung und kryptografische Validierung Ihres Google-Kontos für das serverseitige Rate-Limiting.</li>
           </ul>
         </div>
       </section>
@@ -155,14 +156,25 @@ const router = useRouter();
               <li><strong>Speicherort:</strong> Ihre eigene Google Drive Tabelle</li>
               <li><strong>Kontrolle:</strong> Sie behalten die volle Kontrolle über diese Daten in Ihrem Google Drive</li>
             </ul>
+            <div class="mt-3 p-3 bg-white/5 rounded-lg border border-white/5 text-xs space-y-1">
+              <p class="font-semibold text-foreground">Google API Limited Use Disclosure:</p>
+              <p>
+                Die Nutzung und Übertragung von Informationen, die Gainz AI über Google-APIs erhält, an andere Apps erfolgt im Einklang mit der 
+                <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" class="text-primary hover:underline">Google API Services User Data Policy</a>, 
+                einschließlich der Anforderungen an die eingeschränkte Nutzung ("Limited Use").
+              </p>
+              <p class="italic text-muted-foreground">
+                "Gainz AI's use and transfer to any other app of information received from Google APIs will adhere to the Google API Services User Data Policy, including the Limited Use requirements."
+              </p>
+            </div>
           </div>
 
           <div class="space-y-2">
             <h4 class="font-medium text-foreground underline decoration-primary/30">Google Generative AI (Gemini API)</h4>
             <ul class="list-disc pl-5 space-y-1">
-              <li><strong>Zweck:</strong> KI-gestützte Trainingsempfehlungen und Feedback</li>
+              <li><strong>Zweck:</strong> KI-gestützte Trainingsempfehlungen, Trainingsplanung und Übungsklassifizierung</li>
               <li><strong>Übermittelte Daten:</strong> Ihr Benutzerprofil, Ihre Trainingsprotokolle, Sprach-/Locale-Einstellungen, Aktuelles Datum</li>
-              <li><strong>API-Schlüssel:</strong> Sie müssen Ihren eigenen Google Generative AI API-Schlüssel bereitstellen</li>
+              <li><strong>Übertragungsweg:</strong> Anfragen werden über unser Supabase Backend (Edge Functions) mit dem zentralen API-Schlüssel des Anbieters an die Gemini API weitergeleitet</li>
               <li><strong>Datenschutzerklärung:</strong> <a href="https://policies.google.com/privacy" target="_blank" class="text-primary hover:underline">https://policies.google.com/privacy</a></li>
               <li><strong>API Terms of Service:</strong> <a href="https://ai.google.dev/gemini-api/terms" target="_blank" class="text-primary hover:underline">https://ai.google.dev/gemini-api/terms</a></li>
             </ul>
@@ -170,9 +182,34 @@ const router = useRouter();
         </div>
 
         <div class="space-y-2">
-          <h3 class="text-lg font-medium text-foreground">4.3 Übermittlung in Drittländer</h3>
-          <p><strong>USA:</strong> Datenübermittlung an Google LLC in den USA erfolgt auf Grundlage der EU-Standardvertragsklauseln und des EU-US Data Privacy Framework.</p>
-          <p><strong>Risiken:</strong> Die Übermittlung von Daten in die USA kann mit Risiken verbunden sein, da US-Behörden unter bestimmten Umständen Zugriff auf Ihre Daten haben könnten.</p>
+          <h3 class="text-lg font-medium text-foreground">4.3 Supabase (Backend, Authentifizierung & Rate-Limiting)</h3>
+          <p>Die App nutzt Supabase für serverseitige Edge Functions (OAuth 2.0 Token-Austausch und KI-Anfragen) sowie zur Verwaltung täglicher KI-Nutzungskontingente.</p>
+          <ul class="list-disc pl-5 space-y-1">
+            <li><strong>Anbieter:</strong> Supabase, Inc., 970 Toa Payoh North #07-04, Singapore 318992</li>
+            <li><strong>Datenstandort:</strong> EU (Frankfurt am Main, Deutschland – <code>eu-central-1</code>)</li>
+            <li><strong>Zweck:</strong> Sicherer OAuth-Token-Austausch, Schutz der KI-Systemanweisungen/API-Schlüssel und Schutz vor Missbrauch durch tägliche Anfrage-Limits</li>
+            <li><strong>Rechtsgrundlage:</strong> Art. 6 Abs. 1 lit. b DSGVO (Vertragserfüllung) und Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse an IT-Sicherheit und Kostenkontrolle)</li>
+            <li><strong>Gespeicherte Daten:</strong> Pseudonyme Google-Subjekt-ID (<code>sub</code>), Tagesdatum (UTC), Art der Anfrage und Anzahl der täglichen KI-Anfragen in der Tabelle <code>ai_daily_usage</code></li>
+            <li><strong>Datenschutzerklärung:</strong> <a href="https://supabase.com/privacy" target="_blank" class="text-primary hover:underline">https://supabase.com/privacy</a></li>
+          </ul>
+        </div>
+
+        <div class="space-y-2">
+          <h3 class="text-lg font-medium text-foreground">4.4 Cloudflare Pages (Hosting &amp; CDN)</h3>
+          <p>Diese Web-Anwendung wird über Cloudflare Pages bereitgestellt.</p>
+          <ul class="list-disc pl-5 space-y-1">
+            <li><strong>Anbieter:</strong> Cloudflare, Inc., 101 Townsend St, San Francisco, CA 94107, USA</li>
+            <li><strong>Zweck:</strong> Auslieferung der Web-Anwendung (CDN), DDoS-Schutz und Sicherstellung der technischen Verfügbarkeit</li>
+            <li><strong>Rechtsgrundlage:</strong> Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse an sicherer und performanter Bereitstellung)</li>
+            <li><strong>Verarbeitete Daten:</strong> Technische Zugriffsdaten in Edge-Logs (z.B. IP-Adresse, Zeitpunkt des Abrufs, angeforderte URL, User-Agent)</li>
+            <li><strong>Datenschutzerklärung:</strong> <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" class="text-primary hover:underline">https://www.cloudflare.com/privacypolicy/</a></li>
+          </ul>
+        </div>
+
+        <div class="space-y-2">
+          <h3 class="text-lg font-medium text-foreground">4.5 Übermittlung in Drittländer</h3>
+          <p><strong>USA / Drittländer:</strong> Die Datenübermittlung an Dienstleister mit Sitz oder Muttergesellschaft in den USA (Google LLC, Supabase, Inc., Cloudflare, Inc., Functional Software, Inc. / Sentry) erfolgt auf Grundlage der Standardvertragsklauseln der EU-Kommission (SCCs) sowie, soweit zutreffend, des EU-U.S. Data Privacy Frameworks.</p>
+          <p><strong>Risiken:</strong> Die Übermittlung von Daten in die USA kann mit Risiken verbunden sein, da US-Behörden unter bestimmten gesetzlichen Umständen Zugriff auf Daten verlangen könnten.</p>
         </div>
       </section>
 
@@ -200,8 +237,8 @@ const router = useRouter();
         </div>
 
         <div class="space-y-2">
-          <h3 class="text-lg font-medium text-foreground">5.4 Bei Google Generative AI</h3>
-          <p>Google speichert übermittelte Daten gemäß den Generative AI API Terms of Service.</p>
+          <h3 class="text-lg font-medium text-foreground">5.4 Bei Google Generative AI & Supabase</h3>
+          <p>Google verarbeitet übermittelte Daten gemäß den Generative AI API Terms of Service. In unserem Supabase-Backend werden ausschließlich pseudonyme Nutzungszähler zur Kontingentprüfung (<code>ai_daily_usage</code>) gespeichert; diese Datensätze werden nach <strong>30 Tagen</strong> automatisch und unwiderruflich gelöscht.</p>
         </div>
       </section>
 
@@ -264,14 +301,14 @@ const router = useRouter();
           <li><strong>Verschlüsselung:</strong> HTTPS-Verbindungen für alle Datenübertragungen</li>
           <li><strong>OAuth 2.0:</strong> Sichere Authentifizierung ohne Speicherung Ihres Google-Passworts</li>
           <li><strong>Lokale Speicherung:</strong> Daten werden primär lokal auf Ihrem Gerät gespeichert</li>
-          <li><strong>Keine zentralen Server:</strong> Wir betreiben keine zentralen Server zur Speicherung Ihrer Trainingsdaten</li>
-          <li><strong>Access Token Management:</strong> Kurze Gültigkeitsdauer der Access Tokens</li>
+          <li><strong>Minimale Server-Speicherung:</strong> Ihre Trainingsprotokolle und Profildaten werden ausschließlich lokal und in Ihrem eigenen Google Drive gespeichert; auf dem Backend (Supabase EU) werden nur pseudonyme Tageszähler für KI-Anfragen erfasst</li>
+          <li><strong>Access & Refresh Token Management:</strong> Kurze Gültigkeitsdauer der Access Tokens mit sicherem OAuth 2.0 Authorization Code Flow</li>
         </ul>
       </section>
 
       <section class="space-y-4">
         <h2 class="text-xl font-semibold text-foreground">8. Cookies und ähnliche Technologien</h2>
-        <p>Die App nutzt <strong>LocalStorage</strong> (Browser-Speicher) zur Speicherung von Benutzerprofil, Trainingsprotokollen, Authentifizierungstokens und App-Einstellungen.</p>
+        <p>Die App verwendet keine Tracking- oder Werbe-Cookies. Sie nutzt <strong>LocalStorage</strong> (Browser-Speicher im Web) sowie den <strong>app-isolierten nativen App-Speicher</strong> (Capacitor Preferences: UserDefaults unter iOS bzw. SharedPreferences unter Android) zur Speicherung von Benutzerprofil, Trainingsprotokollen, Authentifizierungstokens und App-Einstellungen.</p>
         <p><strong>Service Worker / PWA:</strong> Die App kann als PWA installiert werden und nutzt Service Worker für Offline-Funktionalität.</p>
       </section>
 

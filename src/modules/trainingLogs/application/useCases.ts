@@ -10,7 +10,11 @@ type ExerciseLogLoadError = "load-failed" | "parse-data-failed" | "auth-failed";
 type ExerciseLogAddError = "add-failed" | "auth-failed";
 type ExerciseLogDeleteError = "delete-failed" | "auth-failed";
 type ExerciseLogUpdateError = "update-failed" | "auth-failed";
-type ExerciseLogYearLoadError = "load-failed" | "parse-data-failed" | "sheet-not-found";
+type ExerciseLogYearLoadError =
+  | "load-failed"
+  | "parse-data-failed"
+  | "sheet-not-found"
+  | "auth-failed";
 
 export interface ExerciseLogRepository {
   loadCurrentYear: () => ResultAsync<ExerciseLog[], ExerciseLogLoadError>;
@@ -19,6 +23,12 @@ export interface ExerciseLogRepository {
   deleteLog: (log: ExerciseLog) => ResultAsync<void, ExerciseLogDeleteError>;
   findPastYearSheets: () => number[];
   loadYear: (year: number) => ResultAsync<ExerciseLog[], ExerciseLogYearLoadError>;
+}
+
+export interface ExerciseLogHistoryReader {
+  loadCurrentYearLogs: () => ResultAsync<ExerciseLog[], ExerciseLogLoadError>;
+  findPastYears: () => number[];
+  loadYearLogs: (year: number) => ResultAsync<ExerciseLog[], ExerciseLogYearLoadError>;
 }
 
 export function loadExerciseLogs(

@@ -1,10 +1,19 @@
-import { describe, expect, it } from "vitest";
-import {
-  createCoachingAdviceJsonSchema,
-  translateCoachingAdviceJson,
-} from "./CoachingAdviceTranslator";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { captureExceptionMock } = vi.hoisted(() => ({
+  captureExceptionMock: vi.fn(),
+}));
+
+vi.mock("@sentry/vue", () => ({
+  captureException: captureExceptionMock,
+}));
+
+import { translateCoachingAdviceJson } from "./CoachingAdviceTranslator";
 
 describe("CoachingAdviceTranslator", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
   it("successfully parses valid coaching advice", () => {
     const validJson = JSON.stringify({
       coachMessage: "Great job!",
@@ -193,47 +202,6 @@ describe("CoachingAdviceTranslator", () => {
     expect(translateCoachingAdviceJson(workoutOnlyJson, "planning").isErr()).toBe(true);
   });
 
-  it("marks trainingPlan and recommendedWorkout as required in planning JSON schema", () => {
-    const planningSchema = createCoachingAdviceJsonSchema(["Chest", "Back"], "planning");
-    expect(planningSchema.$schema).toBeUndefined();
-    expect(planningSchema.required).toEqual(
-      expect.arrayContaining([
-        "coachMessage",
-        "trainingPlan",
-        "recommendedWorkout",
-        "suggestedFollowUps",
-      ]),
-    );
-
-    const executionSchema = createCoachingAdviceJsonSchema(["Chest", "Back"], "execution", false);
-    expect(executionSchema.required).toEqual(
-      expect.arrayContaining(["coachMessage", "suggestedFollowUps"]),
-    );
-    expect(
-      (executionSchema.properties as Record<string, unknown> | undefined)?.trainingPlan,
-    ).toBeUndefined();
-
-    const chatExecutionSchema = createCoachingAdviceJsonSchema(
-      ["Chest", "Back"],
-      "execution",
-      true,
-    );
-    expect(
-      (chatExecutionSchema.properties as Record<string, unknown> | undefined)?.trainingPlan,
-    ).toBeDefined();
-    expect(chatExecutionSchema.required).toEqual(["coachMessage"]);
-    expect(chatExecutionSchema.required).not.toContain("suggestedFollowUps");
-
-    const recommendedProps = (
-      (planningSchema.properties as Record<string, unknown>)?.recommendedWorkout as {
-        items?: { properties?: Record<string, { description?: string }> };
-      }
-    )?.items?.properties;
-    expect(recommendedProps?.restSeconds?.description).toContain(
-      "Recommended rest between sets in seconds",
-    );
-  });
-
   it("rejects a trainingPlan where a session has empty exercises", () => {
     const emptyExercisesPlanJson = JSON.stringify({
       coachMessage: "New plan!",
@@ -321,5 +289,42 @@ describe("CoachingAdviceTranslator", () => {
       expect(result.value.recommendedWorkout?.[0]?.restSeconds).toBe(91);
       expect(result.value.recommendedWorkout?.[0]?.targetDurationSeconds).toBe(45);
     }
+  });
+
+  it("strips markdown code fences (```json ... ```) wrapping the response", () => {
+    const wrappedJson =
+      "```json\n" +
+      JSON.stringify({
+        coachMessage: "Wrapped in markdown code fences!",
+        recommendedWorkout: [{ exerciseName: "Deadlift", targetSets: 3, targetReps: "5" }],
+      }) +
+      "\n```";
+
+    const result = translateCoachingAdviceJson(wrappedJson, "execution");
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.coachMessage).toBe("Wrapped in markdown code fences!");
+      expect(result.value.recommendedWorkout?.[0]?.exerciseName).toBe("Deadlift");
+    }
+  });
+
+  it("logs validation schema metadata to Sentry without unredacted raw AI prose", () => {
+    const rawSecretText = JSON.stringify({
+      coachMessage: "Private athlete injury note",
+      bad: true,
+    });
+    const malformed = rawSecretText.replace("coachMessage", "wrongField");
+
+    const result = translateCoachingAdviceJson(malformed, "execution");
+
+    expect(result.isErr()).toBe(true);
+    expect(captureExceptionMock).toHaveBeenCalledOnce();
+    const extra = captureExceptionMock.mock.calls[0]?.[1]?.extra as Record<string, unknown>;
+    expect(extra).toMatchObject({
+      mode: "execution",
+      rawLength: malformed.length,
+    });
+    expect(extra.coachingAdviceText).toBeUndefined();
+    expect(JSON.stringify(extra)).not.toContain("Private athlete injury note");
   });
 });

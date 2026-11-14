@@ -35,3 +35,7 @@ npm-debug.log*
 .opencode
 .sisyphus
 .superpowers
+
+# Supabase
+supabase/.temp/
+supabase/.branches/

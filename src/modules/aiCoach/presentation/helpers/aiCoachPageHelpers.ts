@@ -5,11 +5,14 @@ import {
   type CoachingAdvice,
   type CoachingAdviceError,
   type CoachingMessage,
+  extractUserQuestion,
   type PlannedSession,
   sanitizeSuggestedFollowUps,
   type TrainingPlan,
   upcastLegacyExercise,
 } from "../../domain";
+
+export { extractUserQuestion };
 
 // ---------------------------------------------------------------------------
 // View-model types
@@ -69,49 +72,13 @@ export function tryParseCoachingAdvice(content: string): CoachingAdvice | null {
 }
 
 export function getAiErrorDescription(error: CoachingAdviceError | string): string {
-  return error === "missing-api-key"
-    ? "No API Key configured! Please add one in your profile."
-    : "Failed to get AI response. Please try again.";
-}
-
-/**
- * Extracts a human-readable user question from message content, filtering out
- * internal automated request triggers and raw prompt context payloads.
- */
-export function extractUserQuestion(content?: string | null): string | null {
-  if (!content) return null;
-  const trimmed = content.trim();
-  if (
-    !trimmed ||
-    trimmed === "AI request" ||
-    trimmed === "Please generate a new 2-week mesocycle plan."
-  ) {
-    return null;
+  if (error === "rate-limit-exceeded") {
+    return "Daily AI coaching limit reached. Quota resets at 00:00 UTC.";
   }
-
-  // Check if content is an assembled system prompt payload (which always starts with # session and metadata/sections)
-  if (
-    (trimmed.startsWith("# session\n") || trimmed.startsWith("# session\r\n")) &&
-    (/(?:^|\r?\n)(?:date|mode|phase|status):/m.test(trimmed) ||
-      /(?:^|\r?\n)# (?:workload|muscles|exercises|e1rm|today|program|events|history|logs|update|profile)/m.test(
-        trimmed,
-      ))
-  ) {
-    const match = trimmed.match(
-      /(?:^|\r?\n)# question\r?\n([\s\S]*?)(?=(?:\r?\n){1,2}# (?:workload|muscles|exercises|e1rm|update|plan|profile|goals|today|program|events|history|logs|\d+d|all)(?:\r?\n|$)|$)/,
-    );
-    if (match?.[1]) {
-      const q = match[1].trim();
-      if (!q || q === "AI request" || q === "Please generate a new 2-week mesocycle plan.") {
-        return null;
-      }
-      return q;
-    }
-    // Assembled prompt payload without an explicit user question (automated daily advice/session trigger)
-    return null;
+  if (error === "unauthorized") {
+    return "Your session expired. Please sign in again.";
   }
-
-  return trimmed;
+  return "Failed to get AI response. Please try again.";
 }
 
 function isStaleAutomatedWorkout(

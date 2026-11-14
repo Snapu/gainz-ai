@@ -56,4 +56,28 @@ describe("ExerciseLogsSheetsRepository.loadCurrentYear", () => {
       expect(result.error).toBe("auth-failed");
     }
   });
+
+  it("returns auth-failed when loadYear throws auth error", async () => {
+    const authError = new Error("unauthorized") as Error & {
+      response?: { status: number };
+    };
+    authError.response = { status: 401 };
+
+    const pastYearSheet = {
+      getRows: vi.fn().mockRejectedValue(authError),
+    };
+    const doc = {
+      sheetsByTitle: {
+        Logs2025: pastYearSheet,
+      },
+    };
+
+    const repository = new ExerciseLogsSheetsRepository(doc as never);
+    const result = await repository.loadYear(2025);
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBe("auth-failed");
+    }
+  });
 });

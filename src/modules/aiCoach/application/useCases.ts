@@ -17,7 +17,7 @@ export interface AiCoachService {
   ask(options: CoachingAdviceRequest): ResultAsync<CoachingAdviceResult, CoachingAdviceError>;
   classifyExercises(
     exerciseNames: string[],
-    apiKey: string | undefined,
+    accessToken: string | undefined,
   ): ResultAsync<ExerciseCleanupResult, CoachingAdviceError>;
   getTodayLogsCount(session: WorkoutSession | null): number;
 }
@@ -32,9 +32,9 @@ export function requestAdvice(
 export function classifyExerciseNames(
   service: AiCoachService,
   exerciseNames: string[],
-  apiKey: string | undefined,
+  accessToken: string | undefined,
 ): ResultAsync<ExerciseCleanupResult, CoachingAdviceError> {
-  return service.classifyExercises(exerciseNames, apiKey);
+  return service.classifyExercises(exerciseNames, accessToken);
 }
 
 export function getTodayLogsCount(service: AiCoachService, session: WorkoutSession | null): number {
@@ -47,9 +47,8 @@ function delay(ms: number): Promise<void> {
 
 /**
  * Retries once, but only when the model produced unusable output
- * (`generate-content-stream-failed`). Request failures (`coaching-request-failed`) already
- * went through the primary → fallback model sequence, so repeating them would only extend
- * the loading time; `missing-api-key` can never succeed on retry.
+ * (`generate-content-stream-failed`). Request failures (`coaching-request-failed`),
+ * `unauthorized`, and `rate-limit-exceeded` are never retried.
  */
 export function requestAdviceWithSingleRetry(
   service: AiCoachService,

@@ -3,112 +3,8 @@ import { Result } from "neverthrow";
 import { z } from "zod";
 import { type CoachingAdvice, type CoachingMode, sanitizeSuggestedFollowUps } from "../domain";
 
-function buildExerciseFields(
-  muscleGroupSchema: z.ZodType<string>,
-  intSchema: {
-    sets: z.ZodType<number>;
-    duration: z.ZodType<number>;
-    distance: z.ZodType<number>;
-    rest: z.ZodType<number>;
-  },
-) {
-  const secondaryMuscleSchema = z.object({
-    muscleGroup: muscleGroupSchema.describe("Secondary muscle group activated by this exercise."),
-    contribution: z
-      .number()
-      .optional()
-      .describe("Fraction of a set credited to this muscle (0.0–1.0). Omit to default to 0.5."),
-  });
-
-  return {
-    exerciseName: z.string(),
-    targetSets: intSchema.sets,
-    targetReps: z
-      .string()
-      .optional()
-      .describe(
-        "Used for counting movements (e.g. '8-12', 'failure'). Do NOT use if duration or distance is provided.",
-      ),
-    targetDurationSeconds: intSchema.duration
-      .optional()
-      .describe(
-        "Used ONLY for time-based exercises like planks or isometric holds (e.g. 30, 60). Do NOT use targetReps if this is used.",
-      ),
-    targetDistanceMeters: intSchema.distance
-      .optional()
-      .describe(
-        "Used ONLY for distance-based cardio like running or rowing (e.g. 500, 1000). Do NOT use targetReps if this is used.",
-      ),
-    targetWeight: z
-      .string()
-      .optional()
-      .describe(
-        "Exact numeric weight only (e.g. '60kg', 'Bodyweight'). For dumbbell exercises, ALWAYS output the TOTAL combined weight (e.g., for two 20kg dumbbells, output '40kg'). Keep it extremely concise.",
-      ),
-    targetRpe: z
-      .number()
-      .min(1)
-      .max(10)
-      .optional()
-      .describe(
-        "Target RPE (Rate of Perceived Exertion) from 6.0 to 10.0 (e.g. 8.5). Prescribe for all lifting/resistance exercises (8.0-9.0 for hypertrophy, 8.5-9.5 for strength, 6.0-6.5 for deload).",
-      ),
-    restSeconds: intSchema.rest
-      .describe(
-        "Recommended rest between sets in seconds. 180–300 for strength (1–5 reps), 120–180 for hypertrophy (6–12 reps), 45–90 for fat loss/endurance (12–20 reps), 15–30 for endurance/circuit (20–25 reps).",
-      )
-      .optional(),
-    notes: z
-      .string()
-      .optional()
-      .describe(
-        "Advanced execution cue, tempo (e.g. '3s eccentric pause'), or anatomical focus (e.g. 'Bias long head'). Omit if nothing special.",
-      ),
-    supersetId: z
-      .string()
-      .optional()
-      .describe(
-        "Optional. Assign the same identifier (e.g. 'A', 'B') to exercises that should be performed together as a superset.",
-      ),
-    primaryMuscle: muscleGroupSchema
-      .optional()
-      .describe("Primary muscle group this exercise targets."),
-    secondaryMuscles: z
-      .array(secondaryMuscleSchema)
-      .optional()
-      .describe(
-        "Optional secondary muscle groups this exercise also activates, with their fractional contribution (0.0–1.0).",
-      ),
-  };
-}
-
-interface IntSchemas {
-  sets: z.ZodType<number>;
-  duration: z.ZodType<number>;
-  distance: z.ZodType<number>;
-  rest: z.ZodType<number>;
-  dayOfWeek: z.ZodType<number>;
-  weekNumber: z.ZodType<number>;
-  cycleWeeks: z.ZodType<number>;
-}
-
-const generationIntSchemas: IntSchemas = {
-  sets: z.number().int().min(1).max(20),
-  duration: z.number().int().min(1).max(14400),
-  distance: z.number().int().min(1).max(100000),
-  rest: z.number().int().min(0).max(600),
-  dayOfWeek: z.number().int().min(0).max(6).describe("0=Sun, 1=Mon...6=Sat"),
-  weekNumber: z.number().int().min(1).max(4).describe("1 or 2"),
-  cycleWeeks: z
-    .number()
-    .int()
-    .min(1)
-    .max(4)
-    .describe("Duration of the mesocycle in weeks (typically 2)."),
-};
-
 const roundedInt = z.number().transform((n) => Math.round(n));
-const validationIntSchemas: IntSchemas = {
+const validationIntSchemas = {
   sets: roundedInt.pipe(z.number().min(1)),
   duration: roundedInt.pipe(z.number().min(1)),
   distance: roundedInt.pipe(z.number().min(1)),
@@ -118,142 +14,43 @@ const validationIntSchemas: IntSchemas = {
   cycleWeeks: roundedInt.pipe(z.number().min(1)),
 };
 
-function buildTrainingPlanSchema(muscleGroupSchema: z.ZodType<string>, intSchema: IntSchemas) {
-  const plannedExerciseSchema = z.object(buildExerciseFields(muscleGroupSchema, intSchema));
+function buildExerciseFields() {
+  const secondaryMuscleSchema = z.object({
+    muscleGroup: z.string(),
+    contribution: z.number().optional(),
+  });
+
+  return {
+    exerciseName: z.string(),
+    targetSets: validationIntSchemas.sets,
+    targetReps: z.string().optional(),
+    targetDurationSeconds: validationIntSchemas.duration.optional(),
+    targetDistanceMeters: validationIntSchemas.distance.optional(),
+    targetWeight: z.string().optional(),
+    targetRpe: z.number().min(1).max(10).optional(),
+    restSeconds: validationIntSchemas.rest.optional(),
+    notes: z.string().optional(),
+    supersetId: z.string().optional(),
+    primaryMuscle: z.string().optional(),
+    secondaryMuscles: z.array(secondaryMuscleSchema).optional(),
+  };
+}
+
+function buildTrainingPlanSchema() {
+  const plannedExerciseSchema = z.object(buildExerciseFields());
 
   const plannedSessionSchema = z.object({
-    dayOfWeek: intSchema.dayOfWeek,
-    weekNumber: intSchema.weekNumber,
-    sessionLabel: z.string().describe("e.g., 'Unit A — Push Focus'"),
+    dayOfWeek: validationIntSchemas.dayOfWeek,
+    weekNumber: validationIntSchemas.weekNumber,
+    sessionLabel: z.string(),
     focusDescription: z.string(),
     exercises: z.array(plannedExerciseSchema).min(1),
   });
 
-  return z
-    .object({
-      cycleWeeks: intSchema.cycleWeeks,
-      sessions: z.array(plannedSessionSchema).min(1),
-    })
-    .describe("A 2-week training program generated by the AI.");
-}
-
-function createMuscleGroupEnumOrString(muscleGroupsList: string[]): z.ZodType<string> {
-  if (muscleGroupsList.length > 0) {
-    return z
-      .enum(muscleGroupsList as [string, ...string[]])
-      .describe(`Must be one of: ${muscleGroupsList.join(", ")}.`);
-  }
-  return z.string();
-}
-
-/**
- * Generates the JSON Schema for Gemini structured output (`responseJsonSchema`)
- * directly from our Zod 4 domain contract.
- */
-export function createCoachingAdviceJsonSchema(
-  muscleGroupsList: string[],
-  mode: CoachingMode = "execution",
-  allowPlanUpdate = false,
-): Record<string, unknown> {
-  const muscleGroupSchema = createMuscleGroupEnumOrString(muscleGroupsList);
-  const exerciseFields = buildExerciseFields(muscleGroupSchema, generationIntSchemas);
-
-  const recommendedExerciseSchema = z.object({
-    ...exerciseFields,
-    restSeconds: exerciseFields.restSeconds.unwrap(),
-    isMetabolicProtocol: z
-      .boolean()
-      .optional()
-      .describe(
-        "Set to true for drop-sets, myo-reps, or rest-pause sets to bypass strict rest periods.",
-      ),
+  return z.object({
+    cycleWeeks: validationIntSchemas.cycleWeeks,
+    sessions: z.array(plannedSessionSchema).min(1),
   });
-
-  const trainingPlanSchema = buildTrainingPlanSchema(muscleGroupSchema, generationIntSchemas);
-
-  const baseFields = {
-    scratchpad: z
-      .string()
-      .optional()
-      .describe(
-        "Internal workspace for reasoning and calculations. Usage depends on phase — see system instructions. NOT shown to user.",
-      ),
-    startDeload: z
-      .boolean()
-      .optional()
-      .describe(
-        "Set to true ONLY when fatigue.shouldDeload is true. This signals the app to automatically begin a 7-day deload phase. Do NOT set true during an already-active deload (deloadStatus='active'). Omit or set false otherwise.",
-      ),
-    coachMessage: z
-      .string()
-      .describe(
-        "The empathetic, motivating, and analytical message from the coach. Max 2-3 short paragraphs.",
-      ),
-  };
-
-  const suggestedFollowUpsSchema = z
-    .array(
-      z.object({
-        label: z
-          .string()
-          .describe(
-            "Concise 2-4 word chip label for mobile UI (e.g., 'Swap Leg Press', 'Warmup Sets', 'Condense to 30m').",
-          ),
-        prompt: z
-          .string()
-          .describe(
-            "Realistic, actionable question written strictly from the user's first-person perspective ('Can I...', 'Swap X for Y') that directly relates to the prescribed exercises, weights, or advice.",
-          ),
-      }),
-    )
-    .min(2)
-    .max(4)
-    .describe(
-      "2 to 4 context-aware follow-up questions or adjustments the athlete might want to ask next.",
-    );
-
-  const suggestedFollowUpsField =
-    mode === "planning" || !allowPlanUpdate
-      ? suggestedFollowUpsSchema
-      : suggestedFollowUpsSchema
-          .optional()
-          .describe(
-            "Include 2 to 4 context-aware follow-up questions only when proposing new workout changes or advice; omit during quick conversational reactions.",
-          );
-
-  const recommendedWorkoutField =
-    mode === "planning"
-      ? z
-          .array(recommendedExerciseSchema)
-          .describe(
-            "Today's first workout session from the generated training plan. Output an empty array [] ONLY if sickness, injury, or severe fatigue requires a rest day today.",
-          )
-      : z
-          .array(recommendedExerciseSchema)
-          .optional()
-          .describe(
-            "Optional recommended exercises for today's workout. OMIT this entirely during mid-workout conversational Q&A to preserve the existing plan.",
-          );
-
-  const schema = z.object({
-    ...baseFields,
-    suggestedFollowUps: suggestedFollowUpsField,
-    recommendedWorkout: recommendedWorkoutField,
-    ...(mode === "planning"
-      ? { trainingPlan: trainingPlanSchema }
-      : allowPlanUpdate
-        ? {
-            trainingPlan: trainingPlanSchema
-              .optional()
-              .describe(
-                "Include ONLY if the user explicitly asks to create, change, or rebuild their multi-week training plan. When changing an existing plan, output the COMPLETE updated plan with ALL sessions (unchanged sessions included) — never only the modified session.",
-              ),
-          }
-        : {}),
-  });
-
-  const { $schema: _omitted, ...jsonSchema } = z.toJSONSchema(schema) as Record<string, unknown>;
-  return jsonSchema;
 }
 
 const coachingAdviceValidationSchema = z.object({
@@ -264,17 +61,28 @@ const coachingAdviceValidationSchema = z.object({
   recommendedWorkout: z
     .array(
       z.object({
-        ...buildExerciseFields(z.string(), validationIntSchemas),
+        ...buildExerciseFields(),
         isMetabolicProtocol: z.boolean().optional(),
       }),
     )
     .optional(),
-  trainingPlan: buildTrainingPlanSchema(z.string(), validationIntSchemas).optional(),
+  trainingPlan: buildTrainingPlanSchema().optional(),
 });
+
+function stripMarkdownCodeFences(text: string): string {
+  const trimmed = text.trim();
+  if (trimmed.startsWith("```")) {
+    return trimmed
+      .replace(/^```(?:json)?\r?\n?/, "")
+      .replace(/\r?\n?```$/, "")
+      .trim();
+  }
+  return trimmed;
+}
 
 /**
  * Anti-Corruption Layer (ACL) Translator
- * Safely parses the raw JSON response from the LLM into a strongly typed CoachingAdvice domain object.
+ * Safely parses the raw JSON response from the backend AI service into a strongly typed CoachingAdvice domain object.
  * When `mode === "planning"`, strictly enforces that a non-empty `trainingPlan` was returned.
  */
 export function translateCoachingAdviceJson(
@@ -283,7 +91,8 @@ export function translateCoachingAdviceJson(
 ): Result<CoachingAdvice, "invalid-json"> {
   return Result.fromThrowable(
     () => {
-      const parsed = JSON.parse(rawJson);
+      const cleaned = stripMarkdownCodeFences(rawJson);
+      const parsed = JSON.parse(cleaned);
       const validated = coachingAdviceValidationSchema.parse(parsed) as CoachingAdvice;
       if (
         mode === "planning" &&
@@ -294,7 +103,16 @@ export function translateCoachingAdviceJson(
       return validated;
     },
     (e) => {
-      Sentry.captureException(e, { extra: { coachingAdviceText: rawJson, mode } });
+      Sentry.captureException(e, {
+        extra: {
+          mode,
+          rawLength: rawJson.length,
+          zodIssues:
+            e instanceof z.ZodError
+              ? e.issues.map((issue) => `${issue.path.join(".")}:${issue.code}`)
+              : undefined,
+        },
+      });
       return "invalid-json" as const;
     },
   )();

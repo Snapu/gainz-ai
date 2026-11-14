@@ -61,6 +61,28 @@ const spreadsheetStore = useSpreadsheetStore();
         <span>Open Spreadsheet</span>
         <ExternalLink class="w-4 h-4 ml-auto opacity-40 group-hover:text-primary transition-colors" />
       </UiDropdownMenuItem>
+
+      <div class="h-px bg-white/5 my-1 mx-3"></div>
+      
+      <div class="px-3 py-2 text-xs font-bold uppercase tracking-widest text-muted-foreground/50">
+        Legal
+      </div>
+
+      <UiDropdownMenuItem 
+        @select="router.push('/privacy')"
+        class="group"
+      >
+        <span>Privacy Policy</span>
+        <ChevronRight class="w-4 h-4 ml-auto opacity-40 group-hover:text-primary transition-colors" />
+      </UiDropdownMenuItem>
+
+      <UiDropdownMenuItem 
+        @select="router.push('/impressum')"
+        class="group"
+      >
+        <span>Impressum</span>
+        <ChevronRight class="w-4 h-4 ml-auto opacity-40 group-hover:text-primary transition-colors" />
+      </UiDropdownMenuItem>
     </UiDropdownMenu>
   </div>
 </template>

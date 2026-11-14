@@ -1,6 +1,7 @@
 import { useDebounceFn, useLocalStorage } from "@vueuse/core";
 import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
+import { retryOnAuthError, useAuthStore } from "@/modules/auth/presentation";
 import { useSpreadsheetRepositoryFactory } from "@/modules/platform/presentation";
 import {
   loadUserProfile,
@@ -12,29 +13,23 @@ import type {
   FitnessGoal,
   FitnessLevel,
   UserProfile,
-  UserProfileWithApiKey,
   WorkoutLocation,
 } from "@/modules/profile/domain";
-import { createUserProfileRepository } from "@/modules/profile/infrastructure";
-import { useAuthErrorHandler } from "@/shared/presentation/composables/useAuthErrorHandler";
+import { createUserProfileRepository, purgeLegacyApiKeys } from "@/modules/profile/infrastructure";
 
-export type {
-  EquipmentOption,
-  FitnessGoal,
-  FitnessLevel,
-  UserProfile,
-  UserProfileWithApiKey,
-  WorkoutLocation,
-};
+export type { EquipmentOption, FitnessGoal, FitnessLevel, UserProfile, WorkoutLocation };
+export { purgeLegacyApiKeys };
 
 export const useUserProfileStore = defineStore("userProfile", () => {
   const userProfile = ref<UserProfile>({});
-  const hasCompletedSetup = useLocalStorage<boolean>("hasCompletedSetup", false);
-  const apiKey = useLocalStorage<string | null>("userProfile:apiKey", null);
+  const hasCompletedSetup = useLocalStorage<boolean>("hasCompletedSetup", false, {
+    flush: "sync",
+  });
   const isLoading = ref(true);
 
+  const authStore = useAuthStore();
   const { createRepository, getDoc } = useSpreadsheetRepositoryFactory(createUserProfileRepository);
-  const { handleAuthError } = useAuthErrorHandler();
+  let isHydrating = false;
 
   const setupCompleted = computed<boolean>(() => hasCompletedSetup.value);
 
@@ -52,6 +47,46 @@ export const useUserProfileStore = defineStore("userProfile", () => {
     );
   }
 
+  function setHydratedProfile(nextProfile: UserProfile): void {
+    isHydrating = true;
+    userProfile.value = nextProfile;
+    isHydrating = false;
+  }
+
+  async function hydrateProfileForDoc(
+    doc: NonNullable<ReturnType<typeof getDoc>>,
+    isCancelled: () => boolean,
+  ): Promise<void> {
+    isLoading.value = true;
+
+    const repository = createRepository(doc);
+    if (!repository) {
+      isLoading.value = false;
+      return;
+    }
+
+    await retryOnAuthError("user-profile-migration", () => migrateFromLocalStorage(repository), {
+      fallbackError: "migration-failed",
+      isCancelled,
+    });
+    if (isCancelled()) return;
+
+    const result = await retryOnAuthError("user-profile-load", () => loadUserProfile(repository), {
+      fallbackError: "load-failed",
+      isCancelled,
+    });
+    if (isCancelled()) return;
+
+    if (result.isOk() && result.value) {
+      setHydratedProfile({ ...result.value });
+      if (profileHasData(result.value)) {
+        hasCompletedSetup.value = true;
+      }
+    }
+
+    isLoading.value = false;
+  }
+
   watch(
     () => getDoc(),
     (doc, _previousDoc, onCleanup) => {
@@ -60,85 +95,60 @@ export const useUserProfileStore = defineStore("userProfile", () => {
         cancelled = true;
       });
 
-      void (async () => {
-        if (!doc) {
-          isLoading.value = false;
-          return;
-        }
-
-        isLoading.value = true;
-
-        const repository = createRepository(doc);
-        if (!repository) {
-          isLoading.value = false;
-          return;
-        }
-
-        await migrateFromLocalStorage(repository);
-        if (cancelled) return;
-
-        const result = await loadUserProfile(repository);
-        if (cancelled) return;
-
-        result.match(
-          (profile) => {
-            if (profile) {
-              userProfile.value = { ...profile };
-              if (profileHasData(profile)) {
-                hasCompletedSetup.value = true;
-              }
-            }
-          },
-          (error) => {
-            if (error === "auth-failed") {
-              handleAuthError("user-profile-load");
-            }
-          },
-        );
-
+      if (!doc) {
+        setHydratedProfile({});
         isLoading.value = false;
-      })();
+        return;
+      }
+
+      void hydrateProfileForDoc(doc, () => cancelled);
     },
     { immediate: true },
   );
+
+  watch(
+    () => authStore.isLoggedIn,
+    (loggedIn, previousLoggedIn) => {
+      if (!loggedIn && previousLoggedIn) {
+        hasCompletedSetup.value = false;
+      }
+    },
+    { flush: "sync" },
+  );
+
+  void authStore.init().then(() => {
+    if (!authStore.isLoggedIn && !getDoc()) {
+      hasCompletedSetup.value = false;
+    }
+  });
 
   const debouncedSave = useDebounceFn(async () => {
     const repository = createRepository();
     if (!repository) return;
 
-    const result = await saveUserProfile(userProfile.value, repository);
-    result.orTee((error) => {
-      if (error === "auth-failed") {
-        handleAuthError("user-profile-save");
-      }
-    });
+    await retryOnAuthError(
+      "user-profile-save",
+      () => saveUserProfile(userProfile.value, repository),
+      { fallbackError: "save-failed" },
+    );
   }, 1500);
 
   watch(
     userProfile,
-    (newProfile) => {
-      if ("apiKey" in newProfile) {
-        const { apiKey: _, ...cleanProfile } = newProfile as UserProfileWithApiKey;
-        userProfile.value = cleanProfile;
-      } else {
-        void debouncedSave();
-      }
+    () => {
+      if (isHydrating) return;
+      void debouncedSave();
     },
-    { deep: true },
+    { deep: true, flush: "sync" },
   );
 
-  function updateProfile(partial: Partial<UserProfileWithApiKey>): void {
-    const { apiKey: newApiKey, ...profileFields } = partial;
-    if (newApiKey !== undefined) {
-      apiKey.value = newApiKey;
-    }
-    userProfile.value = { ...userProfile.value, ...profileFields };
+  function updateProfile(partial: Partial<UserProfile>): void {
+    userProfile.value = { ...userProfile.value, ...partial };
   }
 
   return {
     userProfile,
     hasCompletedSetup,
-    apiKey,
     isLoading,
     setupCompleted,
     updateProfile,

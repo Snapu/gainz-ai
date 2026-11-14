@@ -6,7 +6,7 @@ import {
   saveUserProfile,
 } from "@/modules/profile/application";
 import { type UserProfile, UserProfileSchema } from "@/modules/profile/domain";
-import { createUserProfileRepository } from "@/modules/profile/infrastructure";
+import { createUserProfileRepository, purgeLegacyApiKeys } from "@/modules/profile/infrastructure";
 
 const createMockLocalStorage = () => {
   let store: Record<string, string> = {};
@@ -231,7 +231,6 @@ describe("userProfile service", () => {
           age: 30,
           fitnessGoal: ["build_muscle"],
           deloadLifecycle: { status: "active", endsAtIso: "2026-05-09T10:00:00.000Z" },
-          apiKey: "secret-api-key",
         }),
       );
 
@@ -243,8 +242,19 @@ describe("userProfile service", () => {
       expect(result.isOk()).toBe(true);
       if (result.isOk()) expect(result.value).toBe("migrated");
       expect(mockSheet.addRow).toHaveBeenCalled();
-      expect(mockLocalStorage.getItem("userProfile:apiKey")).toBe("secret-api-key");
       expect(mockLocalStorage.getItem("userProfile")).toBeNull();
+    });
+
+    it("purges legacy api key entries from localStorage", () => {
+      mockLocalStorage.setItem("userProfile:apiKey", "gemini-key-1");
+      mockLocalStorage.setItem("apiKey", "gemini-key-2");
+      mockLocalStorage.setItem("profile:apiKey", "gemini-key-3");
+
+      purgeLegacyApiKeys();
+
+      expect(mockLocalStorage.getItem("userProfile:apiKey")).toBeNull();
+      expect(mockLocalStorage.getItem("apiKey")).toBeNull();
+      expect(mockLocalStorage.getItem("profile:apiKey")).toBeNull();
     });
   });
 });

@@ -1,11 +1,12 @@
-// src/composables/useAuthExpirationWatcher.ts
+// src/shared/presentation/composables/useAuthExpirationWatcher.ts
 
+import { App as CapacitorApp } from "@capacitor/app";
 import * as Sentry from "@sentry/vue";
 import { onUnmounted, ref, watch } from "vue";
-import { useAuthStore } from "@/modules/auth/presentation";
+import { AUTH_PROACTIVE_REFRESH_THRESHOLD_MS, useAuthStore } from "@/modules/auth/presentation";
 import { useToast } from "@/shared/presentation/composables/useToast";
 
-const WARNING_THRESHOLD = 5 * 60 * 1000; // 5 minutes in milliseconds
+const WARNING_THRESHOLD = AUTH_PROACTIVE_REFRESH_THRESHOLD_MS;
 const CHECK_INTERVAL = 30 * 1000; // 30 seconds
 
 export function useAuthExpirationWatcher() {
@@ -15,14 +16,31 @@ export function useAuthExpirationWatcher() {
   let intervalId: ReturnType<typeof setInterval> | null = null;
   let currentToastId: string | undefined;
 
-  function checkExpiration() {
-    // If no expiresAt or no access token, nothing to check
-    if (!authStore.expiresAt || !authStore.accessToken) return;
+  async function checkExpiration() {
+    if (!authStore.refreshToken && (!authStore.expiresAt || !authStore.accessToken)) return;
 
-    const timeRemaining = authStore.expiresAt - Date.now();
+    let timeRemaining =
+      authStore.expiresAt && authStore.accessToken ? authStore.expiresAt - Date.now() : 0;
 
-    // Edge case: token already expired
+    // Proactively refresh via refresh token when within 5 minutes of expiry or already expired
+    if (timeRemaining < WARNING_THRESHOLD && authStore.refreshToken) {
+      const refreshResult = await authStore.refreshSession();
+      if (refreshResult.isOk()) {
+        if (warningActive.value) {
+          clearWarningState();
+        }
+        return;
+      }
+      if (!authStore.expiresAt || !authStore.accessToken) return;
+      timeRemaining = authStore.expiresAt - Date.now();
+    }
+
+    // Edge case: token already expired and could not be refreshed
     if (timeRemaining <= 0) {
+      // Preserve refreshToken on transient offline/network failures so the session recovers once online
+      if (authStore.refreshToken) {
+        return;
+      }
       Sentry.captureMessage("Token already expired on check", {
         level: "warning",
         tags: { category: "auth-expiration" },
@@ -37,7 +55,7 @@ export function useAuthExpirationWatcher() {
       clearWarningState();
     }
 
-    // Trigger warning at 5-minute threshold
+    // Trigger warning at 5-minute threshold when no refresh token could renew the session
     if (timeRemaining > 0 && timeRemaining < WARNING_THRESHOLD && !warningActive.value) {
       showExpirationWarning(timeRemaining);
     }
@@ -93,14 +111,30 @@ export function useAuthExpirationWatcher() {
     },
   );
 
-  // Start checking immediately and then every 30 seconds.
-  // The interval keeps running for the lifetime of the composable (which in App.vue is the lifetime of the app).
-  // It naturally no-ops when logged out due to the early return in checkExpiration.
-  checkExpiration();
-  intervalId = setInterval(checkExpiration, CHECK_INTERVAL);
+  function handleVisibilityChange() {
+    if (document.visibilityState === "visible") {
+      void checkExpiration();
+    }
+  }
+
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+  const appStateListenerPromise = CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+    if (isActive) {
+      void checkExpiration();
+    }
+  });
+
+  // Start checking once auth storage hydration completes, then every 30 seconds.
+  // Naturally no-ops when logged out due to the early return in checkExpiration.
+  void authStore.init().then(() => checkExpiration());
+  intervalId = setInterval(() => {
+    void checkExpiration();
+  }, CHECK_INTERVAL);
 
   // Cleanup on unmount
   onUnmounted(() => {
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
+    void appStateListenerPromise.then((handle) => handle.remove());
     if (intervalId) {
       clearInterval(intervalId);
       intervalId = null;

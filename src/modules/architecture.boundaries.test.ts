@@ -395,7 +395,7 @@ describe("module architecture boundaries", () => {
     expect(violations).toEqual([]);
   });
 
-  it("presentation store files use facades for cross-module domain/application imports", async () => {
+  it("presentation store files use facades for cross-module domain/application/infrastructure imports", async () => {
     const allFiles = await listTsFiles(ROOT);
     const presentationStoreFiles = allFiles.filter(
       (filePath) =>
@@ -414,7 +414,8 @@ describe("module architecture boundaries", () => {
       for (const importPath of importPaths) {
         const targetsRestrictedLayer =
           importTargetsLayer(filePath, importPath, "domain") ||
-          importTargetsLayer(filePath, importPath, "application");
+          importTargetsLayer(filePath, importPath, "application") ||
+          importTargetsLayer(filePath, importPath, "infrastructure");
 
         if (!targetsRestrictedLayer) continue;
 
@@ -431,4 +432,75 @@ describe("module architecture boundaries", () => {
 
     expect(violations).toEqual([]);
   });
+
+  it("presentation facades do not re-export infrastructure or create cycles with shared presentation", async () => {
+    const allFiles = await listTsFiles(ROOT);
+    const violations = [
+      ...(await findFacadeInfraViolations(allFiles)),
+      ...(await findSharedPresentationCycleViolations(allFiles)),
+    ];
+    expect(violations).toEqual([]);
+  });
 });
+
+async function findFacadeInfraViolations(allFiles: string[]): Promise<string[]> {
+  const facadeFiles = allFiles.filter(
+    (filePath) =>
+      isLayerFile(filePath, "presentation") &&
+      isProductionTsFile(filePath) &&
+      (path.basename(filePath) === "index.ts" || path.basename(filePath) === "contracts.ts"),
+  );
+
+  const violations: string[] = [];
+  for (const filePath of facadeFiles) {
+    const source = await readFile(filePath, "utf-8");
+    for (const importPath of extractImports(source)) {
+      if (importTargetsLayer(filePath, importPath, "infrastructure")) {
+        violations.push(`${toModuleRelative(filePath)} -> ${importPath}`);
+      }
+    }
+  }
+  return violations;
+}
+
+async function listSharedImportedModules(): Promise<Map<string, Set<string>>> {
+  const sharedPresentationFiles = (
+    await listSourceFiles(path.resolve(SRC_ROOT, "shared/presentation"))
+  ).filter((filePath) => !filePath.endsWith(".test.ts"));
+
+  const sharedImportedModules = new Map<string, Set<string>>();
+  for (const filePath of sharedPresentationFiles) {
+    const source = await readFile(filePath, "utf-8");
+    const importedModules = new Set(
+      extractImports(source)
+        .filter((importPath) => importPath.startsWith("@/modules/"))
+        .map((importPath) => importPath.split("/")[2])
+        .filter((mod): mod is string => Boolean(mod)),
+    );
+    if (importedModules.size > 0) {
+      const aliasPath = `@/${path.relative(SRC_ROOT, filePath).split(path.sep).join("/")}`;
+      sharedImportedModules.set(aliasPath.replace(/\.(ts|vue)$/, ""), importedModules);
+    }
+  }
+  return sharedImportedModules;
+}
+
+async function findSharedPresentationCycleViolations(allFiles: string[]): Promise<string[]> {
+  const sharedImportedModules = await listSharedImportedModules();
+  const modulePresentationFiles = allFiles.filter(
+    (filePath) => isLayerFile(filePath, "presentation") && isProductionTsFile(filePath),
+  );
+
+  const violations: string[] = [];
+  for (const filePath of modulePresentationFiles) {
+    const currentModule = moduleName(filePath);
+    const source = await readFile(filePath, "utf-8");
+    for (const importPath of extractImports(source)) {
+      const normalizedImport = importPath.replace(/\.(ts|vue)$/, "");
+      if (sharedImportedModules.get(normalizedImport)?.has(currentModule)) {
+        violations.push(`${toModuleRelative(filePath)} <-> ${importPath}`);
+      }
+    }
+  }
+  return violations;
+}

@@ -3,7 +3,6 @@ import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp, defineComponent, h, KeepAlive } from "vue";
 import { useAiOrchestratorStore, useCoachChatStore } from "@/modules/aiCoach/presentation";
-import { useUserProfileStore } from "@/modules/profile/presentation";
 import { extractUserQuestion, useCoachChatViewModel } from "./useCoachChatViewModel";
 
 const mockPush = vi.fn();
@@ -161,17 +160,6 @@ describe("useCoachChatViewModel", () => {
   it("exposes reactive isLoading matching chatStore", () => {
     const vm = useCoachChatViewModel();
     expect(vm.isLoading.value).toBe(false);
-  });
-
-  it("reflects hasApiKey accurately from userProfileStore", () => {
-    const profileStore = useUserProfileStore();
-    const vm = useCoachChatViewModel();
-
-    profileStore.apiKey = "";
-    expect(vm.hasApiKey.value).toBe(false);
-
-    profileStore.apiKey = "gemini-api-key-123";
-    expect(vm.hasApiKey.value).toBe(true);
   });
 
   it("filters automated trigger messages from chatMessages while including real user questions and coach advice", () => {
@@ -541,11 +529,8 @@ describe("useCoachChatViewModel", () => {
     expect(vm.quickPrompts.value).toEqual([]);
   });
 
-  it("navigates to apikey setup and train tabs", () => {
+  it("navigates to train tab", () => {
     const vm = useCoachChatViewModel();
-
-    vm.navigateToApiKeySetup();
-    expect(mockPush).toHaveBeenCalledWith("/wizard/apikey?mode=edit");
 
     vm.navigateToTrainTab();
     expect(mockPush).toHaveBeenCalledWith("/app/home");
@@ -572,9 +557,6 @@ describe("useCoachChatViewModel", () => {
   });
 
   it("only calls triggerEnsureSessionAdvice once on initial mount inside <KeepAlive>", () => {
-    const profileStore = useUserProfileStore();
-    profileStore.apiKey = "gemini-api-key-test";
-
     const orchestratorStore = useAiOrchestratorStore();
     const ensureAdviceSpy = vi
       .spyOn(orchestratorStore, "ensureSessionAdvice")

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowRight, ArrowUp, ChevronDown, Copy, Dumbbell, Key, Sparkles } from "@lucide/vue";
+import { ArrowRight, ArrowUp, ChevronDown, Copy, Dumbbell, Sparkles } from "@lucide/vue";
 import { useCoachChatViewModel, WorkoutExerciseList } from "@/modules/aiCoach/presentation";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
@@ -15,14 +15,12 @@ const {
   scrollContainerRef,
   chatMessages,
   quickPrompts,
-  hasApiKey,
   isKeyboardVisible,
   handleAskQuestion,
   applyQuickPrompt,
   toggleScratchpad,
   togglePayload,
   copyPayload,
-  navigateToApiKeySetup,
   navigateToTrainTab,
   renderMarkdown,
 } = useCoachChatViewModel();
@@ -38,32 +36,6 @@ void scrollContainerRef;
       ref="scrollContainerRef"
       class="flex-1 min-h-0 px-4 pt-4 pb-4 overflow-y-auto overscroll-y-contain no-scrollbar flex flex-col gap-4 w-full max-w-2xl mx-auto"
     >
-      <!-- Missing API Key Callout -->
-      <div
-        v-if="!hasApiKey"
-        class="w-full rounded-xl border border-orange-500/20 bg-orange-500/10 p-4 flex flex-col gap-3 animate-in fade-in duration-300"
-      >
-        <div class="flex items-start gap-3">
-          <div class="p-2 rounded-full bg-orange-500/10 text-orange-400 shrink-0">
-            <Key class="w-4 h-4" />
-          </div>
-          <div class="flex flex-col gap-1">
-            <h3 class="text-sm font-bold text-foreground">Gemini API Key Required</h3>
-            <p class="text-xs text-muted-foreground font-medium leading-relaxed">
-              To activate real-time workout adaptations, exercise swaps, and fatigue advice, add your Gemini API key.
-            </p>
-          </div>
-        </div>
-        <UiButton
-          size="sm"
-          variant="outline"
-          class="w-full text-xs font-semibold border-orange-500/30 text-orange-400 hover:bg-orange-500/10 active:scale-95"
-          @click="navigateToApiKeySetup"
-        >
-          Configure API Key
-        </UiButton>
-      </div>
-
       <!-- Telemetry Loader -->
       <UiTelemetryLoader
         v-if="isLoading && chatMessages.length === 0"

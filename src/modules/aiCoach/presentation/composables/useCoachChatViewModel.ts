@@ -15,7 +15,6 @@ import {
   useAiOrchestratorStore,
   useCoachChatStore,
 } from "@/modules/aiCoach/presentation";
-import { useUserProfileStore } from "@/modules/profile/presentation";
 import { useKeyboard } from "@/shared/presentation/composables/useKeyboard";
 import { useToast } from "@/shared/presentation/composables/useToast";
 import { extractUserQuestion } from "../helpers/aiCoachPageHelpers";
@@ -108,7 +107,6 @@ export function useCoachChatViewModel() {
   const router = useRouter();
   const orchestratorStore = useAiOrchestratorStore();
   const chatStore = useCoachChatStore();
-  const profileStore = useUserProfileStore();
   const { toast } = useToast();
   const { isKeyboardVisible } = useKeyboard();
 
@@ -119,7 +117,6 @@ export function useCoachChatViewModel() {
   const scrollContainerRef = ref<HTMLElement | null>(null);
 
   const isLoading = computed<boolean>(() => chatStore.isLoading);
-  const hasApiKey = computed<boolean>(() => Boolean(profileStore.apiKey));
 
   function formatTime(d: Date | string): string {
     const date = typeof d === "string" ? new Date(d) : d;
@@ -235,10 +232,6 @@ export function useCoachChatViewModel() {
       });
   }
 
-  function navigateToApiKeySetup(): void {
-    router.push("/wizard/apikey?mode=edit");
-  }
-
   function navigateToTrainTab(): void {
     router.push("/app/home");
   }
@@ -255,22 +248,18 @@ export function useCoachChatViewModel() {
   }
 
   function triggerEnsureSessionAdvice(): void {
-    if (profileStore.apiKey) {
-      void orchestratorStore
-        .ensureSessionAdvice()
-        .andTee(() => {
-          scrollToBottom(false);
-        })
-        .orTee((error) => {
-          if (error !== "missing-api-key") {
-            toast({
-              title: "AI Coaching Error",
-              description: getAiErrorDescription(error),
-              variant: "destructive",
-            });
-          }
+    void orchestratorStore
+      .ensureSessionAdvice()
+      .andTee(() => {
+        scrollToBottom(false);
+      })
+      .orTee((error) => {
+        toast({
+          title: "AI Coaching Error",
+          description: getAiErrorDescription(error),
+          variant: "destructive",
         });
-    }
+      });
   }
 
   if (getCurrentInstance()) {
@@ -289,16 +278,6 @@ export function useCoachChatViewModel() {
       triggerEnsureSessionAdvice();
       scrollToBottom(false);
     });
-
-    // Reactively trigger session advice if user configures API key while cached in <keep-alive>
-    watch(
-      () => profileStore.apiKey,
-      (newKey, oldKey) => {
-        if (newKey && !oldKey && chatStore.messages.length === 0) {
-          triggerEnsureSessionAdvice();
-        }
-      },
-    );
   }
 
   watch(
@@ -340,14 +319,12 @@ export function useCoachChatViewModel() {
     coachMessages,
     chatMessages,
     quickPrompts,
-    hasApiKey,
     isKeyboardVisible,
     handleAskQuestion,
     applyQuickPrompt,
     toggleScratchpad,
     togglePayload,
     copyPayload,
-    navigateToApiKeySetup,
     navigateToTrainTab,
     scrollToBottom,
     renderMarkdown,

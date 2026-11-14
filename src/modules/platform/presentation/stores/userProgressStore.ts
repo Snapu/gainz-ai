@@ -3,8 +3,10 @@ import { computed } from "vue";
 import { useUserProfileStore } from "@/modules/profile/presentation";
 import { calculateUserProgress, type UserProgress } from "@/modules/sharedKernel/presentation";
 import { type ExerciseLog, useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
-import { summaryToExerciseLogs } from "@/modules/trainingSummary/presentation";
-import { useTrainingSummaryStore } from "./trainingSummaryStore";
+import {
+  summaryToExerciseLogs,
+  useTrainingSummaryStore,
+} from "@/modules/trainingSummary/presentation";
 
 export const useUserProgressStore = defineStore("userProgress", () => {
   const logsStore = useExerciseLogsStore();

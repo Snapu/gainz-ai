@@ -4,7 +4,7 @@ import type { UserProfile } from "../domain/types";
 type UserProfileLoadError = "load-failed" | "parse-data-failed" | "auth-failed";
 type UserProfileSaveError = "save-failed" | "auth-failed";
 type UserProfileMigrationResult = "migrated" | "skipped" | "no-data";
-type UserProfileMigrationError = "migration-failed";
+type UserProfileMigrationError = "migration-failed" | "auth-failed";
 
 export interface UserProfileRepository {
   load: () => ResultAsync<UserProfile | null, UserProfileLoadError>;

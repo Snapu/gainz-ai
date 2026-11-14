@@ -8,8 +8,8 @@ import { VitePWA } from "vite-plugin-pwa";
 import vueDevTools from "vite-plugin-vue-devtools";
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => {
-  const base = mode === "production" ? "/gainz-ai/" : "/";
+export default defineConfig(() => {
+  const base = "/";
 
   return {
     base,
@@ -42,8 +42,8 @@ export default defineConfig(({ mode }) => {
           name: "Gainz AI",
           short_name: "Gainz AI",
           description: "Your AI-powered personal trainer and workout tracker",
-          theme_color: "#3880ff",
-          background_color: "#ffffff",
+          theme_color: "#080C10",
+          background_color: "#080C10",
           display: "standalone",
           orientation: "portrait",
           start_url: base,

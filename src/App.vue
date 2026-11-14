@@ -103,7 +103,7 @@ watch(
     const isPublicRoute = currentPath === "/privacy" || currentPath === "/impressum";
     if (isPublicRoute || currentPath === "/") return;
 
-    router.push("/");
+    void router.push("/").catch(() => {});
   },
   { immediate: false },
 );

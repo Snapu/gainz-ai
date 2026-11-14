@@ -9,6 +9,7 @@ import { useDebounceFn } from "@vueuse/core";
 import { okAsync, type ResultAsync } from "neverthrow";
 import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
+import { retryOnAuthError } from "@/modules/auth/presentation";
 import { loadDeloadPhase, saveDeloadPhase } from "@/modules/deload/application";
 import {
   createDeloadPhase,
@@ -22,7 +23,6 @@ import {
 import { createDeloadPhaseRepository } from "@/modules/deload/infrastructure";
 import { useSpreadsheetRepositoryFactory } from "@/modules/platform/presentation";
 import type { FatigueTriggerId } from "@/modules/sharedKernel/presentation";
-import { useAuthErrorHandler } from "@/shared/presentation/composables/useAuthErrorHandler";
 
 export type { DeloadPhase, DeloadStatus };
 
@@ -31,7 +31,6 @@ export const useDeloadStore = defineStore("deload", () => {
   const isLoading = ref(true);
 
   const { createRepository, getDoc } = useSpreadsheetRepositoryFactory(createDeloadPhaseRepository);
-  const { handleAuthError } = useAuthErrorHandler();
 
   const status = computed<DeloadStatus>(() => getDeloadStatus(phase.value));
   const active = computed(() => isDeloadActive(phase.value));
@@ -50,11 +49,8 @@ export const useDeloadStore = defineStore("deload", () => {
   const debouncedSave = useDebounceFn(async () => {
     const repository = createRepository();
     if (!repository) return;
-    const result = await saveDeloadPhase(phase.value, repository);
-    result.orTee((error) => {
-      if (error === "auth-failed") {
-        handleAuthError("deload-phase-save");
-      }
+    await retryOnAuthError("deload-phase-save", () => saveDeloadPhase(phase.value, repository), {
+      fallbackError: "save-failed",
     });
   }, 800);
 
@@ -89,14 +85,11 @@ export const useDeloadStore = defineStore("deload", () => {
       return okAsync(undefined);
     }
 
-    return loadDeloadPhase(repository)
+    return retryOnAuthError("deload-phase-load", () => loadDeloadPhase(repository), {
+      fallbackError: "load-failed",
+    })
       .andTee((loadedPhase) => {
         phase.value = loadedPhase;
-      })
-      .orTee((error) => {
-        if (error === "auth-failed") {
-          handleAuthError("deload-phase-load");
-        }
       })
       .map(() => undefined)
       .orElse(() => okAsync(undefined))

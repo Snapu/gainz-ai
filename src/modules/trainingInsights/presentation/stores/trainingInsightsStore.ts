@@ -2,10 +2,7 @@ import { useIntervalFn, useNow } from "@vueuse/core";
 import { defineStore } from "pinia";
 import { computed } from "vue";
 import { useDeloadStore } from "@/modules/deload/presentation";
-import {
-  useExerciseMuscleMapStore,
-  useTrainingSummaryStore,
-} from "@/modules/platform/presentation";
+import { useExerciseMuscleMapStore } from "@/modules/platform/presentation";
 import { useUserProfileStore } from "@/modules/profile/presentation";
 import {
   calculateInsights,
@@ -13,6 +10,7 @@ import {
   type TrainingInsights,
 } from "@/modules/trainingInsights/application";
 import { type ExerciseLog, useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
+import { useTrainingSummaryStore } from "@/modules/trainingSummary/presentation";
 
 /**
  * Cached training insights store.

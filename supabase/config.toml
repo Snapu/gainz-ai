@@ -1,0 +1,26 @@
+project_id = "gainz-ai"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[db.migrations]
+enabled = true
+schema_paths = ["./schemas/*.sql"]
+
+[functions.auth-token]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/auth-token/index.ts"
+
+[functions.ai-coach]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/ai-coach/index.ts"

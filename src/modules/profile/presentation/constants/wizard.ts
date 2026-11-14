@@ -7,5 +7,4 @@ export const WIZARD_STEPS = [
   { id: "equipment", title: "Equipment" },
   { id: "stats", title: "Body Stats" },
   { id: "extra", title: "Additional Info" },
-  { id: "apikey", title: "AI Coach Settings" },
 ] as const;

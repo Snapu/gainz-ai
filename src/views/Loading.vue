@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useOnline } from "@vueuse/core";
 import { computed, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/modules/auth/presentation";
@@ -11,8 +12,12 @@ const router = useRouter();
 const authStore = useAuthStore();
 const profileStore = useUserProfileStore();
 const spreadsheetStore = useSpreadsheetStore();
+const isOnline = useOnline();
 
 const loadingMessage = computed(() => {
+  if (!isOnline.value && !spreadsheetStore.doc) {
+    return "Waiting for network connection...";
+  }
   return profileStore.isLoading ? "Loading profile..." : "Loading spreadsheet...";
 });
 

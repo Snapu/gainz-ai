@@ -32,7 +32,7 @@ vi.mock("@/modules/platform/presentation", () => ({
   })),
 }));
 
-vi.mock("@/shared/presentation/composables/useAuthErrorHandler", () => ({
+vi.mock("@/modules/auth/presentation/composables/useAuthErrorHandler", () => ({
   useAuthErrorHandler: vi.fn(() => ({
     handleAuthError: handleAuthErrorMock,
   })),
@@ -84,8 +84,26 @@ describe("useDeloadStore", () => {
     expect(saveDeloadPhaseMock).not.toHaveBeenCalled();
 
     loadDeloadPhaseMock.mockReturnValueOnce(errAsync("auth-failed"));
+    handleAuthErrorMock.mockResolvedValueOnce(false);
     await store.load();
 
     expect(handleAuthErrorMock).toHaveBeenCalledWith("deload-phase-load");
+
+    const recoveredPhase = {
+      startedAt: "2026-02-01T00:00:00.000Z",
+      endsAt: "2026-02-08T00:00:00.000Z",
+      fatigueRiskScore: 4,
+      triggeredBy: ["volumeSpike"],
+    };
+    loadDeloadPhaseMock
+      .mockReturnValueOnce(errAsync("auth-failed"))
+      .mockReturnValueOnce(okAsync(recoveredPhase));
+    handleAuthErrorMock.mockResolvedValueOnce(true);
+
+    await store.load();
+
+    expect(handleAuthErrorMock).toHaveBeenCalledTimes(2);
+    expect(loadDeloadPhaseMock).toHaveBeenCalledTimes(4);
+    expect(store.phase?.startedAt).toBe("2026-02-01T00:00:00.000Z");
   });
 });

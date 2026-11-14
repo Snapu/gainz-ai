@@ -99,7 +99,7 @@ describe("AI application service port", () => {
     getTodayLogsCount: getTodayLogsCountMock,
   };
 
-  const mockApiKey = "test-api-key";
+  const mockAccessToken = "test-access-token";
   const mockUserProfile = createUserProfile();
   const mockExerciseLogs = [
     createExerciseLog("Bench Press", new Date("2026-03-11T10:00:00"), {
@@ -125,7 +125,7 @@ describe("AI application service port", () => {
     });
 
     await requestAdvice(aiService, {
-      apiKey: mockApiKey,
+      accessToken: mockAccessToken,
       userProfile: mockUserProfile,
       insights: createMockInsights(),
       exerciseLogs: mockExerciseLogs,
@@ -136,7 +136,7 @@ describe("AI application service port", () => {
 
     expect(askMock).toHaveBeenCalledTimes(1);
     expect(askMock).toHaveBeenCalledWith({
-      apiKey: mockApiKey,
+      accessToken: mockAccessToken,
       userProfile: mockUserProfile,
       insights: expect.objectContaining({ phase: "Maintain" }),
       exerciseLogs: mockExerciseLogs,
@@ -163,10 +163,10 @@ describe("AI application service port", () => {
       value: result,
     });
 
-    const response = await classifyExerciseNames(aiService, ["Bench Press"], mockApiKey);
+    const response = await classifyExerciseNames(aiService, ["Bench Press"], mockAccessToken);
 
     expect(classifyMock).toHaveBeenCalledTimes(1);
-    expect(classifyMock).toHaveBeenCalledWith(["Bench Press"], mockApiKey);
+    expect(classifyMock).toHaveBeenCalledWith(["Bench Press"], mockAccessToken);
     expect(response.isOk()).toBe(true);
   });
 

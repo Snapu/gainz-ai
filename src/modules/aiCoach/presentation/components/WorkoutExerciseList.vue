@@ -7,7 +7,7 @@ import {
   supersetConnectorClass,
 } from "../helpers/aiCoachPageHelpers";
 
-export interface WorkoutExerciseListItem extends DisplayExercise {
+interface WorkoutExerciseListItem extends DisplayExercise {
   restSeconds?: number;
 }
 

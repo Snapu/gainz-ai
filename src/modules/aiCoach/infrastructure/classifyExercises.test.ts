@@ -1,28 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { generateContentMock, captureMessageMock, captureExceptionMock } = vi.hoisted(() => ({
-  generateContentMock: vi.fn(),
+const { captureMessageMock, captureExceptionMock } = vi.hoisted(() => ({
   captureMessageMock: vi.fn(),
   captureExceptionMock: vi.fn(),
 }));
 
-const googleGenAiMock = vi.hoisted(() => ({
-  GoogleGenAI: vi.fn(function GoogleGenAI() {
-    return {
-      models: {
-        generateContent: generateContentMock,
-      },
-    };
-  }),
-  Type: {
-    OBJECT: "OBJECT",
-    ARRAY: "ARRAY",
-    STRING: "STRING",
-    NUMBER: "NUMBER",
-  },
-}));
-
-vi.mock("@google/genai", () => googleGenAiMock);
 vi.mock("@sentry/vue", () => ({
   addBreadcrumb: vi.fn(),
   captureMessage: captureMessageMock,
@@ -32,66 +14,82 @@ vi.mock("@sentry/vue", () => ({
 import { classifyExercises } from "./classifyExercises";
 
 describe("classifyExercises", () => {
-  it("returns empty classifications without calling the model for empty input", async () => {
-    const result = await classifyExercises([], "test-api-key");
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("returns empty classifications without calling the backend for empty input", async () => {
+    const result = await classifyExercises([], "test-access-token");
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
       expect(result.value).toEqual({ classifications: [] });
     }
-    expect(googleGenAiMock.GoogleGenAI).not.toHaveBeenCalled();
-    expect(generateContentMock).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("uses the primary model and parses the response", async () => {
-    generateContentMock.mockResolvedValue({
-      text: JSON.stringify({
-        classifications: [
-          {
-            exerciseName: "Bench Press",
-            primaryMuscle: "Chest",
-            confidence: 0.99,
-          },
-        ],
+  it("calls the ai-coach Edge Function and parses the response", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        text: JSON.stringify({
+          classifications: [
+            {
+              exerciseName: "Bench Press",
+              primaryMuscle: "Chest",
+              confidence: 0.99,
+            },
+          ],
+        }),
       }),
     });
 
-    const result = await classifyExercises(["Bench Press"], "test-api-key");
+    const result = await classifyExercises(["Bench Press"], "test-access-token");
 
-    expect(googleGenAiMock.GoogleGenAI).toHaveBeenCalledWith({
-      apiKey: "test-api-key",
-      apiVersion: "v1beta",
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/functions/v1/ai-coach");
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer test-access-token");
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      action: "classify",
+      exerciseNames: ["Bench Press"],
     });
-    expect(generateContentMock).toHaveBeenCalledTimes(1);
-    expect(generateContentMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        model: "gemini-2.5-flash",
-        config: expect.objectContaining({ temperature: 0.1 }),
-      }),
-    );
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
       expect(result.value.classifications[0]?.primaryMuscle).toBe("Chest");
     }
   });
 
-  it("falls back to the secondary model when the primary model is unavailable", async () => {
-    generateContentMock.mockRejectedValueOnce({ status: 503 }).mockResolvedValueOnce({
-      text: JSON.stringify({ classifications: [] }),
+  it("maps HTTP 429 from the Edge Function to rate-limit-exceeded", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 429,
     });
 
-    const result = await classifyExercises(["Bench Press"], "test-api-key");
+    const result = await classifyExercises(["Bench Press"], "test-access-token");
 
-    const models = generateContentMock.mock.calls.slice(-2).map((call) => call[0]?.model);
-    expect(models).toEqual(["gemini-2.5-flash", "gemini-3.5-flash-lite"]);
-    expect(captureMessageMock).toHaveBeenCalled();
-    expect(result.isOk()).toBe(true);
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBe("rate-limit-exceeded");
+    }
   });
 
   it("returns coaching-request-failed and captures exception for malformed JSON", async () => {
-    generateContentMock.mockResolvedValue({ text: "not-json" });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ text: "not-json" }),
+    });
 
-    const result = await classifyExercises(["Bench Press"], "test-api-key");
+    const result = await classifyExercises(["Bench Press"], "test-access-token");
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
@@ -100,17 +98,13 @@ describe("classifyExercises", () => {
     expect(captureExceptionMock).toHaveBeenCalled();
   });
 
-  it("returns missing-api-key without calling the model", async () => {
-    googleGenAiMock.GoogleGenAI.mockClear();
-    generateContentMock.mockClear();
-
+  it("returns unauthorized without calling the backend when accessToken is undefined", async () => {
     const result = await classifyExercises(["Bench Press"], undefined);
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
-      expect(result.error).toBe("missing-api-key");
+      expect(result.error).toBe("unauthorized");
     }
-    expect(googleGenAiMock.GoogleGenAI).not.toHaveBeenCalled();
-    expect(generateContentMock).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

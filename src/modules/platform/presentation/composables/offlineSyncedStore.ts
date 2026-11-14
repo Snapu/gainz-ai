@@ -9,6 +9,9 @@ type UseOfflineSyncedStoreParams<T, FetchE, AddE, RemoveE, UpdateE = never> = {
   addRemote: (item: T) => ResultAsync<void, AddE>;
   removeRemote: (item: T) => ResultAsync<void, RemoveE>;
   updateRemote?: (item: T) => ResultAsync<void, UpdateE>;
+  onVisibleRefresh?: (
+    defaultRefresh: () => ResultAsync<T[], FetchE | "refresh-in-progress">,
+  ) => unknown;
 };
 
 function unwrapAwaitedResult<T, E>(
@@ -34,6 +37,7 @@ export function useOfflineSyncedStore<T, FetchE, AddE, RemoveE, UpdateE = never>
   addRemote,
   removeRemote,
   updateRemote,
+  onVisibleRefresh,
 }: UseOfflineSyncedStoreParams<T, FetchE, AddE, RemoveE, UpdateE>) {
   const isOnline = useOnline();
   const isRefreshing = ref(false);
@@ -47,7 +51,7 @@ export function useOfflineSyncedStore<T, FetchE, AddE, RemoveE, UpdateE = never>
   const debouncedRefresh = useDebounceFn(async () => {
     if (isOnline.value) {
       console.log("App visible. Syncing with remote to prevent stale data...");
-      void refresh();
+      void (onVisibleRefresh ? onVisibleRefresh(refresh) : refresh());
     }
   }, 1000);
 

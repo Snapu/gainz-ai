@@ -1,6 +1,6 @@
-import { type Content, type GenerateContentConfig, GoogleGenAI } from "@google/genai";
 import * as Sentry from "@sentry/vue";
 import { errAsync, ResultAsync } from "neverthrow";
+import { z } from "zod";
 
 import { createExerciseMuscleMapRepository } from "@/modules/platform/infrastructure";
 import { learnFromCoachingAdvice, VALID_MUSCLE_GROUPS } from "@/modules/sharedKernel/application";
@@ -11,271 +11,158 @@ import {
   type CoachingAdviceError,
   type CoachingAdviceRequest,
   type CoachingAdviceResult,
+  type CoachingMessage,
   type CoachingMode,
+  extractUserQuestion,
   resolveCoachingIntent,
 } from "../domain";
-import {
-  createCoachingAdviceJsonSchema,
-  translateCoachingAdviceJson,
-} from "./CoachingAdviceTranslator";
+import { AiEdgeHttpError, postAiEdgeFunction } from "./aiEdgeClient";
+import { translateCoachingAdviceJson } from "./CoachingAdviceTranslator";
 import { assembleCoachingPrompt, assemblePromptContext } from "./promptAssembler";
 
-const BASE_SYSTEM_INSTRUCTION = `
-You are an elite AI personal trainer providing data-driven feedback and workout planning.
-
-1. CORE RESPONSIBILITIES:
-- Generate a highly personalized workout plan for today based on goals, fitness level, available equipment, and time constraints.
-- Factor in health/schedule events and distribute weekly volume across 'days'.
-- You MUST strictly respect the number of workout days per week ('days' in the '# session' profile) when generating a 'trainingPlan'.
-- Adapt programming to fitness goals:
-  build_muscle      → 6–15 rep range (isolation up to 20), focus on mechanical tension & progressive overload
-  lose_fat          → 6–12 rep range, maintain intensity to prevent muscle loss. Prioritize LISS cardio over HIIT (unless user explicitly requests intervals). Only generate a dedicated 30-45m LISS session if 'days' strictly exceeds the number of lifting sessions in the plan. Otherwise, append a conditioning finisher (e.g., Incline Walk, Stairmaster, Assault Bike) at the VERY END of the exercise array using 'targetDurationSeconds' or 'targetDistanceMeters'. If time is constrained (sessionMins ≤45), skip cardio entirely and increase workout density with supersets instead. Cardio must respect available equipment (e.g., no treadmill if no 'cardio_machine'; suggest Jogging or Jump Rope instead).
-  improve_endurance → 8–15 rep range for compounds, 12–20 for isolation/bodyweight, with shorter rest. Incorporate cardio (e.g., Jogging, Running, Rowing) using 'targetDistanceMeters' or 'targetDurationSeconds'. Cardio must respect available equipment.
-  increase_mobility → Integrate 2-3 mobility movements per session (e.g., hip openers, thoracic rotations, shoulder dislocates). Use bodyweight and 'targetDurationSeconds' for holds. Weave in as warm-up or active rest between sets targeting non-competing muscle groups (e.g., thoracic mobility between squats). Do NOT program static stretching for the prime movers between their working sets.
-  general_fitness   → 8–15 rep range, balanced full-body. Mix strength, conditioning, and 1 mobility movement. Optionally include a short cardio finisher if time permits.
-- When multiple goals are selected, use the first listed goal as the primary driver for rep ranges and structure. Layer in secondary goals where compatible (e.g., lose_fat + build_muscle → hypertrophy programming in a deficit; lose_fat + improve_endurance → include cardio more aggressively).
-
-2. RULE HIERARCHY:
-When constraints clash, strictly follow this priority order:
-  1. Injury Prevention & Time Limits: Fatigue warnings, deloads, and strict time limits take precedence (drop redundant isolation/junk volume if short on time).
-  2. Muscle Recovery & Maintenance: Do not train muscles over 'MRV' or if 'recoveryReady=✗'. If requested to "maintain", assign absolute minimum volume (max 2-3 sets TOTAL per week for that area, using just 1 exercise).
-  3. Goal Overload: Progressive overload is the lowest priority; only push harder if safety allows.
-
-3. TRAINING SCIENCE DATA (CRITICAL):
-- TRUST the pre-calculated data in the sections. Do NOT recalculate them.
-
-- '# workload' section:
-  acwr: If >1.5 AND fatigue.risk >= 3, consider reducing volume. Otherwise, >1.3 is healthy during progressive overload.
-  fatigue.deload: If true, set startDeload=true.
-
-- '# muscles' section (Name: sets/directSets | landmark | freq | hoursRested | recoveryReady | trend):
-  MEV=Min Effective, MAV=Max Adaptive, MRV=Max Recoverable.
-  If >MRV, reduce sets to MAV. If →MRV, cap new primary sets to ≤2.
-  If recoveryReady=✗: If last trained <24h ago, skip or halve volume. If 24-36h ago, allow at reduced intensity (70% vol/RPE). If >36h ago, allow normally.
-
-- '# exercises' section (Name: e1rm:N [muscle] [wk] [rpe/rpe_trigger] [PLATEAU/SWAP] [hyp/str/inc] [trend]):
-  'hyp'/'str' = Pre-computed target weight ranges for hypertrophy (6-15 reps) and strength (1-5 reps). USE THESE RANGES.
-  'inc' = Pre-computed progressive overload weight increment.
-  If 'SWAP' flag is present, switch to a mechanical variant using available equipment (e.g. Barbell → Dumbbell, Free weight → Cable/Machine).
-
-- EXERCISE & OVERLOAD RULES:
-  - If the user hit the TOP of the rep range on ALL sets previously, increase targetWeight by 'inc' and reset targetReps to bottom. Otherwise push reps higher.
-  - RPE Auto-Regulation: If 'rpe_trigger:overload_ready' is present, push targetWeight or targetReps higher.
-  - Target RPEs: strength (8.5-9.5), hypertrophy (7.5-9.0), endurance (7.0-8.0). Deload: drop by 2-3 points. ALWAYS populate 'targetRpe' for resistance exercises.
-  - Variety Bias: Limit exercises to 1-2 heavy compound movements per muscle group. Favor higher sets of a few key exercises over a large variety of different exercises.
-  - Overlap: Cap heavy pressing movements (Chest, Shoulders, Dips) to max 2 per session to avoid anterior deltoid burnout and CNS fatigue. Do not program 3+ pressing variations in one workout.
-
-- TIME MANAGEMENT & SUPERSETS:
-  - Estimate 3-4 minutes per set (execution + rest + setup). To respect time limits, strictly cap total session sets (e.g., max 12-15 sets for a 45-minute limit).
-  - When time-constrained, reduce total exercises/sets or use antagonist paired sets ('supersetId') to pair non-competing muscles (e.g. Chest/Back, Biceps/Triceps). Do NOT simply slash rest periods below 90s for hypertrophy — this compromises ATP-PCr resynthesis and shifts the stimulus away from mechanical tension.
-  - NEVER superset two heavy systemic compound movements (e.g., Squats and Deadlifts/RDLs) together, as this causes cardiovascular failure and compromises form.
-
-- 'scratchpad' usage (PLANNING ONLY, max 3 lines):
-  0. DATA: Sanity-check metrics.
-  1. SETUP: Infer session intent. Pick compounds first. Exclude recovering muscles.
-  2. PLAN: Rationale for exercises/swaps.
-
-4. STRICT OUTPUT RULES:
-- Keep 'coachMessage' to 2-3 short, punchy paragraphs in the user's locale.
-- MANDATORY CONSTRAINTS: Follow '# goals' explicitly.
-- Use EXACT exerciseName from the '# exercises' section or '# logs'. DO NOT invent new variations of existing exercises. Exception: you may introduce well-known cardio, mobility, or conditioning movements (e.g., Jogging, Incline Walk, Cycling, Jump Rope, Sled Push, Kettlebell Swings, Battle Ropes, Hip 90/90 Stretch) that are not yet in the user's history.
-- Do NOT give ranges for targetWeight, give a single number (e.g. '82.5kg'). For dumbbell exercises, ALWAYS output the TOTAL combined weight (e.g., for two 20kg dumbbells, output '40kg').
-- Explicit Types: For time-based holds (e.g., Planks), output 'targetDurationSeconds' and OMIT 'targetReps'. For distance cardio (e.g., Running), output 'targetDistanceMeters' and OMIT 'targetReps'. Use 'targetReps' strictly for countable movements (e.g., '8-12').
-- Prescribe 'targetRpe' (number between 6.0 and 10.0, e.g. 8.0, 8.5, 9.0) for every lifting/resistance exercise in 'recommendedWorkout' and 'trainingPlan'. Standard working sets are 8.0–9.0 (1–2 RIR), heavy strength is 8.5–9.5, deload is 6.0–6.5. Omit only for pure cardio or mobility.
-- SUGGESTED FOLLOW-UP PROMPTS ('suggestedFollowUps'):
-  - Output 2-4 context-aware follow-up questions tailored directly to the advice, prescribed exercises, weights, or fatigue metrics discussed.
-  - Phrased strictly from the user's first-person perspective ('Can I...', 'Swap X for Y', 'I only have 30 mins...'). NEVER use coach-to-user phrasing ('Would you like to...').
-  - 'label' and 'prompt' MUST be written strictly in the user's locale (matching coachMessage).
-  - 'label': Concise 2-4 words for mobile pill buttons (e.g., 'Swap Leg Press', 'Warmup Guide', 'Condense to 30m').
-  - 'prompt': The complete, detailed, realistic question sent to the coach.
-
-5. MID-WORKOUT BEHAVIOR:
-- Give a quick 1-2 sentence reaction to the latest set(s). No scratchpad needed.
-- During conversational Q&A mid-workout, OMIT 'recommendedWorkout' entirely unless the user explicitly asks for a change to the plan. This prevents accidental plan drift.
-- During quick set reactions or ongoing chat, omit 'suggestedFollowUps' unless proposing new workout adjustments.
-
-6. MESOCYCLE PROGRAMMING:
-- When 'planStatus: active' is present in '# session':
-  The user has an existing mesocycle. Look at the '# program' section. Sessions marked '[DONE]' have already been completed.
-  The next session in the sequence is marked '[NEXT_SESSION]'. You MUST use the '[NEXT_SESSION]' as today's workout. Do NOT skip ahead to match the current calendar day — the user trains when they find time, so they just do the next session in order.
-  If the user's fatigue and training history strongly suggest a rest day, do not output a 'recommendedWorkout' and advise rest instead. Adapt weights/reps from '# logs'. Do NOT regenerate 'trainingPlan' unless the user explicitly asks to create, change, or adjust their multi-week plan in '# question'.
-- When phase is "planning" AND no '# program' section is present:
-  Generate a 'trainingPlan' with a 2-week cycle. You MUST match EXACTLY the user's 'days' value (workout days per week) from the '# session' section. Do not generate more or fewer sessions per week.
-  Name sessions clearly. Distribute weekly volume across sessions respecting recovery.
-  ALSO output today's session as 'recommendedWorkout'.
-- When '# program' is present:
-  Use the session marked '[NEXT_SESSION]' as today's workout → output as 'recommendedWorkout'.
-  Adapt weights/reps based on actual performance in '# logs'.
-  Do NOT regenerate 'trainingPlan' unless the user explicitly asks.
-- When the user asks for a new plan (detected via '# question'):
-  Generate a fresh 'trainingPlan' (respecting EXACTLY the 'days' value in the '# session' profile), applying progressive overload from performance data.
-  ALSO output today's session from the newly generated plan as 'recommendedWorkout'.
-
-You receive sections in this order:
-- # session, # question, # goals, # workload, # muscles, # exercises, # today, # update, # program, # plan, # history, # logs, # events
-`;
-
-function buildSystemInstruction(mode: CoachingMode): string {
-  const modeDirective =
-    mode === "planning"
-      ? `\n7. ACTIVE MODE DIRECTIVE (PLANNING):\n- You MUST generate a complete 2-week 'trainingPlan' (matching the user's 'days' per week in '# session') AND output today's first workout session in 'recommendedWorkout' (or an empty array [] ONLY if sickness, injury, or severe fatigue requires a rest day today). Never omit 'trainingPlan'. Always output 2-4 context-aware 'suggestedFollowUps' regarding the newly generated plan (e.g. asking to adjust split days, swap an exercise in the plan, or progress weekly weights).`
-      : `\n7. ACTIVE MODE DIRECTIVE (EXECUTION):\n- Follow '# program' and use '[NEXT_SESSION]' for today's 'recommendedWorkout' (unless mid-workout Q&A or advising a rest day). Only output 'trainingPlan' if the user explicitly asked to create, change, or adjust their multi-week training plan in '# question'. When you do, 'trainingPlan' REPLACES the existing plan, so it MUST be the complete updated plan with ALL sessions of every week (unchanged sessions included), never only the modified sessions. Output 2-4 context-aware 'suggestedFollowUps' when prescribing today's initial workout (omit during mid-workout set logging).`;
-
-  return `${BASE_SYSTEM_INSTRUCTION}${modeDirective}`;
+interface ConversationContent {
+  role: "user" | "model";
+  parts: Array<{ text: string }>;
 }
 
-const baseAiConfig: GenerateContentConfig = {
-  responseMimeType: "application/json",
-  temperature: 0.4,
-  topP: 0.85,
-};
+const MAX_CONVERSATION_TURNS = 40;
+const MAX_PART_TEXT_LENGTH = 35_000;
+const MAX_TOTAL_CONVERSATION_CHARS = 50_000;
 
-const COACHING_MODELS = ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-3.5-flash-lite"] as const;
+function clampPartText(text: string): string {
+  return text.length > MAX_PART_TEXT_LENGTH ? text.slice(0, MAX_PART_TEXT_LENGTH) : text;
+}
 
-type CoachingModel = (typeof COACHING_MODELS)[number];
+function totalContentsLength(contents: ConversationContent[]): number {
+  return contents.reduce((sum, item) => sum + (item.parts[0]?.text.length ?? 0), 0);
+}
 
-function isServiceUnavailableError(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const e = error as Record<string, unknown>;
-  const nestedCode = (e.error as Record<string, unknown> | undefined)?.code;
-  if (nestedCode === 503 || nestedCode === 429) return true;
-  if (
-    e.status === "UNAVAILABLE" ||
-    e.status === "RESOURCE_EXHAUSTED" ||
-    e.status === 503 ||
-    e.status === 429
-  ) {
-    return true;
+function normalizeAlternatingHistory(history: ConversationContent[]): ConversationContent[] {
+  const normalized: ConversationContent[] = [];
+
+  for (const turn of history) {
+    // Gemini generateContent expects the conversation to begin with a "user" turn
+    if (normalized.length === 0 && turn.role !== "user") {
+      continue;
+    }
+
+    const previous = normalized.at(-1);
+    if (previous && previous.role === turn.role) {
+      const mergedText = clampPartText(
+        `${previous.parts[0]?.text ?? ""}\n\n${turn.parts[0]?.text ?? ""}`.trim(),
+      );
+      previous.parts = [{ text: mergedText }];
+      continue;
+    }
+
+    normalized.push({ role: turn.role, parts: [{ text: turn.parts[0]?.text ?? "" }] });
   }
-  if (
-    typeof e.message === "string" &&
-    /high demand|503|429|unavailable|resource_exhausted|rate limit/i.test(e.message)
-  ) {
-    return true;
+
+  // Active turn is appended as "user", so history must end on "model"
+  while (normalized.at(-1)?.role === "user") {
+    normalized.pop();
   }
-  return false;
+
+  return normalized;
 }
 
-function isTimeoutError(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const e = error as Record<string, unknown>;
-  if (e.name === "AbortError" || e.name === "TimeoutError") return true;
-  return typeof e.message === "string" && /timed out|timeout|aborted/i.test(e.message);
+function buildBoundedConversationContents(
+  previousMessages: CoachingMessage[],
+  currentUserInput: string,
+): ConversationContent[] {
+  const activeText = clampPartText(currentUserInput);
+  const historyCharBudget = MAX_TOTAL_CONVERSATION_CHARS - activeText.length;
+  let remainingChars = historyCharBudget;
+  const maxHistoryItems = MAX_CONVERSATION_TURNS - 1;
+
+  const recentCandidates = previousMessages.slice(-maxHistoryItems);
+  const keptHistory: ConversationContent[] = [];
+
+  for (let i = recentCandidates.length - 1; i >= 0; i--) {
+    const mapped = mapPreviousMessageToContent(recentCandidates[i]);
+    const partText = clampPartText(mapped.parts[0]?.text ?? "");
+    if (partText.length > remainingChars) break;
+    remainingChars -= partText.length;
+    keptHistory.unshift({
+      role: mapped.role,
+      parts: [{ text: partText }],
+    });
+  }
+
+  const normalized = normalizeAlternatingHistory(keptHistory);
+  while (normalized.length > 0 && totalContentsLength(normalized) > historyCharBudget) {
+    normalized.shift();
+    if (normalized[0]?.role === "model") {
+      normalized.shift();
+    }
+  }
+
+  return [...normalized, { role: "user" as const, parts: [{ text: activeText }] }];
 }
 
-function isNotFoundError(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const e = error as Record<string, unknown>;
-  return e.status === "NOT_FOUND" || e.status === 404;
-}
+const aiCoachEndpointResponseSchema = z.object({
+  text: z.string().min(1),
+  thought: z.string().optional(),
+});
 
-function isEmptyResponseError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  return error.message.startsWith("Empty AI response");
+function mapPreviousMessageToContent(msg: CoachingMessage): ConversationContent {
+  if (msg.role === "user") {
+    const question = extractUserQuestion(msg.content);
+    return {
+      role: "user",
+      parts: [
+        {
+          text:
+            question ??
+            (msg.content.startsWith("# session")
+              ? "Please evaluate my workout readiness and recommend today's session."
+              : msg.content),
+        },
+      ],
+    };
+  }
+
+  let text = msg.content;
+  try {
+    const parsed = JSON.parse(msg.content) as { coachMessage?: unknown };
+    if (parsed && typeof parsed.coachMessage === "string") {
+      text = parsed.coachMessage;
+    }
+  } catch {
+    // not JSON, keep as-is
+  }
+
+  return {
+    role: "model",
+    parts: [{ text }],
+  };
 }
 
 export function getTodayLogsCount(session: WorkoutSession | null): number {
   return session?.logs.length ?? 0;
 }
 
-function extractThoughtSummary(response: unknown): string | undefined {
-  if (!response || typeof response !== "object") return undefined;
-  const candidates = (response as { candidates?: Array<{ content?: { parts?: unknown[] } }> })
-    .candidates;
-  const parts = candidates?.[0]?.content?.parts;
-  if (!Array.isArray(parts)) return undefined;
+async function executeBackendCoachRequest(options: {
+  accessToken: string;
+  mode: CoachingMode;
+  allowPlanUpdate: boolean;
+  muscleGroups: string[];
+  contents: ConversationContent[];
+  timeoutMs: number;
+}): Promise<{ text: string; thought?: string }> {
+  const payload = await postAiEdgeFunction<unknown>({
+    accessToken: options.accessToken,
+    body: {
+      action: "coach",
+      mode: options.mode,
+      allowPlanUpdate: options.allowPlanUpdate,
+      muscleGroups: options.muscleGroups,
+      contents: options.contents,
+    },
+    timeoutMs: options.timeoutMs,
+  });
 
-  const thoughts: string[] = [];
-  for (const part of parts) {
-    if (
-      part &&
-      typeof part === "object" &&
-      (part as { thought?: boolean }).thought === true &&
-      typeof (part as { text?: unknown }).text === "string"
-    ) {
-      thoughts.push((part as { text: string }).text.trim());
-    }
-  }
-  return thoughts.length > 0 ? thoughts.join("\n") : undefined;
-}
-
-async function executeAiRequest(
-  ai: GoogleGenAI,
-  conversationContents: Content[],
-  aiTimeoutMs: number,
-  responseJsonSchema: Record<string, unknown>,
-  mode: CoachingMode,
-): Promise<{ text: string; thought?: string }> {
-  const generateWithTimeout = async (model: CoachingModel) => {
-    const controller = new AbortController();
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(() => {
-        controller.abort();
-        reject(new Error("AI request timed out"));
-      }, aiTimeoutMs);
-    });
-
-    try {
-      const res = await Promise.race([
-        ai.models.generateContent({
-          model,
-          contents: conversationContents,
-          config: {
-            ...baseAiConfig,
-            systemInstruction: buildSystemInstruction(mode),
-            responseJsonSchema,
-            abortSignal: controller.signal,
-          },
-        }),
-        timeoutPromise,
-      ]);
-      const text = res.text?.trim() ?? "";
-      if (!text) {
-        const finishReason = res.candidates?.[0]?.finishReason ?? "UNKNOWN";
-        throw new Error(`Empty AI response (finishReason: ${finishReason})`);
-      }
-      return { text, thought: extractThoughtSummary(res) };
-    } finally {
-      if (timeoutId !== undefined) clearTimeout(timeoutId);
-    }
-  };
-
-  let lastError: unknown;
-  for (let i = 0; i < COACHING_MODELS.length; i++) {
-    const model = COACHING_MODELS[i];
-    if (!model) break;
-    try {
-      return await generateWithTimeout(model);
-    } catch (err) {
-      lastError = err;
-      const nextModel = COACHING_MODELS[i + 1];
-      const isNotFound = isNotFoundError(err);
-      const isEmpty = isEmptyResponseError(err);
-      if (
-        nextModel &&
-        (isServiceUnavailableError(err) || isTimeoutError(err) || isNotFound || isEmpty)
-      ) {
-        Sentry.captureMessage(
-          `Model ${model} unavailable/slow/not-found/empty, falling back to ${nextModel}`,
-          {
-            level: "info",
-            tags: { scope: "ai-service", feature: "model-fallback" },
-            extra: {
-              fromModel: model,
-              toModel: nextModel,
-              timedOut: isTimeoutError(err),
-              notFound: isNotFound,
-              emptyResponse: isEmpty,
-            },
-          },
-        );
-        continue;
-      }
-      throw err;
-    }
-  }
-  throw lastError;
+  return aiCoachEndpointResponseSchema.parse(payload);
 }
 
 function attachThoughtIfMissing(advice: CoachingAdvice, thought?: string): CoachingAdvice {
@@ -301,13 +188,33 @@ function persistLearnedMuscleGroups(advice: CoachingAdvice): void {
   }
 }
 
+function mapCoachRequestError(error: unknown, effectiveMode: CoachingMode): CoachingAdviceError {
+  if (error instanceof AiEdgeHttpError) {
+    if (error.status === 401) {
+      return "unauthorized";
+    }
+    if (error.status === 429) {
+      return "rate-limit-exceeded";
+    }
+  }
+
+  console.error("AI request failed:", error);
+  Sentry.captureException(error, {
+    tags: { scope: "ai-service", feature: "ask-ai-request" },
+    extra: {
+      mode: effectiveMode,
+      status: error instanceof AiEdgeHttpError ? error.status : undefined,
+    },
+  });
+  return "coaching-request-failed";
+}
+
 export function requestCoachingAdvice(
   options: CoachingAdviceRequest,
 ): ResultAsync<CoachingAdviceResult, CoachingAdviceError> {
-  const { apiKey, previousMessages, insights } = options;
-  if (!apiKey) return errAsync("missing-api-key");
+  const { accessToken, previousMessages, insights } = options;
+  if (!accessToken) return errAsync("unauthorized");
 
-  const ai = new GoogleGenAI({ apiKey, apiVersion: "v1beta" });
   const context = assemblePromptContext(options.exerciseLogs, previousMessages);
   const { workoutPhase, isFirstMessage } = context;
 
@@ -319,35 +226,25 @@ export function requestCoachingAdvice(
 
   const currentUserInput = assembleCoachingPrompt(options, context, intent);
 
-  const aiTimeoutMs =
-    effectiveMode === "planning" || isFirstMessage || workoutPhase === "planning" ? 55_000 : 35_000;
+  // Server times out at 55s for planning, 40s for follow-ups. Client timeout gives safe buffer for network transit.
+  const isPlanningMode =
+    effectiveMode === "planning" || isFirstMessage || workoutPhase === "planning";
+  const clientTimeoutMs = isPlanningMode ? 65_000 : 48_000;
 
   if (import.meta.env.DEV) console.debug(currentUserInput);
 
-  const conversationContents: Content[] = [
-    ...previousMessages.map((msg) => ({
-      role: msg.role === "coach" ? ("model" as const) : ("user" as const),
-      parts: [{ text: msg.content }],
-    })),
-    { role: "user" as const, parts: [{ text: currentUserInput }] },
-  ];
-
-  const responseJsonSchema = createCoachingAdviceJsonSchema(
-    Array.from(VALID_MUSCLE_GROUPS),
-    effectiveMode,
-    Boolean(options.question),
-  );
+  const conversationContents = buildBoundedConversationContents(previousMessages, currentUserInput);
 
   return ResultAsync.fromPromise(
-    executeAiRequest(ai, conversationContents, aiTimeoutMs, responseJsonSchema, effectiveMode),
-    (error): CoachingAdviceError => {
-      console.error("AI request failed:", error);
-      Sentry.captureException(error, {
-        tags: { scope: "ai-service", feature: "ask-ai-request" },
-        extra: { responseLength: 0, mode: effectiveMode },
-      });
-      return "coaching-request-failed";
-    },
+    executeBackendCoachRequest({
+      accessToken,
+      mode: effectiveMode,
+      allowPlanUpdate: Boolean(options.question),
+      muscleGroups: Array.from(VALID_MUSCLE_GROUPS),
+      contents: conversationContents,
+      timeoutMs: clientTimeoutMs,
+    }),
+    (error): CoachingAdviceError => mapCoachRequestError(error, effectiveMode),
   )
     .andThen(({ text, thought }) =>
       translateCoachingAdviceJson(text, effectiveMode)

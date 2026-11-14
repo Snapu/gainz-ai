@@ -1,8 +1,8 @@
 import type { GoogleSpreadsheet } from "google-spreadsheet";
-import { ResultAsync } from "neverthrow";
+import { errAsync, okAsync, ResultAsync } from "neverthrow";
 import { defineStore } from "pinia";
-import { computed, ref, watchEffect } from "vue";
-
+import { computed, ref, watch } from "vue";
+import { retryOnAuthError } from "@/modules/auth/presentation";
 import {
   applyExerciseWeightMigrationDecision,
   buildPendingExerciseMigrationCandidates,
@@ -11,20 +11,18 @@ import {
   type ExerciseWeightMigrationReview,
   loadAllLogsForMigration,
   loadExerciseWeightMigrationReviews,
+  type MigrationApplyError,
+  type MigrationLoadError,
 } from "@/modules/migration/application";
 import { createExerciseWeightMigrationRepository } from "@/modules/migration/infrastructure";
-import {
-  useSpreadsheetRepositoryFactory,
-  useTrainingSummaryStore,
-} from "@/modules/platform/presentation";
-import { createExerciseLogRepository } from "@/modules/trainingLogs/infrastructure";
+import { useSpreadsheetRepositoryFactory } from "@/modules/platform/presentation";
 import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
+import { useTrainingSummaryStore } from "@/modules/trainingSummary/presentation";
 
 export const useExerciseWeightMigrationStore = defineStore("exerciseWeightMigration", () => {
   const migrationRepoFactory = useSpreadsheetRepositoryFactory(
     createExerciseWeightMigrationRepository,
   );
-  const logsRepoFactory = useSpreadsheetRepositoryFactory(createExerciseLogRepository);
 
   const { spreadsheetStore, getDoc } = migrationRepoFactory;
   const logsStore = useExerciseLogsStore();
@@ -35,91 +33,139 @@ export const useExerciseWeightMigrationStore = defineStore("exerciseWeightMigrat
   const isLoading = ref(false);
   const activeExerciseName = ref<string | null>(null);
   const lastError = ref<string | null>(null);
+  let latestRefreshId = 0;
+  let latestApplyId = 0;
 
   const reviewedCount = computed(() => reviewedExercises.value.length);
 
-  async function refresh(docOverride?: GoogleSpreadsheet) {
+  function refresh(docOverride?: GoogleSpreadsheet): ResultAsync<void, MigrationLoadError> {
     const doc = getDoc(docOverride);
-    if (!doc) return;
+    if (!doc) return okAsync(undefined);
 
+    const migrationRepository = migrationRepoFactory.createRepository(doc);
+    const logsReader = logsStore.createHistoryReader(doc);
+    if (!migrationRepository || !logsReader) {
+      lastError.value = "load-failed";
+      isLoading.value = false;
+      return errAsync("load-failed");
+    }
+
+    const callId = ++latestRefreshId;
+    const isStale = () =>
+      callId !== latestRefreshId || (!docOverride && spreadsheetStore.doc !== doc);
     isLoading.value = true;
     lastError.value = null;
 
-    const migrationRepository = migrationRepoFactory.createRepository(doc);
-    const logsRepository = logsRepoFactory.createRepository(doc);
-    if (!migrationRepository || !logsRepository) {
-      lastError.value = "load-failed";
-      isLoading.value = false;
-      return;
-    }
-
-    const result = await ResultAsync.combine([
-      ResultAsync.fromPromise(
-        Promise.resolve(loadExerciseWeightMigrationReviews(migrationRepository)),
-        () => "load-failed" as const,
-      ).andThen((r) => r),
-      ResultAsync.fromPromise(
-        Promise.resolve(loadAllLogsForMigration(logsRepository)),
-        () => "load-failed" as const,
-      ).andThen((r) => r),
-    ]);
-
-    isLoading.value = false;
-
-    result.match(
-      ([reviews, logs]) => {
+    return ResultAsync.combine([
+      retryOnAuthError(
+        "migration-reviews-load",
+        () => loadExerciseWeightMigrationReviews(migrationRepository),
+        { fallbackError: "load-failed", isCancelled: isStale },
+      ),
+      retryOnAuthError("migration-logs-load", () => loadAllLogsForMigration(logsReader), {
+        fallbackError: "load-failed",
+        isCancelled: isStale,
+      }).mapErr(
+        (error): MigrationLoadError =>
+          error === "auth-failed" || error === "parse-data-failed" ? error : "load-failed",
+      ),
+    ])
+      .map(([reviews, logs]) => {
+        if (isStale()) return undefined;
         reviewedExercises.value = reviews;
         pendingExercises.value = buildPendingExerciseMigrationCandidates(logs, reviews);
-      },
-      (error) => {
-        lastError.value = error;
-      },
-    );
+        isLoading.value = false;
+        return undefined;
+      })
+      .mapErr((error) => {
+        if (!isStale()) {
+          lastError.value = error;
+          isLoading.value = false;
+        }
+        return error;
+      });
   }
 
-  async function applyDecision(exerciseName: string, decision: ExerciseWeightMigrationDecision) {
-    const repository = migrationRepoFactory.createRepository();
+  function refreshStoresAfterDecision(
+    docOverride: GoogleSpreadsheet | undefined,
+  ): ResultAsync<void, MigrationApplyError> {
+    return ResultAsync.combine([
+      refresh(docOverride),
+      logsStore
+        .refresh()
+        .map(() => undefined)
+        .orElse((error) => (error === "refresh-in-progress" ? okAsync(undefined) : errAsync(error)))
+        .mapErr(
+          (error): MigrationApplyError =>
+            error === "auth-failed" || error === "parse-data-failed" ? error : "load-failed",
+        ),
+    ]).map(() => undefined);
+  }
+
+  function applyDecision(exerciseName: string, decision: ExerciseWeightMigrationDecision) {
+    const doc = getDoc();
+    const docOverride = doc ?? undefined;
+    const repository = migrationRepoFactory.createRepository(docOverride);
     if (!repository) {
       lastError.value = "load-failed";
       return null;
     }
 
+    const applyId = ++latestApplyId;
+    const isStale = () => applyId !== latestApplyId || spreadsheetStore.doc !== doc;
+
     activeExerciseName.value = exerciseName;
     lastError.value = null;
 
-    // Compose: apply → refresh all stores → isolate side effects (error handling + cleanup)
-    // Using orTee pattern from neverthrow-elegant: side effects don't pollute the chain
-    return ResultAsync.fromPromise(
-      applyExerciseWeightMigrationDecision(exerciseName, decision, repository),
-      (error) => {
-        console.error("Failed to apply exercise weight migration decision:", error);
-        return "save-failed" as const;
-      },
+    return retryOnAuthError(
+      "migration-decision-apply",
+      () => applyExerciseWeightMigrationDecision(exerciseName, decision, repository),
+      { fallbackError: "save-failed", isCancelled: isStale },
     )
-      .andThen(() =>
-        ResultAsync.fromPromise(Promise.all([refresh(), logsStore.refresh()]), (error) => {
-          console.error("Failed to refresh after decision:", error);
-          return "save-failed" as const;
-        }),
-      )
-      .andThen(() => trainingSummaryStore.rebuildAllSummaries())
+      .andThen(() => {
+        if (isStale()) return okAsync<void, MigrationApplyError>(undefined);
+        return ResultAsync.combine([
+          trainingSummaryStore
+            .rebuildAllSummaries(docOverride)
+            .map(() => undefined)
+            .mapErr(
+              (error): MigrationApplyError =>
+                error === "auth-failed" ? "auth-failed" : "summary-rebuild-failed",
+            ),
+          refreshStoresAfterDecision(docOverride),
+        ]).map(() => undefined);
+      })
       .map(() => {
-        // Success path: clean up state after both succeed
-        activeExerciseName.value = null;
+        if (!isStale()) {
+          activeExerciseName.value = null;
+        }
         return undefined;
       })
       .orTee((error) => {
-        // Error path (isolated): capture error and clean up on both success/failure
-        lastError.value = String(error);
-        activeExerciseName.value = null;
+        if (!isStale()) {
+          lastError.value = error;
+          activeExerciseName.value = null;
+        }
       });
   }
 
-  watchEffect(() => {
-    const doc = spreadsheetStore.doc;
-    if (!doc) return;
-    void refresh(doc);
-  });
+  watch(
+    () => spreadsheetStore.doc,
+    (doc) => {
+      if (!doc) {
+        latestRefreshId += 1;
+        latestApplyId += 1;
+        pendingExercises.value = [];
+        reviewedExercises.value = [];
+        activeExerciseName.value = null;
+        lastError.value = null;
+        isLoading.value = false;
+        return;
+      }
+      void refresh(doc);
+    },
+    { immediate: true },
+  );
 
   return {
     pendingExercises,

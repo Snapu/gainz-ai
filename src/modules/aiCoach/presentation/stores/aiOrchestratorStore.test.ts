@@ -1,4 +1,4 @@
-import { errAsync, okAsync } from "neverthrow";
+import { errAsync, okAsync, type ResultAsync } from "neverthrow";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick, ref } from "vue";
@@ -10,8 +10,21 @@ const mockExerciseLogs = ref<ExerciseLog[]>([]);
 const mockIsLogsLoading = ref(false);
 const mockIsLogsRefreshing = ref(false);
 const mockLearnedMap = ref({});
-const mockApiKey = ref<string | null>(null);
+const mockAccessToken = ref<string | null>(null);
+const mockIdToken = ref<string | null>(null);
+const mockRefreshToken = ref<string | null>(null);
+let mockEnsureValidAccessToken:
+  | (() => ResultAsync<string, "token-refresh-failed" | "refresh-token-invalid">)
+  | undefined;
+let mockEnsureValidIdToken:
+  | (() => ResultAsync<string, "token-refresh-failed" | "refresh-token-invalid">)
+  | undefined;
+let mockRefreshSession:
+  | ((force?: boolean) => ResultAsync<string, "token-refresh-failed" | "refresh-token-invalid">)
+  | undefined;
+const mockAuthLogout = vi.fn();
 const mockAsk = vi.fn();
+const mockClassifyExercises = vi.fn();
 
 vi.mock("@/modules/aiCoach/infrastructure", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/modules/aiCoach/infrastructure")>();
@@ -19,7 +32,7 @@ vi.mock("@/modules/aiCoach/infrastructure", async (importOriginal) => {
     ...actual,
     createAiCoachService: () => ({
       ask: (...args: unknown[]) => mockAsk(...args),
-      classifyExercises: vi.fn(),
+      classifyExercises: (...args: unknown[]) => mockClassifyExercises(...args),
       getTodayLogsCount: () => 0,
     }),
   };
@@ -51,16 +64,45 @@ vi.mock("@/modules/platform/presentation", () => ({
     refresh: vi.fn(),
     applyCleanupResults: vi.fn(),
   }),
+}));
+
+vi.mock("@/modules/trainingSummary/presentation", () => ({
   useTrainingSummaryStore: () => ({
     summaries: [],
   }),
 }));
 
+vi.mock("@/modules/auth/presentation", () => ({
+  useAuthStore: () => ({
+    get accessToken() {
+      return mockAccessToken.value;
+    },
+    get idToken() {
+      return mockIdToken.value;
+    },
+    get refreshToken() {
+      return mockRefreshToken.value;
+    },
+    logout: mockAuthLogout,
+    refreshSession: (force = false) =>
+      mockRefreshSession ? mockRefreshSession(force) : okAsync("refreshed-access-token"),
+    ensureValidAccessToken: () =>
+      mockEnsureValidAccessToken
+        ? mockEnsureValidAccessToken()
+        : mockAccessToken.value
+          ? okAsync(mockAccessToken.value)
+          : okAsync("default-access-token"),
+    ensureValidIdToken: () =>
+      mockEnsureValidIdToken
+        ? mockEnsureValidIdToken()
+        : mockIdToken.value
+          ? okAsync(mockIdToken.value)
+          : okAsync("default-id-token"),
+  }),
+}));
+
 vi.mock("@/modules/profile/presentation", () => ({
   useUserProfileStore: () => ({
-    get apiKey() {
-      return mockApiKey.value;
-    },
     userProfile: {},
   }),
 }));
@@ -98,13 +140,23 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
     mockExerciseLogs.value = [];
     mockIsLogsLoading.value = false;
     mockIsLogsRefreshing.value = false;
-    mockApiKey.value = null;
+    mockAccessToken.value = null;
+    mockIdToken.value = null;
+    mockRefreshToken.value = null;
+    mockEnsureValidAccessToken = undefined;
+    mockEnsureValidIdToken = undefined;
     for (let i = 0; i < 10; i++) {
       await Promise.resolve();
     }
     localStorage.clear();
     setActivePinia(createPinia());
     mockAsk.mockReset();
+    mockClassifyExercises.mockReset();
+    mockClassifyExercises.mockReturnValue(okAsync({ classifications: [] }));
+    mockAuthLogout.mockReset();
+    mockRefreshSession = undefined;
+    mockEnsureValidAccessToken = undefined;
+    mockEnsureValidIdToken = undefined;
   });
 
   it("evaluates completed sessions when activePlan is set after exerciseLogs is already loaded", async () => {
@@ -248,7 +300,7 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
     const { toasts } = useToast();
     toasts.value = [];
 
-    vi.spyOn(orchestrator, "requestAdvice").mockReturnValue(errAsync("missing-api-key"));
+    vi.spyOn(orchestrator, "requestAdvice").mockReturnValue(errAsync("rate-limit-exceeded"));
 
     const vm = useCoachChatViewModel();
     vm.userQuestion.value = "How many sets?";
@@ -257,7 +309,7 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
 
     expect(toasts.value.length).toBeGreaterThan(0);
     expect(toasts.value[toasts.value.length - 1]?.description).toBe(
-      "No API Key configured! Please add one in your profile.",
+      "Daily AI coaching limit reached. Quota resets at 00:00 UTC.",
     );
     expect(vm.userQuestion.value).toBe("How many sets?");
   });
@@ -266,7 +318,7 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date("2026-10-28T08:29:00.000Z")); // Wednesday
-      mockApiKey.value = "test-api-key";
+      mockAccessToken.value = "test-access-token";
       mockIsLogsLoading.value = true;
       mockExerciseLogs.value = [];
 
@@ -330,6 +382,9 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
       mockIsLogsLoading.value = false;
       await nextTick();
       await nextTick();
+      for (let i = 0; i < 5; i++) {
+        await Promise.resolve();
+      }
 
       // Now AI request is dispatched with W1-D1 marked completed and loaded logs present
       expect(mockAsk).toHaveBeenCalledTimes(1);
@@ -345,7 +400,7 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date("2026-10-28T08:29:00.000Z"));
-      mockApiKey.value = "test-api-key";
+      mockAccessToken.value = "test-access-token";
       mockIsLogsLoading.value = false;
 
       const plan = TrainingPlan.create("2026-10-26T08:00:00.000Z", 1, [
@@ -421,7 +476,7 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date("2026-10-28T08:29:00.000Z"));
-      mockApiKey.value = "test-api-key";
+      mockAccessToken.value = "test-access-token";
       mockIsLogsLoading.value = false;
 
       // Logs from Monday (Bench Press) are already loaded in exerciseLogsStore
@@ -495,7 +550,7 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date("2026-10-28T08:29:00.000Z"));
-      mockApiKey.value = "test-api-key";
+      mockAccessToken.value = "test-access-token";
       mockIsLogsLoading.value = true;
       mockExerciseLogs.value = [];
 
@@ -539,6 +594,9 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
 
       // 3. Direct call to ensureSessionAdvice should consume pending flag and trigger mockAsk exactly once
       await orchestrator.ensureSessionAdvice();
+      for (let i = 0; i < 5; i++) {
+        await Promise.resolve();
+      }
       expect(mockAsk).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
@@ -549,7 +607,7 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date("2026-11-06T00:15:00"));
-      mockApiKey.value = "test-key";
+      mockAccessToken.value = "test-key";
 
       // Workout started Thursday 23:30, last log Friday 00:05 (active session)
       mockExerciseLogs.value = [
@@ -583,7 +641,7 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date("2026-11-06T00:15:00"));
-      mockApiKey.value = "test-key";
+      mockAccessToken.value = "test-key";
 
       const planStore = useTrainingPlanStore();
       const plan = TrainingPlan.create("2026-11-01T00:00:00.000Z", 1, [
@@ -630,7 +688,7 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date("2026-11-06T00:15:00"));
-      mockApiKey.value = "test-key";
+      mockAccessToken.value = "test-key";
       mockAsk.mockReturnValue(
         okAsync({
           advice: { coachMessage: "New cycle plan." },
@@ -680,6 +738,9 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
 
       // Trigger ensureSessionAdvice after workout ended
       await orchestrator.ensureSessionAdvice();
+      for (let i = 0; i < 5; i++) {
+        await Promise.resolve();
+      }
 
       // Plan should be cleared and generateNewPlan called!
       expect(planStore.activePlan).toBeNull();
@@ -729,5 +790,93 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("maps resolveAccessToken to coaching-request-failed when offline with valid refreshToken", async () => {
+    mockAccessToken.value = null;
+    mockIdToken.value = null;
+    mockRefreshToken.value = "valid-refresh-token";
+    mockEnsureValidIdToken = vi.fn().mockReturnValue(errAsync("token-refresh-failed"));
+
+    const orchestrator = useAiOrchestratorStore();
+    const result = await orchestrator.requestAdvice();
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toBe("coaching-request-failed");
+  });
+
+  it("maps resolveAccessToken to unauthorized when refreshToken is invalid or missing", async () => {
+    mockAccessToken.value = null;
+    mockIdToken.value = null;
+    mockRefreshToken.value = "invalid-refresh-token";
+    mockEnsureValidIdToken = vi.fn().mockReturnValue(errAsync("refresh-token-invalid"));
+
+    const orchestrator = useAiOrchestratorStore();
+    const result = await orchestrator.requestAdvice();
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toBe("unauthorized");
+    expect(mockAuthLogout).toHaveBeenCalled();
+  });
+
+  it("forces a token refresh, uses refreshed token directly, and retries once when ai-coach returns unauthorized", async () => {
+    mockRefreshToken.value = "valid-refresh-token";
+    mockEnsureValidIdToken = vi
+      .fn()
+      .mockReturnValueOnce(okAsync("stale-id-token"))
+      .mockReturnValueOnce(okAsync("stale-id-token"));
+    mockRefreshSession = vi.fn().mockReturnValue(okAsync("fresh-access-token"));
+    mockAsk.mockReturnValueOnce(errAsync("unauthorized")).mockReturnValueOnce(
+      okAsync({
+        advice: { coachMessage: "Recovered after refresh" },
+        requestPayload: "prompt",
+      }),
+    );
+
+    const orchestrator = useAiOrchestratorStore();
+    const result = await orchestrator.requestAdvice();
+
+    expect(mockRefreshSession).toHaveBeenCalledWith(true);
+    expect(mockAsk).toHaveBeenCalledTimes(2);
+    expect(mockAsk.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({ accessToken: "fresh-access-token" }),
+    );
+    expect(result.isOk()).toBe(true);
+  });
+
+  it("re-runs exercise pre-classification after forced token refresh on 401", async () => {
+    mockRefreshToken.value = "valid-refresh-token";
+    mockEnsureValidIdToken = vi.fn().mockReturnValue(okAsync("stale-id-token"));
+    mockRefreshSession = vi.fn().mockReturnValue(okAsync("fresh-access-token"));
+    mockExerciseLogs.value = [
+      {
+        id: "log-1",
+        exerciseName: "Xyzzy Unclassified Press 99",
+        weight: 20,
+        reps: 12,
+        rpe: 8,
+        loggedAt: new Date("2026-11-13T10:00:00Z"),
+      },
+    ];
+    mockClassifyExercises
+      .mockReturnValueOnce(errAsync("unauthorized"))
+      .mockReturnValueOnce(okAsync({ classifications: [] }));
+    mockAsk.mockReturnValueOnce(
+      okAsync({
+        advice: { coachMessage: "Classified and answered" },
+        requestPayload: "prompt",
+      }),
+    );
+
+    const orchestrator = useAiOrchestratorStore();
+    const result = await orchestrator.requestAdvice();
+
+    expect(mockClassifyExercises).toHaveBeenCalledTimes(2);
+    expect(mockClassifyExercises.mock.calls[1]?.[1]).toBe("fresh-access-token");
+    expect(mockAsk).toHaveBeenCalledTimes(1);
+    expect(mockAsk.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ accessToken: "fresh-access-token" }),
+    );
+    expect(result.isOk()).toBe(true);
   });
 });

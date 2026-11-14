@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowLeft, Check, Sparkles } from "@lucide/vue";
+import { ArrowLeft, Check } from "@lucide/vue";
 import { useStepper } from "@vueuse/core";
 import { storeToRefs } from "pinia";
 import { computed, watch } from "vue";
@@ -12,7 +12,6 @@ import type {
 } from "@/modules/profile/presentation";
 import { useUserProfileStore, WIZARD_STEPS } from "@/modules/profile/presentation";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
-import UiInput from "@/shared/presentation/components/ui/UiInput.vue";
 import UiNumberField from "@/shared/presentation/components/ui/UiNumberField.vue";
 import UiTextarea from "@/shared/presentation/components/ui/UiTextarea.vue";
 import UiToggleGroup from "@/shared/presentation/components/ui/UiToggleGroup.vue";
@@ -21,7 +20,7 @@ import UiToggleGroupItem from "@/shared/presentation/components/ui/UiToggleGroup
 const router = useRouter();
 const route = useRoute();
 const profileStore = useUserProfileStore();
-const { userProfile, apiKey } = storeToRefs(profileStore);
+const { userProfile } = storeToRefs(profileStore);
 
 const isEditMode = computed(() => route.query.mode === "edit");
 
@@ -67,13 +66,6 @@ const equipmentOptionLabels: [string, EquipmentOption][] = [
   ["Cardio machines", "cardio_machine"],
   ["Medicine ball", "medicine_ball"],
 ];
-
-const apiKeyString = computed({
-  get: () => apiKey.value || "",
-  set: (val: string) => {
-    apiKey.value = val || null;
-  },
-});
 
 const workoutDaysString = computed({
   get: () =>
@@ -299,21 +291,6 @@ function skipWizard() {
             placeholder="e.g. Bad left knee, want to focus on explosive strength..."
             class="min-h-[160px] overflow-hidden"
           />
-        </template>
-
-        <!-- API Key -->
-        <template v-else-if="stepper.isCurrent('apikey')">
-          <h2 class="text-3xl font-bold mb-2 tracking-tight">Enable AI Coach</h2>
-          <p class="text-muted-foreground mb-10 text-lg">Enter your Gemini API Key to enable personalized feedback.</p>
-          <UiInput
-            v-model="apiKeyString"
-            type="password"
-            placeholder="AIzaSy..."
-            class="mb-6 font-mono tracking-widest"
-          />
-          <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="text-primary hover:underline font-semibold flex items-center gap-2">
-            Get a free API key <Sparkles class="w-4 h-4" />
-          </a>
         </template>
 
       </div>
