@@ -39,3 +39,6 @@ npm-debug.log*
 # Supabase
 supabase/.temp/
 supabase/.branches/
+
+# Local environment overrides
+.env*.local
