@@ -191,6 +191,7 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     }
     activeAttemptToken = null;
     inFlightMode = null;
+    chatStore.streamingCoachMessage = "";
     chatStore.isLoading = false;
     const next = pendingRequest;
     if (!next) return null;
@@ -593,6 +594,18 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     });
   }
 
+  function finalizeActiveAttempt(clientRequestId: string): void {
+    if (activeAttemptRequestId !== clientRequestId) return;
+    activeAttemptRequestId = null;
+    chatStore.streamingCoachMessage = "";
+  }
+
+  function clearPendingCoachIfMatches(clientRequestId: string): void {
+    if (pendingCoachRequest.value?.clientRequestId === clientRequestId) {
+      clearPendingCoachRequest(true);
+    }
+  }
+
   function executeCoachingAttempt(
     accessToken: string,
     question: string | undefined,
@@ -624,6 +637,7 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     const userMessageId = userMessage.id;
     let attemptClientRequestId: string = crypto.randomUUID();
     activeAttemptRequestId = attemptClientRequestId;
+    chatStore.streamingCoachMessage = "";
     chatStore.addMessage(userMessage);
 
     pendingCoachRequest.value = {
@@ -649,11 +663,16 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
         mode: activeMode,
         activePlan: planStore.activePlan ?? undefined,
         completedSessionKeys: planStore.completedSessions,
+        onStreamPreview: (textSoFar) => {
+          if (activeAttemptRequestId !== attemptClientRequestId) return;
+          chatStore.streamingCoachMessage = textSoFar;
+        },
       },
       undefined,
       (retryClientRequestId) => {
         attemptClientRequestId = retryClientRequestId;
         activeAttemptRequestId = retryClientRequestId;
+        chatStore.streamingCoachMessage = "";
         if (pendingCoachRequest.value) {
           pendingCoachRequest.value = {
             ...pendingCoachRequest.value,
@@ -663,9 +682,7 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
       },
     )
       .andTee((result) => {
-        if (activeAttemptRequestId === attemptClientRequestId) {
-          activeAttemptRequestId = null;
-        }
+        finalizeActiveAttempt(attemptClientRequestId);
         if (pendingCoachRequest.value?.clientRequestId !== attemptClientRequestId) return;
         pendingCoachRequest.value = null;
         handleCoachingSuccess(
@@ -678,9 +695,7 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
         );
       })
       .orElse((error) => {
-        if (activeAttemptRequestId === attemptClientRequestId) {
-          activeAttemptRequestId = null;
-        }
+        finalizeActiveAttempt(attemptClientRequestId);
         // Only short-circuit as resolved when this exact request was delivered via applyRecoveredAdvice
         if (lastRecoveredRequestId === attemptClientRequestId) {
           return okAsync({ advice: { coachMessage: "" } });
@@ -690,18 +705,14 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
           error === "coaching-request-server-error" ? "coaching-request-failed" : error;
 
         if (error !== "coaching-request-failed") {
-          if (pendingCoachRequest.value?.clientRequestId === attemptClientRequestId) {
-            clearPendingCoachRequest(true);
-          }
+          clearPendingCoachIfMatches(attemptClientRequestId);
           return errAsync(normalizedError);
         }
 
         return ResultAsync.fromPromise(
           waitForForeground().then((canRecover) => {
             if (!canRecover) {
-              if (pendingCoachRequest.value?.clientRequestId === attemptClientRequestId) {
-                clearPendingCoachRequest(true);
-              }
+              clearPendingCoachIfMatches(attemptClientRequestId);
               return err("coaching-request-failed" as const);
             }
             return recoverPendingRequest();

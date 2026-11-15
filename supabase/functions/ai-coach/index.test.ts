@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { GenerateWithFallbackOptions } from "../_shared/gemini";
+import type { GenerateWithFallbackOptions, StreamWithFallbackOptions } from "../_shared/gemini";
 import { type AiCoachHandlerDeps, handleAiCoachRequest } from "./index";
 import {
   type AiRequestResultRow,
@@ -124,15 +124,69 @@ function createMockRequestResultsStore(initial: Record<string, AiRequestResultRo
   return { store, rows };
 }
 
+interface ParsedSseEvent {
+  event: string;
+  data: unknown;
+}
+
+async function readSseEvents(response: Response): Promise<ParsedSseEvent[]> {
+  if (!response.body) {
+    throw new Error("Expected SSE response body");
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let raw = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      raw += decoder.decode(value, { stream: true });
+    }
+    raw += decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
+
+  return raw
+    .split(/\r?\n\r?\n/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block) => {
+      let event = "message";
+      const dataLines: string[] = [];
+      for (const line of block.split(/\r?\n/)) {
+        if (line.startsWith("event:")) {
+          event = line.slice(6).trim();
+        } else if (line.startsWith("data:")) {
+          dataLines.push(line.slice(5).trimStart());
+        }
+      }
+      return {
+        event,
+        data: JSON.parse(dataLines.join("\n")),
+      };
+    });
+}
+
 function createDeps(overrides: Partial<AiCoachHandlerDeps> = {}) {
+  const coachAdvice = {
+    coachMessage: "Focus on progressive overload on Chest today.",
+    scratchpad: "1. Balanced push volume.",
+    suggestedFollowUps: [{ label: "Adjust weight?", prompt: "Adjust weight?" }],
+  };
   const generateSpy = vi.fn(async (_opts: GenerateWithFallbackOptions<unknown>) => ({
-    data: {
-      coachMessage: "Focus on progressive overload on Chest today.",
-      scratchpad: "1. Balanced push volume.",
-      suggestedFollowUps: [{ label: "Adjust weight?", prompt: "Adjust weight?" }],
-    },
+    data: coachAdvice,
     model: "gemini-3.8-flash",
   }));
+  const streamSpy = vi.fn(async (opts: StreamWithFallbackOptions<unknown>) => {
+    opts.onAccumulatedText?.('{"coachMessage": "Focus on progressive ');
+    opts.onAccumulatedText?.('{"coachMessage": "Focus on progressive overload on Chest today."}');
+    return {
+      data: coachAdvice,
+      model: "gemini-3.8-flash",
+    };
+  });
+  const waitUntilPromises: Promise<unknown>[] = [];
   const { store: defaultRequestResults } = createMockRequestResultsStore();
 
   const deps: AiCoachHandlerDeps = {
@@ -153,11 +207,17 @@ function createDeps(overrides: Partial<AiCoachHandlerDeps> = {}) {
     generateWithFallback: generateSpy as unknown as NonNullable<
       AiCoachHandlerDeps["generateWithFallback"]
     >,
+    streamWithFallback: streamSpy as unknown as NonNullable<
+      AiCoachHandlerDeps["streamWithFallback"]
+    >,
+    waitUntil: (promise) => {
+      waitUntilPromises.push(promise);
+    },
     requestResults: defaultRequestResults,
     ...overrides,
   };
 
-  return { deps, generateSpy };
+  return { deps, generateSpy, streamSpy, waitUntilPromises };
 }
 
 describe("handleAiCoachRequest", () => {
@@ -198,33 +258,49 @@ describe("handleAiCoachRequest", () => {
     expect(await response.json()).toEqual({ error: "unauthorized" });
   });
 
-  it("uses thinkingBudget 256 without trainingPlan schema for routine execution chat", async () => {
-    const { deps, generateSpy } = createDeps();
+  it("streams SSE with security headers and uses thinkingBudget 256 without trainingPlan schema for routine execution chat", async () => {
+    const { deps, streamSpy } = createDeps();
     const response = await handleAiCoachRequest(
       createJsonRequest(createValidCoachDto({ mode: "execution", question: "Weight for Bench?" })),
       deps,
     );
 
     expect(response.status).toBe(200);
-    const json = (await response.json()) as Record<string, unknown>;
-    expect(json.advice).toBeDefined();
-    expect(json.requestPayload).toBeUndefined();
-    expect(json.quota).toEqual({
+    expect(response.headers.get("Content-Type")).toBe("text/event-stream; charset=utf-8");
+    expect(response.headers.get("Cache-Control")).toBe("no-store, no-transform");
+    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+
+    const events = await readSseEvents(response);
+    expect(events.map((e) => e.event)).toEqual(["preview", "preview", "complete"]);
+    expect(events[0]?.data).toEqual({ text: "Focus on progressive " });
+    expect(events[1]?.data).toEqual({ text: "Focus on progressive overload on Chest today." });
+
+    const completeData = events[2]?.data as Record<string, unknown>;
+    expect(completeData.advice).toBeDefined();
+    expect(completeData.requestPayload).toBeUndefined();
+    expect(completeData.quota).toEqual({
       currentCount: 1,
       dailyLimit: 10,
       resetAt: "2026-11-16T00:00:00.000Z",
     });
 
-    const genCall = generateSpy.mock.calls[0]?.[0];
+    const genCall = streamSpy.mock.calls[0]?.[0];
     expect(genCall?.thinkingConfig).toEqual({ thinkingBudget: 256, includeThoughts: false });
     expect(genCall?.timeoutMs).toBe(55_000);
     expect(
       (genCall?.responseJsonSchema.properties as Record<string, unknown>)?.trainingPlan,
     ).toBeUndefined();
+    expect(genCall?.responseJsonSchema.propertyOrdering).toEqual([
+      "coachMessage",
+      "scratchpad",
+      "startDeload",
+      "suggestedFollowUps",
+      "recommendedWorkout",
+    ]);
   });
 
   it("uses timeoutMs 40000 for non-planning mid-workout follow-up questions", async () => {
-    const { deps, generateSpy } = createDeps();
+    const { deps, streamSpy } = createDeps();
     const response = await handleAiCoachRequest(
       createJsonRequest(
         createValidCoachDto({
@@ -240,12 +316,13 @@ describe("handleAiCoachRequest", () => {
     );
 
     expect(response.status).toBe(200);
-    const genCall = generateSpy.mock.calls[0]?.[0];
+    await readSseEvents(response);
+    const genCall = streamSpy.mock.calls[0]?.[0];
     expect(genCall?.timeoutMs).toBe(40_000);
   });
 
   it("uses thinkingBudget 1024 and enables trainingPlan schema for planning mode", async () => {
-    const { deps, generateSpy } = createDeps();
+    const { deps, streamSpy } = createDeps();
     const response = await handleAiCoachRequest(
       createJsonRequest(
         createValidCoachDto({ mode: "planning", question: "Build my 4-week split" }),
@@ -254,7 +331,8 @@ describe("handleAiCoachRequest", () => {
     );
 
     expect(response.status).toBe(200);
-    const genCall = generateSpy.mock.calls[0]?.[0];
+    await readSseEvents(response);
+    const genCall = streamSpy.mock.calls[0]?.[0];
     expect(genCall?.thinkingConfig).toEqual({ thinkingBudget: 1024, includeThoughts: false });
     expect(
       (genCall?.responseJsonSchema.properties as Record<string, unknown>)?.trainingPlan,
@@ -262,7 +340,7 @@ describe("handleAiCoachRequest", () => {
   });
 
   it("enables trainingPlan schema in execution mode when user explicitly asks to update plan", async () => {
-    const { deps, generateSpy } = createDeps();
+    const { deps, streamSpy } = createDeps();
     const response = await handleAiCoachRequest(
       createJsonRequest(
         createValidCoachDto({
@@ -274,64 +352,154 @@ describe("handleAiCoachRequest", () => {
     );
 
     expect(response.status).toBe(200);
-    const genCall = generateSpy.mock.calls[0]?.[0];
+    await readSseEvents(response);
+    const genCall = streamSpy.mock.calls[0]?.[0];
     expect(genCall?.thinkingConfig).toEqual({ thinkingBudget: 256, includeThoughts: false });
     expect(
       (genCall?.responseJsonSchema.properties as Record<string, unknown>)?.trainingPlan,
     ).toBeDefined();
   });
 
-  it("retries fallback model inside real generateWithFallback when primary returns invalid JSON", async () => {
+  it("retries fallback model inside real streamWithFallback before preview commits", async () => {
+    const encoder = new TextEncoder();
+    const sseBody = (chunks: string[]) =>
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          for (const c of chunks) {
+            controller.enqueue(encoder.encode(c));
+          }
+          controller.close();
+        },
+      });
+
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
         new Response(
-          JSON.stringify({
-            candidates: [{ content: { parts: [{ text: "{not-valid-json" }] } }],
-          }),
+          sseBody([
+            `data: ${JSON.stringify({
+              candidates: [{ content: { parts: [{ text: "{not-valid-json" }] } }],
+            })}\n\n`,
+          ]),
           { status: 200 },
         ),
       )
       .mockResolvedValueOnce(
         new Response(
-          JSON.stringify({
-            candidates: [
-              {
-                content: {
-                  parts: [
-                    {
-                      text: JSON.stringify({
-                        coachMessage: "Recovered via fallback model.",
-                        scratchpad: "Checked recovery status.",
-                      }),
-                    },
-                  ],
+          sseBody([
+            `data: ${JSON.stringify({
+              candidates: [
+                {
+                  content: {
+                    parts: [{ text: '{"coachMessage": "Recovered via ' }],
+                  },
                 },
-              },
-            ],
-          }),
+              ],
+            })}\n\n`,
+            `data: ${JSON.stringify({
+              candidates: [
+                {
+                  content: {
+                    parts: [
+                      { text: 'fallback model.", "scratchpad": "Checked recovery status."}' },
+                    ],
+                  },
+                  finishReason: "STOP",
+                },
+              ],
+            })}\n\n`,
+          ]),
           { status: 200 },
         ),
       );
 
     try {
       const { deps } = createDeps();
-      delete deps.generateWithFallback;
+      delete deps.streamWithFallback;
       const response = await handleAiCoachRequest(
         createJsonRequest(createValidCoachDto({ question: "How should I train today?" })),
         deps,
       );
 
       expect(response.status).toBe(200);
-      const json = (await response.json()) as { advice: { coachMessage: string } };
-      expect(json.advice.coachMessage).toBe("Recovered via fallback model.");
+      const events = await readSseEvents(response);
+      expect(events.map((e) => e.event)).toEqual(["preview", "preview", "complete"]);
+      const completePayload = events[2]?.data as { advice: { coachMessage: string } };
+      expect(completePayload.advice.coachMessage).toBe("Recovered via fallback model.");
       expect(fetchSpy).toHaveBeenCalledTimes(2);
     } finally {
       fetchSpy.mockRestore();
     }
   });
 
-  it("refunds quota with usageDate, returns 502, and emits zero PII when all models fail", async () => {
+  it("ignores whitespace-only initial preview chunks so model fallback remains enabled", async () => {
+    const encoder = new TextEncoder();
+    const sseBody = (chunks: string[]) =>
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          for (const c of chunks) {
+            controller.enqueue(encoder.encode(c));
+          }
+          controller.close();
+        },
+      });
+
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          sseBody([
+            `data: ${JSON.stringify({
+              candidates: [{ content: { parts: [{ text: '{"coachMessage": "   ' }] } }],
+            })}\n\n`,
+            `data: ${JSON.stringify({
+              candidates: [{ content: { parts: [{ text: "" }] }, finishReason: "MAX_TOKENS" }],
+            })}\n\n`,
+          ]),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          sseBody([
+            `data: ${JSON.stringify({
+              candidates: [
+                {
+                  content: {
+                    parts: [
+                      { text: '{"coachMessage": "Clean fallback reply.", "scratchpad": "OK"}' },
+                    ],
+                  },
+                  finishReason: "STOP",
+                },
+              ],
+            })}\n\n`,
+          ]),
+          { status: 200 },
+        ),
+      );
+
+    try {
+      const { deps } = createDeps();
+      delete deps.streamWithFallback;
+      const response = await handleAiCoachRequest(
+        createJsonRequest(createValidCoachDto({ question: "How should I train today?" })),
+        deps,
+      );
+
+      expect(response.status).toBe(200);
+      const events = await readSseEvents(response);
+      expect(events.map((e) => e.event)).toEqual(["preview", "complete"]);
+      expect(events[0]?.data).toEqual({ text: "Clean fallback reply." });
+      const completePayload = events[1]?.data as { advice: { coachMessage: string } };
+      expect(completePayload.advice.coachMessage).toBe("Clean fallback reply.");
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("refunds quota with usageDate, emits SSE error event, and emits zero PII when all models fail", async () => {
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     const consoleInfoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
@@ -344,9 +512,9 @@ describe("handleAiCoachRequest", () => {
           daily_limit: 10,
           reset_at: "2026-11-16T00:00:00.000Z",
         })),
-        generateWithFallback: vi.fn(async () => {
+        streamWithFallback: vi.fn(async () => {
           throw new Error("All Gemini models failed");
-        }) as unknown as NonNullable<AiCoachHandlerDeps["generateWithFallback"]>,
+        }) as unknown as NonNullable<AiCoachHandlerDeps["streamWithFallback"]>,
       });
 
       const response = await handleAiCoachRequest(
@@ -362,8 +530,9 @@ describe("handleAiCoachRequest", () => {
         deps,
       );
 
-      expect(response.status).toBe(502);
-      expect(await response.json()).toEqual({ error: "coaching-request-failed" });
+      expect(response.status).toBe(200);
+      const events = await readSseEvents(response);
+      expect(events).toEqual([{ event: "error", data: { error: "coaching-request-failed" } }]);
       expect(deps.refundQuota).toHaveBeenCalledWith(
         "https://test.supabase.co",
         "test-service-role",
@@ -387,6 +556,37 @@ describe("handleAiCoachRequest", () => {
       consoleLogSpy.mockRestore();
       consoleInfoSpy.mockRestore();
     }
+  });
+
+  it("keeps action classify non-streaming JSON", async () => {
+    const { deps, streamSpy } = createDeps({
+      generateWithFallback: vi.fn(async () => ({
+        data: {
+          classifications: [
+            {
+              exerciseName: "Barbell Row",
+              primaryMuscle: "Upper Back",
+              secondaryMuscles: [{ muscleGroup: "Biceps", contribution: 0.4 }],
+              confidence: 0.92,
+            },
+          ],
+        },
+        model: "gemini-2.5-flash",
+      })) as unknown as NonNullable<AiCoachHandlerDeps["generateWithFallback"]>,
+    });
+
+    const response = await handleAiCoachRequest(
+      createJsonRequest({
+        action: "classify",
+        exerciseNames: ["Barbell Row"],
+        muscleGroups: ["Upper Back", "Biceps"],
+      }),
+      deps,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("application/json");
+    expect(streamSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -526,6 +726,7 @@ describe("ai-coach idempotency and request recovery", () => {
     );
 
     expect(res.status).toBe(200);
+    await readSseEvents(res);
     expect(store.markCompleted).toHaveBeenCalledTimes(1);
     const savedPayload = vi.mocked(store.markCompleted).mock.calls[0]?.[2] as Record<
       string,
@@ -543,9 +744,9 @@ describe("ai-coach idempotency and request recovery", () => {
     const { store, rows } = createMockRequestResultsStore();
     const { deps } = createDeps({
       requestResults: store,
-      generateWithFallback: vi.fn(async () => {
+      streamWithFallback: vi.fn(async () => {
         throw new Error("Gemini timeout");
-      }) as unknown as NonNullable<AiCoachHandlerDeps["generateWithFallback"]>,
+      }) as unknown as NonNullable<AiCoachHandlerDeps["streamWithFallback"]>,
     });
 
     const res = await handleAiCoachRequest(
@@ -553,7 +754,9 @@ describe("ai-coach idempotency and request recovery", () => {
       deps,
     );
 
-    expect(res.status).toBe(502);
+    expect(res.status).toBe(200);
+    const events = await readSseEvents(res);
+    expect(events).toEqual([{ event: "error", data: { error: "coaching-request-failed" } }]);
     expect(deps.refundQuota).toHaveBeenCalledTimes(1);
     expect(store.markFailed).toHaveBeenCalledWith(
       "google-sub-123",
@@ -561,6 +764,56 @@ describe("ai-coach idempotency and request recovery", () => {
       "coaching-request-failed",
     );
     expect(rows.get(`google-sub-123:${VALID_UUID_V4}`)?.status).toBe("failed");
+  });
+
+  it("survives client disconnect via waitUntil, persists completion, and delivers on recover", async () => {
+    const { store } = createMockRequestResultsStore();
+    let resolveGemini!: (val: { data: unknown; model: string }) => void;
+    const geminiDeferred = new Promise<{ data: unknown; model: string }>((resolve) => {
+      resolveGemini = resolve;
+    });
+
+    const { deps, waitUntilPromises } = createDeps({
+      requestResults: store,
+      streamWithFallback: vi.fn(async (opts: StreamWithFallbackOptions<unknown>) => {
+        opts.onAccumulatedText?.('{"coachMessage": "Background answer ');
+        return geminiDeferred;
+      }) as unknown as NonNullable<AiCoachHandlerDeps["streamWithFallback"]>,
+    });
+
+    const res = await handleAiCoachRequest(
+      createJsonRequest(createValidCoachDto({ clientRequestId: VALID_UUID_V4 })),
+      deps,
+    );
+    expect(res.status).toBe(200);
+    expect(waitUntilPromises).toHaveLength(1);
+
+    // Client cancels SSE stream mid-flight (e.g. screen locked / network drop)
+    if (!res.body) throw new Error("Expected SSE response body");
+    const reader = res.body.getReader();
+    await reader.read();
+    await reader.cancel("client-disconnected");
+    reader.releaseLock();
+
+    // Upstream completes in background after disconnect
+    resolveGemini({
+      data: { coachMessage: "Background answer completed cleanly." },
+      model: "gemini-3.8-flash",
+    });
+    await Promise.all(waitUntilPromises);
+
+    expect(store.markCompleted).toHaveBeenCalledTimes(1);
+    const recoverRes = await handleAiCoachRequest(
+      createJsonRequest({ action: "recover", clientRequestId: VALID_UUID_V4 }),
+      deps,
+    );
+    expect(recoverRes.status).toBe(200);
+    const recoveredJson = (await recoverRes.json()) as {
+      status: string;
+      advice: { coachMessage: string };
+    };
+    expect(recoveredJson.status).toBe("completed");
+    expect(recoveredJson.advice.coachMessage).toBe("Background answer completed cleanly.");
   });
 
   it("recovers completed result with delete-on-recovery, returns 202 while processing, 502 on failed, and 404 for unknown/other-user", async () => {

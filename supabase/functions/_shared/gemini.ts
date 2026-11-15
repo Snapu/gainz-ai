@@ -47,7 +47,10 @@ function isRetryableStatus(status: number): boolean {
   return status === 404 || status === 429 || status >= 500;
 }
 
-function extractTextAndFinishReason(payload: unknown): {
+function extractTextAndFinishReason(
+  payload: unknown,
+  trimText = true,
+): {
   text: string;
   finishReason?: string;
 } {
@@ -70,8 +73,9 @@ function extractTextAndFinishReason(payload: unknown): {
     }
   }
 
+  const rawText = textParts.join("");
   return {
-    text: textParts.join("").trim(),
+    text: trimText ? rawText.trim() : rawText,
     finishReason,
   };
 }
@@ -136,6 +140,51 @@ export function buildGeminiRequestBody(options: {
   return requestBody;
 }
 
+function parseCompletedJson<T>(rawText: string, parseResponse: (parsedJson: unknown) => T): T {
+  const cleanJsonText = stripMarkdownCodeFences(rawText);
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(cleanJsonText);
+  } catch {
+    throw new RetryableModelError("invalid-json");
+  }
+
+  try {
+    return parseResponse(parsedJson);
+  } catch {
+    throw new RetryableModelError("schema-validation-failed");
+  }
+}
+
+async function fetchGeminiResponse(
+  url: string,
+  geminiApiKey: string,
+  requestBody: Record<string, unknown>,
+  signal: AbortSignal,
+  extraHeaders?: Record<string, string>,
+): Promise<Response> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": geminiApiKey,
+      ...extraHeaders,
+    },
+    body: JSON.stringify(requestBody),
+    signal,
+  });
+
+  if (!res.ok) {
+    await res.text().catch(() => "");
+    if (isRetryableStatus(res.status)) {
+      throw new RetryableModelError(`upstream-http-${res.status}`);
+    }
+    throw new NonRetryableModelError(res.status);
+  }
+
+  return res;
+}
+
 async function callSingleGeminiModel<T>(
   model: string,
   geminiApiKey: string,
@@ -147,23 +196,12 @@ async function callSingleGeminiModel<T>(
   const timeoutId = setTimeout(() => controller.abort(), attemptTimeoutMs);
 
   try {
-    const res = await fetch(`${GEMINI_BASE_URL}/${model}:generateContent`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": geminiApiKey,
-      },
-      body: JSON.stringify(requestBody),
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      await res.text().catch(() => "");
-      if (isRetryableStatus(res.status)) {
-        throw new RetryableModelError(`upstream-http-${res.status}`);
-      }
-      throw new NonRetryableModelError(res.status);
-    }
+    const res = await fetchGeminiResponse(
+      `${GEMINI_BASE_URL}/${model}:generateContent`,
+      geminiApiKey,
+      requestBody,
+      controller.signal,
+    );
 
     const payload = await res.json();
     const { text, finishReason } = extractTextAndFinishReason(payload);
@@ -174,21 +212,166 @@ async function callSingleGeminiModel<T>(
       throw new RetryableModelError(`finish-${finishReason}`);
     }
 
-    const cleanJsonText = stripMarkdownCodeFences(text);
-    let parsedJson: unknown;
-    try {
-      parsedJson = JSON.parse(cleanJsonText);
-    } catch {
-      throw new RetryableModelError("invalid-json");
-    }
-
-    try {
-      return parseResponse(parsedJson);
-    } catch {
-      throw new RetryableModelError("schema-validation-failed");
-    }
+    return parseCompletedJson(text, parseResponse);
   } finally {
     clearTimeout(timeoutId);
+  }
+}
+
+function parseGeminiSseChunk(rawPayload: string): {
+  text: string;
+  finishReason?: string;
+} {
+  let chunkJson: unknown;
+  try {
+    chunkJson = JSON.parse(rawPayload);
+  } catch {
+    throw new RetryableModelError("invalid-sse-payload");
+  }
+
+  const parsed = extractTextAndFinishReason(chunkJson, false);
+  if (parsed.finishReason && parsed.finishReason !== "STOP") {
+    throw new RetryableModelError(`finish-${parsed.finishReason}`);
+  }
+  return parsed;
+}
+
+function createAttemptTimer(
+  controller: AbortController,
+  attemptTimeoutMs: number,
+  deadlineMs: number,
+) {
+  let finished = false;
+  let committed = false;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined = setTimeout(
+    () => controller.abort(),
+    attemptTimeoutMs,
+  );
+
+  return {
+    extendToDeadline() {
+      if (committed || finished || controller.signal.aborted) return;
+      committed = true;
+      clearTimeout(timeoutId);
+      const remainingMs = deadlineMs - Date.now();
+      if (remainingMs <= 0) {
+        timeoutId = undefined;
+        controller.abort();
+        return;
+      }
+      timeoutId = setTimeout(() => controller.abort(), remainingMs);
+    },
+    clear() {
+      finished = true;
+      clearTimeout(timeoutId);
+      timeoutId = undefined;
+    },
+  };
+}
+
+async function streamSingleGeminiModel<T>(
+  model: string,
+  geminiApiKey: string,
+  requestBody: Record<string, unknown>,
+  attemptTimeoutMs: number,
+  deadlineMs: number,
+  parseResponse: (parsedJson: unknown) => T,
+  onAccumulatedText: ((accumulatedText: string) => boolean | undefined) | undefined,
+  markCommitted: () => void,
+): Promise<T> {
+  const controller = new AbortController();
+  const timer = createAttemptTimer(controller, attemptTimeoutMs, deadlineMs);
+
+  try {
+    const res = await fetchGeminiResponse(
+      `${GEMINI_BASE_URL}/${model}:streamGenerateContent?alt=sse`,
+      geminiApiKey,
+      requestBody,
+      controller.signal,
+      { Accept: "text/event-stream" },
+    );
+
+    if (!res.body) {
+      throw new RetryableModelError("empty-response");
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    const onAbort = () => {
+      void reader.cancel(controller.signal.reason).catch(() => {});
+    };
+    controller.signal.addEventListener("abort", onAbort, { once: true });
+
+    let sseBuffer = "";
+    let dataLines: string[] = [];
+    let accumulatedText = "";
+    let lastFinishReason: string | undefined;
+
+    const flushEvent = () => {
+      if (dataLines.length === 0) return;
+      const rawPayload = dataLines.join("\n").trim();
+      dataLines = [];
+      if (!rawPayload || rawPayload === "[DONE]") return;
+
+      const { text, finishReason } = parseGeminiSseChunk(rawPayload);
+      if (finishReason) lastFinishReason = finishReason;
+      if (!text) return;
+
+      accumulatedText += text;
+      if (onAccumulatedText?.(accumulatedText) === true) {
+        markCommitted();
+        timer.extendToDeadline();
+      }
+    };
+
+    const consumeLine = (rawLine: string) => {
+      const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
+      if (line === "") {
+        flushEvent();
+        return;
+      }
+      if (line.startsWith(":")) return;
+      if (line.startsWith("data:")) {
+        dataLines.push(line.startsWith("data: ") ? line.slice(6) : line.slice(5));
+      }
+    };
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        sseBuffer += decoder.decode(value, { stream: true });
+        let newlineIdx = sseBuffer.indexOf("\n");
+        while (newlineIdx !== -1) {
+          consumeLine(sseBuffer.slice(0, newlineIdx));
+          sseBuffer = sseBuffer.slice(newlineIdx + 1);
+          newlineIdx = sseBuffer.indexOf("\n");
+        }
+      }
+      sseBuffer += decoder.decode();
+      if (sseBuffer.length > 0) {
+        consumeLine(sseBuffer);
+      }
+      flushEvent();
+    } finally {
+      controller.signal.removeEventListener("abort", onAbort);
+      await reader.cancel().catch(() => {});
+      reader.releaseLock();
+    }
+
+    if (controller.signal.aborted) {
+      throw new DOMException("The operation was aborted", "AbortError");
+    }
+    if (!accumulatedText.trim()) {
+      throw new RetryableModelError("empty-response");
+    }
+    if (lastFinishReason && lastFinishReason !== "STOP") {
+      throw new RetryableModelError(`finish-${lastFinishReason}`);
+    }
+
+    return parseCompletedJson(accumulatedText, parseResponse);
+  } finally {
+    timer.clear();
   }
 }
 
@@ -213,10 +396,22 @@ export interface GenerateWithFallbackOptions<T> {
   parseResponse: (parsedJson: unknown) => T;
 }
 
-export async function generateWithFallback<T>(
+export interface StreamWithFallbackOptions<T> extends GenerateWithFallbackOptions<T> {
+  /** Return true once irreversible client output was emitted to halt further model fallback. */
+  onAccumulatedText?: (accumulatedText: string) => boolean | undefined;
+}
+
+async function runModelsWithFallback<T>(
   options: GenerateWithFallbackOptions<T>,
+  executeAttempt: (
+    model: string,
+    requestBody: Record<string, unknown>,
+    attemptTimeoutMs: number,
+    deadlineMs: number,
+    markCommitted: () => void,
+  ) => Promise<T>,
 ): Promise<{ data: T; model: string }> {
-  const { geminiApiKey, models, timeoutMs, parseResponse } = options;
+  const { models, timeoutMs } = options;
   const deadlineMs = Date.now() + timeoutMs;
   const requestBody = buildGeminiRequestBody(options);
   let lastError: unknown;
@@ -228,19 +423,16 @@ export async function generateWithFallback<T>(
     const attemptTimeoutMs = computeAttemptTimeoutMs(deadlineMs, timeoutMs, i, models.length - i);
     if (attemptTimeoutMs <= 0) break;
 
+    let committed = false;
     try {
-      const data = await callSingleGeminiModel(
-        model,
-        geminiApiKey,
-        requestBody,
-        attemptTimeoutMs,
-        parseResponse,
-      );
+      const data = await executeAttempt(model, requestBody, attemptTimeoutMs, deadlineMs, () => {
+        committed = true;
+      });
       return { data, model };
     } catch (err) {
       lastError = err;
       const hasMoreModels = i + 1 < models.length;
-      if (hasMoreModels && isRetryableFailure(err)) {
+      if (!committed && hasMoreModels && isRetryableFailure(err)) {
         continue;
       }
       throw err;
@@ -248,4 +440,37 @@ export async function generateWithFallback<T>(
   }
 
   throw lastError ?? new RetryableModelError("all-models-failed");
+}
+
+export async function generateWithFallback<T>(
+  options: GenerateWithFallbackOptions<T>,
+): Promise<{ data: T; model: string }> {
+  return runModelsWithFallback(options, (model, requestBody, attemptTimeoutMs) =>
+    callSingleGeminiModel(
+      model,
+      options.geminiApiKey,
+      requestBody,
+      attemptTimeoutMs,
+      options.parseResponse,
+    ),
+  );
+}
+
+export async function streamWithFallback<T>(
+  options: StreamWithFallbackOptions<T>,
+): Promise<{ data: T; model: string }> {
+  return runModelsWithFallback(
+    options,
+    (model, requestBody, attemptTimeoutMs, deadlineMs, markCommitted) =>
+      streamSingleGeminiModel(
+        model,
+        options.geminiApiKey,
+        requestBody,
+        attemptTimeoutMs,
+        deadlineMs,
+        options.parseResponse,
+        options.onAccumulatedText,
+        markCommitted,
+      ),
+  );
 }

@@ -614,4 +614,15 @@ describe("useCoachChatViewModel", () => {
     expect(coachBubble?.requestPayload).toBeNull();
     expect(coachBubble?.scratchpad).toBe("Solid progression from last week.");
   });
+
+  it("exposes reactive streamingCoachMessage from chatStore", () => {
+    const store = useCoachChatStore();
+    const vm = useCoachChatViewModel();
+
+    expect(vm.streamingCoachMessage.value).toBe("");
+    store.streamingCoachMessage = "Live progressive overload preview...";
+    expect(vm.streamingCoachMessage.value).toBe("Live progressive overload preview...");
+    store.streamingCoachMessage = "";
+    expect(vm.streamingCoachMessage.value).toBe("");
+  });
 });

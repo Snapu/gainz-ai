@@ -120,6 +120,7 @@ export function useCoachChatViewModel(options: { isDev?: boolean } = {}) {
   const scrollContainerRef = ref<HTMLElement | null>(null);
 
   const isLoading = computed<boolean>(() => chatStore.isLoading);
+  const streamingCoachMessage = computed<string>(() => chatStore.streamingCoachMessage);
 
   function formatTime(d: Date | string): string {
     const date = typeof d === "string" ? new Date(d) : d;
@@ -306,6 +307,15 @@ export function useCoachChatViewModel(options: { isDev?: boolean } = {}) {
     }
   });
 
+  watch(streamingCoachMessage, (next, prev) => {
+    if (!next) return;
+    const el = scrollContainerRef.value;
+    const isNearBottom = !el || el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (!prev || isNearBottom) {
+      scrollToBottom(false);
+    }
+  });
+
   watch(isKeyboardVisible, (visible) => {
     if (visible) {
       scrollToBottom(true);
@@ -315,6 +325,7 @@ export function useCoachChatViewModel(options: { isDev?: boolean } = {}) {
   return {
     isDev,
     isLoading,
+    streamingCoachMessage,
     currentPageIndex,
     userQuestion,
     openScratchpads,

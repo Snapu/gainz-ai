@@ -285,6 +285,9 @@ export function renderMarkdown(text: string): string {
   }) as string;
   return DOMPurify.sanitize(rawHtml, {
     ALLOWED_TAGS: ["p", "strong", "em", "br", "ul", "ol", "li", "code", "blockquote"],
+    ALLOWED_ATTR: [],
+    ALLOW_ARIA_ATTR: false,
+    ALLOW_DATA_ATTR: false,
   });
 }
 

@@ -48,6 +48,7 @@ describe("requestCoachingAdvice", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -395,5 +396,152 @@ describe("requestCoachingAdvice", () => {
 
     const serverFailedRes = await recoverCoachingAdvice(clientRequestId, "token");
     expect(serverFailedRes.isErr() && serverFailedRes.error).toBe("server-failed");
+  });
+
+  it("streams live SSE preview chunks across UTF-8/CRLF splits, completes advice, and learns muscle groups", async () => {
+    const encoder = new TextEncoder();
+    const rawSse =
+      'event: preview\r\ndata: {"text":"Focus on "}\r\n\r\n' +
+      'event: preview\ndata: {"text":"Focus on Progressive Overload 💪"}\n\n' +
+      `event: complete\ndata: ${JSON.stringify({
+        advice: {
+          coachMessage: "Focus on Progressive Overload 💪",
+          recommendedWorkout: [
+            {
+              exerciseName: "Incline DB Press",
+              targetSets: 3,
+              targetReps: "8-10",
+              primaryMuscle: "Chest",
+            },
+          ],
+        },
+        quota: { currentCount: 2, dailyLimit: 15, resetAt: "2026-11-16T00:00:00.000Z" },
+      })}\n\n`;
+
+    const bytes = encoder.encode(rawSse);
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        // Split across multi-byte UTF-8 emoji and SSE frame boundaries
+        controller.enqueue(bytes.slice(0, 22));
+        controller.enqueue(bytes.slice(22, 68));
+        controller.enqueue(bytes.slice(68, 120));
+        controller.enqueue(bytes.slice(120));
+        controller.close();
+      },
+    });
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(body, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+      }),
+    );
+
+    const previews: string[] = [];
+    const result = await requestCoachingAdvice(
+      createBaseRequest({
+        onStreamPreview: (text) => previews.push(text),
+      }),
+    );
+
+    expect(previews).toEqual(["Focus on ", "Focus on Progressive Overload 💪"]);
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.advice.coachMessage).toBe("Focus on Progressive Overload 💪");
+    }
+    expect(localStorage.getItem("exerciseMuscleMap")).toContain("Chest");
+    expect(body.locked).toBe(false);
+  });
+
+  it("maps SSE event: error to coaching-request-server-error", async () => {
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('event: preview\ndata: {"text":"Start"}\n\n'));
+        controller.enqueue(
+          encoder.encode('event: error\ndata: {"error":"coaching-request-failed"}\n\n'),
+        );
+        controller.close();
+      },
+    });
+    fetchMock.mockResolvedValueOnce(
+      new Response(body, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    );
+
+    const previews: string[] = [];
+    const result = await requestCoachingAdvice(
+      createBaseRequest({
+        onStreamPreview: (text) => previews.push(text),
+      }),
+    );
+
+    expect(previews).toEqual(["Start"]);
+    expect(result.isErr() && result.error).toBe("coaching-request-server-error");
+    expect(body.locked).toBe(false);
+  });
+
+  it("maps unexpected SSE stream termination before complete to coaching-request-failed and releases lock", async () => {
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('event: preview\ndata: {"text":"Halfway..."}\n\n'));
+        controller.close();
+      },
+    });
+    fetchMock.mockResolvedValueOnce(
+      new Response(body, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    );
+
+    const result = await requestCoachingAdvice(createBaseRequest());
+
+    expect(result.isErr() && result.error).toBe("coaching-request-failed");
+    expect(body.locked).toBe(false);
+  });
+
+  it("aborts stalled SSE stream on client timeout and releases reader lock", async () => {
+    vi.useFakeTimers();
+    let capturedBody: ReadableStream<Uint8Array> | null = null;
+    fetchMock.mockImplementationOnce(async (_url: string, init?: RequestInit) => {
+      capturedBody = new ReadableStream<Uint8Array>({
+        start(controller) {
+          init?.signal?.addEventListener("abort", () => {
+            controller.error(new DOMException("Aborted", "AbortError"));
+          });
+        },
+      });
+      return new Response(capturedBody, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      });
+    });
+
+    const pending = requestCoachingAdvice(
+      createBaseRequest({
+        previousMessages: [
+          {
+            id: "m1",
+            role: "user",
+            content: "Warmup?",
+            timestamp: "2026-11-15T10:00:00.000Z",
+            sessionId: "2026-11-15",
+            logsCount: 0,
+          },
+        ],
+        mode: "execution",
+      }),
+    );
+
+    await vi.advanceTimersByTimeAsync(65_100);
+    const result = await pending;
+
+    expect(result.isErr() && result.error).toBe("coaching-request-failed");
+    expect(capturedBody).not.toBeNull();
+    expect((capturedBody as ReadableStream<Uint8Array> | null)?.locked).toBe(false);
   });
 });

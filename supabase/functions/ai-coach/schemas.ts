@@ -501,11 +501,6 @@ export function createCoachingAdviceJsonSchema(
   };
 
   const properties: Record<string, unknown> = {
-    startDeload: {
-      type: "boolean",
-      description:
-        "Set to true ONLY when fatigue.shouldDeload is true. This signals the app to automatically begin a 7-day deload phase. Do NOT set true during an already-active deload (deloadStatus='active'). Omit or set false otherwise.",
-    },
     coachMessage: {
       type: "string",
       description:
@@ -516,6 +511,11 @@ export function createCoachingAdviceJsonSchema(
       type: "string",
       description:
         "Brief 2-3 line rationale summarizing the key training adjustments and data signals for the athlete.",
+    },
+    startDeload: {
+      type: "boolean",
+      description:
+        "Set to true ONLY when fatigue.shouldDeload is true. This signals the app to automatically begin a 7-day deload phase. Do NOT set true during an already-active deload (deloadStatus='active'). Omit or set false otherwise.",
     },
     suggestedFollowUps: suggestedFollowUpsSchema,
     recommendedWorkout: {
@@ -540,11 +540,226 @@ export function createCoachingAdviceJsonSchema(
     };
   }
 
+  const propertyOrdering = [
+    "coachMessage",
+    "scratchpad",
+    "startDeload",
+    "suggestedFollowUps",
+    "recommendedWorkout",
+    "trainingPlan",
+  ].filter((key) => key in properties);
+
   return {
     type: "object",
     properties,
+    propertyOrdering,
     required,
   };
+}
+
+const SIMPLE_JSON_ESCAPES: Record<string, string> = {
+  '"': '"',
+  "\\": "\\",
+  "/": "/",
+  b: "\b",
+  f: "\f",
+  n: "\n",
+  r: "\r",
+  t: "\t",
+};
+
+const HEX_4_REGEX = /^[0-9a-fA-F]{4}$/;
+
+function skipWhitespace(input: string, index: number): number {
+  let i = index;
+  while (i < input.length && /\s/.test(input.charAt(i))) {
+    i++;
+  }
+  return i;
+}
+
+function decodeUnicodeEscape(
+  input: string,
+  index: number,
+): { char: string; nextIndex: number; incomplete: boolean } {
+  if (index + 6 > input.length) {
+    return { char: "", nextIndex: index, incomplete: true };
+  }
+  const hex = input.slice(index + 2, index + 6);
+  if (!HEX_4_REGEX.test(hex)) {
+    return { char: "u", nextIndex: index + 2, incomplete: false };
+  }
+  const code = Number.parseInt(hex, 16);
+  const isHighSurrogate = code >= 0xd800 && code <= 0xdbff;
+  if (!isHighSurrogate) {
+    return { char: String.fromCharCode(code), nextIndex: index + 6, incomplete: false };
+  }
+  if (index + 6 === input.length) {
+    return { char: "", nextIndex: index, incomplete: true };
+  }
+  if (input.charAt(index + 6) === "\\") {
+    if (index + 12 > input.length) {
+      return { char: "", nextIndex: index, incomplete: true };
+    }
+    const lowHex = input.slice(index + 8, index + 12);
+    if (input.charAt(index + 7) === "u" && HEX_4_REGEX.test(lowHex)) {
+      const low = Number.parseInt(lowHex, 16);
+      if (low >= 0xdc00 && low <= 0xdfff) {
+        return { char: String.fromCharCode(code, low), nextIndex: index + 12, incomplete: false };
+      }
+    }
+  }
+  return { char: String.fromCharCode(code), nextIndex: index + 6, incomplete: false };
+}
+
+function decodePartialJsonString(
+  input: string,
+  startAfterQuote: number,
+): { value: string; nextIndex: number; closed: boolean } {
+  let value = "";
+  let i = startAfterQuote;
+
+  while (i < input.length) {
+    const ch = input.charAt(i);
+    if (ch === '"') {
+      return { value, nextIndex: i + 1, closed: true };
+    }
+    if (ch !== "\\") {
+      value += ch;
+      i++;
+      continue;
+    }
+
+    if (i + 1 >= input.length) break;
+    const esc = input.charAt(i + 1);
+    const mapped = SIMPLE_JSON_ESCAPES[esc];
+    if (mapped !== undefined) {
+      value += mapped;
+      i += 2;
+      continue;
+    }
+
+    if (esc === "u") {
+      const unicode = decodeUnicodeEscape(input, i);
+      if (unicode.incomplete) break;
+      value += unicode.char;
+      i = unicode.nextIndex;
+      continue;
+    }
+
+    value += esc;
+    i += 2;
+  }
+
+  return { value, nextIndex: i, closed: false };
+}
+
+function skipJsonString(input: string, startAfterQuote: number): number {
+  let i = startAfterQuote;
+  while (i < input.length) {
+    const ch = input.charAt(i);
+    if (ch === "\\") {
+      i += 2;
+      continue;
+    }
+    if (ch === '"') return i + 1;
+    i++;
+  }
+  return -1;
+}
+
+function skipJsonComposite(input: string, index: number): number {
+  let depth = 0;
+  let i = index;
+
+  while (i < input.length) {
+    const ch = input.charAt(i);
+    if (ch === '"') {
+      const next = skipJsonString(input, i + 1);
+      if (next === -1) return -1;
+      i = next;
+      continue;
+    }
+    if (ch === "{" || ch === "[") {
+      depth++;
+    } else if (ch === "}" || ch === "]") {
+      depth--;
+      if (depth === 0) return i + 1;
+    }
+    i++;
+  }
+  return -1;
+}
+
+function skipJsonValue(input: string, index: number): number {
+  const first = input.charAt(index);
+  if (!first) return -1;
+
+  if (first === '"') return skipJsonString(input, index + 1);
+  if (first === "{" || first === "[") return skipJsonComposite(input, index);
+
+  let i = index;
+  while (i < input.length && !/[\s,}\]]/.test(input.charAt(i))) {
+    i++;
+  }
+  return i < input.length ? i : -1;
+}
+
+function findObjectStart(input: string): number {
+  let i = skipWhitespace(input, 0);
+  if (input.startsWith("```", i)) {
+    const newline = input.indexOf("\n", i);
+    if (newline === -1) return -1;
+    i = skipWhitespace(input, newline + 1);
+  }
+  return input.charAt(i) === "{" ? i + 1 : -1;
+}
+
+function readObjectKeyAndValueStart(
+  input: string,
+  index: number,
+): { key: string; valueIndex: number } | null {
+  let i = skipWhitespace(input, index);
+  if (input.charAt(i) === ",") {
+    i = skipWhitespace(input, i + 1);
+  }
+  if (input.charAt(i) !== '"') return null;
+
+  const key = decodePartialJsonString(input, i + 1);
+  if (!key.closed) return null;
+
+  i = skipWhitespace(input, key.nextIndex);
+  if (input.charAt(i) !== ":") return null;
+
+  const valueIndex = skipWhitespace(input, i + 1);
+  return valueIndex < input.length ? { key: key.value, valueIndex } : null;
+}
+
+/**
+ * Incrementally extracts and unescapes the `coachMessage` string value from a
+ * partial JSON object buffer, holding back incomplete trailing escapes.
+ */
+export function extractCoachMessageSoFar(accumulatedJson: string): string | null {
+  if (!accumulatedJson) return null;
+  let i = findObjectStart(accumulatedJson);
+  if (i === -1) return null;
+
+  while (i < accumulatedJson.length) {
+    const member = readObjectKeyAndValueStart(accumulatedJson, i);
+    if (!member) return null;
+
+    if (member.key === "coachMessage") {
+      return accumulatedJson.charAt(member.valueIndex) === '"'
+        ? decodePartialJsonString(accumulatedJson, member.valueIndex + 1).value
+        : null;
+    }
+
+    const nextAfterValue = skipJsonValue(accumulatedJson, member.valueIndex);
+    if (nextAfterValue === -1) return null;
+    i = nextAfterValue;
+  }
+
+  return null;
 }
 
 export function createExerciseCleanupJsonSchema(

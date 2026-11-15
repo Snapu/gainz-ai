@@ -227,7 +227,7 @@ Requests are validated with strict Zod schemas and capped at `100 KB` HTTP body 
 - **Idempotency & Lock Recovery (`clientRequestId`)**: When a valid UUID v4 `clientRequestId` is provided on `action: "coach"`, the Edge Function claims an atomic lock in `public.ai_request_results` before consuming quota:
   - Duplicate request while the original execution is still running returns `202 Accepted` (`{ "status": "processing" }`) without double-charging quota.
   - Duplicate request after completion returns `200 OK` with the cached `{ advice, quota }` payload without re-running Gemini or double-charging quota.
-- **Response Validation & Fallback**: Structured JSON outputs are validated with `parseCoachingAdviceResponse` inside `generateWithFallback`; malformed model JSON automatically falls back across configured Gemini models before failing closed with `502` + `refund_ai_quota` (and marks the idempotency row `failed`).
+- **Response Validation & Fallback**: For `coach`, structured JSON outputs are validated with `parseCoachingAdviceResponse` inside `streamWithFallback` (while `classify` validates via `generateWithFallback`). On `coach`, malformed model JSON or upstream stream errors automatically fall back across configured Gemini models until the first non-whitespace `preview` chunk commits; post-commit or all-model failures invoke `refund_ai_quota`, mark the idempotency row `failed`, and emit an SSE `event: error` payload.
 - **Timeouts**:
   - Server: `55,000ms` (Planning / Initial Coaching), `40,000ms` (Coaching Follow-ups), `30,000ms` (Classify).
   - Client: `65,000ms` (planning / initial evaluation), `48,000ms` (follow-ups), `35,000ms` (Classify).
@@ -277,38 +277,33 @@ curl -X POST "https://<PROJECT_REF>.supabase.co/functions/v1/ai-coach" \
   }'
 ```
 
-#### Success Response: `200 OK`
+#### Success Response: `200 OK` (`text/event-stream; charset=utf-8`)
 
-Returns `{ advice, quota }` directly. Prompt strings (`requestPayload`) are never returned in production.
+New accepted `action: "coach"` requests stream Server-Sent Events (SSE) backed by Gemini `:streamGenerateContent?alt=sse` with `coachMessage` ordered first in `propertyOrdering`.
 
-```json
-{
-  "advice": {
-    "coachMessage": "Swapping Incline Dumbbell Bench for Incline Machine Press fits your volume perfectly...",
-    "scratchpad": "1. Athlete requested mechanical chest variant swap.\n2. Preserved push volume within MAV.",
-    "recommendedWorkout": [
-      {
-        "exerciseName": "Incline Machine Press",
-        "targetSets": 3,
-        "targetReps": "8-12",
-        "targetRpe": 8.0,
-        "restSeconds": 120,
-        "primaryMuscle": "Chest"
-      }
-    ],
-    "suggestedFollowUps": [
-      {
-        "label": "Warmup Sets",
-        "prompt": "How should I warm up for Incline Machine Press?"
-      }
-    ]
-  },
-  "quota": {
-    "currentCount": 1,
-    "dailyLimit": 15,
-    "resetAt": "2026-11-16T00:00:00.000Z"
-  }
-}
+- **Response Headers**:
+  - `Content-Type: text/event-stream; charset=utf-8`
+  - `Cache-Control: no-store, no-transform`
+  - `X-Content-Type-Options: nosniff`
+- **Resilience**: Upstream Gemini generation runs inside a server `AbortController` and `EdgeRuntime.waitUntil(...)`, decoupled from client socket disconnects so interrupted runs still finish and persist for `action: "recover"`. Model fallback only occurs before the first `preview` event is emitted.
+- **Duplicate `clientRequestId` Hits**: Idempotent retries matching an existing lock still return standard JSON (`200 OK` `{ advice, quota }` if completed, `202 Accepted` `{ "status": "processing" }` while active, or `502 Bad Gateway` if failed).
+
+```text
+event: preview
+data: {"text":"Swapping Incline Dumbbell Bench for "}
+
+event: preview
+data: {"text":"Swapping Incline Dumbbell Bench for Incline Machine Press fits your volume perfectly..."}
+
+event: complete
+data: {"advice":{"coachMessage":"Swapping Incline Dumbbell Bench for Incline Machine Press fits your volume perfectly...","scratchpad":"1. Athlete requested mechanical chest variant swap.\n2. Preserved push volume within MAV.","recommendedWorkout":[{"exerciseName":"Incline Machine Press","targetSets":3,"targetReps":"8-12","targetRpe":8.0,"restSeconds":120,"primaryMuscle":"Chest"}],"suggestedFollowUps":[{"label":"Warmup Sets","prompt":"How should I warm up for Incline Machine Press?"}]},"quota":{"currentCount":1,"dailyLimit":15,"resetAt":"2026-11-16T00:00:00.000Z"}}
+```
+
+If upstream generation fails or produces invalid/truncated JSON after the SSE stream starts, the server refunds quota, marks the idempotency entry failed, and emits a terminal error event:
+
+```text
+event: error
+data: {"error":"coaching-request-failed"}
 ```
 
 ---
@@ -408,14 +403,14 @@ When an athlete reaches their daily limit (15 coach / 50 classify) or the platfo
 
 | Status Code | Meaning | Client Handling |
 | :--- | :--- | :--- |
-| `200 OK` | Request succeeded. | For `coach` / `recover`, consume `{ advice, quota }` directly; for `classify`, parse `{ text }`. |
+| `200 OK` | Request succeeded (or SSE stream opened for `coach`). | For live `coach`, consume SSE `preview` / `complete` / `error` events; for cached duplicate `coach` or `recover`, consume JSON `{ advice, quota }`; for `classify`, parse JSON `{ text }`. |
 | `202 Accepted` | Request with matching `clientRequestId` is still executing. | Show loading state and poll `action: "recover"` while foregrounded. |
 | `400 Bad Request` | Invalid DTO payload or JSON. | Check closed DTO schema structure and bounds. |
 | `401 Unauthorized` | Invalid or expired Google ID Token. | Refresh token via `/auth-token` and retry. |
 | `404 Not Found` | `recover` target missing, expired (>30m), or already consumed. | Clear pending local recovery state and allow retry. |
 | `413 Payload Too Large` | Request body exceeded `100 KB`. | Trim excess historical logs/messages cleanly on client. |
 | `429 Too Many Requests` | Daily user quota or platform cap reached. | Show friendly quota limit alert with reset time. |
-| `502 Bad Gateway` | Upstream Gemini failure or invalid JSON (`coach`), or recovered request marked failed (`recover`). | On `coach`, quota refunded; on `recover`, failed marker deleted so client may retry. |
+| `502 Bad Gateway` | Upstream Gemini failure or invalid JSON (`classify`), or recovered request marked failed (`recover`). | Live `coach` failures after stream open arrive as SSE `event: error` with refunded quota; on `recover`, failed marker is deleted so client may retry. |
 | `503 Service Unavailable` | Transient recovery store unavailability (`recovery-check-failed` on `recover`). | Keep local pending request state and retry recovery polling. |
 
 ---

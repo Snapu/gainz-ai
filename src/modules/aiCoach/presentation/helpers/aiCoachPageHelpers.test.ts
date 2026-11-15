@@ -451,3 +451,27 @@ describe("supersetConnectorClass and isSupersetStart", () => {
     expect(isSupersetStart(5, exercises)).toBe(false);
   });
 });
+
+describe("renderMarkdown security", () => {
+  it("strips scripts, event handlers, javascript: links, data attributes, aria attributes, and style attributes", () => {
+    const dirty = [
+      "Push **hard** today!",
+      '<script>alert("xss")</script>',
+      '<img src=x onerror="alert(1)">',
+      '<p data-test="1" aria-label="spoof" style="position:fixed" onclick="alert(2)">Safe paragraph</p>',
+      "[click](javascript:alert(3))",
+    ].join("\n\n");
+
+    const sanitized = renderMarkdown(dirty);
+    expect(sanitized).toContain("<strong>hard</strong>");
+    expect(sanitized).toContain("<p>Safe paragraph</p>");
+    expect(sanitized).not.toContain("<script");
+    expect(sanitized).not.toContain("<img");
+    expect(sanitized).not.toContain("onerror");
+    expect(sanitized).not.toContain("onclick");
+    expect(sanitized).not.toContain("javascript:");
+    expect(sanitized).not.toContain("data-test");
+    expect(sanitized).not.toContain("aria-label");
+    expect(sanitized).not.toContain("style=");
+  });
+});

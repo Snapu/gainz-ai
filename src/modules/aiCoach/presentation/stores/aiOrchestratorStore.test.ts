@@ -1462,4 +1462,104 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
       vi.useRealTimers();
     }
   });
+
+  it("streams live coachMessage preview without mutating plan, deload, or messages before completion", async () => {
+    mockRefreshToken.value = "valid-refresh-token";
+    mockEnsureValidIdToken = vi.fn().mockReturnValue(okAsync("valid-id-token"));
+
+    let completePromiseResolve!: (val: {
+      advice: {
+        coachMessage: string;
+        startDeload?: boolean;
+        trainingPlan?: {
+          cycleWeeks: number;
+          sessions: Array<{
+            dayOfWeek: number;
+            weekNumber: number;
+            sessionLabel: string;
+            focusDescription: string;
+            exercises: Array<{ exerciseName: string; targetSets: number }>;
+          }>;
+        };
+      };
+    }) => void;
+    mockAsk.mockImplementationOnce((req: { onStreamPreview?: (text: string) => void }) => {
+      req.onStreamPreview?.("Great progress ");
+      return ResultAsync.fromPromise(
+        new Promise((resolve) => {
+          completePromiseResolve = resolve;
+        }),
+        () => "coaching-request-failed" as const,
+      );
+    });
+
+    const chatStore = useCoachChatStore();
+    const planStore = useTrainingPlanStore();
+    const orchestrator = useAiOrchestratorStore();
+
+    const pending = orchestrator.requestAdvice("Check my fatigue", "planning");
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+
+    expect(chatStore.streamingCoachMessage).toBe("Great progress ");
+    expect(planStore.activePlan).toBeNull();
+    expect(mockStartDeload).not.toHaveBeenCalled();
+    expect(chatStore.messages.some((m) => m.role === "coach")).toBe(false);
+
+    const capturedReq = mockAsk.mock.calls[0]?.[0] as {
+      onStreamPreview?: (text: string) => void;
+    };
+    capturedReq.onStreamPreview?.("Great progress today!");
+    expect(chatStore.streamingCoachMessage).toBe("Great progress today!");
+    expect(planStore.activePlan).toBeNull();
+
+    completePromiseResolve({
+      advice: {
+        coachMessage: "Great progress today!",
+        startDeload: true,
+        trainingPlan: {
+          cycleWeeks: 2,
+          sessions: [
+            {
+              dayOfWeek: 1,
+              weekNumber: 1,
+              sessionLabel: "Push A",
+              focusDescription: "Chest",
+              exercises: [{ exerciseName: "Bench Press", targetSets: 3 }],
+            },
+          ],
+        },
+      },
+    });
+    const res = await pending;
+    expect(res.isOk()).toBe(true);
+    expect(chatStore.streamingCoachMessage).toBe("");
+    expect(chatStore.messages.some((m) => m.role === "coach")).toBe(true);
+    expect(planStore.activePlan?.sessions).toHaveLength(1);
+    expect(mockStartDeload).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears streamingCoachMessage on error before foreground recovery delivers final result", async () => {
+    mockRefreshToken.value = "valid-refresh-token";
+    mockEnsureValidIdToken = vi.fn().mockReturnValue(okAsync("valid-id-token"));
+
+    mockAsk.mockImplementationOnce((req: { onStreamPreview?: (text: string) => void }) => {
+      req.onStreamPreview?.("Partial dropped preview");
+      return errAsync("coaching-request-failed" as const);
+    });
+    mockRecover.mockReturnValueOnce(
+      okAsync({
+        status: "completed" as const,
+        advice: { coachMessage: "Recovered full response!" },
+      }),
+    );
+
+    const chatStore = useCoachChatStore();
+    const orchestrator = useAiOrchestratorStore();
+
+    const res = await orchestrator.requestAdvice("Will this recover?");
+    expect(res.isOk()).toBe(true);
+    expect(chatStore.streamingCoachMessage).toBe("");
+    const coachMsg = chatStore.messages.find((m) => m.role === "coach");
+    expect(coachMsg?.content).toContain("Recovered full response!");
+  });
 });

@@ -1,6 +1,7 @@
 import { extractBearerToken, verifyGoogleCaller } from "../_shared/auth.ts";
-import { COACHING_MODELS, generateWithFallback } from "../_shared/gemini.ts";
+import { COACHING_MODELS, generateWithFallback, streamWithFallback } from "../_shared/gemini.ts";
 import {
+  corsHeaders,
   corsPreflightResponse,
   DEFAULT_GOOGLE_CLIENT_ID,
   getDenoRuntime,
@@ -35,11 +36,19 @@ import {
   aiCoachRequestDtoSchema,
   type CoachActionRequestDto,
   createCoachingAdviceJsonSchema,
+  extractCoachMessageSoFar,
   parseCoachingAdviceResponse,
 } from "./schemas.ts";
 
 const DEFAULT_DAILY_COACH_LIMIT = 15;
 const DEFAULT_DAILY_CLASSIFY_LIMIT = 50;
+
+const SSE_RESPONSE_HEADERS: Record<string, string> = {
+  ...corsHeaders,
+  "Content-Type": "text/event-stream; charset=utf-8",
+  "Cache-Control": "no-store, no-transform",
+  "X-Content-Type-Options": "nosniff",
+};
 
 export interface AiCoachServerConfig {
   clientId: string;
@@ -54,7 +63,15 @@ export interface AiCoachHandlerDeps {
   consumeQuota?: typeof consumeQuota;
   refundQuota?: typeof refundQuota;
   generateWithFallback?: typeof generateWithFallback;
+  streamWithFallback?: typeof streamWithFallback;
+  waitUntil?: (promise: Promise<unknown>) => void;
   requestResults?: AiRequestResultsStore;
+}
+
+function defaultWaitUntil(promise: Promise<unknown>): void {
+  (
+    globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }
+  ).EdgeRuntime?.waitUntil?.(promise);
 }
 
 function loadServerConfig(): AiCoachServerConfig | null {
@@ -70,7 +87,8 @@ async function executeCoachAction(
   dto: CoachActionRequestDto,
   geminiApiKey: string,
   quota: QuotaRow,
-  generateFn: typeof generateWithFallback,
+  streamFn: typeof streamWithFallback,
+  onAccumulatedText?: (accumulatedText: string) => boolean | undefined,
 ) {
   const allowPlanUpdate = shouldAllowPlanUpdate(dto.mode, dto.question);
   const thinkingBudget = dto.mode === "planning" ? 1024 : 256;
@@ -80,7 +98,7 @@ async function executeCoachAction(
   const prompt = assembleCoachingPrompt(dto);
   const contents = buildBoundedConversationContents(dto.previousMessages, prompt);
 
-  const result = await generateFn({
+  const result = await streamFn({
     geminiApiKey,
     models: COACHING_MODELS,
     contents,
@@ -91,6 +109,7 @@ async function executeCoachAction(
     thinkingConfig: { thinkingBudget, includeThoughts: false },
     timeoutMs,
     parseResponse: (parsedJson) => parseCoachingAdviceResponse(parsedJson, dto.mode),
+    onAccumulatedText,
   });
 
   const completedSessionKeys =
@@ -108,6 +127,103 @@ async function executeCoachAction(
     advice,
     quota: formatQuotaPayload(quota),
   };
+}
+
+function createCoachStreamResponse(params: {
+  dto: CoachActionRequestDto;
+  userId: string;
+  clientRequestId?: string;
+  config: AiCoachServerConfig;
+  quota: QuotaRow;
+  quotaUsageDate: string | undefined;
+  deps: Pick<
+    Required<AiCoachHandlerDeps>,
+    "refundQuota" | "streamWithFallback" | "requestResults" | "waitUntil"
+  >;
+}): Response {
+  const { dto, userId, clientRequestId, config, quota, quotaUsageDate, deps } = params;
+  const encoder = new TextEncoder();
+  let streamClosedOrCancelled = false;
+
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const emit = (event: "preview" | "complete" | "error", data: unknown): boolean => {
+        if (streamClosedOrCancelled) return false;
+        try {
+          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+          return true;
+        } catch {
+          streamClosedOrCancelled = true;
+          return false;
+        }
+      };
+
+      const close = () => {
+        if (streamClosedOrCancelled) return;
+        streamClosedOrCancelled = true;
+        try {
+          controller.close();
+        } catch {
+          // Stream already closed or cancelled by client
+        }
+      };
+
+      const work = (async () => {
+        let lastPreview = "";
+        try {
+          const payload = await executeCoachAction(
+            dto,
+            config.geminiApiKey,
+            quota,
+            deps.streamWithFallback,
+            (accumulatedText) => {
+              const preview = extractCoachMessageSoFar(accumulatedText);
+              if (
+                !preview ||
+                (!lastPreview && !preview.trim()) ||
+                preview.length <= lastPreview.length
+              ) {
+                return false;
+              }
+              lastPreview = preview;
+              return emit("preview", { text: preview });
+            },
+          );
+          if (clientRequestId) {
+            await deps.requestResults.markCompleted(userId, clientRequestId, payload);
+          }
+          emit("complete", payload);
+        } catch (err) {
+          const errorName = err instanceof Error ? err.name : "UnknownError";
+          console.error("AI execution failed:", { action: dto.action, errorName });
+          await deps.refundQuota(
+            config.supabaseUrl,
+            config.serviceRoleKey,
+            userId,
+            dto.action,
+            quotaUsageDate,
+          );
+          if (clientRequestId) {
+            await deps.requestResults.markFailed(
+              userId,
+              clientRequestId,
+              "coaching-request-failed",
+            );
+          }
+          emit("error", { error: "coaching-request-failed" });
+        } finally {
+          close();
+        }
+      })();
+
+      deps.waitUntil(work);
+    },
+    cancel() {
+      streamClosedOrCancelled = true;
+    },
+  });
+
+  return new Response(body, { status: 200, headers: SSE_RESPONSE_HEADERS });
 }
 
 function existingCoachEntryToResponse(row: AiRequestResultRow): Response {
@@ -167,42 +283,56 @@ async function handleRecoverAction(
   );
 }
 
-async function handleVerifiedCoachRequest(
-  dto: AiCoachRequestDto,
+async function executeClassifyWithRefund(
+  dto: Extract<AiCoachRequestDto, { action: "classify" }>,
   userId: string,
   config: AiCoachServerConfig,
-  deps: Required<
-    Pick<
-      AiCoachHandlerDeps,
-      "consumeQuota" | "refundQuota" | "generateWithFallback" | "requestResults"
-    >
-  >,
+  quota: QuotaRow,
+  quotaUsageDate: string | undefined,
+  deps: Pick<Required<AiCoachHandlerDeps>, "refundQuota" | "generateWithFallback">,
 ): Promise<Response> {
-  if (dto.action === "recover") {
-    return handleRecoverAction(userId, dto.clientRequestId, deps.requestResults);
+  try {
+    return await executeClassifyAction(dto, config.geminiApiKey, quota, deps.generateWithFallback);
+  } catch (err) {
+    const errorName = err instanceof Error ? err.name : "UnknownError";
+    console.error("AI execution failed:", { action: dto.action, errorName });
+    await deps.refundQuota(
+      config.supabaseUrl,
+      config.serviceRoleKey,
+      userId,
+      dto.action,
+      quotaUsageDate,
+    );
+    return jsonResponse({ error: "coaching-request-failed" }, 502);
   }
+}
 
-  if (dto.action === "classify" && dto.exerciseNames.length === 0) {
-    return jsonResponse({ text: JSON.stringify({ classifications: [] }) });
-  }
-
-  const clientRequestId = dto.action === "coach" ? dto.clientRequestId : undefined;
-  if (clientRequestId) {
-    const lockResult = await deps.requestResults.acquireProcessingLock(userId, clientRequestId);
-    if (lockResult === "conflict") {
-      const existing = await deps.requestResults.getActive(userId, clientRequestId);
-      if (existing === "error") {
-        return jsonResponse({ error: "quota-check-failed" }, 500);
-      }
-      return existing
-        ? existingCoachEntryToResponse(existing)
-        : jsonResponse({ error: "coaching-request-failed" }, 502);
-    }
-    if (lockResult === "error") {
+async function tryAcquireProcessingLock(
+  userId: string,
+  clientRequestId: string,
+  requestResults: AiRequestResultsStore,
+): Promise<Response | null> {
+  const lockResult = await requestResults.acquireProcessingLock(userId, clientRequestId);
+  if (lockResult === "acquired") return null;
+  if (lockResult === "conflict") {
+    const existing = await requestResults.getActive(userId, clientRequestId);
+    if (existing === "error") {
       return jsonResponse({ error: "quota-check-failed" }, 500);
     }
+    return existing
+      ? existingCoachEntryToResponse(existing)
+      : jsonResponse({ error: "coaching-request-failed" }, 502);
   }
+  return jsonResponse({ error: "quota-check-failed" }, 500);
+}
 
+async function consumeQuotaOrErrorResponse(
+  dto: Exclude<AiCoachRequestDto, { action: "recover" }>,
+  userId: string,
+  clientRequestId: string | undefined,
+  config: AiCoachServerConfig,
+  deps: Pick<Required<AiCoachHandlerDeps>, "consumeQuota" | "requestResults">,
+): Promise<{ quota: QuotaRow } | { response: Response }> {
   const dailyLimit =
     dto.action === "coach"
       ? parsePositiveIntEnv("AI_DAILY_COACH_LIMIT", DEFAULT_DAILY_COACH_LIMIT)
@@ -220,7 +350,7 @@ async function handleVerifiedCoachRequest(
     if (clientRequestId) {
       await deps.requestResults.deleteEntry(userId, clientRequestId);
     }
-    return jsonResponse({ error: "quota-check-failed" }, 500);
+    return { response: jsonResponse({ error: "quota-check-failed" }, 500) };
   }
 
   if (!quota.allowed) {
@@ -230,51 +360,80 @@ async function handleVerifiedCoachRequest(
     if (quota.global_capped) {
       console.warn(`Global daily AI quota ceiling reached for action: ${dto.action}`);
     }
-    return jsonResponse(
-      {
-        error: "rate-limit-exceeded",
-        quota: formatQuotaPayload(quota),
-      },
-      429,
-    );
+    return {
+      response: jsonResponse(
+        {
+          error: "rate-limit-exceeded",
+          quota: formatQuotaPayload(quota),
+        },
+        429,
+      ),
+    };
   }
 
-  const quotaUsageDate = deriveUsageDateFromResetAt(quota.reset_at);
+  return { quota };
+}
 
-  try {
-    if (dto.action === "classify") {
-      return await executeClassifyAction(
-        dto,
-        config.geminiApiKey,
-        quota,
-        deps.generateWithFallback,
-      );
-    }
-    const payload = await executeCoachAction(
-      dto,
-      config.geminiApiKey,
-      quota,
-      deps.generateWithFallback,
-    );
-    if (clientRequestId) {
-      await deps.requestResults.markCompleted(userId, clientRequestId, payload);
-    }
-    return jsonResponse(payload, 200);
-  } catch (err) {
-    const errorName = err instanceof Error ? err.name : "UnknownError";
-    console.error("AI execution failed:", { action: dto.action, errorName });
-    await deps.refundQuota(
-      config.supabaseUrl,
-      config.serviceRoleKey,
+async function handleVerifiedCoachRequest(
+  dto: AiCoachRequestDto,
+  userId: string,
+  config: AiCoachServerConfig,
+  deps: Required<
+    Pick<
+      AiCoachHandlerDeps,
+      | "consumeQuota"
+      | "refundQuota"
+      | "generateWithFallback"
+      | "streamWithFallback"
+      | "waitUntil"
+      | "requestResults"
+    >
+  >,
+): Promise<Response> {
+  if (dto.action === "recover") {
+    return handleRecoverAction(userId, dto.clientRequestId, deps.requestResults);
+  }
+
+  if (dto.action === "classify" && dto.exerciseNames.length === 0) {
+    return jsonResponse({ text: JSON.stringify({ classifications: [] }) });
+  }
+
+  const clientRequestId = dto.action === "coach" ? dto.clientRequestId : undefined;
+  if (clientRequestId) {
+    const lockErrorResponse = await tryAcquireProcessingLock(
       userId,
-      dto.action,
-      quotaUsageDate,
+      clientRequestId,
+      deps.requestResults,
     );
-    if (clientRequestId) {
-      await deps.requestResults.markFailed(userId, clientRequestId, "coaching-request-failed");
-    }
-    return jsonResponse({ error: "coaching-request-failed" }, 502);
+    if (lockErrorResponse) return lockErrorResponse;
   }
+
+  const quotaOutcome = await consumeQuotaOrErrorResponse(
+    dto,
+    userId,
+    clientRequestId,
+    config,
+    deps,
+  );
+  if ("response" in quotaOutcome) {
+    return quotaOutcome.response;
+  }
+
+  const quotaUsageDate = deriveUsageDateFromResetAt(quotaOutcome.quota.reset_at);
+
+  if (dto.action === "classify") {
+    return executeClassifyWithRefund(dto, userId, config, quotaOutcome.quota, quotaUsageDate, deps);
+  }
+
+  return createCoachStreamResponse({
+    dto,
+    userId,
+    clientRequestId,
+    config,
+    quota: quotaOutcome.quota,
+    quotaUsageDate,
+    deps,
+  });
 }
 
 export async function handleAiCoachRequest(
@@ -319,6 +478,8 @@ export async function handleAiCoachRequest(
     consumeQuota: deps.consumeQuota ?? consumeQuota,
     refundQuota: deps.refundQuota ?? refundQuota,
     generateWithFallback: deps.generateWithFallback ?? generateWithFallback,
+    streamWithFallback: deps.streamWithFallback ?? streamWithFallback,
+    waitUntil: deps.waitUntil ?? defaultWaitUntil,
     requestResults:
       deps.requestResults ??
       createSupabaseRequestResultsStore(config.supabaseUrl, config.serviceRoleKey),

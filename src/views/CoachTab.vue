@@ -10,6 +10,7 @@ import UiTextarea from "@/shared/presentation/components/ui/UiTextarea.vue";
 const {
   isDev,
   isLoading,
+  streamingCoachMessage,
   userQuestion,
   openScratchpads,
   openRequestPayloads,
@@ -39,13 +40,13 @@ void scrollContainerRef;
     >
       <!-- Telemetry Loader -->
       <UiTelemetryLoader
-        v-if="isLoading && chatMessages.length === 0"
+        v-if="isLoading && !streamingCoachMessage && chatMessages.length === 0"
         text="Analyzing training history..."
       />
 
       <!-- Empty State -->
       <div
-        v-else-if="!isLoading && chatMessages.length === 0"
+        v-else-if="!isLoading && !streamingCoachMessage && chatMessages.length === 0"
         class="flex-1 flex flex-col items-center justify-center text-center p-6 gap-5 my-auto animate-in fade-in duration-300"
       >
         <div class="w-16 h-16 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-sm">
@@ -200,9 +201,28 @@ void scrollContainerRef;
         </div>
       </template>
 
+      <!-- Live Streaming Coach Message -->
+      <div
+        v-if="streamingCoachMessage"
+        class="w-full flex flex-col gap-3 animate-in fade-in duration-200 py-1"
+      >
+        <div
+          class="coach-content text-sm leading-relaxed text-foreground/90 font-medium"
+          v-html="renderMarkdown(streamingCoachMessage)"
+        />
+        <div
+          role="status"
+          aria-live="polite"
+          class="flex items-center gap-2 text-xs text-muted-foreground/70 font-medium"
+        >
+          <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+          <span>Finalizing coaching response...</span>
+        </div>
+      </div>
+
       <!-- Active Typing Indicator -->
       <div
-        v-if="isLoading && chatMessages.length > 0"
+        v-if="isLoading && !streamingCoachMessage && chatMessages.length > 0"
         role="status"
         aria-live="polite"
         class="w-full flex items-center gap-2 text-xs text-muted-foreground animate-in fade-in duration-200 py-1"

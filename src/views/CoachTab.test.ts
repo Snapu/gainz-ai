@@ -4,6 +4,7 @@ import { createApp, defineComponent, ref } from "vue";
 const mockViewModel = {
   isDev: false,
   isLoading: ref(false),
+  streamingCoachMessage: ref(""),
   userQuestion: ref(""),
   openScratchpads: ref<string[]>([]),
   openRequestPayloads: ref<string[]>([]),
@@ -29,7 +30,7 @@ const mockViewModel = {
   togglePayload: vi.fn(),
   copyPayload: vi.fn(),
   navigateToTrainTab: vi.fn(),
-  renderMarkdown: (text: string) => text,
+  renderMarkdown: vi.fn((text: string) => text),
 };
 
 vi.mock("@/modules/aiCoach/presentation", () => ({
@@ -39,7 +40,7 @@ vi.mock("@/modules/aiCoach/presentation", () => ({
 
 import CoachTab from "./CoachTab.vue";
 
-function mountCoachTab(): { text: string; unmount: () => void } {
+function mountCoachTab(): { host: HTMLDivElement; text: string; unmount: () => void } {
   const host = document.createElement("div");
   const app = createApp(CoachTab);
   app.component("UiBadge", defineComponent({ template: "<span><slot /></span>" }));
@@ -49,6 +50,7 @@ function mountCoachTab(): { text: string; unmount: () => void } {
   app.component("UiTextarea", defineComponent({ template: "<textarea />" }));
   app.mount(host);
   return {
+    host,
     text: host.textContent ?? "",
     unmount: () => app.unmount(),
   };
@@ -73,6 +75,31 @@ describe("CoachTab.vue", () => {
     try {
       expect(mounted.text).toContain("Debug Data");
     } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("renders live streamingCoachMessage via renderMarkdown, scopes live region to status footer, and hides typing indicator while streaming", () => {
+    mockViewModel.renderMarkdown.mockClear();
+    mockViewModel.isLoading.value = true;
+    mockViewModel.streamingCoachMessage.value = "Streaming coaching tip right now.";
+    const mounted = mountCoachTab();
+    try {
+      expect(mockViewModel.renderMarkdown).toHaveBeenCalledWith(
+        "Streaming coaching tip right now.",
+      );
+      expect(mounted.text).toContain("Streaming coaching tip right now.");
+      expect(mounted.text).toContain("Finalizing coaching response...");
+      expect(mounted.text).not.toContain("Coach is thinking...");
+
+      const statusEl = mounted.host.querySelector('[role="status"]');
+      expect(statusEl).not.toBeNull();
+      expect(statusEl?.getAttribute("aria-live")).toBe("polite");
+      expect(statusEl?.textContent).toContain("Finalizing coaching response...");
+      expect(statusEl?.querySelector(".coach-content")).toBeNull();
+    } finally {
+      mockViewModel.isLoading.value = false;
+      mockViewModel.streamingCoachMessage.value = "";
       mounted.unmount();
     }
   });

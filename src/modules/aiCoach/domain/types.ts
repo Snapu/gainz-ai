@@ -25,6 +25,7 @@ export interface CoachingAdviceRequest {
   mode?: CoachingMode;
   activePlan?: TrainingPlan | null;
   completedSessionKeys?: ReadonlySet<string>;
+  onStreamPreview?: (textSoFar: string) => void;
 }
 
 export type CoachingMessage = {

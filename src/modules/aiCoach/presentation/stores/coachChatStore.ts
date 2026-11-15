@@ -2,7 +2,7 @@ import * as Sentry from "@sentry/vue";
 import { useIntervalFn, useLocalStorage, useNow } from "@vueuse/core";
 import { Result } from "neverthrow";
 import { defineStore } from "pinia";
-import { computed, ref, watch } from "vue";
+import { computed, ref, shallowRef, watch } from "vue";
 import type { CoachingAdvice, CoachingMessage } from "@/modules/aiCoach/domain";
 import { LocalStorageMessageRepository } from "@/modules/aiCoach/infrastructure";
 import { isoDateString } from "@/modules/sharedKernel/domain";
@@ -10,6 +10,7 @@ import { resolveCurrentSession, useExerciseLogsStore } from "@/modules/trainingL
 
 export const useCoachChatStore = defineStore("coachChat", () => {
   const messages = ref<CoachingMessage[]>([]);
+  const streamingCoachMessage = shallowRef("");
   const isLoading = ref(false);
   const hasInitialized = ref(false);
   const now = useNow({ scheduler: (cb) => useIntervalFn(cb, 60000) });
@@ -81,11 +82,13 @@ export const useCoachChatStore = defineStore("coachChat", () => {
 
   function clearMessages() {
     messages.value = [];
+    streamingCoachMessage.value = "";
     messageRepository.removeMessages(currentSessionId.value);
   }
 
   function resetAllSessions() {
     messages.value = [];
+    streamingCoachMessage.value = "";
     lastRequestState.value = { date: "", checksum: "" };
     messageRepository.clearAllSessions();
   }
@@ -121,6 +124,7 @@ export const useCoachChatStore = defineStore("coachChat", () => {
   return {
     initialize,
     messages,
+    streamingCoachMessage,
     isLoading,
     hasInitialized,
     lastRequestState,

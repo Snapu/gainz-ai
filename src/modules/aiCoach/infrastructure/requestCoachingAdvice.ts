@@ -34,7 +34,7 @@ import {
   sanitizeSuggestedFollowUps,
   TrainingPlan,
 } from "../domain";
-import { AiEdgeHttpError, postAiEdgeFunction } from "./aiEdgeClient";
+import { AiEdgeHttpError, postAiCoachStream, postAiEdgeFunction } from "./aiEdgeClient";
 
 const plannedExerciseResponseSchema = z.object({
   exerciseName: z.string().min(1),
@@ -598,10 +598,11 @@ export function requestCoachingAdvice(
   const clientTimeoutMs = isPlanningMode ? 65_000 : 48_000;
 
   return ResultAsync.fromPromise(
-    postAiEdgeFunction<unknown>({
+    postAiCoachStream<unknown>({
       accessToken,
       body: dto,
       timeoutMs: clientTimeoutMs,
+      onPreview: options.onStreamPreview,
     }).then((payload): CoachingAdvice => {
       const parsed = coachEndpointResponseSchema.parse(payload);
       if (!("advice" in parsed)) {

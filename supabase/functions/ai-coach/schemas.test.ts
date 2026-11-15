@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   aiCoachRequestDtoSchema,
   createCoachingAdviceJsonSchema,
+  extractCoachMessageSoFar,
   parseClassifyResponse,
   parseCoachingAdviceResponse,
 } from "./schemas";
@@ -115,20 +116,44 @@ describe("aiCoachRequestDtoSchema", () => {
 });
 
 describe("createCoachingAdviceJsonSchema", () => {
-  it("places scratchpad after coachMessage and conditionally includes trainingPlan", () => {
+  it("sets explicit propertyOrdering with coachMessage first and conditionally includes trainingPlan", () => {
     const execNoPlan = createCoachingAdviceJsonSchema(["Chest"], "execution", false);
-    const propKeys = Object.keys(execNoPlan.properties as Record<string, unknown>);
-    expect(propKeys.indexOf("coachMessage")).toBeGreaterThan(-1);
+    const execNoPlanProps = execNoPlan.properties as Record<string, unknown>;
+    const propKeys = Object.keys(execNoPlanProps);
+    expect(propKeys[0]).toBe("coachMessage");
     expect(propKeys.indexOf("scratchpad")).toBeGreaterThan(propKeys.indexOf("coachMessage"));
-    expect((execNoPlan.properties as Record<string, unknown>).trainingPlan).toBeUndefined();
+    expect(execNoPlanProps.trainingPlan).toBeUndefined();
+    expect(execNoPlan.propertyOrdering).toEqual([
+      "coachMessage",
+      "scratchpad",
+      "startDeload",
+      "suggestedFollowUps",
+      "recommendedWorkout",
+    ]);
 
     const execWithPlan = createCoachingAdviceJsonSchema(["Chest"], "execution", true);
     expect((execWithPlan.properties as Record<string, unknown>).trainingPlan).toBeDefined();
     expect(execWithPlan.required).not.toContain("trainingPlan");
+    expect(execWithPlan.propertyOrdering).toEqual([
+      "coachMessage",
+      "scratchpad",
+      "startDeload",
+      "suggestedFollowUps",
+      "recommendedWorkout",
+      "trainingPlan",
+    ]);
 
     const planningSchema = createCoachingAdviceJsonSchema(["Chest"], "planning", false);
     expect((planningSchema.properties as Record<string, unknown>).trainingPlan).toBeDefined();
     expect(planningSchema.required).toContain("trainingPlan");
+    expect(planningSchema.propertyOrdering).toEqual([
+      "coachMessage",
+      "scratchpad",
+      "startDeload",
+      "suggestedFollowUps",
+      "recommendedWorkout",
+      "trainingPlan",
+    ]);
   });
 });
 
@@ -281,5 +306,44 @@ describe("parseCoachingAdviceResponse", () => {
     });
     expect(valid.classifications).toHaveLength(1);
     expect(() => parseClassifyResponse({ wrong: true })).toThrow();
+  });
+});
+
+describe("extractCoachMessageSoFar", () => {
+  it("returns null before coachMessage string opens", () => {
+    expect(extractCoachMessageSoFar("")).toBeNull();
+    expect(extractCoachMessageSoFar("{")).toBeNull();
+    expect(extractCoachMessageSoFar('{"startDeload": false')).toBeNull();
+    expect(extractCoachMessageSoFar('{"coachMessage":')).toBeNull();
+    expect(extractCoachMessageSoFar('{"coachMessage": ')).toBeNull();
+    expect(extractCoachMessageSoFar("not json at all")).toBeNull();
+  });
+
+  it("extracts partial decoded coachMessage across incomplete JSON", () => {
+    expect(extractCoachMessageSoFar('{"coachMessage": "')).toBe("");
+    expect(extractCoachMessageSoFar('{"coachMessage": "Great work')).toBe("Great work");
+    expect(
+      extractCoachMessageSoFar('{"coachMessage": "Line 1\\n\\nQuote: \\"push\\"\\\\slash'),
+    ).toBe('Line 1\n\nQuote: "push"\\slash');
+  });
+
+  it("holds back incomplete trailing escapes and lone UTF-16 high surrogates", () => {
+    expect(extractCoachMessageSoFar('{"coachMessage": "Wait\\')).toBe("Wait");
+    expect(extractCoachMessageSoFar('{"coachMessage": "Wait\\u00')).toBe("Wait");
+    expect(extractCoachMessageSoFar('{"coachMessage": "Umlaut \\u00fc!')).toBe("Umlaut ü!");
+    expect(extractCoachMessageSoFar('{"coachMessage": "Power \\uD83D')).toBe("Power ");
+    expect(extractCoachMessageSoFar('{"coachMessage": "Power \\uD83D\\uDC')).toBe("Power ");
+    expect(extractCoachMessageSoFar('{"coachMessage": "Power \\uD83D\\uDCAA!')).toBe("Power 💪!");
+  });
+
+  it("handles coachMessage appearing after other top-level keys without false string matches", () => {
+    const partial =
+      '{"scratchpad": "note mentioning \\"coachMessage\\": \\"decoy\\"", "startDeload": false, "coachMessage": "Real answer';
+    expect(extractCoachMessageSoFar(partial)).toBe("Real answer");
+  });
+
+  it("returns complete coachMessage and ignores trailing fields", () => {
+    const json = '{"coachMessage": "Done!", "scratchpad": "brief", "trainingPlan": {"weeks": []';
+    expect(extractCoachMessageSoFar(json)).toBe("Done!");
   });
 });
