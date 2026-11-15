@@ -77,11 +77,13 @@ function toCoachBubble(
   allMessages: CoachingMessage[],
   indexById: Map<string, number>,
   formatTimeFn: (d: Date | string) => string,
+  isDev: boolean,
 ): ChatBubbleMessage {
   const parsedData = tryParseCoachingAdvice(msg.content);
   const msgIndex = indexById.get(msg.id);
   const previous = typeof msgIndex === "number" && msgIndex > 0 ? allMessages[msgIndex - 1] : null;
   const requestPayload =
+    isDev &&
     previous?.role === "user" &&
     previous.content &&
     previous.content !== "AI request" &&
@@ -103,7 +105,8 @@ function toCoachBubble(
   };
 }
 
-export function useCoachChatViewModel() {
+export function useCoachChatViewModel(options: { isDev?: boolean } = {}) {
+  const isDev = options.isDev ?? import.meta.env.DEV;
   const router = useRouter();
   const orchestratorStore = useAiOrchestratorStore();
   const chatStore = useCoachChatStore();
@@ -134,7 +137,7 @@ export function useCoachChatViewModel() {
       const previous =
         typeof msgIndex === "number" && msgIndex > 0 ? allMessages[msgIndex - 1] : null;
       const requestPayload =
-        previous?.role === "user" && previous.content && previous.content !== "AI request"
+        isDev && previous?.role === "user" && previous.content && previous.content !== "AI request"
           ? previous.content
           : null;
       return {
@@ -159,7 +162,7 @@ export function useCoachChatViewModel() {
         const bubble = toUserBubble(msg, formatTime);
         if (bubble) bubbles.push(bubble);
       } else if (msg.role === "coach") {
-        bubbles.push(toCoachBubble(msg, allMessages, indexById, formatTime));
+        bubbles.push(toCoachBubble(msg, allMessages, indexById, formatTime, isDev));
       }
     }
 
@@ -310,6 +313,7 @@ export function useCoachChatViewModel() {
   });
 
   return {
+    isDev,
     isLoading,
     currentPageIndex,
     userQuestion,

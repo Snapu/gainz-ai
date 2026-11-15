@@ -8,6 +8,7 @@ import UiTelemetryLoader from "@/shared/presentation/components/ui/UiTelemetryLo
 import UiTextarea from "@/shared/presentation/components/ui/UiTextarea.vue";
 
 const {
+  isDev,
   isLoading,
   userQuestion,
   openScratchpads,
@@ -130,8 +131,8 @@ void scrollContainerRef;
             </button>
           </UiCard>
 
-          <!-- Expandable Disclosures: Rationale & Debug Data -->
-          <div v-if="message.scratchpad || message.requestPayload" class="pt-1 flex flex-col gap-2">
+          <!-- Expandable Disclosures: Rationale & Debug Data (DEV only) -->
+          <div v-if="message.scratchpad || (isDev && message.requestPayload)" class="pt-1 flex flex-col gap-2">
             <div class="flex items-center gap-3 flex-wrap">
               <!-- Coach Rationale Button -->
               <button
@@ -151,7 +152,7 @@ void scrollContainerRef;
 
               <!-- Debug Data Button -->
               <button
-                v-if="message.requestPayload"
+                v-if="isDev && message.requestPayload"
                 type="button"
                 :aria-expanded="openRequestPayloads.includes(message.id)"
                 :aria-controls="'payload-' + message.id"
@@ -178,7 +179,7 @@ void scrollContainerRef;
 
             <!-- Debug Data Box -->
             <div
-              v-if="message.requestPayload && openRequestPayloads.includes(message.id)"
+              v-if="isDev && message.requestPayload && openRequestPayloads.includes(message.id)"
               :id="'payload-' + message.id"
               class="p-3.5 rounded-xl bg-muted/20 border border-white/5 text-xs font-mono text-muted-foreground/80 leading-relaxed animate-in fade-in duration-200 flex flex-col gap-2"
             >

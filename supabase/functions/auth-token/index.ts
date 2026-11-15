@@ -1,14 +1,17 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import {
+  corsPreflightResponse,
+  DEFAULT_GOOGLE_CLIENT_ID,
+  extractClientIp,
+  fetchWithTimeout,
+  getDenoRuntime,
+  getEnv,
+  jsonResponse,
+  readJsonBodyWithLimit,
+} from "../_shared/http.ts";
+import { isRateLimited } from "./rateLimiter.ts";
 
-const DEFAULT_GOOGLE_CLIENT_ID =
-  "804592774481-hvo962fnjn23g9tt4i0s5d62f17pegg7.apps.googleusercontent.com";
 const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
-
-const corsHeaders: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const GOOGLE_TOKEN_TIMEOUT_MS = 10_000;
 
 interface AuthCodeRequest {
   grantType: "authorization_code";
@@ -21,16 +24,6 @@ interface RefreshTokenRequest {
 }
 
 type TokenRequestBody = AuthCodeRequest | RefreshTokenRequest;
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      ...corsHeaders,
-      "Content-Type": "application/json",
-    },
-  });
-}
 
 function isTokenRequestBody(value: unknown): value is TokenRequestBody {
   if (!value || typeof value !== "object") return false;
@@ -65,33 +58,6 @@ function buildTokenParams(
   return params;
 }
 
-interface RateLimitEntry {
-  count: number;
-  resetAt: number;
-}
-
-const rateLimitMap = new Map<string, RateLimitEntry>();
-const RATE_LIMIT_WINDOW_MS = 60_000;
-const MAX_REQUESTS_PER_WINDOW = 30;
-
-function isRateLimited(ip: string): boolean {
-  const now = Date.now();
-  if (rateLimitMap.size > 500) {
-    for (const [key, value] of rateLimitMap.entries()) {
-      if (now > value.resetAt) rateLimitMap.delete(key);
-    }
-  }
-
-  const current = rateLimitMap.get(ip);
-  if (!current || now > current.resetAt) {
-    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return false;
-  }
-
-  current.count++;
-  return current.count > MAX_REQUESTS_PER_WINDOW;
-}
-
 function formatTokenSuccess(payload: Record<string, unknown>): Response {
   return jsonResponse({
     access_token: payload.access_token,
@@ -101,37 +67,6 @@ function formatTokenSuccess(payload: Record<string, unknown>): Response {
     scope: typeof payload.scope === "string" ? payload.scope : undefined,
     token_type: typeof payload.token_type === "string" ? payload.token_type : "Bearer",
   });
-}
-
-const GOOGLE_TOKEN_TIMEOUT_MS = 10_000;
-
-async function fetchWithTimeout(
-  url: string,
-  init: RequestInit,
-  timeoutMs: number,
-): Promise<Response> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-function extractClientIp(req: Request): string | undefined {
-  // Supabase sits behind Cloudflare (`cf-connecting-ip`); reverse proxies append hops at the tail of x-forwarded-for
-  const forwardedFor = req.headers
-    .get("x-forwarded-for")
-    ?.split(",")
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-  return (
-    req.headers.get("cf-connecting-ip")?.trim() ||
-    forwardedFor?.at(-1) ||
-    req.headers.get("x-real-ip")?.trim() ||
-    undefined
-  );
 }
 
 function mapTokenUpstreamErrorStatus(googleStatus: number): number {
@@ -181,26 +116,20 @@ async function exchangeGoogleToken(
   }
 }
 
-Deno.serve(async (req: Request): Promise<Response> => {
+export async function handleAuthTokenRequest(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return corsPreflightResponse();
   }
 
   const clientIp = extractClientIp(req);
   if (clientIp && isRateLimited(clientIp)) {
-    return new Response(
-      JSON.stringify({
+    return jsonResponse(
+      {
         error: "rate-limited",
         message: "Too many authentication requests. Please try again later.",
-      }),
-      {
-        status: 429,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-          "Retry-After": "60",
-        },
       },
+      429,
+      { "Retry-After": "60" },
     );
   }
 
@@ -208,22 +137,22 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return jsonResponse({ error: "method-not-allowed" }, 405);
   }
 
-  const clientId = (Deno.env.get("GOOGLE_CLIENT_ID") ?? "").trim() || DEFAULT_GOOGLE_CLIENT_ID;
-  const clientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET");
+  const clientId = (getEnv("GOOGLE_CLIENT_ID") ?? "").trim() || DEFAULT_GOOGLE_CLIENT_ID;
+  const clientSecret = getEnv("GOOGLE_CLIENT_SECRET");
   if (!clientSecret) {
     return jsonResponse({ error: "missing-server-config" }, 500);
   }
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return jsonResponse({ error: "invalid-json" }, 400);
+  const bodyResult = await readJsonBodyWithLimit(req);
+  if (!bodyResult.ok) {
+    return jsonResponse({ error: bodyResult.error }, bodyResult.status);
   }
 
-  if (!isTokenRequestBody(body)) {
+  if (!isTokenRequestBody(bodyResult.data)) {
     return jsonResponse({ error: "invalid-request" }, 400);
   }
 
-  return exchangeGoogleToken(body, clientId, clientSecret);
-});
+  return exchangeGoogleToken(bodyResult.data, clientId, clientSecret);
+}
+
+getDenoRuntime()?.serve(handleAuthTokenRequest);

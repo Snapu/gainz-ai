@@ -4,7 +4,6 @@ import { defineStore } from "pinia";
 import { watch } from "vue";
 
 import {
-  adviceStartsDeload,
   classifyExerciseNames,
   evaluateCompletedSessions,
   getTodayLogsCount,
@@ -169,14 +168,28 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
       });
   }
 
+  let inFlightClassification: {
+    attempt: symbol;
+    token: string | undefined;
+    request: ResultAsync<void, "unauthorized">;
+  } | null = null;
+
   function classifyExercisesIfNeeded(
     explicitAccessToken?: string,
   ): ResultAsync<void, "unauthorized"> {
+    if (
+      inFlightClassification &&
+      (explicitAccessToken === undefined || inFlightClassification.token === explicitAccessToken)
+    ) {
+      return inFlightClassification.request;
+    }
+
     const unclassified = getUnclassifiedExercises();
     if (unclassified.length === 0) return okAsync(undefined);
 
+    const attempt = Symbol();
     const tokenResult = explicitAccessToken ? okAsync(explicitAccessToken) : resolveAccessToken();
-    return tokenResult
+    const request = tokenResult
       .andThen((accessToken) =>
         classifyExerciseNames(aiCoachService, unclassified, accessToken)
           .andTee((cleanupResult) => {
@@ -194,7 +207,20 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
           extra: { reason: error, unclassifiedCount: unclassified.length },
         });
         return okAsync(undefined);
+      })
+      .andTee(() => {
+        if (inFlightClassification?.attempt === attempt) {
+          inFlightClassification = null;
+        }
+      })
+      .orTee(() => {
+        if (inFlightClassification?.attempt === attempt) {
+          inFlightClassification = null;
+        }
       });
+
+    inFlightClassification = { attempt, token: explicitAccessToken, request };
+    return request;
   }
 
   /** Surfaces bad model output when `TrainingPlan.create` had to move a session to a free day. */
@@ -263,18 +289,20 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
   }
 
   function handleCoachingSuccess(
-    result: { advice: CoachingAdvice; requestPayload: string },
+    result: { advice: CoachingAdvice; requestPayload?: string },
     userMessageId: string,
     currentId: string,
     todayLogsCount: number,
     todayLogsChecksum: string,
     isFullPlanReset: boolean,
   ): void {
-    chatStore.updateMessageContent(userMessageId, result.requestPayload);
+    if (import.meta.env.DEV && result.requestPayload) {
+      chatStore.updateMessageContent(userMessageId, result.requestPayload);
+    }
     applyTrainingPlanIfPresent(result.advice, userMessageId, isFullPlanReset);
     exerciseMuscleMapStore.refresh();
 
-    if (adviceStartsDeload(result.advice) && !deloadStore.active) {
+    if (result.advice.startDeload === true && !deloadStore.active) {
       const { riskScore, triggeredBy } = trainingInsightsStore.insights.fatigue;
       deloadStore.startDeload(riskScore, mapTrainingFatigueTriggersToDeload(triggeredBy));
     }
@@ -298,7 +326,7 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     accessToken: string,
     question: string | undefined,
     mode: CoachingMode,
-  ): ResultAsync<{ advice: CoachingAdvice; requestPayload: string }, CoachingAdviceError> {
+  ): ResultAsync<{ advice: CoachingAdvice; requestPayload?: string }, CoachingAdviceError> {
     let activeQuestion = question;
     let activeMode = mode;
     if (pendingRequest?.mode === "planning") {
@@ -384,24 +412,22 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     inFlightMode = initialEffectiveMode;
 
     return resolveAccessToken()
-      .andThen((accessToken) =>
-        classifyExercisesIfNeeded(accessToken)
-          .andThen(() => executeCoachingAttempt(accessToken, question, mode))
-          .orElse((error) => {
-            if (error !== "unauthorized") {
-              return errAsync(error);
-            }
-            return refreshAuthAfterUnauthorized().andThen((freshToken) =>
-              classifyExercisesIfNeeded(freshToken)
-                .andThen(() => executeCoachingAttempt(freshToken, question, mode))
-                .orTee((retryErr) => {
-                  if (retryErr === "unauthorized") {
-                    authStore.logout();
-                  }
-                }),
-            );
-          }),
-      )
+      .andThen((accessToken) => {
+        void classifyExercisesIfNeeded(accessToken);
+        return executeCoachingAttempt(accessToken, question, mode).orElse((error) => {
+          if (error !== "unauthorized") {
+            return errAsync(error);
+          }
+          return refreshAuthAfterUnauthorized().andThen((freshToken) => {
+            void classifyExercisesIfNeeded(freshToken);
+            return executeCoachingAttempt(freshToken, question, mode).orTee((retryErr) => {
+              if (retryErr === "unauthorized") {
+                authStore.logout();
+              }
+            });
+          });
+        });
+      })
       .map(() => undefined)
       .andTee(() => {
         void drainPendingRequest();

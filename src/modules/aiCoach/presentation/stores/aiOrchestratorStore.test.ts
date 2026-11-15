@@ -1,4 +1,4 @@
-import { errAsync, okAsync, type ResultAsync } from "neverthrow";
+import { errAsync, okAsync, ResultAsync } from "neverthrow";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick, ref } from "vue";
@@ -844,9 +844,70 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
     expect(result.isOk()).toBe(true);
   });
 
-  it("re-runs exercise pre-classification after forced token refresh on 401", async () => {
+  it("runs exercise pre-classification non-blocking without stalling or blocking requestAdvice", async () => {
     mockRefreshToken.value = "valid-refresh-token";
-    mockEnsureValidIdToken = vi.fn().mockReturnValue(okAsync("stale-id-token"));
+    mockEnsureValidIdToken = vi.fn().mockReturnValue(okAsync("valid-id-token"));
+    mockExerciseLogs.value = [
+      {
+        id: "log-1",
+        exerciseName: "Xyzzy Unclassified Press 99",
+        weight: 20,
+        reps: 12,
+        rpe: 8,
+        loggedAt: new Date("2026-11-13T10:00:00Z"),
+      },
+    ];
+    mockClassifyExercises.mockReturnValueOnce(new ResultAsync(new Promise<never>(() => {})));
+    mockAsk.mockReturnValueOnce(
+      okAsync({
+        advice: { coachMessage: "Answered immediately without waiting for classify" },
+      }),
+    );
+
+    const orchestrator = useAiOrchestratorStore();
+    const result = await orchestrator.requestAdvice();
+
+    expect(mockClassifyExercises).toHaveBeenCalledTimes(1);
+    expect(mockAsk).toHaveBeenCalledTimes(1);
+    expect(result.isOk()).toBe(true);
+  });
+
+  it("deduplicates overlapping classifyExercisesIfNeeded calls while one is in flight", async () => {
+    mockRefreshToken.value = "valid-refresh-token";
+    mockEnsureValidIdToken = vi.fn().mockReturnValue(okAsync("valid-id-token"));
+    mockExerciseLogs.value = [
+      {
+        id: "log-1",
+        exerciseName: "Xyzzy Unclassified Press 99",
+        weight: 20,
+        reps: 12,
+        rpe: 8,
+        loggedAt: new Date("2026-11-13T10:00:00Z"),
+      },
+    ];
+    let resolveClassify!: (value: { isOk: () => true; value: { classifications: [] } }) => void;
+    mockClassifyExercises.mockReturnValue(
+      ResultAsync.fromSafePromise(
+        new Promise((resolve) => {
+          resolveClassify = resolve as typeof resolveClassify;
+        }),
+      ).map(() => ({ classifications: [] })),
+    );
+
+    const orchestrator = useAiOrchestratorStore();
+    const first = orchestrator.classifyExercisesIfNeeded("valid-id-token");
+    const second = orchestrator.classifyExercisesIfNeeded("valid-id-token");
+
+    await Promise.resolve();
+    expect(mockClassifyExercises).toHaveBeenCalledTimes(1);
+
+    resolveClassify({ isOk: () => true, value: { classifications: [] } });
+    await Promise.all([first, second]);
+  });
+
+  it("re-runs classifyExercisesIfNeeded with freshToken even when a stale-token call is still in flight", async () => {
+    mockRefreshToken.value = "valid-refresh-token";
+    mockEnsureValidIdToken = vi.fn().mockReturnValue(okAsync("stale-access-token"));
     mockRefreshSession = vi.fn().mockReturnValue(okAsync("fresh-access-token"));
     mockExerciseLogs.value = [
       {
@@ -859,24 +920,18 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
       },
     ];
     mockClassifyExercises
-      .mockReturnValueOnce(errAsync("unauthorized"))
+      .mockReturnValueOnce(new ResultAsync(new Promise<never>(() => {})))
       .mockReturnValueOnce(okAsync({ classifications: [] }));
-    mockAsk.mockReturnValueOnce(
-      okAsync({
-        advice: { coachMessage: "Classified and answered" },
-        requestPayload: "prompt",
-      }),
-    );
+    mockAsk
+      .mockReturnValueOnce(errAsync("unauthorized" as const))
+      .mockReturnValueOnce(okAsync({ advice: { coachMessage: "Recovered after refresh" } }));
 
     const orchestrator = useAiOrchestratorStore();
     const result = await orchestrator.requestAdvice();
 
-    expect(mockClassifyExercises).toHaveBeenCalledTimes(2);
-    expect(mockClassifyExercises.mock.calls[1]?.[1]).toBe("fresh-access-token");
-    expect(mockAsk).toHaveBeenCalledTimes(1);
-    expect(mockAsk.mock.calls[0]?.[0]).toEqual(
-      expect.objectContaining({ accessToken: "fresh-access-token" }),
-    );
     expect(result.isOk()).toBe(true);
+    expect(mockClassifyExercises).toHaveBeenCalledTimes(2);
+    expect(mockClassifyExercises.mock.calls[0]?.[1]).toBe("stale-access-token");
+    expect(mockClassifyExercises.mock.calls[1]?.[1]).toBe("fresh-access-token");
   });
 });

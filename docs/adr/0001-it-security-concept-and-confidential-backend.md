@@ -57,23 +57,24 @@ sequenceDiagram
 
     Note over Athlete, Client: 2. Authenticated AI Coaching Request
     Athlete->>Client: Requests Coaching / Mesocycle Advice
-    Client->>AiCoach: POST /functions/v1/ai-coach (Bearer <id_token>, { action: "coach", mode, muscleGroups, contents })
+    Client->>AiCoach: POST /functions/v1/ai-coach (Bearer <id_token>, CoachActionRequestDto)
     AiCoach->>GoogleAuth: Verify ID Token (JWKS, Issuer, Audience, Expiry)
     GoogleAuth-->>AiCoach: Valid Claims (sub = user_id)
-    AiCoach->>Postgres: RPC consume_ai_quota(user_id, kind='coach', daily_limit=25)
+    AiCoach->>AiCoach: Validate <=100KB body & Zod DTO, sanitize text, assemble prompt
+    AiCoach->>Postgres: RPC consume_ai_quota(user_id, kind='coach', daily_limit=15)
     alt Quota Exceeded
         Postgres-->>AiCoach: Quota error (HTTP 429)
         AiCoach-->>Client: 429 Too Many Requests (reset timestamp)
     else Quota Available
         Postgres-->>AiCoach: OK (current_usage, remaining)
-        AiCoach->>Gemini: GenerateContent (GEMINI_API_KEY, System Prompt, Contents)
-        alt Gemini Error (5xx / Timeout)
+        AiCoach->>Gemini: GenerateContent (GEMINI_API_KEY, Server System Prompt, thinkingConfig, Contents)
+        alt Gemini Error / Invalid Schema across Fallbacks
             Gemini-->>AiCoach: Error
-            AiCoach->>Postgres: RPC refund_ai_quota(user_id, kind='coach')
-            AiCoach-->>Client: 502/504 Error (Quota refunded)
-        else Gemini Success
-            Gemini-->>AiCoach: Structured JSON
-            AiCoach-->>Client: Validated CoachingAdvice / Classifications
+            AiCoach->>Postgres: RPC refund_ai_quota(user_id, kind='coach', usage_date)
+            AiCoach-->>Client: 502 Error (Quota refunded)
+        else Gemini Success & Zod ACL Valid
+            Gemini-->>AiCoach: Structured JSON -> Server Post-Processing
+            AiCoach-->>Client: { advice, quota } (zero prompt disclosure)
         end
     end
 ```
@@ -96,17 +97,19 @@ All calls to the `ai-coach` Edge Function require an `Authorization: Bearer <goo
 ### 4.3. Multi-Tiered Quota & Anti-Abuse Rate Limiting
 To prevent denial-of-wallet and quota exhaustion:
 - **Atomic Database RPC**: Daily usage is tracked in PostgreSQL via `consume_ai_quota(p_user_id, p_kind, p_daily_limit)`.
-- **User-Level Cap**: Users are bounded to a fair-use limit of 25 coaching requests and 50 classification requests per UTC calendar day.
+- **User-Level Cap**: Users are bounded to a fair-use limit of 15 coaching requests and 50 classification requests per UTC calendar day (`AI_DAILY_COACH_LIMIT`, `AI_DAILY_CLASSIFY_LIMIT`).
 - **Global Platform Kill-Switch**: A global safety ceiling (`v_global_daily_cap = 10000` for coaching, `20000` for classification) prevents runaway platform billing in the event of distributed bot proliferation.
-- **Atomic Upstream Refund (`refund_ai_quota`)**: If AI execution fails inside `executeAction` (for example upstream Gemini API errors, empty responses, or timeouts), the consumed quota slot is atomically refunded for the request's original UTC `usage_date` (`p_usage_date`).
+- **Atomic Upstream Refund (`refund_ai_quota`)**: If AI execution fails inside `executeAction` (for example upstream Gemini API errors, invalid model JSON across fallback models, or timeouts), the consumed quota slot is atomically refunded for the request's original UTC `usage_date` (`p_usage_date`).
 - **Probabilistic 30-Day Retention Pruning**: Historical records older than 30 days are pruned probabilistically (`random() < 0.01`) during quota check transactions, eliminating hot-path index lock churn while maintaining GDPR data-retention compliance.
 
-### 4.4. Input Hardening, Timeouts & Prompt Injection Guardrails
-- **Payload Validation**: Inbound payloads to both Edge Functions are validated via strict TypeScript type guards (`isTokenRequestBody`, `isAiCoachRequestBody`), and client-side AI responses are schema-validated via Zod ACLs (`CoachingAdviceTranslator`) before entering domain state.
-- **Aligned Timeout Hierarchy**: Client timeout margins (`65s` for planning, `48s` for follow-ups, `35s` for classification) are strictly longer than server-side Gemini execution timeouts (`55s`, `40s`, `30s`), guaranteeing that server quota refunds execute and return before client abort signals fire.
-- **Length Bounds**: Exercise arrays are bounded to `0–100` items; coaching message parts are capped at `35,000` chars (`MAX_PART_TEXT_LENGTH`) and `50,000` chars total conversation length (`MAX_TOTAL_CONVERSATION_CHARS`), enforced identically in the client (`requestCoachingAdvice`) and Edge Function (`ai-coach`).
-- **Multi-Turn Chat Compaction**: When assembling multi-turn history, `requestCoachingAdvice` compacts `previousMessages` to extract only prior user questions (`extractUserQuestion`), while sending the active turn's full assembled training context (`currentUserInput`).
-- **Response Completeness & JSON Verification**: `ai-coach` rejects incomplete upstream `finishReason` values (`!== "STOP"`) and verifies `JSON.parse` completeness (after stripping markdown fences) before returning HTTP `200`, triggering upstream model fallback or atomic quota refund (`refund_ai_quota`) on truncated output.
+### 4.4. Backend IP Protection, Input Hardening & GDPR Art. 9 Controls
+- **Closed Structured DTO & Server-Side Prompt Assembly**: Clients send structured training metrics (`CoachActionRequestDto`) rather than free-form `contents` arrays. System instructions, prompt assembly (`prompt.ts`), response Zod ACLs (`schemas.ts`), and clinical post-processing (`postProcess.ts`) run exclusively inside the `ai-coach` Edge Function. Prompt payloads (`requestPayload`) are never returned by the server, and the client's `"Debug Data"` inspector is gated strictly behind `import.meta.env.DEV`.
+- **Modular Edge Architecture**: Shared HTTP/size limits (`_shared/http.ts`), OIDC/token verification (`_shared/auth.ts`), quota RPC helpers (`_shared/quota.ts`), and Gemini fallback + Zod validation (`_shared/gemini.ts`) are cleanly isolated from domain logic and verified via `src/modules/architecture.boundaries.test.ts`.
+- **Body Size & Length Bounds**: Inbound JSON bodies are capped at `100 KB` (`413 payload-too-large`). Zod bounds enforce `recentLogs <= 500`, `previousMessages <= 40`, `events <= 50`, `question <= 2000`, `freeUserInput <= 2000`. Conversation history strips `trainingPlan` and `scratchpad` payloads before serialization.
+- **Prompt Injection Sanitization**: User-controlled text fields (`question`, `freeUserInput`, custom event types, and history turns) strip leading markdown section headers (`# ...`) and protocol control tokens (`[NEXT_SESSION]`, `[DONE]`) before server-side prompt assembly.
+- **GDPR Art. 9 Zero-PII Logging**: Edge Functions never log user health telemetry, workout logs, athlete free-text notes, raw prompts, or upstream model outputs (`console.*` logs are restricted to error class names and action types), and never forward emails, display names, or OAuth tokens to Gemini.
+- **Cost & Latency Controls**: Execution requests apply `thinkingConfig: { thinkingBudget: 256, includeThoughts: false }` (and omit `trainingPlan` schema unless `shouldAllowPlanUpdate` detects explicit plan modification intent); planning requests apply `thinkingBudget: 1024, includeThoughts: false`. Background exercise classification runs non-blocking so coaching responses never stall.
+- **Response Completeness & Schema Verification**: `generateWithFallback` validates incomplete `finishReason` values (`!== "STOP"`), strips markdown fences, parses JSON, and runs Zod ACL validation (`parseCoachingAdviceResponse`) **inside** each model attempt so schema violations automatically trigger fallback models before refunding quota (`502`).
 
 ### 4.5. Content Security Policy (CSP), Framing & Defense-in-Depth
 - **CSP & Framing Headers (`index.html` & `public/_headers`)**:

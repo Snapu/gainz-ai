@@ -94,7 +94,7 @@ Single-context repository layout centered around `GLOSSARY.md` and strict DDD bo
 
 - **AI (Google GenAI via Supabase Edge Function)**:
   - Infrastructure adapters: `src/modules/aiCoach/infrastructure/requestCoachingAdvice.ts`, `classifyExercises.ts`, and `aiEdgeClient.ts` calling Supabase `ai-coach` Edge Function (server-side `gemini-3.8-flash` with `gemini-2.5-flash` fallback).
-  - Anti-Corruption Layer (ACL): `src/modules/aiCoach/infrastructure/CoachingAdviceTranslator.ts` (Zod validation into `CoachingAdvice` domain model).
+  - Anti-Corruption Layer (ACL): `supabase/functions/ai-coach/schemas.ts` (`aiCoachRequestDtoSchema`, `parseCoachingAdviceResponse`) and `src/modules/aiCoach/infrastructure/requestCoachingAdvice.ts` (`buildCoachActionRequestDto`, `coachEndpointResponseSchema`).
   - Presentation orchestration: `src/modules/aiCoach/presentation/stores/aiOrchestratorStore.ts`, `coachChatStore.ts`, and `trainingPlanStore.ts`.
 - **Google Sheets & Offline Sync**: `src/modules/platform/infrastructure/spreadsheets.ts` (`google-spreadsheet`) and `src/modules/platform/presentation/composables/offlineSyncedStore.ts`. Do NOT leak `google-spreadsheet` outside infrastructure.
 - **Auth**: `src/modules/auth/presentation/stores/authStore.ts` and `src/modules/auth/infrastructure/googleOAuthClient.ts` (`vue3-google-login`).

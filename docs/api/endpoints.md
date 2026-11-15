@@ -138,7 +138,7 @@ curl -X POST "https://<PROJECT_REF>.supabase.co/functions/v1/auth-token" \
   - Coaching: `gemini-3.8-flash` (Primary) → `gemini-2.5-flash` → `gemini-3.5-flash-lite`
   - Classification: `gemini-2.5-flash` (Primary) → `gemini-3.5-flash-lite`
 - **Daily Quotas**:
-  - `coach`: Default 25 requests per UTC day (configured via `AI_DAILY_COACH_LIMIT`).
+  - `coach`: Default 15 requests per UTC day (configured via `AI_DAILY_COACH_LIMIT`).
   - `classify`: Default 50 requests per UTC day (configured via `AI_DAILY_CLASSIFY_LIMIT`).
   - Global Emergency Ceiling: 10,000 coach requests / 20,000 classify requests per UTC day platform-wide.
   - Quotas are automatically refunded via Postgres RPC `refund_ai_quota` if Gemini fails or aborts.
@@ -159,27 +159,74 @@ Authorization: Bearer <GOOGLE_ID_TOKEN>
 Content-Type: application/json
 ```
 
-#### Request Body Schema
+#### Request Body Schema (`CoachActionRequestDto`)
+
+Requests are validated with strict Zod schemas and capped at `100 KB` HTTP body size (`413 payload-too-large`). Arbitrary prompt `contents` arrays and client-supplied system instructions are rejected (`400 invalid-request`).
 
 ```typescript
 {
   action: "coach";
   mode: "planning" | "execution";
-  allowPlanUpdate?: boolean;
-  muscleGroups: string[];
-  contents: Array<{
-    role: "user" | "model";
-    parts: Array<{ text: string }>;
-  }>;
+  muscleGroups: string[];       // 1..50 allowed muscle groups
+  locale: string;
+  localDate: string;            // YYYY-MM-DD
+  nowIso: string;
+  workoutPhase: "planning" | "mid-workout" | "post-workout";
+  workoutStatus: string;
+  sessionStartBoundaryMs: number;
+  question?: string;            // Max 2000 chars (sanitized server-side)
+  userProfile: {
+    age?: number;
+    heightCm?: number;
+    weightKg?: number;
+    fitnessGoal?: string[];
+    fitnessLevel?: "beginner" | "intermediate" | "advanced";
+    workoutDaysPerWeek?: number;
+    workoutDurationMinutes?: number;
+    workoutLocation?: "gym" | "home" | "both";
+    equipmentAccess?: string[];
+    freeUserInput?: string;     // Max 2000 chars (sanitized server-side)
+  };
+  insights: {
+    acwr: number | null;
+    deloadStatus: "active" | "completed" | "canceled" | "none";
+    deloadEndsAt: string | null;
+    deloadTimeRemainingMs: number | null;
+    deloadTriggerSnapshot: { triggeredBy: string[]; riskScore: number } | null;
+    fatigue: {
+      shouldDeload: boolean;
+      reason?: string;
+      hasSufficientHistory: boolean;
+      decliningExercises: number;
+      riskScore: number;
+      loadWindow: { sets: object; tonnage: object };
+    };
+    muscleGroups: Record<string, object>; // Max 25 groups
+    e1rm: Record<string, object>;         // Max 200 exercises
+  };
+  recentLogs: Array<object>;    // Max 500 recent logs (trailing 90 days)
+  trainingSummaries: Array<object>; // Max 60 entries
+  previousMessages: Array<{
+    role: "user" | "coach";
+    content: string;            // Max 8000 chars (strips trainingPlan & scratchpad)
+    timestamp: string;
+  }>;                           // Max 40 turns
+  events?: Array<{ type: string; dates: string[] }>; // Max 50 events
+  activePlan?: object | null;
+  completedSessionKeys?: string[];
 }
 ```
 
-#### Constraints & Timeouts
+#### Constraints, Cost Guardrails & Timeouts
 
-- `contents`: Array of conversational turns. User prompts are compacted client-side to prevent quadratic token growth.
+- **Server-Side IP & Prompt Assembly**: Prompt templates, system instructions, Zod response validation, and clinical post-processing (`supabase/functions/ai-coach/prompt.ts`, `schemas.ts`, `postProcess.ts`) reside exclusively on the server.
+- **Closed Schema & Thinking Budgets**:
+  - `mode: "planning"`: `thinkingConfig: { thinkingBudget: 1024, includeThoughts: false }`, includes `trainingPlan` output schema.
+  - `mode: "execution"`: `thinkingConfig: { thinkingBudget: 256, includeThoughts: false }`; `trainingPlan` output schema is only enabled if the athlete's `question` explicitly requests a schedule/split/plan update (`shouldAllowPlanUpdate`).
+- **Response Validation & Fallback**: Structured JSON outputs are validated with `parseCoachingAdviceResponse` inside `generateWithFallback`; malformed model JSON automatically falls back across configured Gemini models before failing closed with `502` + `refund_ai_quota`.
 - **Timeouts**:
-  - Server: `55,000ms` for planning or first message; `40,000ms` for conversational follow-ups.
-  - Client: `65,000ms` for planning; `48,000ms` for follow-ups (providing network transit buffer).
+  - Server: `55,000ms` (Planning / Initial Coaching), `40,000ms` (Coaching Follow-ups), `30,000ms` (Classify).
+  - Client: `65,000ms` (planning / initial evaluation), `48,000ms` (follow-ups), `35,000ms` (Classify).
 
 #### Example Request
 
@@ -191,27 +238,71 @@ curl -X POST "https://<PROJECT_REF>.supabase.co/functions/v1/ai-coach" \
   -d '{
     "action": "coach",
     "mode": "execution",
-    "allowPlanUpdate": true,
-    "muscleGroups": ["chest", "back", "quads", "hamstrings", "shoulders", "biceps", "triceps"],
-    "contents": [
-      {
-        "role": "user",
-        "parts": [{ "text": "# session\nworkoutDays: 4\n# question\nCan I swap Incline Dumbbell Bench today?" }]
-      }
-    ]
+    "muscleGroups": ["Chest", "Lats", "Upper Back", "Quads", "Hamstrings"],
+    "locale": "en-US",
+    "localDate": "2026-11-15",
+    "nowIso": "2026-11-15T10:30:00.000Z",
+    "workoutPhase": "planning",
+    "workoutStatus": "Not started",
+    "sessionStartBoundaryMs": 1794700800000,
+    "question": "Can I swap Incline Dumbbell Bench today?",
+    "userProfile": { "workoutDaysPerWeek": 4 },
+    "insights": {
+      "acwr": 1.0,
+      "deloadStatus": "none",
+      "deloadEndsAt": null,
+      "deloadTimeRemainingMs": null,
+      "deloadTriggerSnapshot": null,
+      "fatigue": {
+        "shouldDeload": false,
+        "hasSufficientHistory": false,
+        "decliningExercises": 0,
+        "riskScore": 0,
+        "loadWindow": {
+          "sets": { "weekMinus3": 0, "weekMinus2": 0, "weekMinus1": 0, "current": 0, "prior3WeekAvg": 0, "ratioVsPriorAvg": null },
+          "tonnage": { "weekMinus3": 0, "weekMinus2": 0, "weekMinus1": 0, "current": 0, "prior3WeekAvg": 0, "ratioVsPriorAvg": null }
+        }
+      },
+      "muscleGroups": {},
+      "e1rm": {}
+    },
+    "recentLogs": [],
+    "trainingSummaries": [],
+    "previousMessages": [],
+    "events": []
   }'
 ```
 
 #### Success Response: `200 OK`
 
+Returns `{ advice, quota }` directly. Prompt strings (`requestPayload`) are never returned in production.
+
 ```json
 {
-  "text": "{\"coachMessage\": \"Swapping Incline Dumbbell Bench for Incline Machine Press fits your volume perfectly...\", \"recommendedWorkout\": [{\"exerciseName\": \"Incline Machine Press\", \"targetSets\": 3, \"targetReps\": \"8-12\", \"targetRpe\": 8.0, \"restSeconds\": 120, \"primaryMuscle\": \"Chest\"}], \"suggestedFollowUps\": [{\"label\": \"Warmup Sets\", \"prompt\": \"How should I warm up for Incline Machine Press?\"}]}",
-  "thought": "Athlete requested swap for incline dumbbell bench. Selecting mechanical chest press variant...",
+  "advice": {
+    "coachMessage": "Swapping Incline Dumbbell Bench for Incline Machine Press fits your volume perfectly...",
+    "scratchpad": "1. Athlete requested mechanical chest variant swap.\n2. Preserved push volume within MAV.",
+    "recommendedWorkout": [
+      {
+        "exerciseName": "Incline Machine Press",
+        "targetSets": 3,
+        "targetReps": "8-12",
+        "targetRpe": 8.0,
+        "restSeconds": 120,
+        "primaryMuscle": "Chest"
+      }
+    ],
+    "suggestedFollowUps": [
+      {
+        "label": "Warmup Sets",
+        "prompt": "How should I warm up for Incline Machine Press?"
+      }
+    ]
+  },
   "quota": {
     "currentCount": 1,
-    "dailyLimit": 25,
-    "resetAt": "2026-11-13T00:00:00.000Z"
+    "dailyLimit": 15,
+    "resetAt": "2026-11-16T00:00:00.000Z"
   }
 }
 ```
@@ -271,7 +362,7 @@ curl -X POST "https://<PROJECT_REF>.supabase.co/functions/v1/ai-coach" \
 
 ## 4. Rate Limiting, Quotas & Error Handling
 
-When an athlete reaches their daily limit (25 coach / 50 classify) or the platform ceiling is reached:
+When an athlete reaches their daily limit (15 coach / 50 classify) or the platform ceiling is reached:
 
 #### HTTP `429 Too Many Requests`
 
@@ -279,9 +370,9 @@ When an athlete reaches their daily limit (25 coach / 50 classify) or the platfo
 {
   "error": "rate-limit-exceeded",
   "quota": {
-    "currentCount": 25,
-    "dailyLimit": 25,
-    "resetAt": "2026-11-13T00:00:00.000Z"
+    "currentCount": 15,
+    "dailyLimit": 15,
+    "resetAt": "2026-11-16T00:00:00.000Z"
   }
 }
 ```
@@ -290,11 +381,12 @@ When an athlete reaches their daily limit (25 coach / 50 classify) or the platfo
 
 | Status Code | Meaning | Client Handling |
 | :--- | :--- | :--- |
-| `200 OK` | Request succeeded. | Parse `text` JSON into domain model with Zod. |
-| `400 Bad Request` | Invalid payload or JSON. | Check request body structure. |
+| `200 OK` | Request succeeded. | For `coach`, consume `{ advice, quota }` directly; for `classify`, parse `{ text }`. |
+| `400 Bad Request` | Invalid DTO payload or JSON. | Check closed DTO schema structure and bounds. |
 | `401 Unauthorized` | Invalid or expired Google ID Token. | Refresh token via `/auth-token` and retry. |
+| `413 Payload Too Large` | Request body exceeded `100 KB`. | Trim excess historical logs/messages cleanly on client. |
 | `429 Too Many Requests` | Daily user quota or platform cap reached. | Show friendly quota limit alert with reset time. |
-| `502 Bad Gateway` | Upstream Gemini API failed. | Quota was refunded by server. Retry with exponential backoff. |
+| `502 Bad Gateway` | All upstream Gemini models failed or returned invalid JSON. | Quota was refunded for original `usage_date` by server. Retry with exponential backoff. |
 
 ---
 

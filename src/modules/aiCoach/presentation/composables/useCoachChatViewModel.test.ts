@@ -582,4 +582,36 @@ describe("useCoachChatViewModel", () => {
     expect(ensureAdviceSpy).toHaveBeenCalledTimes(1);
     app.unmount();
   });
+
+  it("strips requestPayload in non-dev mode while keeping scratchpad intact", () => {
+    const store = useCoachChatStore();
+    store.messages = [
+      {
+        id: "u1",
+        role: "user",
+        content: "# session\ndate: 2026-11-15\n# question\nHow heavy?",
+        sessionId: "s1",
+        timestamp: new Date().toISOString(),
+        logsCount: 0,
+      },
+      {
+        id: "c1",
+        role: "coach",
+        content: JSON.stringify({
+          coachMessage: "Aim for 80kg.",
+          scratchpad: "Solid progression from last week.",
+        }),
+        sessionId: "s1",
+        timestamp: new Date().toISOString(),
+        logsCount: 0,
+      },
+    ];
+
+    const prodVm = useCoachChatViewModel({ isDev: false });
+    expect(prodVm.isDev).toBe(false);
+    expect(prodVm.coachMessages.value[0]?.requestPayload).toBeNull();
+    const coachBubble = prodVm.chatMessages.value.find((m) => m.role === "coach");
+    expect(coachBubble?.requestPayload).toBeNull();
+    expect(coachBubble?.scratchpad).toBe("Solid progression from last week.");
+  });
 });

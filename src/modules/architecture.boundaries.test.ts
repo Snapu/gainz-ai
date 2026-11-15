@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = path.resolve(process.cwd(), "src/modules");
 const SRC_ROOT = path.resolve(process.cwd(), "src");
+const SUPABASE_FUNCTIONS_ROOT = path.resolve(process.cwd(), "supabase/functions");
 
 type Layer = "domain" | "application" | "infrastructure" | "presentation";
 
@@ -504,3 +505,57 @@ async function findSharedPresentationCycleViolations(allFiles: string[]): Promis
   }
   return violations;
 }
+
+describe("Supabase Edge Function Boundaries", () => {
+  it("keeps Supabase Edge Functions completely isolated from frontend src/ and @/modules/", async () => {
+    const fnFiles = (await listTsFiles(SUPABASE_FUNCTIONS_ROOT)).filter(
+      (f) => !f.endsWith(".test.ts") && !f.endsWith(".d.ts"),
+    );
+    const violations: string[] = [];
+
+    for (const filePath of fnFiles) {
+      const source = await readFile(filePath, "utf-8");
+      for (const importPath of extractImports(source)) {
+        if (importPath.startsWith("@/") || importPath.includes("/src/")) {
+          violations.push(`${path.relative(SUPABASE_FUNCTIONS_ROOT, filePath)} -> ${importPath}`);
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it("forbids _shared modules from importing function-specific directories", async () => {
+    const sharedDir = path.resolve(SUPABASE_FUNCTIONS_ROOT, "_shared");
+    const sharedFiles = (await listTsFiles(sharedDir)).filter((f) => !f.endsWith(".test.ts"));
+    const violations: string[] = [];
+
+    for (const filePath of sharedFiles) {
+      const source = await readFile(filePath, "utf-8");
+      for (const importPath of extractImports(source)) {
+        if (importPath.includes("../ai-coach/") || importPath.includes("../auth-token/")) {
+          violations.push(`${path.relative(SUPABASE_FUNCTIONS_ROOT, filePath)} -> ${importPath}`);
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it("keeps pure ai-coach backend modules (prompt, schemas, postProcess) free of HTTP/network side effects", async () => {
+    const pureFiles = ["ai-coach/prompt.ts", "ai-coach/schemas.ts", "ai-coach/postProcess.ts"];
+    const forbiddenTokens = ["Deno.serve", "getDenoRuntime", "fetch(", "npm:jose"];
+    const violations: string[] = [];
+
+    for (const relPath of pureFiles) {
+      const source = await readFile(path.resolve(SUPABASE_FUNCTIONS_ROOT, relPath), "utf-8");
+      for (const token of forbiddenTokens) {
+        if (source.includes(token)) {
+          violations.push(`${relPath} contains forbidden token "${token}"`);
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+});

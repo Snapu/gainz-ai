@@ -45,7 +45,7 @@ export type CoachingAdviceError =
 
 export interface CoachingAdviceResult {
   advice: CoachingAdvice;
-  requestPayload: string;
+  requestPayload?: string;
 }
 
 export interface ExerciseCleanupResult {
@@ -131,7 +131,7 @@ export interface PlannedSession {
   exercises: PlannedExercise[];
 }
 
-export interface PlannedExercise {
+interface PlannedExercise {
   exerciseName: string;
   targetSets: number;
   targetReps?: string;
