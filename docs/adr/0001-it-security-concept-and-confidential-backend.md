@@ -111,9 +111,9 @@ To prevent denial-of-wallet and quota exhaustion:
 ### 4.5. Content Security Policy (CSP), Framing & Defense-in-Depth
 - **CSP & Framing Headers (`index.html` & `public/_headers`)**:
   - `public/_headers` enforces `X-Frame-Options: DENY` and `Content-Security-Policy: frame-ancestors 'none'` on Cloudflare Pages responses to block clickjacking.
-  - `index.html` CSP `connect-src`: Strictly limited to `'self'`, local dev & HMR ports (`ws:`, `wss:`, `http://localhost:*`, `http://127.0.0.1:*`), the Supabase project domain (`https://*.supabase.co`), Google Sheets/Drive APIs (`https://sheets.googleapis.com`, `https://*.googleapis.com`), Google OAuth endpoints (`https://accounts.google.com`, `https://oauth2.googleapis.com`, `https://www.googleapis.com`), and Sentry telemetry (`https://*.sentry.io`).
-  - `script-src`: Restricts script execution to `'self'`, `'unsafe-inline'`, `data:` (needed for Vite's inline legacy/module detection scripts), and Google Identity Services (`https://accounts.google.com`, `https://apis.google.com`). `'unsafe-eval'` is omitted.
-  - `frame-src`: Restricted to `'self'` and `https://accounts.google.com` for Google authentication iframes.
+  - `index.html` CSP `connect-src`: Strictly limited to `'self'`, local dev & HMR ports (`ws:`, `wss:`, `http://localhost:*`, `http://127.0.0.1:*`), the Supabase project domain (`https://*.supabase.co`), Google Sheets/Drive/Picker APIs (`https://apis.google.com`, `https://sheets.googleapis.com`, `https://*.googleapis.com`), Google OAuth endpoints (`https://accounts.google.com`, `https://oauth2.googleapis.com`, `https://www.googleapis.com`), and Sentry telemetry (`https://*.sentry.io`).
+  - `script-src`: Restricts script execution to `'self'`, `'unsafe-inline'`, `data:` (needed for Vite's inline legacy/module detection scripts), Google Identity Services (`https://accounts.google.com`), and Google API/Picker bundles (`https://apis.google.com`, `https://*.gstatic.com`). `'unsafe-eval'` is omitted.
+  - `frame-src`: Restricted to `'self'`, `https://accounts.google.com` for Google authentication iframes, and Google Picker (`https://docs.google.com`, `https://drive.google.com`, `https://apis.google.com`).
 - **Database Row-Level Security (RLS)**:
   - Table `public.ai_daily_usage` has RLS enabled.
   - Direct public client access is completely blocked (`FOR ALL TO service_role USING (true)`).

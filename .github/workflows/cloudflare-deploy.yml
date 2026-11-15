@@ -28,6 +28,7 @@ jobs:
       VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
       VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
+      VITE_GOOGLE_PICKER_API_KEY: ${{ vars.VITE_GOOGLE_PICKER_API_KEY }}
     steps:
       - name: Validate Cloudflare & app environment configuration
         run: |
@@ -38,6 +39,9 @@ jobs:
           if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_PUBLISHABLE_KEY" ]; then
             echo "Missing VITE_SUPABASE_URL or VITE_SUPABASE_PUBLISHABLE_KEY for this environment." >&2
             exit 1
+          fi
+          if [ -z "$VITE_GOOGLE_PICKER_API_KEY" ]; then
+            echo "::warning::VITE_GOOGLE_PICKER_API_KEY is not set for this environment; Google Picker sheet linking will be unavailable."
           fi
 
       - name: Checkout repository

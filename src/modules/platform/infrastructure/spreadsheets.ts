@@ -1,12 +1,15 @@
 import * as Sentry from "@sentry/vue";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import { errAsync, okAsync, ResultAsync } from "neverthrow";
-import { isAuthError } from "@/modules/platform/infrastructure/utils/isAuthError";
+import {
+  getHttpErrorStatus,
+  isAuthError,
+} from "@/modules/platform/infrastructure/utils/httpErrors";
 
 export const SPREADSHEET_NAME = "Gainz AI App Database";
 
 type GetSpreadsheetIdError = "get-spreadsheet-id-failed" | "parse-data-failed" | "auth-failed";
-type SpreadsheetLoadError = "load-spreadsheet-failed" | "auth-failed";
+type SpreadsheetLoadError = "load-spreadsheet-failed" | "not-found" | "forbidden" | "auth-failed";
 type SpreadsheetCreateError = "create-spreadsheet-failed" | "auth-failed";
 
 function createSpreadsheetQuery(name: string): string {
@@ -31,8 +34,15 @@ function mapSpreadsheetJsonParseError(error: unknown): "parse-data-failed" {
 
 function mapLoadSpreadsheetError(id: string, error: unknown): SpreadsheetLoadError {
   console.error(`Failed to load spreadsheet with id ${id}. Error:`, error);
-  if (isAuthError(error)) {
+  const status = getHttpErrorStatus(error);
+  if (status === 401) {
     return "auth-failed";
+  }
+  if (status === 403) {
+    return "forbidden";
+  }
+  if (status === 404) {
+    return "not-found";
   }
   Sentry.captureException(error, {
     tags: { scope: "spreadsheets-service", feature: "load" },

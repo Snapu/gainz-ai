@@ -107,7 +107,7 @@ describe("spreadsheets", () => {
       }
     });
 
-    it("should return auth-failed when google-spreadsheet throws 403", async () => {
+    it("should return forbidden when google-spreadsheet throws 403", async () => {
       const error = new Error("Forbidden");
       // @ts-expect-error - Adding response property for mock
       error.response = { status: 403 };
@@ -119,7 +119,23 @@ describe("spreadsheets", () => {
 
       expect(result.isErr()).toBe(true);
       if (result.isErr()) {
-        expect(result.error).toBe("auth-failed");
+        expect(result.error).toBe("forbidden");
+      }
+    });
+
+    it("should return not-found when google-spreadsheet throws 404", async () => {
+      const error = new Error("Not Found");
+      // @ts-expect-error - Adding response property for mock
+      error.response = { status: 404 };
+
+      const { GoogleSpreadsheet } = await import("google-spreadsheet");
+      vi.spyOn(GoogleSpreadsheet.prototype, "loadInfo").mockRejectedValue(error);
+
+      const result = await loadSpreadsheet("spreadsheet-123", "access-token");
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBe("not-found");
       }
     });
 

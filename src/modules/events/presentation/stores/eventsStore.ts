@@ -18,9 +18,15 @@ export const useEventsStore = defineStore("events", () => {
     events.value = nextEvents;
   }
 
+  function clearEvents(): void {
+    saveEventsInfra([]);
+    events.value = [];
+  }
+
   return {
     events,
     addEvent: addEventToStore,
     removeEvent: removeEventFromStore,
+    clearEvents,
   };
 });

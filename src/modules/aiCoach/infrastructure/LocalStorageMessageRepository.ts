@@ -67,6 +67,10 @@ export class LocalStorageMessageRepository {
     });
   }
 
+  public clearAllSessions(): void {
+    localStorage.removeItem(STORAGE_KEY);
+  }
+
   public cleanOldSessions(): void {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - MAX_SESSION_AGE_DAYS);

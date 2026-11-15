@@ -1,14 +1,27 @@
 <script setup lang="ts">
-import { Bed, ChevronRight, ExternalLink, History, Menu } from "@lucide/vue";
+import { Bed, ChevronRight, ExternalLink, FolderOpen, History, Menu } from "@lucide/vue";
 import { useRouter } from "vue-router";
 import { useSpreadsheetStore } from "@/modules/platform/presentation";
 import { WIZARD_STEPS } from "@/modules/profile/presentation";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiDropdownMenu from "@/shared/presentation/components/ui/UiDropdownMenu.vue";
 import UiDropdownMenuItem from "@/shared/presentation/components/ui/UiDropdownMenuItem.vue";
+import { useToast } from "@/shared/presentation/composables/useToast";
 
 const router = useRouter();
 const spreadsheetStore = useSpreadsheetStore();
+const { toast } = useToast();
+
+function handleSwitchSpreadsheet(): void {
+  void spreadsheetStore.switchSpreadsheet().orTee((error) => {
+    if (error === "picker-cancelled") return;
+    toast({
+      variant: "destructive",
+      title: "Could Not Switch Sheet",
+      description: "Google Picker could not be opened. Please try again.",
+    });
+  });
+}
 </script>
 
 <template>
@@ -60,6 +73,14 @@ const spreadsheetStore = useSpreadsheetStore();
       >
         <span>Open Spreadsheet</span>
         <ExternalLink class="w-4 h-4 ml-auto opacity-40 group-hover:text-primary transition-colors" />
+      </UiDropdownMenuItem>
+
+      <UiDropdownMenuItem 
+        @select="handleSwitchSpreadsheet"
+        class="group"
+      >
+        <span>Switch Spreadsheet</span>
+        <FolderOpen class="w-4 h-4 ml-auto opacity-40 group-hover:text-primary transition-colors" />
       </UiDropdownMenuItem>
 
       <div class="h-px bg-white/5 my-1 mx-3"></div>

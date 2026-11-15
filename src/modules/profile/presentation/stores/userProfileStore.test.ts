@@ -207,4 +207,19 @@ describe("useUserProfileStore", () => {
 
     expect(store.hasCompletedSetup).toBe(false);
   });
+
+  it("sets isLoading synchronously when spreadsheet doc transitions from null to loaded", async () => {
+    reactiveDoc.value = null;
+    vi.mocked(migrateFromLocalStorage).mockResolvedValue(ok("no-data"));
+    vi.mocked(loadUserProfile).mockResolvedValue(ok(null));
+
+    const store = useUserProfileStore();
+    expect(store.isLoading).toBe(false);
+
+    reactiveDoc.value = mockDoc;
+    // Must flip synchronously before pre-flush router guards run on Loading.vue
+    expect(store.isLoading).toBe(true);
+
+    await vi.waitFor(() => expect(store.isLoading).toBe(false));
+  });
 });

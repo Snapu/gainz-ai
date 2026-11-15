@@ -84,6 +84,12 @@ export const useCoachChatStore = defineStore("coachChat", () => {
     messageRepository.removeMessages(currentSessionId.value);
   }
 
+  function resetAllSessions() {
+    messages.value = [];
+    lastRequestState.value = { date: "", checksum: "" };
+    messageRepository.clearAllSessions();
+  }
+
   function retainOnlyMessage(messageId: string) {
     messages.value = messages.value.filter((msg) => msg.id === messageId);
     messageRepository.saveMessages(currentSessionId.value, messages.value);
@@ -123,6 +129,7 @@ export const useCoachChatStore = defineStore("coachChat", () => {
     updateMessageContent,
     removeMessage,
     clearMessages,
+    resetAllSessions,
     retainOnlyMessage,
     currentWorkoutPlan,
     hasTodayCoachMessage,

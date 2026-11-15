@@ -8,13 +8,15 @@ import { useAuthStore } from "@/modules/auth/presentation";
 import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
 import UiToaster from "@/shared/presentation/components/ui/UiToaster.vue";
 import { useAuthExpirationWatcher } from "@/shared/presentation/composables/useAuthExpirationWatcher";
+import { useSheetCacheSync } from "@/shared/presentation/composables/useSheetCacheSync";
 import { useToast } from "@/shared/presentation/composables/useToast";
 
 const router = useRouter();
 const authStore = useAuthStore();
 
-// Start watching for auth expiration
+// Start watching for auth expiration and sheet switches
 useAuthExpirationWatcher();
+useSheetCacheSync();
 
 let swUpdateInterval: ReturnType<typeof setInterval> | undefined;
 

@@ -103,7 +103,7 @@ export const useUserProfileStore = defineStore("userProfile", () => {
 
       void hydrateProfileForDoc(doc, () => cancelled);
     },
-    { immediate: true },
+    { immediate: true, flush: "sync" },
   );
 
   watch(
