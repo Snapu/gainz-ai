@@ -64,6 +64,19 @@ export default defineConfig(() => {
           ],
         },
       }),
+      {
+        name: "vitest-deno-npm-specifier-stub",
+        resolveId(id) {
+          if (process.env.VITEST && id === "npm:jose@5") {
+            return "\0vitest-npm-jose";
+          }
+        },
+        load(id) {
+          if (id === "\0vitest-npm-jose") {
+            return "export const createRemoteJWKSet = () => () => {}; export const jwtVerify = async () => ({ payload: {} });";
+          }
+        },
+      },
     ],
     resolve: {
       alias: {

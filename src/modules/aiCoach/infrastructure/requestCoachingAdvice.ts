@@ -28,6 +28,8 @@ import {
   type CoachingMessage,
   type CoachingMode,
   extractUserQuestion,
+  type RecoverCoachingAdviceError,
+  type RecoverCoachingAdviceResult,
   resolveCoachingIntent,
   sanitizeSuggestedFollowUps,
   TrainingPlan,
@@ -57,32 +59,50 @@ const plannedExerciseResponseSchema = z.object({
     .optional(),
 });
 
-const coachEndpointResponseSchema = z.object({
-  advice: z.object({
-    coachMessage: z.string().min(1),
-    scratchpad: z.string().optional(),
-    startDeload: z.boolean().optional(),
-    suggestedFollowUps: z.unknown().optional(),
-    recommendedWorkout: z.array(plannedExerciseResponseSchema).optional(),
-    trainingPlan: z
-      .object({
-        cycleWeeks: z.number().int().min(1),
-        sessions: z.array(
-          z.object({
-            dayOfWeek: z.number().int().min(0).max(6),
-            weekNumber: z.number().int().min(1),
-            sessionLabel: z.string(),
-            focusDescription: z.string(),
-            exercises: z.array(plannedExerciseResponseSchema),
-          }),
-        ),
-      })
-      .optional(),
-  }),
+const coachAdviceSchema = z.object({
+  coachMessage: z.string().min(1),
+  scratchpad: z.string().optional(),
+  startDeload: z.boolean().optional(),
+  suggestedFollowUps: z.unknown().optional(),
+  recommendedWorkout: z.array(plannedExerciseResponseSchema).optional(),
+  trainingPlan: z
+    .object({
+      cycleWeeks: z.number().int().min(1),
+      sessions: z.array(
+        z.object({
+          dayOfWeek: z.number().int().min(0).max(6),
+          weekNumber: z.number().int().min(1),
+          sessionLabel: z.string(),
+          focusDescription: z.string(),
+          exercises: z.array(plannedExerciseResponseSchema),
+        }),
+      ),
+    })
+    .optional(),
 });
+
+const coachEndpointResponseSchema = z.union([
+  z.object({
+    advice: coachAdviceSchema,
+  }),
+  z.object({
+    status: z.literal("processing"),
+  }),
+]);
+
+const recoverEndpointResponseSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("completed"),
+    advice: coachAdviceSchema,
+  }),
+  z.object({
+    status: z.literal("processing"),
+  }),
+]);
 
 export type CoachActionRequestDto = {
   action: "coach";
+  clientRequestId?: string;
   mode: CoachingMode;
   muscleGroups: string[];
   locale: string;
@@ -464,6 +484,7 @@ export function buildCoachActionRequestDto(
 
   return compactObject({
     action: "coach" as const,
+    clientRequestId: options.clientRequestId,
     mode: intent.effectiveMode,
     muscleGroups: Array.from(VALID_MUSCLE_GROUPS),
     locale: resolveLocale(),
@@ -523,6 +544,10 @@ function persistLearnedMuscleGroups(advice: CoachingAdvice): void {
 }
 
 function mapCoachRequestError(error: unknown, effectiveMode: CoachingMode): CoachingAdviceError {
+  const isTerminalHttpError =
+    error instanceof AiEdgeHttpError &&
+    (error.status === 400 || error.status === 413 || error.status === 500 || error.status === 502);
+
   if (error instanceof AiEdgeHttpError) {
     if (error.status === 401) {
       return "unauthorized";
@@ -539,7 +564,21 @@ function mapCoachRequestError(error: unknown, effectiveMode: CoachingMode): Coac
       status: error instanceof AiEdgeHttpError ? error.status : undefined,
     },
   });
-  return "coaching-request-failed";
+  return isTerminalHttpError ? "coaching-request-server-error" : "coaching-request-failed";
+}
+
+function normalizeParsedAdvice(rawAdvice: z.infer<typeof coachAdviceSchema>): CoachingAdvice {
+  return {
+    ...rawAdvice,
+    suggestedFollowUps: sanitizeSuggestedFollowUps(rawAdvice.suggestedFollowUps),
+  };
+}
+
+class ProcessingInProgressError extends Error {
+  constructor() {
+    super("Request is still processing");
+    this.name = "ProcessingInProgressError";
+  }
 }
 
 export function requestCoachingAdvice(
@@ -548,7 +587,10 @@ export function requestCoachingAdvice(
   if (!options.accessToken) return errAsync("unauthorized");
   const accessToken = options.accessToken;
 
-  const dto = buildCoachActionRequestDto(options);
+  const dto = buildCoachActionRequestDto({
+    ...options,
+    clientRequestId: options.clientRequestId ?? crypto.randomUUID(),
+  });
   const isPlanningMode =
     dto.mode === "planning" ||
     options.previousMessages.length === 0 ||
@@ -562,12 +604,15 @@ export function requestCoachingAdvice(
       timeoutMs: clientTimeoutMs,
     }).then((payload): CoachingAdvice => {
       const parsed = coachEndpointResponseSchema.parse(payload);
-      return {
-        ...parsed.advice,
-        suggestedFollowUps: sanitizeSuggestedFollowUps(parsed.advice.suggestedFollowUps),
-      };
+      if (!("advice" in parsed)) {
+        throw new ProcessingInProgressError();
+      }
+      return normalizeParsedAdvice(parsed.advice);
     }),
     (error): CoachingAdviceError => {
+      if (error instanceof ProcessingInProgressError) {
+        return "coaching-request-failed";
+      }
       if (error instanceof z.ZodError) {
         return "generate-content-stream-failed";
       }
@@ -576,4 +621,39 @@ export function requestCoachingAdvice(
   )
     .andTee(persistLearnedMuscleGroups)
     .map((advice) => ({ advice }));
+}
+
+export function recoverCoachingAdvice(
+  clientRequestId: string,
+  accessToken: string | undefined,
+): ResultAsync<RecoverCoachingAdviceResult, RecoverCoachingAdviceError> {
+  if (!accessToken) return errAsync("unauthorized");
+
+  return ResultAsync.fromPromise(
+    postAiEdgeFunction<unknown>({
+      accessToken,
+      body: { action: "recover", clientRequestId },
+      timeoutMs: 15_000,
+    }).then((payload): RecoverCoachingAdviceResult => {
+      const parsed = recoverEndpointResponseSchema.parse(payload);
+      if (parsed.status === "processing") {
+        return { status: "processing" };
+      }
+      return { status: "completed", advice: normalizeParsedAdvice(parsed.advice) };
+    }),
+    (error): RecoverCoachingAdviceError => {
+      if (error instanceof z.ZodError) {
+        return "generate-content-stream-failed";
+      }
+      if (error instanceof AiEdgeHttpError) {
+        if (error.status === 404) return "not-found";
+        if (error.status === 502) return "server-failed";
+      }
+      return mapCoachRequestError(error, "execution");
+    },
+  ).andTee((result) => {
+    if (result.status === "completed") {
+      persistLearnedMuscleGroups(result.advice);
+    }
+  });
 }

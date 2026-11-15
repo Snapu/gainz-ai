@@ -138,8 +138,11 @@ const plannedSessionDtoSchema = z.object({
   exercises: z.array(plannedExerciseDtoSchema).max(30),
 });
 
+const uuidV4Schema = z.uuid({ version: "v4" });
+
 export const coachActionRequestDtoSchema = z.object({
   action: z.literal("coach"),
+  clientRequestId: uuidV4Schema.optional(),
   mode: z.enum(["planning", "execution"]),
   muscleGroups: z.array(muscleGroupItemSchema).min(1).max(50),
   locale: z.string().trim().min(1).max(32),
@@ -255,13 +258,20 @@ export const classifyActionRequestDtoSchema = z.object({
   muscleGroups: z.array(muscleGroupItemSchema).min(1).max(50),
 });
 
+export const recoverActionRequestDtoSchema = z.object({
+  action: z.literal("recover"),
+  clientRequestId: uuidV4Schema,
+});
+
 export const aiCoachRequestDtoSchema = z.discriminatedUnion("action", [
   coachActionRequestDtoSchema,
   classifyActionRequestDtoSchema,
+  recoverActionRequestDtoSchema,
 ]);
 
 export type CoachActionRequestDto = z.infer<typeof coachActionRequestDtoSchema>;
 export type ClassifyActionRequestDto = z.infer<typeof classifyActionRequestDtoSchema>;
+export type RecoverActionRequestDto = z.infer<typeof recoverActionRequestDtoSchema>;
 export type AiCoachRequestDto = z.infer<typeof aiCoachRequestDtoSchema>;
 
 export function sanitizeSuggestedFollowUps(items: unknown): SuggestedFollowUp[] | undefined {

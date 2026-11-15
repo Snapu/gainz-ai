@@ -11,10 +11,16 @@ import type {
   CoachingAdviceRequest,
   CoachingAdviceResult,
   ExerciseCleanupResult,
+  RecoverCoachingAdviceError,
+  RecoverCoachingAdviceResult,
 } from "../domain/types";
 
 export interface AiCoachService {
   ask(options: CoachingAdviceRequest): ResultAsync<CoachingAdviceResult, CoachingAdviceError>;
+  recover(
+    clientRequestId: string,
+    accessToken: string | undefined,
+  ): ResultAsync<RecoverCoachingAdviceResult, RecoverCoachingAdviceError>;
   classifyExercises(
     exerciseNames: string[],
     accessToken: string | undefined,
@@ -54,16 +60,25 @@ export function requestAdviceWithSingleRetry(
   service: AiCoachService,
   options: CoachingAdviceRequest,
   retryDelayMs = 2000,
+  onRetry?: (retryClientRequestId: string) => void,
 ): ResultAsync<CoachingAdviceResult, CoachingAdviceError> {
-  const askOnce = () => requestAdvice(service, options);
+  const askWithOptions = (reqOptions: CoachingAdviceRequest) => requestAdvice(service, reqOptions);
 
-  return askOnce().orElse((error) => {
+  return askWithOptions(options).orElse((error) => {
     if (error !== "generate-content-stream-failed") return errAsync(error);
+
+    const retryClientRequestId = options.clientRequestId ? crypto.randomUUID() : undefined;
+    if (retryClientRequestId) {
+      onRetry?.(retryClientRequestId);
+    }
+    const retryOptions = retryClientRequestId
+      ? { ...options, clientRequestId: retryClientRequestId }
+      : options;
 
     return ResultAsync.fromPromise(
       delay(retryDelayMs),
       () => "coaching-request-failed" as const,
-    ).andThen(() => askOnce());
+    ).andThen(() => askWithOptions(retryOptions));
   });
 }
 

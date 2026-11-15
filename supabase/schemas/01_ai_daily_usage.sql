@@ -53,6 +53,12 @@ begin
     raise exception 'Invalid quota kind: %', p_kind;
   end if;
 
+  -- Probabilistically prune expired request recovery rows (30-minute hard TTL) on coach quota checks
+  if p_kind = 'coach' and random() < 0.05 then
+    delete from public.ai_request_results
+    where expires_at <= now();
+  end if;
+
   -- Global daily ceiling protection against runaway billing/bot proliferation
   if p_kind = 'coach' then
     select coalesce(sum(coaching_count), 0) into v_global_count

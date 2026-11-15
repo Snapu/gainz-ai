@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import type { GenerateWithFallbackOptions } from "../_shared/gemini";
 import { type AiCoachHandlerDeps, handleAiCoachRequest } from "./index";
+import {
+  type AiRequestResultRow,
+  type AiRequestResultsStore,
+  createSupabaseRequestResultsStore,
+} from "./requestResults";
+
+const VALID_UUID_V4 = "11111111-1111-4111-8111-111111111111";
+const UUID_V1 = "11111111-1111-1111-8111-111111111111";
 
 function createValidCoachDto(overrides: Record<string, unknown> = {}) {
   return {
@@ -70,6 +78,52 @@ function createJsonRequest(body: unknown, headers: Record<string, string> = {}) 
   });
 }
 
+function createMockRequestResultsStore(initial: Record<string, AiRequestResultRow> = {}): {
+  store: AiRequestResultsStore;
+  rows: Map<string, AiRequestResultRow>;
+} {
+  const rows = new Map<string, AiRequestResultRow>(Object.entries(initial));
+  const key = (userId: string, id: string) => `${userId}:${id}`;
+
+  const store: AiRequestResultsStore = {
+    getActive: vi.fn(
+      async (userId, clientRequestId) => rows.get(key(userId, clientRequestId)) ?? null,
+    ),
+    claimTerminalResult: vi.fn(async (userId, clientRequestId) => {
+      const k = key(userId, clientRequestId);
+      const row = rows.get(k);
+      if (!row || (row.status !== "completed" && row.status !== "failed")) return null;
+      rows.delete(k);
+      return row;
+    }),
+    acquireProcessingLock: vi.fn(async (userId, clientRequestId) => {
+      const k = key(userId, clientRequestId);
+      if (rows.has(k)) return "conflict";
+      rows.set(k, { status: "processing", response_payload: null, error_code: null });
+      return "acquired";
+    }),
+    markCompleted: vi.fn(async (userId, clientRequestId, responsePayload) => {
+      rows.set(key(userId, clientRequestId), {
+        status: "completed",
+        response_payload: responsePayload,
+        error_code: null,
+      });
+    }),
+    markFailed: vi.fn(async (userId, clientRequestId, errorCode) => {
+      rows.set(key(userId, clientRequestId), {
+        status: "failed",
+        response_payload: null,
+        error_code: errorCode,
+      });
+    }),
+    deleteEntry: vi.fn(async (userId, clientRequestId) => {
+      rows.delete(key(userId, clientRequestId));
+    }),
+  };
+
+  return { store, rows };
+}
+
 function createDeps(overrides: Partial<AiCoachHandlerDeps> = {}) {
   const generateSpy = vi.fn(async (_opts: GenerateWithFallbackOptions<unknown>) => ({
     data: {
@@ -79,6 +133,7 @@ function createDeps(overrides: Partial<AiCoachHandlerDeps> = {}) {
     },
     model: "gemini-3.8-flash",
   }));
+  const { store: defaultRequestResults } = createMockRequestResultsStore();
 
   const deps: AiCoachHandlerDeps = {
     getConfig: () => ({
@@ -98,6 +153,7 @@ function createDeps(overrides: Partial<AiCoachHandlerDeps> = {}) {
     generateWithFallback: generateSpy as unknown as NonNullable<
       AiCoachHandlerDeps["generateWithFallback"]
     >,
+    requestResults: defaultRequestResults,
     ...overrides,
   };
 
@@ -331,5 +387,332 @@ describe("handleAiCoachRequest", () => {
       consoleLogSpy.mockRestore();
       consoleInfoSpy.mockRestore();
     }
+  });
+});
+
+describe("ai-coach idempotency and request recovery", () => {
+  it("rejects non-UUID-v4 clientRequestId on coach and recover actions with 400", async () => {
+    const { deps } = createDeps();
+
+    const badCoachRes = await handleAiCoachRequest(
+      createJsonRequest(createValidCoachDto({ clientRequestId: UUID_V1 })),
+      deps,
+    );
+    expect(badCoachRes.status).toBe(400);
+
+    const badRecoverRes = await handleAiCoachRequest(
+      createJsonRequest({ action: "recover", clientRequestId: "not-a-uuid" }),
+      deps,
+    );
+    expect(badRecoverRes.status).toBe(400);
+  });
+
+  it("returns cached 200 payload on duplicate coach clientRequestId without calling quota or Gemini", async () => {
+    const cachedPayload = {
+      advice: { coachMessage: "Cached workout ready." },
+      quota: { currentCount: 2, dailyLimit: 15, resetAt: "2026-11-16T00:00:00.000Z" },
+    };
+    const { store } = createMockRequestResultsStore({
+      [`google-sub-123:${VALID_UUID_V4}`]: {
+        status: "completed",
+        response_payload: cachedPayload,
+        error_code: null,
+      },
+    });
+    const { deps, generateSpy } = createDeps({ requestResults: store });
+
+    const res = await handleAiCoachRequest(
+      createJsonRequest(createValidCoachDto({ clientRequestId: VALID_UUID_V4 })),
+      deps,
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(cachedPayload);
+    expect(deps.consumeQuota).not.toHaveBeenCalled();
+    expect(generateSpy).not.toHaveBeenCalled();
+  });
+
+  it("returns 202 Accepted when clientRequestId is already processing or races on lock conflict", async () => {
+    const { store } = createMockRequestResultsStore({
+      [`google-sub-123:${VALID_UUID_V4}`]: {
+        status: "processing",
+        response_payload: null,
+        error_code: null,
+      },
+    });
+    const { deps, generateSpy } = createDeps({ requestResults: store });
+
+    const res = await handleAiCoachRequest(
+      createJsonRequest(createValidCoachDto({ clientRequestId: VALID_UUID_V4 })),
+      deps,
+    );
+
+    expect(res.status).toBe(202);
+    expect(await res.json()).toEqual({ status: "processing" });
+    expect(deps.consumeQuota).not.toHaveBeenCalled();
+    expect(generateSpy).not.toHaveBeenCalled();
+
+    // Simulate concurrent race: acquireProcessingLock returns conflict and getActive sees in-flight processing
+    const racedStore = createMockRequestResultsStore().store;
+    vi.mocked(racedStore.acquireProcessingLock).mockResolvedValueOnce("conflict");
+    vi.mocked(racedStore.getActive).mockResolvedValueOnce({
+      status: "processing",
+      response_payload: null,
+      error_code: null,
+    });
+    const { deps: raceDeps, generateSpy: raceGen } = createDeps({ requestResults: racedStore });
+
+    const raceRes = await handleAiCoachRequest(
+      createJsonRequest(createValidCoachDto({ clientRequestId: VALID_UUID_V4 })),
+      raceDeps,
+    );
+
+    expect(raceRes.status).toBe(202);
+    expect(raceDeps.consumeQuota).not.toHaveBeenCalled();
+    expect(raceGen).not.toHaveBeenCalled();
+  });
+
+  it("deletes processing lock immediately when consumeQuota denies (429) or fails (500)", async () => {
+    const { store: quotaDeniedStore, rows: deniedRows } = createMockRequestResultsStore();
+    const { deps: deniedDeps } = createDeps({
+      requestResults: quotaDeniedStore,
+      consumeQuota: vi.fn(async () => ({
+        allowed: false,
+        current_count: 15,
+        daily_limit: 15,
+        reset_at: "2026-11-16T00:00:00.000Z",
+      })),
+    });
+
+    const deniedRes = await handleAiCoachRequest(
+      createJsonRequest(createValidCoachDto({ clientRequestId: VALID_UUID_V4 })),
+      deniedDeps,
+    );
+    expect(deniedRes.status).toBe(429);
+    expect(quotaDeniedStore.deleteEntry).toHaveBeenCalledWith("google-sub-123", VALID_UUID_V4);
+    expect(deniedRows.size).toBe(0);
+
+    const { store: rpcErrorStore, rows: errRows } = createMockRequestResultsStore();
+    const { deps: rpcErrorDeps } = createDeps({
+      requestResults: rpcErrorStore,
+      consumeQuota: vi.fn(async () => null),
+    });
+
+    const errRes = await handleAiCoachRequest(
+      createJsonRequest(createValidCoachDto({ clientRequestId: VALID_UUID_V4 })),
+      rpcErrorDeps,
+    );
+    expect(errRes.status).toBe(500);
+    expect(rpcErrorStore.deleteEntry).toHaveBeenCalledWith("google-sub-123", VALID_UUID_V4);
+    expect(errRows.size).toBe(0);
+  });
+
+  it("stores only { advice, quota } without any input DTO fields on completion", async () => {
+    const { store } = createMockRequestResultsStore();
+    const { deps } = createDeps({ requestResults: store });
+
+    const res = await handleAiCoachRequest(
+      createJsonRequest(
+        createValidCoachDto({
+          clientRequestId: VALID_UUID_V4,
+          question: "Sensitive injury question",
+          userProfile: {
+            freeUserInput: "Private medical note",
+            workoutDaysPerWeek: 4,
+          },
+        }),
+      ),
+      deps,
+    );
+
+    expect(res.status).toBe(200);
+    expect(store.markCompleted).toHaveBeenCalledTimes(1);
+    const savedPayload = vi.mocked(store.markCompleted).mock.calls[0]?.[2] as Record<
+      string,
+      unknown
+    >;
+    expect(Object.keys(savedPayload).sort()).toEqual(["advice", "quota"]);
+    const serialized = JSON.stringify(savedPayload);
+    expect(serialized).not.toContain("Sensitive injury question");
+    expect(serialized).not.toContain("Private medical note");
+    expect(serialized).not.toContain("userProfile");
+    expect(serialized).not.toContain("recentLogs");
+  });
+
+  it("transitions entry to failed and refunds quota when Gemini fails", async () => {
+    const { store, rows } = createMockRequestResultsStore();
+    const { deps } = createDeps({
+      requestResults: store,
+      generateWithFallback: vi.fn(async () => {
+        throw new Error("Gemini timeout");
+      }) as unknown as NonNullable<AiCoachHandlerDeps["generateWithFallback"]>,
+    });
+
+    const res = await handleAiCoachRequest(
+      createJsonRequest(createValidCoachDto({ clientRequestId: VALID_UUID_V4 })),
+      deps,
+    );
+
+    expect(res.status).toBe(502);
+    expect(deps.refundQuota).toHaveBeenCalledTimes(1);
+    expect(store.markFailed).toHaveBeenCalledWith(
+      "google-sub-123",
+      VALID_UUID_V4,
+      "coaching-request-failed",
+    );
+    expect(rows.get(`google-sub-123:${VALID_UUID_V4}`)?.status).toBe("failed");
+  });
+
+  it("recovers completed result with delete-on-recovery, returns 202 while processing, 502 on failed, and 404 for unknown/other-user", async () => {
+    const storedPayload = {
+      advice: { coachMessage: "Recovered advice" },
+      quota: { currentCount: 1, dailyLimit: 10, resetAt: "2026-11-16T00:00:00.000Z" },
+    };
+    const { store, rows } = createMockRequestResultsStore({
+      [`google-sub-123:${VALID_UUID_V4}`]: {
+        status: "completed",
+        response_payload: storedPayload,
+        error_code: null,
+      },
+      [`other-user:22222222-2222-4222-8222-222222222222`]: {
+        status: "completed",
+        response_payload: storedPayload,
+        error_code: null,
+      },
+      [`google-sub-123:33333333-3333-4333-8333-333333333333`]: {
+        status: "processing",
+        response_payload: null,
+        error_code: null,
+      },
+      [`google-sub-123:44444444-4444-4444-8444-444444444444`]: {
+        status: "failed",
+        response_payload: null,
+        error_code: "coaching-request-failed",
+      },
+    });
+    const { deps, generateSpy } = createDeps({ requestResults: store });
+
+    // 1. Completed -> 200 and deleted
+    const okRes = await handleAiCoachRequest(
+      createJsonRequest({ action: "recover", clientRequestId: VALID_UUID_V4 }),
+      deps,
+    );
+    expect(okRes.status).toBe(200);
+    expect(await okRes.json()).toEqual({ status: "completed", ...storedPayload });
+    expect(rows.has(`google-sub-123:${VALID_UUID_V4}`)).toBe(false);
+
+    // 2. Second recover after delete -> 404
+    const secondRes = await handleAiCoachRequest(
+      createJsonRequest({ action: "recover", clientRequestId: VALID_UUID_V4 }),
+      deps,
+    );
+    expect(secondRes.status).toBe(404);
+
+    // 3. BOLA prevention: other user's ID -> generic 404
+    const bolaRes = await handleAiCoachRequest(
+      createJsonRequest({
+        action: "recover",
+        clientRequestId: "22222222-2222-4222-8222-222222222222",
+      }),
+      deps,
+    );
+    expect(bolaRes.status).toBe(404);
+    expect(rows.has("other-user:22222222-2222-4222-8222-222222222222")).toBe(true);
+
+    // 4. Processing -> 202 and preserved
+    const procRes = await handleAiCoachRequest(
+      createJsonRequest({
+        action: "recover",
+        clientRequestId: "33333333-3333-4333-8333-333333333333",
+      }),
+      deps,
+    );
+    expect(procRes.status).toBe(202);
+    expect(await procRes.json()).toEqual({ status: "processing" });
+    expect(rows.has("google-sub-123:33333333-3333-4333-8333-333333333333")).toBe(true);
+
+    // 5. Failed -> 502 and deleted
+    const failRes = await handleAiCoachRequest(
+      createJsonRequest({
+        action: "recover",
+        clientRequestId: "44444444-4444-4444-8444-444444444444",
+      }),
+      deps,
+    );
+    expect(failRes.status).toBe(502);
+    expect(await failRes.json()).toEqual({
+      status: "failed",
+      error: "coaching-request-failed",
+    });
+    expect(rows.has("google-sub-123:44444444-4444-4444-8444-444444444444")).toBe(false);
+
+    expect(deps.consumeQuota).not.toHaveBeenCalled();
+    expect(generateSpy).not.toHaveBeenCalled();
+  });
+
+  it("uses single-shot POST lock on happy path and atomic DELETE returning for terminal recovery", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([{ client_request_id: VALID_UUID_V4 }]), { status: 201 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify([
+            {
+              status: "completed",
+              response_payload: { advice: { coachMessage: "Hi" } },
+              error_code: null,
+            },
+          ]),
+          { status: 200 },
+        ),
+      );
+
+    try {
+      const store = createSupabaseRequestResultsStore("https://test.supabase.co", "svc-key");
+      const active = await store.getActive("google-sub-123", VALID_UUID_V4);
+      expect(active).toBeNull();
+      const getUrl = String(fetchSpy.mock.calls[0]?.[0]);
+      expect(getUrl).toContain("user_id=eq.google-sub-123");
+      expect(getUrl).toContain(`client_request_id=eq.${VALID_UUID_V4}`);
+      expect(getUrl).toContain("expires_at=gt.");
+
+      const lock = await store.acquireProcessingLock("google-sub-123", VALID_UUID_V4);
+      expect(lock).toBe("acquired");
+      // Happy path acquires lock in a single POST call (no pre-lock DELETE/GET)
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      expect(fetchSpy.mock.calls[1]?.[1]?.method).toBe("POST");
+      expect((fetchSpy.mock.calls[1]?.[1]?.headers as Record<string, string>)?.Prefer).toBe(
+        "resolution=ignore-duplicates,return=representation",
+      );
+
+      const claimed = await store.claimTerminalResult("google-sub-123", VALID_UUID_V4);
+      expect(claimed && claimed !== "error" ? claimed.status : null).toBe("completed");
+      const deleteUrl = String(fetchSpy.mock.calls[2]?.[0]);
+      expect(fetchSpy.mock.calls[2]?.[1]?.method).toBe("DELETE");
+      expect(deleteUrl).toContain("status=in.(completed,failed)");
+      expect(deleteUrl).toContain("expires_at=gt.");
+      expect((fetchSpy.mock.calls[2]?.[1]?.headers as Record<string, string>)?.Prefer).toBe(
+        "return=representation",
+      );
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("returns 503 recovery-check-failed on transient DB errors during recover instead of 404", async () => {
+    const { store } = createMockRequestResultsStore();
+    vi.mocked(store.claimTerminalResult).mockResolvedValueOnce("error");
+    const { deps } = createDeps({ requestResults: store });
+
+    const res = await handleAiCoachRequest(
+      createJsonRequest({ action: "recover", clientRequestId: VALID_UUID_V4 }),
+      deps,
+    );
+
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: "recovery-check-failed" });
   });
 });

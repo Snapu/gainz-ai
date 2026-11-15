@@ -1,27 +1,9 @@
+import { createRemoteJWKSet, jwtVerify } from "npm:jose@5";
 import { fetchWithTimeout } from "./http.ts";
-
-const JOSE_SPECIFIER = "npm:jose@5";
-type JoseModule = typeof import("npm:jose@5");
 
 const GOOGLE_TOKENINFO_ENDPOINT = "https://oauth2.googleapis.com/tokeninfo";
 const GOOGLE_TOKENINFO_TIMEOUT_MS = 5000;
-
-let joseStatePromise: Promise<{
-  jose: JoseModule;
-  jwks: ReturnType<JoseModule["createRemoteJWKSet"]>;
-}> | null = null;
-
-function getGoogleJwtVerifier() {
-  if (!joseStatePromise) {
-    joseStatePromise = (import(/* @vite-ignore */ JOSE_SPECIFIER) as Promise<JoseModule>).then(
-      (jose) => ({
-        jose,
-        jwks: jose.createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs")),
-      }),
-    );
-  }
-  return joseStatePromise;
-}
+const GOOGLE_JWKS = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"));
 
 export function extractBearerToken(req: Request): string | null {
   const authHeader = req.headers.get("Authorization") ?? req.headers.get("authorization");
@@ -35,8 +17,7 @@ async function verifyGoogleIdToken(
   expectedClientId: string,
 ): Promise<{ userId: string } | null> {
   try {
-    const { jose, jwks } = await getGoogleJwtVerifier();
-    const { payload } = await jose.jwtVerify(idToken, jwks, {
+    const { payload } = await jwtVerify(idToken, GOOGLE_JWKS, {
       issuer: ["https://accounts.google.com", "accounts.google.com"],
       audience: expectedClientId,
     });

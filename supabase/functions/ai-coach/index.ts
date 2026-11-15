@@ -26,6 +26,11 @@ import {
   shouldAllowPlanUpdate,
 } from "./prompt.ts";
 import {
+  type AiRequestResultRow,
+  type AiRequestResultsStore,
+  createSupabaseRequestResultsStore,
+} from "./requestResults.ts";
+import {
   type AiCoachRequestDto,
   aiCoachRequestDtoSchema,
   type CoachActionRequestDto,
@@ -49,6 +54,7 @@ export interface AiCoachHandlerDeps {
   consumeQuota?: typeof consumeQuota;
   refundQuota?: typeof refundQuota;
   generateWithFallback?: typeof generateWithFallback;
+  requestResults?: AiRequestResultsStore;
 }
 
 function loadServerConfig(): AiCoachServerConfig | null {
@@ -65,7 +71,7 @@ async function executeCoachAction(
   geminiApiKey: string,
   quota: QuotaRow,
   generateFn: typeof generateWithFallback,
-): Promise<Response> {
+) {
   const allowPlanUpdate = shouldAllowPlanUpdate(dto.mode, dto.question);
   const thinkingBudget = dto.mode === "planning" ? 1024 : 256;
   const isPlanningTimeout =
@@ -98,20 +104,103 @@ async function executeCoachAction(
     dto.activePlan,
   );
 
-  return jsonResponse({
+  return {
     advice,
     quota: formatQuotaPayload(quota),
-  });
+  };
+}
+
+function existingCoachEntryToResponse(row: AiRequestResultRow): Response {
+  if (row.status === "completed") {
+    return jsonResponse(row.response_payload, 200);
+  }
+  if (row.status === "processing") {
+    return jsonResponse({ status: "processing" }, 202);
+  }
+  return jsonResponse(
+    { status: "failed", error: row.error_code ?? "coaching-request-failed" },
+    502,
+  );
+}
+
+async function handleRecoverAction(
+  userId: string,
+  clientRequestId: string,
+  requestResults: AiRequestResultsStore,
+): Promise<Response> {
+  // Atomically claim & delete terminal outcomes (DELETE ... RETURNING) so concurrent polls never duplicate delivery
+  let claimed = await requestResults.claimTerminalResult(userId, clientRequestId);
+  if (claimed === "error") {
+    return jsonResponse({ error: "recovery-check-failed" }, 503);
+  }
+  if (!claimed) {
+    const existing = await requestResults.getActive(userId, clientRequestId);
+    if (existing === "error") {
+      return jsonResponse({ error: "recovery-check-failed" }, 503);
+    }
+    if (!existing) {
+      return jsonResponse({ error: "not-found" }, 404);
+    }
+    if (existing.status === "processing") {
+      return jsonResponse({ status: "processing" }, 202);
+    }
+    claimed = await requestResults.claimTerminalResult(userId, clientRequestId);
+    if (claimed === "error") {
+      return jsonResponse({ error: "recovery-check-failed" }, 503);
+    }
+    if (!claimed) {
+      return jsonResponse({ error: "not-found" }, 404);
+    }
+  }
+
+  if (claimed.status === "completed") {
+    const payload =
+      claimed.response_payload && typeof claimed.response_payload === "object"
+        ? (claimed.response_payload as Record<string, unknown>)
+        : {};
+    return jsonResponse({ status: "completed", ...payload }, 200);
+  }
+
+  return jsonResponse(
+    { status: "failed", error: claimed.error_code ?? "coaching-request-failed" },
+    502,
+  );
 }
 
 async function handleVerifiedCoachRequest(
   dto: AiCoachRequestDto,
   userId: string,
   config: AiCoachServerConfig,
-  deps: Required<Pick<AiCoachHandlerDeps, "consumeQuota" | "refundQuota" | "generateWithFallback">>,
+  deps: Required<
+    Pick<
+      AiCoachHandlerDeps,
+      "consumeQuota" | "refundQuota" | "generateWithFallback" | "requestResults"
+    >
+  >,
 ): Promise<Response> {
+  if (dto.action === "recover") {
+    return handleRecoverAction(userId, dto.clientRequestId, deps.requestResults);
+  }
+
   if (dto.action === "classify" && dto.exerciseNames.length === 0) {
     return jsonResponse({ text: JSON.stringify({ classifications: [] }) });
+  }
+
+  const clientRequestId = dto.action === "coach" ? dto.clientRequestId : undefined;
+  if (clientRequestId) {
+    const lockResult = await deps.requestResults.acquireProcessingLock(userId, clientRequestId);
+    if (lockResult === "conflict") {
+      const existing = await deps.requestResults.getActive(userId, clientRequestId);
+      if (existing === "error") {
+        return jsonResponse({ error: "quota-check-failed" }, 500);
+      }
+      return existing
+        ? existingCoachEntryToResponse(existing)
+        : jsonResponse({ error: "coaching-request-failed" }, 502);
+    }
+    if (lockResult === "error") {
+      return jsonResponse({ error: "quota-check-failed" }, 500);
+    }
   }
 
   const dailyLimit =
@@ -128,10 +217,16 @@ async function handleVerifiedCoachRequest(
   );
 
   if (!quota) {
+    if (clientRequestId) {
+      await deps.requestResults.deleteEntry(userId, clientRequestId);
+    }
     return jsonResponse({ error: "quota-check-failed" }, 500);
   }
 
   if (!quota.allowed) {
+    if (clientRequestId) {
+      await deps.requestResults.deleteEntry(userId, clientRequestId);
+    }
     if (quota.global_capped) {
       console.warn(`Global daily AI quota ceiling reached for action: ${dto.action}`);
     }
@@ -155,7 +250,16 @@ async function handleVerifiedCoachRequest(
         deps.generateWithFallback,
       );
     }
-    return await executeCoachAction(dto, config.geminiApiKey, quota, deps.generateWithFallback);
+    const payload = await executeCoachAction(
+      dto,
+      config.geminiApiKey,
+      quota,
+      deps.generateWithFallback,
+    );
+    if (clientRequestId) {
+      await deps.requestResults.markCompleted(userId, clientRequestId, payload);
+    }
+    return jsonResponse(payload, 200);
   } catch (err) {
     const errorName = err instanceof Error ? err.name : "UnknownError";
     console.error("AI execution failed:", { action: dto.action, errorName });
@@ -166,6 +270,9 @@ async function handleVerifiedCoachRequest(
       dto.action,
       quotaUsageDate,
     );
+    if (clientRequestId) {
+      await deps.requestResults.markFailed(userId, clientRequestId, "coaching-request-failed");
+    }
     return jsonResponse({ error: "coaching-request-failed" }, 502);
   }
 }
@@ -212,6 +319,9 @@ export async function handleAiCoachRequest(
     consumeQuota: deps.consumeQuota ?? consumeQuota,
     refundQuota: deps.refundQuota ?? refundQuota,
     generateWithFallback: deps.generateWithFallback ?? generateWithFallback,
+    requestResults:
+      deps.requestResults ??
+      createSupabaseRequestResultsStore(config.supabaseUrl, config.serviceRoleKey),
   });
 }
 

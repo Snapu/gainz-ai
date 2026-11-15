@@ -95,6 +95,7 @@ describe("AI application service port", () => {
 
   const aiService: AiCoachService = {
     ask: askMock,
+    recover: vi.fn(),
     classifyExercises: classifyMock,
     getTodayLogsCount: getTodayLogsCountMock,
   };

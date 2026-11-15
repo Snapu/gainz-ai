@@ -14,6 +14,7 @@ export type CoachingMode = "planning" | "execution";
 
 export interface CoachingAdviceRequest {
   accessToken: string | undefined;
+  clientRequestId?: string;
   userProfile: UserProfile;
   insights: TrainingInsights;
   exerciseLogs: ExerciseLog[];
@@ -41,12 +42,19 @@ export type CoachingAdviceError =
   | "unauthorized"
   | "rate-limit-exceeded"
   | "generate-content-stream-failed"
-  | "coaching-request-failed";
+  | "coaching-request-failed"
+  | "coaching-request-server-error";
 
 export interface CoachingAdviceResult {
   advice: CoachingAdvice;
   requestPayload?: string;
 }
+
+export type RecoverCoachingAdviceError = CoachingAdviceError | "not-found" | "server-failed";
+
+export type RecoverCoachingAdviceResult =
+  | { status: "completed"; advice: CoachingAdvice }
+  | { status: "processing" };
 
 export interface ExerciseCleanupResult {
   classifications: Array<{

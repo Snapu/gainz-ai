@@ -1,6 +1,6 @@
 import { errAsync, okAsync, ResultAsync } from "neverthrow";
 import { createPinia, setActivePinia } from "pinia";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick, ref } from "vue";
 import { TrainingPlan } from "@/modules/aiCoach/domain";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
@@ -23,8 +23,12 @@ let mockRefreshSession:
   | ((force?: boolean) => ResultAsync<string, "token-refresh-failed" | "refresh-token-invalid">)
   | undefined;
 const mockAuthLogout = vi.fn();
+const mockIsLoggedIn = ref(true);
 const mockAsk = vi.fn();
+const mockRecover = vi.fn();
 const mockClassifyExercises = vi.fn();
+const mockRefreshMuscleMap = vi.fn();
+const mockStartDeload = vi.fn();
 
 vi.mock("@/modules/aiCoach/infrastructure", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/modules/aiCoach/infrastructure")>();
@@ -32,6 +36,7 @@ vi.mock("@/modules/aiCoach/infrastructure", async (importOriginal) => {
     ...actual,
     createAiCoachService: () => ({
       ask: (...args: unknown[]) => mockAsk(...args),
+      recover: (...args: unknown[]) => mockRecover(...args),
       classifyExercises: (...args: unknown[]) => mockClassifyExercises(...args),
       getTodayLogsCount: () => 0,
     }),
@@ -61,7 +66,7 @@ vi.mock("@/modules/platform/presentation", () => ({
     get learnedMap() {
       return mockLearnedMap.value;
     },
-    refresh: vi.fn(),
+    refresh: mockRefreshMuscleMap,
     applyCleanupResults: vi.fn(),
   }),
 }));
@@ -83,6 +88,10 @@ vi.mock("@/modules/auth/presentation", () => ({
     get refreshToken() {
       return mockRefreshToken.value;
     },
+    get isLoggedIn() {
+      return mockIsLoggedIn.value;
+    },
+    init: () => Promise.resolve(),
     logout: mockAuthLogout,
     refreshSession: (force = false) =>
       mockRefreshSession ? mockRefreshSession(force) : okAsync("refreshed-access-token"),
@@ -116,7 +125,7 @@ vi.mock("@/modules/events/presentation", () => ({
 vi.mock("@/modules/deload/presentation", () => ({
   useDeloadStore: () => ({
     active: false,
-    startDeload: vi.fn(),
+    startDeload: mockStartDeload,
   }),
 }));
 
@@ -136,6 +145,15 @@ import { useCoachChatStore } from "./coachChatStore";
 import { useTrainingPlanStore } from "./trainingPlanStore";
 
 describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
+  let activePinia: ReturnType<typeof createPinia> | undefined;
+
+  afterEach(() => {
+    (
+      activePinia as (ReturnType<typeof createPinia> & { _e?: { stop: () => void } }) | undefined
+    )?._e?.stop();
+    activePinia = undefined;
+  });
+
   beforeEach(async () => {
     mockExerciseLogs.value = [];
     mockIsLogsLoading.value = false;
@@ -143,17 +161,23 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
     mockAccessToken.value = null;
     mockIdToken.value = null;
     mockRefreshToken.value = null;
+    mockIsLoggedIn.value = true;
     mockEnsureValidAccessToken = undefined;
     mockEnsureValidIdToken = undefined;
     for (let i = 0; i < 10; i++) {
       await Promise.resolve();
     }
     localStorage.clear();
-    setActivePinia(createPinia());
+    activePinia = createPinia();
+    setActivePinia(activePinia);
     mockAsk.mockReset();
+    mockRecover.mockReset();
+    mockRecover.mockReturnValue(errAsync("not-found"));
     mockClassifyExercises.mockReset();
     mockClassifyExercises.mockReturnValue(okAsync({ classifications: [] }));
     mockAuthLogout.mockReset();
+    mockRefreshMuscleMap.mockReset();
+    mockStartDeload.mockReset();
     mockRefreshSession = undefined;
     mockEnsureValidAccessToken = undefined;
     mockEnsureValidIdToken = undefined;
@@ -933,5 +957,509 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
     expect(mockClassifyExercises).toHaveBeenCalledTimes(2);
     expect(mockClassifyExercises.mock.calls[0]?.[1]).toBe("stale-access-token");
     expect(mockClassifyExercises.mock.calls[1]?.[1]).toBe("fresh-access-token");
+  });
+
+  it("acquires wake lock while loading, releases on completion, and silently degrades on iOS NotAllowedError", async () => {
+    const releaseMock = vi.fn().mockResolvedValue(undefined);
+    const requestWakeLockMock = vi
+      .fn()
+      .mockRejectedValueOnce(new DOMException("Low power mode", "NotAllowedError"))
+      .mockResolvedValueOnce({
+        released: false,
+        type: "screen",
+        release: releaseMock,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      });
+
+    Object.defineProperty(navigator, "wakeLock", {
+      value: { request: requestWakeLockMock },
+      configurable: true,
+    });
+
+    try {
+      let resolveAsk!: (val: { advice: { coachMessage: string } }) => void;
+      mockAsk
+        .mockReturnValueOnce(
+          ResultAsync.fromSafePromise(
+            new Promise((resolve) => {
+              resolveAsk = resolve;
+            }),
+          ),
+        )
+        .mockReturnValueOnce(okAsync({ advice: { coachMessage: "Second ok" } }));
+
+      const orchestrator = useAiOrchestratorStore();
+
+      // 1. iOS NotAllowedError must not fail or reject the coaching request
+      const firstReq = orchestrator.requestAdvice("Test wake lock fallback");
+      await nextTick();
+      expect(requestWakeLockMock).toHaveBeenCalledWith("screen");
+      resolveAsk({ advice: { coachMessage: "First ok" } });
+      const firstRes = await firstReq;
+      expect(firstRes.isOk()).toBe(true);
+
+      // 2. Normal wake lock acquisition & release on completion
+      const secondReq = orchestrator.requestAdvice("Test wake lock release");
+      await nextTick();
+      const secondRes = await secondReq;
+      await nextTick();
+      expect(secondRes.isOk()).toBe(true);
+      expect(releaseMock).toHaveBeenCalled();
+    } finally {
+      delete (navigator as unknown as { wakeLock?: unknown }).wakeLock;
+    }
+  });
+
+  it("stores minimal pendingCoachRequest metadata and recovers via 202 -> 200 polling on visibility resume after network abort", async () => {
+    vi.useFakeTimers();
+    const originalVisibility = Object.getOwnPropertyDescriptor(document, "visibilityState");
+
+    try {
+      let currentVisibility: DocumentVisibilityState = "visible";
+      Object.defineProperty(document, "visibilityState", {
+        get: () => currentVisibility,
+        configurable: true,
+      });
+
+      let rejectAskPromise!: (err: unknown) => void;
+      mockAsk.mockReturnValueOnce(
+        ResultAsync.fromPromise(
+          new Promise<never>((_resolve, reject) => {
+            rejectAskPromise = reject;
+          }),
+          () => "coaching-request-failed" as const,
+        ),
+      );
+
+      mockRecover
+        .mockReturnValueOnce(okAsync({ status: "processing" as const }))
+        .mockReturnValueOnce(
+          okAsync({
+            status: "completed" as const,
+            advice: {
+              coachMessage: "Recovered mesocycle!",
+              startDeload: true,
+              trainingPlan: {
+                cycleWeeks: 2,
+                sessions: [
+                  {
+                    weekNumber: 1,
+                    dayOfWeek: 1,
+                    sessionLabel: "Push A",
+                    focusDescription: "Chest",
+                    exercises: [{ exerciseName: "Bench Press", targetSets: 3, targetReps: "8-10" }],
+                  },
+                ],
+              },
+            },
+          }),
+        );
+
+      const chatStore = useCoachChatStore();
+      const planStore = useTrainingPlanStore();
+      const orchestrator = useAiOrchestratorStore();
+
+      const flushMicrotasks = async () => {
+        for (let i = 0; i < 15; i++) {
+          await Promise.resolve();
+        }
+        await nextTick();
+      };
+
+      const reqPromise = orchestrator.requestAdvice("Build my plan", "planning");
+      await flushMicrotasks();
+
+      // Verify minimal metadata persisted (no profile/logs/health fields)
+      const rawPending = localStorage.getItem("ai-coach:pending-request");
+      expect(rawPending).not.toBeNull();
+      const parsedPending = JSON.parse(rawPending ?? "{}") as Record<string, unknown>;
+      expect(Object.keys(parsedPending).sort()).toEqual([
+        "clientRequestId",
+        "mode",
+        "sessionId",
+        "startedAt",
+        "userMessageId",
+      ]);
+
+      // Simulate phone lock + socket abort while hidden
+      currentVisibility = "hidden";
+      document.dispatchEvent(new Event("visibilitychange"));
+      await nextTick();
+      rejectAskPromise(new Error("Load failed"));
+      await flushMicrotasks();
+
+      // Pending request remains preserved for recovery while hidden
+      expect(localStorage.getItem("ai-coach:pending-request")).not.toBeNull();
+
+      // Simulate user unlocking phone -> visibility resumes
+      currentVisibility = "visible";
+      document.dispatchEvent(new Event("visibilitychange"));
+      await flushMicrotasks();
+
+      // First poll returned 202 processing; advance poll interval for 200 completed
+      await vi.advanceTimersByTimeAsync(2000);
+      await flushMicrotasks();
+      const result = await reqPromise;
+
+      expect(result.isOk()).toBe(true);
+      expect(mockRecover).toHaveBeenCalledTimes(2);
+      expect(localStorage.getItem("ai-coach:pending-request")).toBeNull();
+      expect(chatStore.isLoading).toBe(false);
+      expect(
+        chatStore.messages.some(
+          (m) => m.role === "coach" && m.content.includes("Recovered mesocycle!"),
+        ),
+      ).toBe(true);
+      expect(planStore.activePlan?.sessions).toHaveLength(1);
+      expect(mockRefreshMuscleMap).toHaveBeenCalled();
+      expect(mockStartDeload).toHaveBeenCalled();
+    } finally {
+      if (originalVisibility) {
+        Object.defineProperty(document, "visibilityState", originalVisibility);
+      }
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears pendingCoachRequest and removes user placeholder when server recovery returns failed (502)", async () => {
+    localStorage.setItem(
+      "ai-coach:pending-request",
+      JSON.stringify({
+        clientRequestId: "11111111-1111-4111-8111-111111111111",
+        userMessageId: "orphan-user-msg",
+        sessionId: "2026-11-15",
+        mode: "execution",
+        startedAt: Date.now(),
+      }),
+    );
+
+    const chatStore = useCoachChatStore();
+    chatStore.addMessage({
+      id: "orphan-user-msg",
+      role: "user",
+      content: "Will fail on server",
+      timestamp: new Date().toISOString(),
+      sessionId: "2026-11-15",
+      logsCount: 0,
+    });
+
+    mockRecover.mockReturnValueOnce(errAsync("server-failed" as const));
+
+    const orchestrator = useAiOrchestratorStore();
+    orchestrator.initialize();
+    for (let i = 0; i < 15; i++) {
+      await Promise.resolve();
+    }
+
+    expect(localStorage.getItem("ai-coach:pending-request")).toBeNull();
+    expect(chatStore.messages.some((m) => m.id === "orphan-user-msg")).toBe(false);
+    expect(chatStore.messages.some((m) => m.role === "coach")).toBe(false);
+    expect(chatStore.isLoading).toBe(false);
+  });
+
+  it("clears pendingCoachRequest on logout and after 30-minute expiration", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-11-15T12:00:00.000Z"));
+      // 1. Expired (>30 minutes) entry is wiped on initialize without calling recover
+      localStorage.setItem(
+        "ai-coach:pending-request",
+        JSON.stringify({
+          clientRequestId: "11111111-1111-4111-8111-111111111111",
+          userMessageId: "expired-msg",
+          sessionId: "2026-11-15",
+          mode: "execution",
+          startedAt: Date.now() - 31 * 60 * 1000,
+        }),
+      );
+
+      const orchestrator = useAiOrchestratorStore();
+      orchestrator.initialize();
+      for (let i = 0; i < 15; i++) {
+        await Promise.resolve();
+      }
+
+      expect(mockRecover).not.toHaveBeenCalled();
+      expect(localStorage.getItem("ai-coach:pending-request")).toBeNull();
+
+      // 2. Active entry is cleared immediately when authStore.isLoggedIn turns false
+      mockAsk.mockReturnValueOnce(new ResultAsync(new Promise<never>(() => {})));
+      void orchestrator.requestAdvice("In flight before logout");
+      for (let i = 0; i < 15; i++) {
+        await Promise.resolve();
+      }
+      await nextTick();
+      expect(localStorage.getItem("ai-coach:pending-request")).not.toBeNull();
+
+      mockIsLoggedIn.value = false;
+      await nextTick();
+      expect(localStorage.getItem("ai-coach:pending-request")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not poll recover on terminal server HTTP errors or while live request stays active during brief lock, and drains queued request after recovery", async () => {
+    // 1. Terminal server error skips recovery and returns coaching-request-failed without swallowing error
+    mockAsk.mockReturnValueOnce(errAsync("coaching-request-server-error" as const));
+    const orchestrator = useAiOrchestratorStore();
+    const serverErrRes = await orchestrator.requestAdvice("Check form");
+    expect(serverErrRes.isErr() && serverErrRes._unsafeUnwrapErr()).toBe("coaching-request-failed");
+    expect(mockRecover).not.toHaveBeenCalled();
+    expect(localStorage.getItem("ai-coach:pending-request")).toBeNull();
+
+    // 2. Brief lock/unlock during a live slow request does NOT race recoverPendingRequest
+    const originalVisibility = Object.getOwnPropertyDescriptor(document, "visibilityState");
+    let vis: DocumentVisibilityState = "visible";
+    Object.defineProperty(document, "visibilityState", {
+      get: () => vis,
+      configurable: true,
+    });
+    try {
+      let resolveSlowAsk!: (val: { advice: { coachMessage: string } }) => void;
+      mockAsk.mockReturnValueOnce(
+        ResultAsync.fromSafePromise(
+          new Promise((resolve) => {
+            resolveSlowAsk = resolve;
+          }),
+        ),
+      );
+      const slowReq = orchestrator.requestAdvice("Slow planning call", "planning");
+      for (let i = 0; i < 15; i++) await Promise.resolve();
+      vis = "hidden";
+      document.dispatchEvent(new Event("visibilitychange"));
+      await nextTick();
+      vis = "visible";
+      document.dispatchEvent(new Event("visibilitychange"));
+      await nextTick();
+
+      expect(mockRecover).not.toHaveBeenCalled();
+      resolveSlowAsk({ advice: { coachMessage: "Finished directly" } });
+      const slowRes = await slowReq;
+      expect(slowRes.isOk()).toBe(true);
+    } finally {
+      if (originalVisibility)
+        Object.defineProperty(document, "visibilityState", originalVisibility);
+    }
+
+    // 3. Recovery drains any pendingRequest queued while loading
+    let rejectFirst!: (err: unknown) => void;
+    mockAsk
+      .mockReturnValueOnce(
+        ResultAsync.fromPromise(
+          new Promise<never>((_resolve, reject) => {
+            rejectFirst = reject;
+          }),
+          () => "coaching-request-failed" as const,
+        ),
+      )
+      .mockReturnValueOnce(okAsync({ advice: { coachMessage: "Queued follow-up ok" } }));
+    mockRecover.mockReturnValueOnce(
+      okAsync({ status: "completed" as const, advice: { coachMessage: "Recovered first" } }),
+    );
+
+    const firstPromise = orchestrator.requestAdvice("First prompt");
+    for (let i = 0; i < 15; i++) await Promise.resolve();
+    await orchestrator.requestAdvice("Queued follow-up");
+    rejectFirst(new Error("Network dropped"));
+    await firstPromise;
+    for (let i = 0; i < 15; i++) await Promise.resolve();
+
+    expect(mockAsk).toHaveBeenCalledTimes(4);
+    const chatStore = useCoachChatStore();
+    expect(
+      chatStore.messages.some(
+        (m) => m.role === "coach" && m.content.includes("Queued follow-up ok"),
+      ),
+    ).toBe(true);
+  });
+
+  it("removes orphan user message when initializing while logged out", async () => {
+    mockIsLoggedIn.value = false;
+    localStorage.setItem(
+      "ai-coach:pending-request",
+      JSON.stringify({
+        clientRequestId: "11111111-1111-4111-8111-111111111111",
+        userMessageId: "orphan-logged-out-msg",
+        sessionId: "2026-11-15",
+        mode: "execution",
+        startedAt: Date.now(),
+      }),
+    );
+
+    const chatStore = useCoachChatStore();
+    chatStore.addMessage({
+      id: "orphan-logged-out-msg",
+      role: "user",
+      content: "Logged out later",
+      timestamp: new Date().toISOString(),
+      sessionId: "2026-11-15",
+      logsCount: 0,
+    });
+
+    const orchestrator = useAiOrchestratorStore();
+    orchestrator.initialize();
+    for (let i = 0; i < 15; i++) await Promise.resolve();
+
+    expect(localStorage.getItem("ai-coach:pending-request")).toBeNull();
+    expect(chatStore.messages.some((m) => m.id === "orphan-logged-out-msg")).toBe(false);
+  });
+
+  it("retries transient poll failures, avoids initialize race on fresh requests, and deduplicates planning during recovery", async () => {
+    vi.useFakeTimers();
+    try {
+      // 1. Fresh requestAdvice() on uninitialized store must not race initialize() recovery
+      let resolveFresh!: (val: { advice: { coachMessage: string } }) => void;
+      mockAsk.mockReturnValueOnce(
+        ResultAsync.fromSafePromise(
+          new Promise((resolve) => {
+            resolveFresh = resolve;
+          }),
+        ),
+      );
+      const orchestrator = useAiOrchestratorStore();
+      const freshReq = orchestrator.requestAdvice("Start fresh", "execution");
+      for (let i = 0; i < 15; i++) await Promise.resolve();
+      expect(mockRecover).not.toHaveBeenCalled();
+
+      resolveFresh({ advice: { coachMessage: "Fresh finished cleanly" } });
+      const freshRes = await freshReq;
+      expect(freshRes.isOk()).toBe(true);
+
+      // 2. Transient poll failure retries cleanly & planning recovery deduplicates generateNewPlan()
+      localStorage.setItem(
+        "ai-coach:pending-request",
+        JSON.stringify({
+          clientRequestId: "11111111-1111-4111-8111-111111111111",
+          userMessageId: "planning-user-msg",
+          sessionId: "2026-11-15",
+          mode: "planning",
+          startedAt: Date.now(),
+        }),
+      );
+      mockRecover
+        .mockReturnValueOnce(errAsync("coaching-request-failed" as const))
+        .mockReturnValueOnce(
+          okAsync({
+            status: "completed" as const,
+            advice: { coachMessage: "Recovered planning response" },
+          }),
+        );
+
+      (
+        activePinia as (ReturnType<typeof createPinia> & { _e?: { stop: () => void } }) | undefined
+      )?._e?.stop();
+      activePinia = createPinia();
+      setActivePinia(activePinia);
+      const coldStartOrchestrator = useAiOrchestratorStore();
+      coldStartOrchestrator.initialize();
+      for (let i = 0; i < 15; i++) await Promise.resolve();
+
+      // generateNewPlan while planning recovery is paused on transient retry must deduplicate
+      const dupPlanRes = await coldStartOrchestrator.generateNewPlan();
+      expect(dupPlanRes.isOk()).toBe(true);
+      expect(mockAsk).toHaveBeenCalledTimes(1);
+      expect(localStorage.getItem("ai-coach:pending-request")).not.toBeNull();
+
+      await vi.advanceTimersByTimeAsync(2000);
+      for (let i = 0; i < 15; i++) await Promise.resolve();
+
+      expect(mockRecover).toHaveBeenCalledTimes(2);
+      expect(localStorage.getItem("ai-coach:pending-request")).toBeNull();
+      const chatStore = useCoachChatStore();
+      expect(
+        chatStore.messages.some(
+          (m) => m.role === "coach" && m.content.includes("Recovered planning response"),
+        ),
+      ).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("defers ensureSessionAdvice during pending cold-start recovery", async () => {
+    const originalId = "11111111-1111-4111-8111-111111111111";
+    localStorage.setItem(
+      "ai-coach:pending-request",
+      JSON.stringify({
+        clientRequestId: originalId,
+        userMessageId: "cold-start-user-msg",
+        sessionId: "2026-11-15",
+        mode: "planning",
+        startedAt: Date.now(),
+      }),
+    );
+    mockRecover.mockReturnValueOnce(
+      okAsync({
+        status: "completed" as const,
+        advice: {
+          coachMessage: "Recovered before ensureSessionAdvice",
+          trainingPlan: {
+            cycleWeeks: 2,
+            sessions: [
+              {
+                weekNumber: 1,
+                dayOfWeek: 1,
+                sessionLabel: "Upper A",
+                focusDescription: "Chest",
+                exercises: [{ exerciseName: "Bench Press", targetSets: 3, targetReps: "8-10" }],
+              },
+            ],
+          },
+        },
+      }),
+    );
+
+    const orchestrator = useAiOrchestratorStore();
+    await orchestrator.ensureSessionAdvice();
+    expect(mockAsk).not.toHaveBeenCalled();
+
+    for (let i = 0; i < 15; i++) await Promise.resolve();
+    expect(mockRecover).toHaveBeenCalledWith(originalId, "default-id-token");
+    expect(mockAsk).not.toHaveBeenCalled();
+    expect(useTrainingPlanStore().activePlan?.sessions).toHaveLength(1);
+  });
+
+  it("stops polling after 35 attempts without sleeping after the final attempt", async () => {
+    vi.useFakeTimers();
+    try {
+      localStorage.setItem(
+        "ai-coach:pending-request",
+        JSON.stringify({
+          clientRequestId: "11111111-1111-4111-8111-111111111111",
+          userMessageId: "exhausted-user-msg",
+          sessionId: "2026-11-15",
+          mode: "execution",
+          startedAt: Date.now(),
+        }),
+      );
+      const chatStore = useCoachChatStore();
+      chatStore.addMessage({
+        id: "exhausted-user-msg",
+        role: "user",
+        content: "Still processing",
+        timestamp: new Date().toISOString(),
+        sessionId: "2026-11-15",
+        logsCount: 0,
+      });
+      mockRecover.mockReturnValue(okAsync({ status: "processing" as const }));
+
+      const orchestrator = useAiOrchestratorStore();
+      const baselineTimers = vi.getTimerCount();
+      orchestrator.initialize();
+
+      // Advance 34 x 2_000ms intervals between 35 attempts; no 35th trailing sleep should be scheduled
+      await vi.advanceTimersByTimeAsync(34 * 2000);
+      for (let i = 0; i < 15; i++) await Promise.resolve();
+
+      expect(mockRecover).toHaveBeenCalledTimes(35);
+      expect(vi.getTimerCount()).toBe(baselineTimers);
+      expect(localStorage.getItem("ai-coach:pending-request")).toBeNull();
+      expect(chatStore.messages.some((m) => m.id === "exhausted-user-msg")).toBe(false);
+      expect(chatStore.isLoading).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

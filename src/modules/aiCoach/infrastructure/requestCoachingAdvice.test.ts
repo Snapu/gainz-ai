@@ -14,7 +14,11 @@ vi.mock("@sentry/vue", () => ({
   captureException: captureExceptionMock,
 }));
 
-import { buildCoachActionRequestDto, requestCoachingAdvice } from "./requestCoachingAdvice";
+import {
+  buildCoachActionRequestDto,
+  recoverCoachingAdvice,
+  requestCoachingAdvice,
+} from "./requestCoachingAdvice";
 
 function createBaseRequest(overrides: Partial<CoachingAdviceRequest> = {}): CoachingAdviceRequest {
   const insights = calculateTrainingInsights([]);
@@ -97,6 +101,9 @@ describe("requestCoachingAdvice", () => {
       unknown
     >;
     expect(requestBody.action).toBe("coach");
+    expect(requestBody.clientRequestId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
     expect(requestBody.question).toBe("What should I train today?");
     expect(requestBody.contents).toBeUndefined();
     expect(() => coachActionRequestDtoSchema.parse(requestBody)).not.toThrow();
@@ -331,5 +338,62 @@ describe("requestCoachingAdvice", () => {
     expect(parsed.activePlan?.sessions[0]?.exercises[0]?.targetSets).toBe(20);
     expect(parsed.activePlan?.sessions[0]?.exercises[0]?.restSeconds).toBe(600);
     expect(parsed.activePlan?.sessions[0]?.exercises[0]?.targetRpe).toBe(10);
+  });
+
+  it("recovers completed advice, persists learned muscle groups, and maps 202/404/502 responses", async () => {
+    const clientRequestId = "11111111-1111-4111-8111-111111111111";
+
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 202,
+        json: async () => ({ status: "processing" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          status: "completed",
+          advice: {
+            coachMessage: "Recovered plan!",
+            recommendedWorkout: [
+              {
+                exerciseName: "Cable Lateral Raise XYZ",
+                targetSets: 3,
+                targetReps: "12-15",
+                primaryMuscle: "Side Delts",
+              },
+            ],
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        json: async () => ({ error: "not-found" }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        json: async () => ({ status: "failed", error: "coaching-request-failed" }),
+      });
+
+    const processingRes = await recoverCoachingAdvice(clientRequestId, "token");
+    expect(processingRes.isOk() && processingRes.value).toEqual({ status: "processing" });
+
+    const completedRes = await recoverCoachingAdvice(clientRequestId, "token");
+    expect(completedRes.isOk()).toBe(true);
+    if (completedRes.isOk() && completedRes.value.status === "completed") {
+      expect(completedRes.value.advice.coachMessage).toBe("Recovered plan!");
+    }
+    // Verify persistLearnedMuscleGroups persisted primaryMuscle from recovered response
+    const storedMuscles = localStorage.getItem("exerciseMuscleMap");
+    expect(storedMuscles).toContain("Side Delts");
+
+    const notFoundRes = await recoverCoachingAdvice(clientRequestId, "token");
+    expect(notFoundRes.isErr() && notFoundRes.error).toBe("not-found");
+
+    const serverFailedRes = await recoverCoachingAdvice(clientRequestId, "token");
+    expect(serverFailedRes.isErr() && serverFailedRes.error).toBe("server-failed");
   });
 });

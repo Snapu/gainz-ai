@@ -6,6 +6,7 @@ import { type AiCoachService, requestAdviceWithSingleRetry } from "./useCases";
 function makeService(askImpl: AiCoachService["ask"]): AiCoachService {
   return {
     ask: askImpl,
+    recover: vi.fn(() => errAsync("not-found" as const)),
     classifyExercises: vi.fn(() => okAsync({ classifications: [] })),
     getTodayLogsCount: vi.fn(() => 0),
   };
@@ -94,5 +95,44 @@ describe("aiCoach application use-cases", () => {
 
     expect(askRateLimited).toHaveBeenCalledTimes(1);
     expect(rateLimitedResult).toEqual(err("rate-limit-exceeded"));
+  });
+
+  it("rotates clientRequestId on retry after generate-content-stream-failed", async () => {
+    vi.useFakeTimers();
+
+    const ask = vi
+      .fn<AiCoachService["ask"]>()
+      .mockReturnValueOnce(errAsync("generate-content-stream-failed"))
+      .mockReturnValueOnce(
+        okAsync({ advice: { coachMessage: "Recovered schema" } as CoachingAdvice }),
+      );
+    const onRetry = vi.fn();
+
+    const promise = requestAdviceWithSingleRetry(
+      makeService(ask),
+      {
+        accessToken: "access-token",
+        clientRequestId: "11111111-1111-4111-8111-111111111111",
+        userProfile: {} as never,
+        insights: {} as never,
+        exerciseLogs: [],
+        trainingSummaries: [],
+        previousMessages: [],
+      },
+      2000,
+      onRetry,
+    );
+
+    await vi.advanceTimersByTimeAsync(2000);
+    const result = await promise;
+    vi.useRealTimers();
+
+    expect(result.isOk()).toBe(true);
+    expect(ask).toHaveBeenCalledTimes(2);
+    const firstId = ask.mock.calls[0]?.[0].clientRequestId;
+    const retryId = ask.mock.calls[1]?.[0].clientRequestId;
+    expect(retryId).toBeTruthy();
+    expect(retryId).not.toBe(firstId);
+    expect(onRetry).toHaveBeenCalledWith(retryId);
   });
 });

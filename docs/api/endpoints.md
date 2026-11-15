@@ -166,6 +166,7 @@ Requests are validated with strict Zod schemas and capped at `100 KB` HTTP body 
 ```typescript
 {
   action: "coach";
+  clientRequestId?: string;     // Optional UUID v4 idempotency key for lock/abort recovery
   mode: "planning" | "execution";
   muscleGroups: string[];       // 1..50 allowed muscle groups
   locale: string;
@@ -223,7 +224,10 @@ Requests are validated with strict Zod schemas and capped at `100 KB` HTTP body 
 - **Closed Schema & Thinking Budgets**:
   - `mode: "planning"`: `thinkingConfig: { thinkingBudget: 1024, includeThoughts: false }`, includes `trainingPlan` output schema.
   - `mode: "execution"`: `thinkingConfig: { thinkingBudget: 256, includeThoughts: false }`; `trainingPlan` output schema is only enabled if the athlete's `question` explicitly requests a schedule/split/plan update (`shouldAllowPlanUpdate`).
-- **Response Validation & Fallback**: Structured JSON outputs are validated with `parseCoachingAdviceResponse` inside `generateWithFallback`; malformed model JSON automatically falls back across configured Gemini models before failing closed with `502` + `refund_ai_quota`.
+- **Idempotency & Lock Recovery (`clientRequestId`)**: When a valid UUID v4 `clientRequestId` is provided on `action: "coach"`, the Edge Function claims an atomic lock in `public.ai_request_results` before consuming quota:
+  - Duplicate request while the original execution is still running returns `202 Accepted` (`{ "status": "processing" }`) without double-charging quota.
+  - Duplicate request after completion returns `200 OK` with the cached `{ advice, quota }` payload without re-running Gemini or double-charging quota.
+- **Response Validation & Fallback**: Structured JSON outputs are validated with `parseCoachingAdviceResponse` inside `generateWithFallback`; malformed model JSON automatically falls back across configured Gemini models before failing closed with `502` + `refund_ai_quota` (and marks the idempotency row `failed`).
 - **Timeouts**:
   - Server: `55,000ms` (Planning / Initial Coaching), `40,000ms` (Coaching Follow-ups), `30,000ms` (Classify).
   - Client: `65,000ms` (planning / initial evaluation), `48,000ms` (follow-ups), `35,000ms` (Classify).
@@ -360,6 +364,29 @@ curl -X POST "https://<PROJECT_REF>.supabase.co/functions/v1/ai-coach" \
 
 ---
 
+### 3.3 Action: `recover` (Idempotent Result Recovery)
+
+Retrieves the outcome of an interrupted `action: "coach"` request using its UUID v4 `clientRequestId` (e.g., when a mobile OS suspends the client socket during screen lock).
+
+#### Request Body Schema
+
+```typescript
+{
+  action: "recover";
+  clientRequestId: string; // UUID v4 generated for the original coach call
+}
+```
+
+#### Responses
+
+- **`200 OK` (Completed — Delete-on-Recovery)**: Returns `{ "status": "completed", "advice": { ... }, "quota"?: { ... } }` and deletes the `ai_request_results` row atomically (`DELETE ... RETURNING`). Subsequent recovery calls for the same `clientRequestId` return `404`.
+- **`202 Accepted` (Still Processing)**: Returns `{ "status": "processing" }` while the original Edge Function invocation is still executing. Clients may poll until completion or TTL expiry.
+- **`404 Not Found`**: Returns `{ "error": "not-found" }` when the `clientRequestId` does not exist, belongs to another user, was already recovered, or exceeded its 30-minute TTL.
+- **`502 Bad Gateway`**: Returns `{ "status": "failed", "error": "coaching-request-failed" }` when the original server invocation failed; deletes the `failed` marker row immediately so the athlete can retry cleanly.
+- **`503 Service Unavailable`**: Returns `{ "error": "recovery-check-failed" }` when `ai_request_results` cannot be read transiently; does not delete the entry so the client may retry.
+
+---
+
 ## 4. Rate Limiting, Quotas & Error Handling
 
 When an athlete reaches their daily limit (15 coach / 50 classify) or the platform ceiling is reached:
@@ -381,12 +408,15 @@ When an athlete reaches their daily limit (15 coach / 50 classify) or the platfo
 
 | Status Code | Meaning | Client Handling |
 | :--- | :--- | :--- |
-| `200 OK` | Request succeeded. | For `coach`, consume `{ advice, quota }` directly; for `classify`, parse `{ text }`. |
+| `200 OK` | Request succeeded. | For `coach` / `recover`, consume `{ advice, quota }` directly; for `classify`, parse `{ text }`. |
+| `202 Accepted` | Request with matching `clientRequestId` is still executing. | Show loading state and poll `action: "recover"` while foregrounded. |
 | `400 Bad Request` | Invalid DTO payload or JSON. | Check closed DTO schema structure and bounds. |
 | `401 Unauthorized` | Invalid or expired Google ID Token. | Refresh token via `/auth-token` and retry. |
+| `404 Not Found` | `recover` target missing, expired (>30m), or already consumed. | Clear pending local recovery state and allow retry. |
 | `413 Payload Too Large` | Request body exceeded `100 KB`. | Trim excess historical logs/messages cleanly on client. |
 | `429 Too Many Requests` | Daily user quota or platform cap reached. | Show friendly quota limit alert with reset time. |
-| `502 Bad Gateway` | All upstream Gemini models failed or returned invalid JSON. | Quota was refunded for original `usage_date` by server. Retry with exponential backoff. |
+| `502 Bad Gateway` | Upstream Gemini failure or invalid JSON (`coach`), or recovered request marked failed (`recover`). | On `coach`, quota refunded; on `recover`, failed marker deleted so client may retry. |
+| `503 Service Unavailable` | Transient recovery store unavailability (`recovery-check-failed` on `recover`). | Keep local pending request state and retry recovery polling. |
 
 ---
 
@@ -395,5 +425,5 @@ When an athlete reaches their daily limit (15 coach / 50 classify) or the platfo
 1. **JWKS Token Verification**: Google ID Tokens are cryptographically validated against Google JWKS (`RS256`) checking signature, audience (`GOOGLE_CLIENT_ID`), issuer (`accounts.google.com`), and expiration.
 2. **Access Token Introspection**: When the caller sends an opaque Google OAuth `access_token` (rather than a 3-segment JWT ID token), `ai-coach` validates it via `POST https://oauth2.googleapis.com/tokeninfo` (`application/x-www-form-urlencoded` body) and verifies `sub` plus `aud`/`azp === GOOGLE_CLIENT_ID`. Invalid or expired 3-segment JWT ID tokens fail closed without falling back.
 3. **Identity Derivation**: `userId` is strictly derived from the verified token's `sub` claim. It cannot be spoofed by client payload parameters.
-4. **Database RLS & Protection**: `ai_daily_usage` has Row-Level Security enabled for `service_role` only. Public client tokens (`anon`) cannot query or modify quota rows directly.
-5. **Probabilistic Pruning**: Records older than 30 days are pruned probabilistically (`random() < 0.01`) within quota RPC calls to prevent index lock contention on the hot path.
+4. **Database RLS & Data Minimization**: Both `ai_daily_usage` and `ai_request_results` have Row-Level Security enabled for `service_role` only (`REVOKE ALL` from `public`, `anon`, and `authenticated`). `ai_request_results` stores zero athlete input DTOs—only the idempotency state and `{ advice, quota }` result, bounded by Delete-on-Recovery and a strict 30-minute TTL.
+5. **Quota & Idempotency Pruning**: `ai_daily_usage` records older than 30 days are pruned probabilistically (`random() < 0.01`), and expired `ai_request_results` rows (`expires_at <= now()`) are pruned probabilistically (`random() < 0.05`) on `coach` calls to `consume_ai_quota`.

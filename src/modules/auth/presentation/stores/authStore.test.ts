@@ -39,7 +39,7 @@ describe("useAuthStore", () => {
       expect(store.expiresAt).toBeNull();
     });
 
-    it("calls clearAuthTokens on logout", () => {
+    it("should call clearAuthTokens", () => {
       const clearSpy = vi.spyOn(authInfra, "clearAuthTokens");
       const store = useAuthStore();
       store.logout();
