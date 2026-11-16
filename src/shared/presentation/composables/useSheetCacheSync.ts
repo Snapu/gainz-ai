@@ -7,6 +7,7 @@ import {
 import { useEventsStore } from "@/modules/events/presentation";
 import { useExerciseMuscleMapStore, useSpreadsheetStore } from "@/modules/platform/presentation";
 import { useUserProfileStore } from "@/modules/profile/presentation";
+import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
 
 const CACHE_OWNER_STORAGE_KEY = "gainz:cacheSpreadsheetId";
 
@@ -18,6 +19,7 @@ function clearDerivedSheetCaches(): void {
   useAiOrchestratorStore().clearPendingRequest();
   useEventsStore().clearEvents();
   useExerciseMuscleMapStore().clearMap();
+  useExerciseLogsStore().clearPendingMutations();
   useUserProfileStore().hasCompletedSetup = false;
 }
 

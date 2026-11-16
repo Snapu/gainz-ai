@@ -87,4 +87,24 @@ describe("useToast", () => {
 
     expect(callerCountdown.seconds).toBe(5);
   });
+
+  it("replaces any existing toast with the same explicit id and cancels its previous dismiss timer", () => {
+    const { toast, toasts } = useToast();
+
+    toast({ id: "auth-session-expired", title: "First", duration: 4000 });
+    vi.advanceTimersByTime(3000);
+
+    toast({ id: "auth-session-expired", title: "Second", duration: 4000 });
+    expect(toasts.value).toHaveLength(1);
+    expect(toasts.value[0]?.title).toBe("Second");
+
+    // Advancing past first timer's expiry must NOT dismiss the replacement toast early
+    vi.advanceTimersByTime(1500);
+    expect(toasts.value).toHaveLength(1);
+    expect(toasts.value[0]?.title).toBe("Second");
+
+    // Replacement toast dismisses after its full 4000ms duration
+    vi.advanceTimersByTime(2500);
+    expect(toasts.value).toHaveLength(0);
+  });
 });

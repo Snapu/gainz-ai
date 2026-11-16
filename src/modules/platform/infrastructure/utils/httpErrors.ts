@@ -14,3 +14,20 @@ export function isAuthError(error: unknown): boolean {
   const status = getHttpErrorStatus(error);
   return status === 401 || status === 403;
 }
+
+export function isAuthExpiredError(error: unknown): boolean {
+  return getHttpErrorStatus(error) === 401;
+}
+
+export function isRetryableHttpStatus(status: number): boolean {
+  return status === 401 || status === 408 || status === 429 || (status >= 500 && status < 600);
+}
+
+export function isNonRetryableClientStatus(status: number): boolean {
+  return status >= 400 && status < 500 && !isRetryableHttpStatus(status);
+}
+
+export function isNonRetryableClientError(error: unknown): boolean {
+  const status = getHttpErrorStatus(error);
+  return status !== null && isNonRetryableClientStatus(status);
+}

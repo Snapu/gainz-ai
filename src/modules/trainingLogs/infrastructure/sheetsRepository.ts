@@ -1,10 +1,30 @@
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { errAsync, ResultAsync } from "neverthrow";
 import { ZodError, z } from "zod";
-import { isAuthError } from "@/modules/platform/infrastructure";
+import { isAuthExpiredError, isNonRetryableClientError } from "@/modules/platform/infrastructure";
 import { parseData } from "@/modules/sharedKernel/domain";
 import type { ExerciseLogRepository } from "@/modules/trainingLogs/application";
 import { type ExerciseLog, ExerciseLogSchema } from "../domain/exerciseLog";
+
+class RowNotFoundError extends Error {}
+
+function mapMutationError<TTransient extends string>(
+  operation: string,
+  transientError: TTransient,
+  error: unknown,
+): TTransient | "validation-failed" | "auth-failed" {
+  if (isAuthExpiredError(error)) {
+    console.error(`Auth failed during ${operation}. Error:`, error);
+    return "auth-failed";
+  }
+  if (error instanceof ZodError || isNonRetryableClientError(error)) {
+    console.error(`Validation failed during ${operation}. Error:`, error);
+    if (error instanceof ZodError) console.error(z.prettifyError(error));
+    return "validation-failed";
+  }
+  console.error(`Failed to ${operation} exercise log. Error:`, error);
+  return transientError;
+}
 
 const LOGS_SHEET_PREFIX = "Logs";
 const SHEET_NAME = LOGS_SHEET_PREFIX + new Date().getFullYear();
@@ -85,7 +105,7 @@ export class ExerciseLogsSheetsRepository {
         return rows.map((row) => row.toObject());
       },
       (error) => {
-        if (isAuthError(error)) {
+        if (isAuthExpiredError(error)) {
           console.error("Auth failed during load. Error:", error);
           return "auth-failed" as const;
         }
@@ -95,31 +115,23 @@ export class ExerciseLogsSheetsRepository {
     )().andThen((rows) => parseData(ExerciseLogSchema.array(), rows));
   }
 
-  addLog(log: ExerciseLog): ResultAsync<void, "add-failed" | "auth-failed"> {
+  addLog(log: ExerciseLog): ResultAsync<void, "add-failed" | "validation-failed" | "auth-failed"> {
     return ResultAsync.fromThrowable(
       async () => {
-        const sheet = this.getSheet() ?? (await this.addSheet());
-
-        const logWithId = {
+        const parsedLog = ExerciseLogSchema.parse({
           ...log,
           id: log.id || crypto.randomUUID(),
-        };
-
-        await sheet.addRow(ExerciseLogSchema.parse(logWithId));
+        });
+        const sheet = this.getSheet() ?? (await this.addSheet());
+        await sheet.addRow(parsedLog);
       },
-      (error) => {
-        if (isAuthError(error)) {
-          console.error("Auth failed during add. Error:", error);
-          return "auth-failed" as const;
-        }
-        console.error("Failed to add exercise log. Error:", error);
-        if (error instanceof ZodError) console.error(z.prettifyError(error));
-        return "add-failed" as const;
-      },
+      (error) => mapMutationError("add", "add-failed", error),
     )();
   }
 
-  deleteLog(log: ExerciseLog): ResultAsync<void, "delete-failed" | "auth-failed"> {
+  deleteLog(
+    log: ExerciseLog,
+  ): ResultAsync<void, "delete-failed" | "validation-failed" | "auth-failed"> {
     const sheet = this.getSheet();
     if (!sheet) {
       console.error("Failed to delete exercise log. Sheet does not exist.");
@@ -132,18 +144,13 @@ export class ExerciseLogsSheetsRepository {
         console.debug("Deleting row:", rowToDelete);
         await rowToDelete?.delete();
       },
-      (error) => {
-        if (isAuthError(error)) {
-          console.error("Auth failed during delete. Error:", error);
-          return "auth-failed" as const;
-        }
-        console.error("Failed to delete exercise log. Error:", error);
-        return "delete-failed" as const;
-      },
+      (error) => mapMutationError("delete", "delete-failed", error),
     )();
   }
 
-  updateLog(log: ExerciseLog): ResultAsync<void, "update-failed" | "auth-failed"> {
+  updateLog(
+    log: ExerciseLog,
+  ): ResultAsync<void, "update-failed" | "validation-failed" | "not-found" | "auth-failed"> {
     const sheet = this.getSheet();
     if (!sheet) {
       console.error("Failed to update exercise log. Sheet does not exist.");
@@ -151,24 +158,20 @@ export class ExerciseLogsSheetsRepository {
     }
     return ResultAsync.fromThrowable(
       async () => {
+        const parsedLog = ExerciseLogSchema.parse(log);
         const rows = await sheet.getRows<ExerciseLog>();
         const rowToUpdate = rows.find((row) => row.get("id") === log.id);
         if (!rowToUpdate) {
-          throw new Error("Row not found");
+          throw new RowNotFoundError("Row not found");
         }
         console.debug("Updating row:", rowToUpdate, "with new log:", log);
-        rowToUpdate.assign(ExerciseLogSchema.parse(log));
+        rowToUpdate.assign(parsedLog);
         await rowToUpdate.save();
       },
-      (error) => {
-        if (isAuthError(error)) {
-          console.error("Auth failed during update. Error:", error);
-          return "auth-failed" as const;
-        }
-        console.error("Failed to update exercise log. Error:", error);
-        if (error instanceof ZodError) console.error(z.prettifyError(error));
-        return "update-failed" as const;
-      },
+      (error) =>
+        error instanceof RowNotFoundError
+          ? ("not-found" as const)
+          : mapMutationError("update", "update-failed", error),
     )();
   }
 
@@ -212,7 +215,7 @@ export class ExerciseLogsSheetsRepository {
         });
       },
       (error) => {
-        if (isAuthError(error)) {
+        if (isAuthExpiredError(error)) {
           console.error(`Auth failed during load logs from year ${year}. Error:`, error);
           return "auth-failed" as const;
         }

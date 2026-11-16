@@ -10,6 +10,7 @@ const resetAllSessionsMock = vi.fn();
 const clearPendingRequestMock = vi.fn();
 const clearEventsMock = vi.fn();
 const clearMapMock = vi.fn();
+const clearPendingLogsMock = vi.fn();
 const userProfileState = reactive({
   hasCompletedSetup: true,
 });
@@ -50,6 +51,12 @@ vi.mock("@/modules/events/presentation", () => ({
 
 vi.mock("@/modules/profile/presentation", () => ({
   useUserProfileStore: () => userProfileState,
+}));
+
+vi.mock("@/modules/trainingLogs/presentation", () => ({
+  useExerciseLogsStore: () => ({
+    clearPendingMutations: clearPendingLogsMock,
+  }),
 }));
 
 describe("useSheetCacheSync", () => {
@@ -103,6 +110,7 @@ describe("useSheetCacheSync", () => {
     expect(clearPendingRequestMock).toHaveBeenCalledTimes(1);
     expect(clearEventsMock).toHaveBeenCalledTimes(1);
     expect(clearMapMock).toHaveBeenCalledTimes(1);
+    expect(clearPendingLogsMock).toHaveBeenCalledTimes(1);
     expect(userProfileState.hasCompletedSetup).toBe(false);
     expect(localStorage.getItem(CACHE_OWNER_KEY)).toBe("sheet-account-b");
   });
@@ -137,6 +145,7 @@ describe("useSheetCacheSync", () => {
     expect(clearPendingRequestMock).toHaveBeenCalledTimes(1);
     expect(clearEventsMock).toHaveBeenCalledTimes(1);
     expect(clearMapMock).toHaveBeenCalledTimes(1);
+    expect(clearPendingLogsMock).toHaveBeenCalledTimes(1);
     expect(userProfileState.hasCompletedSetup).toBe(false);
     expect(localStorage.getItem(CACHE_OWNER_KEY)).toBe("created-sheet-1");
   });

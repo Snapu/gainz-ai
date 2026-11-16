@@ -1,3 +1,4 @@
+import { errAsync, okAsync } from "neverthrow";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp, defineComponent, h, nextTick, ref } from "vue";
@@ -7,6 +8,8 @@ const startRestTimerMock = vi.fn();
 const resetRestTimerMock = vi.fn();
 const addExerciseLogMock = vi.fn();
 const updateExerciseLogMock = vi.fn();
+const removeExerciseLogMock = vi.fn();
+const toastMock = vi.fn();
 let selectedExerciseUpdater: ((val: string) => void) | null = null;
 
 const mockLogs: ExerciseLog[] = [
@@ -65,6 +68,12 @@ vi.mock("@/modules/platform/presentation", () => ({
   }),
 }));
 
+vi.mock("@/shared/presentation/composables/useToast", () => ({
+  useToast: () => ({
+    toast: toastMock,
+  }),
+}));
+
 vi.mock("@/modules/trainingLogs/presentation", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/modules/trainingLogs/presentation")>();
   return {
@@ -73,7 +82,7 @@ vi.mock("@/modules/trainingLogs/presentation", async (importOriginal) => {
       exerciseLogs: ref(mockLogs),
       addExerciseLog: addExerciseLogMock,
       updateExerciseLog: updateExerciseLogMock,
-      removeExerciseLog: vi.fn(),
+      removeExerciseLog: removeExerciseLogMock,
       lastLogForExercise: (name: string) => mockLogs.find((l) => l.exerciseName === name),
     }),
   };
@@ -108,6 +117,9 @@ describe("LogExerciseSheet", () => {
     setActivePinia(createPinia());
     vi.clearAllMocks();
     selectedExerciseUpdater = null;
+    addExerciseLogMock.mockImplementation(() => okAsync("synced"));
+    updateExerciseLogMock.mockImplementation(() => okAsync("synced"));
+    removeExerciseLogMock.mockImplementation(() => okAsync("synced"));
   });
 
   it("does not start rest timer when saving an edited log", async () => {
@@ -461,6 +473,163 @@ describe("LogExerciseSheet", () => {
 
     const savedLog = addExerciseLogMock.mock.calls[0]?.[0] as ExerciseLog;
     expect(savedLog.rpe).toBe(9);
+
+    app.unmount();
+  });
+
+  it("preserves offline-first UX with pending-sync feedback when addExerciseLog queues offline", async () => {
+    addExerciseLogMock.mockReturnValueOnce(okAsync("queued-offline"));
+    const onUpdateOpen = vi.fn();
+    const onSaved = vi.fn();
+
+    const container = document.createElement("div");
+    const app = createApp(LogExerciseSheet, {
+      open: true,
+      prefillData: { exerciseName: "Bench Press", weight: 80, reps: 8 },
+      "onUpdate:open": onUpdateOpen,
+      onSaved,
+    });
+    app.mount(container);
+    await nextTick();
+
+    const saveButton = Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Save Set"),
+    );
+    saveButton?.click();
+    await nextTick();
+    await vi.waitFor(() => {
+      expect(onSaved).toHaveBeenCalledOnce();
+    });
+
+    expect(startRestTimerMock).toHaveBeenCalledOnce();
+    expect(onUpdateOpen).toHaveBeenCalledWith(false);
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Saved Offline",
+      }),
+    );
+
+    app.unmount();
+  });
+
+  it("keeps sheet open, does not start rest timer, and shows destructive error toast on non-retryable save failure", async () => {
+    addExerciseLogMock.mockReturnValueOnce(errAsync("validation-failed"));
+    const onUpdateOpen = vi.fn();
+    const onSaved = vi.fn();
+
+    const container = document.createElement("div");
+    const app = createApp(LogExerciseSheet, {
+      open: true,
+      prefillData: { exerciseName: "Bench Press", weight: 80, reps: 8 },
+      "onUpdate:open": onUpdateOpen,
+      onSaved,
+    });
+    app.mount(container);
+    await nextTick();
+
+    const saveButton = Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Save Set"),
+    );
+    saveButton?.click();
+    await vi.waitFor(() => {
+      expect(toastMock).toHaveBeenCalledOnce();
+    });
+
+    expect(startRestTimerMock).not.toHaveBeenCalled();
+    expect(onUpdateOpen).not.toHaveBeenCalledWith(false);
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Could Not Save Set",
+        variant: "destructive",
+      }),
+    );
+
+    app.unmount();
+  });
+
+  it("keeps sheet open and surfaces destructive toast when editing or deleting fails permanently", async () => {
+    updateExerciseLogMock.mockReturnValueOnce(errAsync("auth-failed"));
+    removeExerciseLogMock
+      .mockReturnValueOnce(errAsync("validation-failed"))
+      .mockReturnValueOnce(okAsync("queued-offline"));
+    const onUpdateOpen = vi.fn();
+    const onSaved = vi.fn();
+
+    const container = document.createElement("div");
+    const app = createApp(LogExerciseSheet, {
+      open: true,
+      logToEdit: mockLogs[0],
+      "onUpdate:open": onUpdateOpen,
+      onSaved,
+    });
+    app.mount(container);
+    await nextTick();
+
+    const saveButton = Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Save Changes"),
+    );
+    saveButton?.click();
+    await vi.waitFor(() => {
+      expect(toastMock).toHaveBeenCalledTimes(1);
+    });
+    expect(onUpdateOpen).not.toHaveBeenCalledWith(false);
+    expect(onSaved).not.toHaveBeenCalled();
+
+    const deleteButton = container.querySelector<HTMLButtonElement>('[aria-label="Delete Set"]');
+    deleteButton?.click();
+    await vi.waitFor(() => {
+      expect(toastMock).toHaveBeenCalledTimes(2);
+    });
+    expect(toastMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        title: "Could Not Delete Set",
+        variant: "destructive",
+      }),
+    );
+    expect(onSaved).not.toHaveBeenCalled();
+
+    deleteButton?.click();
+    await vi.waitFor(() => {
+      expect(onSaved).toHaveBeenCalledOnce();
+    });
+    expect(toastMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        title: "Deleted Offline",
+      }),
+    );
+
+    app.unmount();
+  });
+
+  it("surfaces missing-row description when update fails with not-found", async () => {
+    updateExerciseLogMock.mockReturnValueOnce(errAsync("not-found"));
+    const onUpdateOpen = vi.fn();
+    const container = document.createElement("div");
+    const app = createApp(LogExerciseSheet, {
+      open: true,
+      logToEdit: mockLogs[0],
+      "onUpdate:open": onUpdateOpen,
+    });
+    app.mount(container);
+    await nextTick();
+
+    const saveButton = Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Save Changes"),
+    );
+    saveButton?.click();
+    await vi.waitFor(() => {
+      expect(toastMock).toHaveBeenCalledOnce();
+    });
+
+    expect(onUpdateOpen).not.toHaveBeenCalledWith(false);
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Could Not Save Set",
+        description: "This set no longer exists in Google Sheets.",
+        variant: "destructive",
+      }),
+    );
 
     app.unmount();
   });

@@ -7,9 +7,9 @@ import type { ExerciseLog } from "../domain/exerciseLog";
  */
 
 type ExerciseLogLoadError = "load-failed" | "parse-data-failed" | "auth-failed";
-type ExerciseLogAddError = "add-failed" | "auth-failed";
-type ExerciseLogDeleteError = "delete-failed" | "auth-failed";
-type ExerciseLogUpdateError = "update-failed" | "auth-failed";
+type ExerciseLogAddError = "add-failed" | "validation-failed" | "auth-failed";
+type ExerciseLogDeleteError = "delete-failed" | "validation-failed" | "auth-failed";
+type ExerciseLogUpdateError = "update-failed" | "validation-failed" | "not-found" | "auth-failed";
 type ExerciseLogYearLoadError =
   | "load-failed"
   | "parse-data-failed"

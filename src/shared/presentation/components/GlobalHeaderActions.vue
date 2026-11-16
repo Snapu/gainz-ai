@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { Bed, ChevronRight, ExternalLink, FolderOpen, History, Menu } from "@lucide/vue";
+import { Bed, ChevronRight, CloudOff, ExternalLink, FolderOpen, History, Menu } from "@lucide/vue";
 import { useRouter } from "vue-router";
 import { useSpreadsheetStore } from "@/modules/platform/presentation";
 import { WIZARD_STEPS } from "@/modules/profile/presentation";
+import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiDropdownMenu from "@/shared/presentation/components/ui/UiDropdownMenu.vue";
 import UiDropdownMenuItem from "@/shared/presentation/components/ui/UiDropdownMenuItem.vue";
@@ -10,6 +11,7 @@ import { useToast } from "@/shared/presentation/composables/useToast";
 
 const router = useRouter();
 const spreadsheetStore = useSpreadsheetStore();
+const logsStore = useExerciseLogsStore();
 const { toast } = useToast();
 
 function handleSwitchSpreadsheet(): void {
@@ -26,6 +28,24 @@ function handleSwitchSpreadsheet(): void {
 
 <template>
   <div class="flex items-center gap-1">
+    <UiButton
+      v-if="logsStore.showPendingSync"
+      variant="chip"
+      size="micro"
+      :disabled="!logsStore.isOnline || logsStore.isSyncingPending || logsStore.isRefreshing"
+      aria-label="Sync pending offline logs"
+      class="rounded-full bg-orange-500/10 border-orange-500/20 text-orange-400 hover:bg-white/10"
+      @click="void logsStore.refresh()"
+    >
+      <CloudOff class="w-3.5 h-3.5 shrink-0" />
+      <span>
+        {{
+          logsStore.isSyncingPending || logsStore.isRefreshing
+            ? "Syncing..."
+            : `${logsStore.pendingSyncCount} Pending`
+        }}
+      </span>
+    </UiButton>
     <UiButton variant="ghost" size="icon" aria-label="Past Sessions" @click="router.push('/past-sessions')">
       <History class="w-5 h-5 text-muted-foreground" />
     </UiButton>

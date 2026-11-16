@@ -26,3 +26,12 @@ export const ExerciseLogSchema = z.object({
 });
 
 export type ExerciseLog = z.infer<typeof ExerciseLogSchema>;
+
+const ClientExerciseLogSchema = ExerciseLogSchema.extend({
+  id: z.string().min(1),
+  exerciseName: ExerciseNameSchema.pipe(z.string().min(1)),
+});
+
+export function isValidExerciseLogInput(log: ExerciseLog): boolean {
+  return ClientExerciseLogSchema.safeParse(log).success && !Number.isNaN(log.loggedAt.getTime());
+}

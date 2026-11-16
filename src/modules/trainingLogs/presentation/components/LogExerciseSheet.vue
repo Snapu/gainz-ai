@@ -6,6 +6,7 @@ import { useDeloadStore } from "@/modules/deload/presentation";
 import { useRestTimerStore } from "@/modules/platform/presentation";
 import type { ExerciseLog } from "@/modules/trainingLogs/presentation";
 import {
+  buildExerciseLogErrorToast,
   buildExerciseProgression,
   computeExercisePr,
   useExerciseLogsStore,
@@ -365,24 +366,50 @@ async function saveLog() {
     loggedAt: props.logToEdit?.loggedAt || new Date(),
   };
 
-  if (props.logToEdit) {
-    logsStore.updateExerciseLog(log);
-  } else {
-    logsStore.addExerciseLog(log);
-    const DEFAULT_REST_SECONDS = 120; // 2 minutes generic fallback
-    restTimerStore.reset();
-    restTimerStore.start(props.restSeconds ?? DEFAULT_REST_SECONDS);
-  }
+  const result = props.logToEdit
+    ? await logsStore.updateExerciseLog(log)
+    : await logsStore.addExerciseLog(log);
 
-  internalOpen.value = false;
-  emit("saved");
+  result.match(
+    (status) => {
+      if (!props.logToEdit) {
+        const DEFAULT_REST_SECONDS = 120; // 2 minutes generic fallback
+        restTimerStore.reset();
+        restTimerStore.start(props.restSeconds ?? DEFAULT_REST_SECONDS);
+      }
+      if (status === "queued-offline") {
+        toast({
+          title: "Saved Offline",
+          description: "Set kept locally and queued to sync when back online.",
+        });
+      }
+      internalOpen.value = false;
+      emit("saved");
+    },
+    (error) => {
+      toast(buildExerciseLogErrorToast("save", error));
+    },
+  );
 }
 
 async function deleteLog() {
   if (!props.logToEdit) return;
-  logsStore.removeExerciseLog(props.logToEdit);
-  internalOpen.value = false;
-  emit("saved");
+  const result = await logsStore.removeExerciseLog(props.logToEdit);
+  result.match(
+    (status) => {
+      if (status === "queued-offline") {
+        toast({
+          title: "Deleted Offline",
+          description: "Set removed locally and queued to sync when back online.",
+        });
+      }
+      internalOpen.value = false;
+      emit("saved");
+    },
+    (error) => {
+      toast(buildExerciseLogErrorToast("delete", error));
+    },
+  );
 }
 </script>
 
@@ -582,7 +609,7 @@ async function deleteLog() {
           <Trash class="w-5 h-5" />
         </UiButton>
         <UiButton haptic class="flex-1 h-14 rounded-xl text-base font-bold shadow-lg shadow-primary/10 active:scale-95 transition-transform" @click="saveLog">
-          {{ props.logToEdit ? 'Save Changes' : 'Save Set' }}
+          {{ props.logToEdit ? "Save Changes" : "Save Set" }}
         </UiButton>
       </div>
     </template>

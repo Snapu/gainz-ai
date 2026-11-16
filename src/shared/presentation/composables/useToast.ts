@@ -18,12 +18,37 @@ export interface ToastOptions {
 }
 
 const toasts = ref<ToastOptions[]>([]);
-// Internal map: toast id → active countdown interval
+// Internal maps: toast id → active timer handles
 const countdownIntervals = new Map<string, ReturnType<typeof setInterval>>();
+const dismissTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
 
 export function useToast() {
+  function startCountdown(id: string, countdown: NonNullable<ToastOptions["countdown"]>) {
+    let remainingSeconds = countdown.seconds;
+    const countdownInterval = setInterval(() => {
+      remainingSeconds--;
+
+      const currentToast = toasts.value.find((t) => t.id === id);
+      if (currentToast?.countdown) {
+        currentToast.countdown.seconds = remainingSeconds;
+      }
+
+      if (remainingSeconds <= 0) {
+        clearInterval(countdownInterval);
+        countdownIntervals.delete(id);
+        countdown.onComplete();
+        dismiss(id);
+      }
+    }, 1000);
+
+    countdownIntervals.set(id, countdownInterval);
+  }
+
   function toast(options: ToastOptions) {
     const id = options.id || Math.random().toString(36).substring(2, 9);
+    if (options.id) {
+      dismiss(options.id);
+    }
     const toastData: ToastOptions = {
       ...options,
       id,
@@ -31,40 +56,14 @@ export function useToast() {
     };
     toasts.value.push(toastData);
 
-    // Handle countdown
     if (options.countdown) {
-      let remainingSeconds = options.countdown.seconds;
-      const countdownInterval = setInterval(() => {
-        remainingSeconds--;
-
-        // Update countdown in toasts array
-        const toastIndex = toasts.value.findIndex((t) => t.id === id);
-        if (toastIndex !== -1) {
-          const currentToast = toasts.value[toastIndex];
-          if (currentToast?.countdown) {
-            currentToast.countdown.seconds = remainingSeconds;
-          }
-        }
-
-        // When countdown reaches 0, call onComplete and dismiss
-        if (remainingSeconds <= 0) {
-          clearInterval(countdownInterval);
-          countdownIntervals.delete(id);
-          if (options.countdown) {
-            options.countdown.onComplete();
-          }
-          dismiss(id);
-        }
-      }, 1000);
-
-      countdownIntervals.set(id, countdownInterval);
-    }
-
-    // Only auto-dismiss if not persistent and no countdown
-    if (!options.persistent && !options.countdown && options.duration !== Infinity) {
-      setTimeout(() => {
+      startCountdown(id, options.countdown);
+    } else if (!options.persistent && options.duration !== Infinity) {
+      const timeout = setTimeout(() => {
+        dismissTimeouts.delete(id);
         dismiss(id);
       }, options.duration ?? 5000);
+      dismissTimeouts.set(id, timeout);
     }
 
     return id;
@@ -75,6 +74,11 @@ export function useToast() {
     if (interval) {
       clearInterval(interval);
       countdownIntervals.delete(id);
+    }
+    const timeout = dismissTimeouts.get(id);
+    if (timeout) {
+      clearTimeout(timeout);
+      dismissTimeouts.delete(id);
     }
     toasts.value = toasts.value.filter((t) => t.id !== id);
   }

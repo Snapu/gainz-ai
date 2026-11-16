@@ -27,6 +27,7 @@ export function useAuthErrorHandler() {
     authStore.logout();
 
     toast({
+      id: "auth-session-expired",
       title: "Session Expired",
       description: "Your session expired. Please log in again.",
       variant: "destructive",

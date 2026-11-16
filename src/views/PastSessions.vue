@@ -4,6 +4,7 @@ import { storeToRefs } from "pinia";
 import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import {
+  buildExerciseLogErrorToast,
   type ExerciseLog,
   groupLogsIntoSessions,
   LogExerciseSheet,
@@ -13,6 +14,7 @@ import AppHeader from "@/shared/presentation/components/AppHeader.vue";
 import EmptyState from "@/shared/presentation/components/EmptyState.vue";
 import SessionLogGroup from "@/shared/presentation/components/SessionLogGroup.vue";
 import { useLogSheet } from "@/shared/presentation/composables/useLogSheet";
+import { useToast } from "@/shared/presentation/composables/useToast";
 
 interface GroupedSession {
   id: string;
@@ -30,6 +32,7 @@ const router = useRouter();
 const logsStore = useExerciseLogsStore();
 const { exerciseLogs } = storeToRefs(logsStore);
 const logSheet = useLogSheet();
+const { toast } = useToast();
 
 const collapsedSessions = ref<Record<string, boolean>>({});
 
@@ -81,6 +84,23 @@ function toggleSession(id: string) {
 function editLog(log: ExerciseLog) {
   logSheet.openEditLog(log);
 }
+
+async function deleteLog(log: ExerciseLog) {
+  const result = await logsStore.removeExerciseLog(log);
+  result.match(
+    (status) => {
+      if (status === "queued-offline") {
+        toast({
+          title: "Deleted Offline",
+          description: "Set removed locally and queued to sync when back online.",
+        });
+      }
+    },
+    (error) => {
+      toast(buildExerciseLogErrorToast("delete", error));
+    },
+  );
+}
 </script>
 
 <template>
@@ -98,7 +118,7 @@ function editLog(log: ExerciseLog) {
         :stats="session.stats"
         :is-collapsed="!!collapsedSessions[session.id]"
         @toggle="toggleSession(session.id)"
-        @delete-log="logsStore.removeExerciseLog"
+        @delete-log="deleteLog"
         @edit-log="editLog"
       />
 

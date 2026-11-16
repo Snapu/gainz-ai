@@ -1,15 +1,22 @@
 /// <reference lib="webworker" />
 /// <reference lib="webworker.iterable" />
 
-import { BackgroundSyncPlugin } from "workbox-background-sync";
+import { Queue } from "workbox-background-sync";
 import type { PrecacheEntry } from "workbox-precaching";
 import { cleanupOutdatedCaches, precacheAndRoute } from "workbox-precaching";
 import { registerRoute } from "workbox-routing";
 import { NetworkOnly } from "workbox-strategies";
+import {
+  replaySyncQueue,
+  shouldQueueSheetsWrite,
+  updateQueueAuthHeaders,
+} from "../src/modules/platform/infrastructure/serviceWorkerSync";
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<PrecacheEntry>;
 };
+
+const QUEUE_NAME = "sheets-api-queue";
 
 // Clean up old caches automatically
 cleanupOutdatedCaches();
@@ -17,57 +24,62 @@ cleanupOutdatedCaches();
 // Precache app shell assets
 precacheAndRoute(self.__WB_MANIFEST);
 
-// Create a background sync plugin for Google Sheets API requests
-const bgSyncPlugin = new BackgroundSyncPlugin("sheets-api-queue", {
+async function notifyClients(message: Record<string, unknown>): Promise<void> {
+  const clients = await self.clients.matchAll();
+  for (const client of clients) {
+    client.postMessage(message);
+  }
+}
+
+const sheetsQueue = new Queue(QUEUE_NAME, {
   maxRetentionTime: 24 * 60, // Retry for up to 24 hours (in minutes)
-  onSync: async ({ queue }) => {
-    let entry = await queue.shiftRequest();
-    while (entry) {
-      try {
-        await fetch(entry.request.clone());
-      } catch (error) {
-        console.error("Replay failed for request", entry.request, error);
-        // Put the request back in the queue if it failed
-        await queue.unshiftRequest(entry);
-        throw error;
-      }
-      entry = await queue.shiftRequest();
-    }
-  },
+  onSync: ({ queue }) =>
+    replaySyncQueue(queue, {
+      onAuthRequired: () => notifyClients({ type: "BACKGROUND_SYNC_AUTH_REQUIRED" }),
+      onSuccess: () => notifyClients({ type: "BACKGROUND_SYNC_SUCCESS", tag: QUEUE_NAME }),
+    }),
 });
 
-// Register routes for Google Sheets API requests (POST, PUT, DELETE)
+// Register routes for non-Log Sheets writes (Profile, Metrics, Deload, etc.).
+// Logs* writes are owned by exerciseLogsStore; volatile :batchUpdate calls are excluded.
 (["POST", "PUT", "DELETE"] as const).forEach((method) => {
   registerRoute(
-    ({ url }) => url.origin === "https://sheets.googleapis.com",
+    ({ url }) => shouldQueueSheetsWrite(url),
     new NetworkOnly({
-      plugins: [bgSyncPlugin],
+      plugins: [
+        {
+          fetchDidFail: async ({ request }) => {
+            await sheetsQueue.pushRequest({ request });
+          },
+        },
+      ],
     }),
     method,
   );
 });
 
-// Notify the app when background sync completes successfully
-self.addEventListener("sync", (event: SyncEvent) => {
-  if (event.tag === "sheets-api-queue") {
+self.addEventListener("message", (event) => {
+  const data = event.data as { type?: string; accessToken?: unknown } | null;
+  if (!data?.type) return;
+
+  if (data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+    return;
+  }
+
+  if (data.type === "AUTH_TOKEN_UPDATED" && typeof data.accessToken === "string") {
+    event.waitUntil(updateQueueAuthHeaders(sheetsQueue, data.accessToken));
+    return;
+  }
+
+  if (data.type === "CLEAR_SYNC_QUEUE") {
     event.waitUntil(
       (async () => {
-        // Notify all clients that sync completed
-        const clients = await self.clients.matchAll();
-        clients.forEach((client: Client) => {
-          client.postMessage({
-            type: "BACKGROUND_SYNC_SUCCESS",
-            tag: event.tag,
-          });
-        });
+        while (await sheetsQueue.shiftRequest()) {
+          // Drain queued requests for logged-out session
+        }
       })(),
     );
-  }
-});
-
-self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") {
-    self.skipWaiting();
   }
 });
 

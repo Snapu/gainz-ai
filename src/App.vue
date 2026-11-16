@@ -5,7 +5,7 @@ import { ConfigProvider } from "reka-ui";
 import { onMounted, onUnmounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useAiOrchestratorStore } from "@/modules/aiCoach/presentation";
-import { useAuthStore } from "@/modules/auth/presentation";
+import { useAuthErrorHandler, useAuthStore } from "@/modules/auth/presentation";
 import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
 import UiToaster from "@/shared/presentation/components/ui/UiToaster.vue";
 import { useAuthExpirationWatcher } from "@/shared/presentation/composables/useAuthExpirationWatcher";
@@ -14,6 +14,7 @@ import { useToast } from "@/shared/presentation/composables/useToast";
 
 const router = useRouter();
 const authStore = useAuthStore();
+const { handleAuthError } = useAuthErrorHandler();
 
 // Start watching for auth expiration and sheet switches
 useAuthExpirationWatcher();
@@ -54,10 +55,23 @@ const { needRefresh, updateServiceWorker } = useRegisterSW({
   },
 });
 
+function postToServiceWorker(message: Record<string, unknown>): void {
+  if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.controller.postMessage(message);
+  }
+}
+
 function handleServiceWorkerMessage(event: MessageEvent) {
-  if (event.data && event.data.type === "BACKGROUND_SYNC_SUCCESS") {
-    const exerciseLogsStore = useExerciseLogsStore();
-    exerciseLogsStore.refresh();
+  const type = (event.data as { type?: string } | null)?.type;
+  if (type === "BACKGROUND_SYNC_SUCCESS") {
+    void useExerciseLogsStore().refresh();
+  } else if (type === "BACKGROUND_SYNC_AUTH_REQUIRED") {
+    const previousToken = authStore.accessToken;
+    void handleAuthError("service-worker-sync").then((recovered) => {
+      if (recovered && authStore.accessToken && authStore.accessToken === previousToken) {
+        postToServiceWorker({ type: "AUTH_TOKEN_UPDATED", accessToken: authStore.accessToken });
+      }
+    });
   }
 }
 
@@ -95,6 +109,16 @@ onMounted(() => {
   }
 });
 
+watch(
+  () => authStore.accessToken,
+  (token) => {
+    if (token) {
+      postToServiceWorker({ type: "AUTH_TOKEN_UPDATED", accessToken: token });
+    }
+  },
+  { immediate: true },
+);
+
 // Keep runtime session-loss handling here; router guards remain the single source
 // for normal auth/setup/document routing decisions.
 watch(
@@ -103,6 +127,7 @@ watch(
     if (isLoggedIn) return;
 
     useAiOrchestratorStore().clearPendingRequest();
+    postToServiceWorker({ type: "CLEAR_SYNC_QUEUE" });
     const currentPath = router.currentRoute.value.path;
     const isPublicRoute = currentPath === "/privacy" || currentPath === "/impressum";
     if (isPublicRoute || currentPath === "/") return;
