@@ -244,6 +244,20 @@ describe("assembleCoachingPrompt", () => {
     expect(prompt).toContain("restDays: 3");
     expect(prompt).toContain("pattern: Thu");
   });
+
+  it("includes sessionMins in # session when userProfile.workoutDurationMinutes is set", () => {
+    const prompt = assembleCoachingPrompt(
+      createPromptDto({
+        userProfile: {
+          workoutDaysPerWeek: 4,
+          workoutDurationMinutes: 45,
+          fitnessGoal: ["build_muscle"],
+        },
+      }),
+    );
+
+    expect(prompt).toContain("sessionMins: 45");
+  });
 });
 
 describe("buildBoundedConversationContents", () => {

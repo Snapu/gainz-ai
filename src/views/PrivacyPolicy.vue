@@ -47,6 +47,7 @@ const router = useRouter();
               <li><strong>Fitnessziele</strong> (fitnessGoal): z.B. Muskelaufbau, Fettabbau, Ausdauerverbesserung</li>
               <li><strong>Fitnesslevel</strong> (fitnessLevel): Anfänger, Fortgeschritten, Experte</li>
               <li><strong>Trainingstage pro Woche</strong> (workoutDaysPerWeek)</li>
+              <li><strong>Trainingsdauer in Minuten</strong> (workoutDurationMinutes)</li>
               <li><strong>Trainingsort</strong> (workoutLocation): Fitnessstudio, Zuhause, Beides</li>
               <li><strong>Verfügbare Ausrüstung</strong> (equipmentAccess): z.B. Hanteln, Klimmzugstange, etc.</li>
               <li><strong>Freitextangaben</strong> (freeUserInput): zusätzliche Informationen, die Sie freiwillig bereitstellen</li>

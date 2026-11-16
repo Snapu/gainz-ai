@@ -36,6 +36,24 @@ export type EquipmentOption = z.infer<typeof EquipmentOptionSchema>;
 
 const optionalNumberSchema = z.preprocess((val) => parseOptionalNumber(val), z.number().optional());
 
+export function parsePositiveOptionalNumber(value: unknown): number | undefined {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed === "") return undefined;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value > 0 ? value : undefined;
+  }
+  return undefined;
+}
+
+const optionalPositiveNumberSchema = z.preprocess(
+  parsePositiveOptionalNumber,
+  z.number().positive().optional(),
+);
+
 const commaSeparatedArraySchema = <T extends z.ZodTypeAny>(enumSchema: T) =>
   z.preprocess((val) => {
     if (val === "" || val === null || val === undefined) return undefined;
@@ -61,7 +79,7 @@ export const UserProfileSchema = z.object({
   fitnessGoal: commaSeparatedArraySchema(FitnessGoalSchema),
   fitnessLevel: optionalEnumSchema(FitnessLevelSchema),
   workoutDaysPerWeek: optionalNumberSchema,
-  workoutDurationMinutes: optionalNumberSchema,
+  workoutDurationMinutes: optionalPositiveNumberSchema,
   workoutLocation: optionalEnumSchema(WorkoutLocationSchema),
   equipmentAccess: commaSeparatedArraySchema(EquipmentOptionSchema),
   freeUserInput: z.preprocess((val) => (val === "" ? undefined : val), z.string().optional()),

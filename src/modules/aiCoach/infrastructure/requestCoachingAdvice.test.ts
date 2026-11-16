@@ -215,6 +215,11 @@ describe("requestCoachingAdvice", () => {
     const dto = buildCoachActionRequestDto(
       createBaseRequest({
         mode: "execution",
+        userProfile: {
+          workoutDaysPerWeek: 3,
+          workoutDurationMinutes: 45,
+          fitnessGoal: ["build_muscle"],
+        },
         insights,
         exerciseLogs: logs,
         activePlan: plan,
@@ -250,6 +255,7 @@ describe("requestCoachingAdvice", () => {
     );
 
     const parsed = coachActionRequestDtoSchema.parse(dto);
+    expect(parsed.userProfile.workoutDurationMinutes).toBe(45);
     expect(parsed.insights.e1rm["Bench Press"]?.primaryMuscle).toBe("Chest");
     expect(parsed.insights.e1rm["Bench Press"]?.progressionIncrementKg).toBe(2.5);
     expect(parsed.previousMessages[0]?.content).toBe("Can I press heavier today?");

@@ -3,8 +3,12 @@ import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { err, ok, okAsync, Result, ResultAsync } from "neverthrow";
 import { isAuthError } from "@/modules/platform/infrastructure";
 import type { UserProfileRepository } from "@/modules/profile/application";
+import {
+  parsePositiveOptionalNumber,
+  type UserProfile,
+  UserProfileSchema,
+} from "@/modules/profile/domain";
 import { parseData } from "@/modules/sharedKernel/domain";
-import { type UserProfile, UserProfileSchema } from "../domain/types";
 
 const SHEET_NAME = "UserProfile";
 const USER_PROFILE_HEADERS = [
@@ -14,6 +18,7 @@ const USER_PROFILE_HEADERS = [
   "fitnessGoal",
   "fitnessLevel",
   "workoutDaysPerWeek",
+  "workoutDurationMinutes",
   "workoutLocation",
   "equipmentAccess",
   "freeUserInput",
@@ -49,6 +54,8 @@ function serializeForSheet(profile: UserProfile): Record<string, string> {
     fitnessGoal: (profile.fitnessGoal ?? []).join(","),
     fitnessLevel: profile.fitnessLevel ?? "",
     workoutDaysPerWeek: profile.workoutDaysPerWeek?.toString() ?? "",
+    workoutDurationMinutes:
+      parsePositiveOptionalNumber(profile.workoutDurationMinutes)?.toString() ?? "",
     workoutLocation: profile.workoutLocation ?? "",
     equipmentAccess: (profile.equipmentAccess ?? []).join(","),
     freeUserInput: profile.freeUserInput ?? "",

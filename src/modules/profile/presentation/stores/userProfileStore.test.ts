@@ -1,5 +1,5 @@
 import type { GoogleSpreadsheet } from "google-spreadsheet";
-import { err, ok } from "neverthrow";
+import { err, ok, okAsync } from "neverthrow";
 import { createPinia, type Pinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick, ref } from "vue";
@@ -86,6 +86,7 @@ describe("useUserProfileStore", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     (pinia as unknown as { _e?: { stop?: () => void } })._e?.stop?.();
   });
 
@@ -130,6 +131,57 @@ describe("useUserProfileStore", () => {
     const store = useUserProfileStore();
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(store.hasCompletedSetup).toBe(false);
+  });
+
+  it("auto-detects setup completion when only workoutDurationMinutes is present", async () => {
+    vi.mocked(migrateFromLocalStorage).mockResolvedValue(ok("no-data"));
+    vi.mocked(loadUserProfile).mockResolvedValue(ok({ workoutDurationMinutes: 45 }));
+
+    const store = useUserProfileStore();
+    await vi.waitFor(() => expect(store.isLoading).toBe(false));
+    expect(store.hasCompletedSetup).toBe(true);
+  });
+
+  it("does not treat non-positive workoutDurationMinutes as completed profile data", async () => {
+    vi.mocked(migrateFromLocalStorage).mockResolvedValue(ok("no-data"));
+    vi.mocked(loadUserProfile).mockResolvedValue(ok({ workoutDurationMinutes: 0 }));
+
+    const store = useUserProfileStore();
+    await vi.waitFor(() => expect(store.isLoading).toBe(false));
+    expect(store.hasCompletedSetup).toBe(false);
+  });
+
+  it("persists onboarding workoutDurationMinutes edits and restores them on reload", async () => {
+    vi.useFakeTimers();
+    let persistedProfile: UserProfile | null = null;
+    vi.mocked(migrateFromLocalStorage).mockResolvedValue(ok("no-data"));
+    vi.mocked(loadUserProfile).mockImplementation(() =>
+      okAsync(persistedProfile ? { ...persistedProfile } : null),
+    );
+    vi.mocked(saveUserProfile).mockImplementation((profile: UserProfile) => {
+      persistedProfile = { ...profile };
+      return okAsync(undefined);
+    });
+
+    const store = useUserProfileStore();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(store.isLoading).toBe(false);
+
+    store.userProfile.workoutDurationMinutes = 60;
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(saveUserProfile).toHaveBeenCalledTimes(1);
+    expect(persistedProfile).toMatchObject({ workoutDurationMinutes: 60 });
+
+    // Simulate app reload with a fresh Pinia instance
+    (pinia as unknown as { _e?: { stop?: () => void } })._e?.stop?.();
+    pinia = createPinia();
+    setActivePinia(pinia);
+
+    const reloadedStore = useUserProfileStore();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(reloadedStore.isLoading).toBe(false);
+    expect(reloadedStore.userProfile.workoutDurationMinutes).toBe(60);
+    expect(reloadedStore.hasCompletedSetup).toBe(true);
   });
 
   it("retries load once after auth recovery on auth-failed", async () => {

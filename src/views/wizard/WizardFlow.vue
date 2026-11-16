@@ -67,11 +67,11 @@ const equipmentOptionLabels: [string, EquipmentOption][] = [
   ["Medicine ball", "medicine_ball"],
 ];
 
-const workoutDaysString = computed({
+const workoutDaysString = computed<string | undefined>({
   get: () =>
     userProfile.value.workoutDaysPerWeek ? String(userProfile.value.workoutDaysPerWeek) : "",
-  set: (val: string) => {
-    userProfile.value.workoutDaysPerWeek = val === "" ? undefined : Number(val);
+  set: (val: string | undefined) => {
+    userProfile.value.workoutDaysPerWeek = !val ? undefined : Number(val);
   },
 });
 
@@ -82,13 +82,13 @@ const workoutDurationLabels: [string, number][] = [
   ["90 min", 90],
 ];
 
-const workoutDurationString = computed({
+const workoutDurationString = computed<string | undefined>({
   get: () =>
     userProfile.value.workoutDurationMinutes
       ? String(userProfile.value.workoutDurationMinutes)
       : "",
-  set: (val: string) => {
-    userProfile.value.workoutDurationMinutes = val === "" ? undefined : Number(val);
+  set: (val: string | undefined) => {
+    userProfile.value.workoutDurationMinutes = !val ? undefined : Number(val);
   },
 });
 

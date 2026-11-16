@@ -8,12 +8,13 @@ import {
   migrateFromLocalStorage,
   saveUserProfile,
 } from "@/modules/profile/application";
-import type {
-  EquipmentOption,
-  FitnessGoal,
-  FitnessLevel,
-  UserProfile,
-  WorkoutLocation,
+import {
+  type EquipmentOption,
+  type FitnessGoal,
+  type FitnessLevel,
+  parsePositiveOptionalNumber,
+  type UserProfile,
+  type WorkoutLocation,
 } from "@/modules/profile/domain";
 import { createUserProfileRepository, purgeLegacyApiKeys } from "@/modules/profile/infrastructure";
 
@@ -41,6 +42,7 @@ export const useUserProfileStore = defineStore("userProfile", () => {
       profile.weightKg ||
       profile.fitnessLevel ||
       profile.workoutDaysPerWeek ||
+      parsePositiveOptionalNumber(profile.workoutDurationMinutes) ||
       profile.workoutLocation ||
       profile.equipmentAccess?.length ||
       profile.freeUserInput
