@@ -42,21 +42,21 @@ function upcastLegacyExercise<
   const lower = ex.targetReps.toLowerCase().trim();
   if (/m$/.test(lower) && !lower.includes("min") && !lower.includes("time")) {
     const distance = parseFirstRep(ex.targetReps);
-    if (distance !== undefined) {
+    if (distance !== undefined && distance > 0) {
       return { ...ex, targetDistanceMeters: distance, targetReps: undefined };
     }
   }
 
   if (isDuration(ex.targetReps)) {
     const parsed = parseFirstRep(ex.targetReps);
-    if (parsed !== undefined) {
+    if (parsed !== undefined && parsed > 0) {
       const unit = splitReps(ex.targetReps).unit.toLowerCase();
-      const durationSeconds = unit.includes("hr")
-        ? parsed * 3600
-        : unit.includes("min")
-          ? parsed * 60
-          : parsed;
-      return { ...ex, targetDurationSeconds: durationSeconds, targetReps: undefined };
+      const durationSeconds = Math.round(
+        unit.includes("hr") ? parsed * 3600 : unit.includes("min") ? parsed * 60 : parsed,
+      );
+      if (durationSeconds > 0) {
+        return { ...ex, targetDurationSeconds: durationSeconds, targetReps: undefined };
+      }
     }
   }
 
@@ -223,10 +223,12 @@ export function postProcessCoachingAdvice(
   }
 
   if (cleaned.trainingPlan?.sessions) {
-    cleaned.trainingPlan.sessions = cleaned.trainingPlan.sessions.map((session) => ({
-      ...session,
-      exercises: session.exercises.map((ex) => normalizeExerciseParameters(ex, deloadStatus)),
-    }));
+    cleaned.trainingPlan.sessions = normalizePlanSessions(cleaned.trainingPlan.sessions).map(
+      (session) => ({
+        ...session,
+        exercises: session.exercises.map((ex) => normalizeExerciseParameters(ex, deloadStatus)),
+      }),
+    );
 
     if (phase === "planning" && cleaned.recommendedWorkout === undefined) {
       cleaned.recommendedWorkout = backfillRecommendedWorkout(

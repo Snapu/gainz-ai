@@ -1,5 +1,9 @@
 import { watch } from "vue";
-import { useCoachChatStore, useTrainingPlanStore } from "@/modules/aiCoach/presentation";
+import {
+  useAiOrchestratorStore,
+  useCoachChatStore,
+  useTrainingPlanStore,
+} from "@/modules/aiCoach/presentation";
 import { useEventsStore } from "@/modules/events/presentation";
 import { useExerciseMuscleMapStore, useSpreadsheetStore } from "@/modules/platform/presentation";
 import { useUserProfileStore } from "@/modules/profile/presentation";
@@ -11,6 +15,7 @@ function clearDerivedSheetCaches(): void {
   trainingPlanStore.clearPlan();
   trainingPlanStore.clearCompletedSessions();
   useCoachChatStore().resetAllSessions();
+  useAiOrchestratorStore().clearPendingRequest();
   useEventsStore().clearEvents();
   useExerciseMuscleMapStore().clearMap();
   useUserProfileStore().hasCompletedSetup = false;

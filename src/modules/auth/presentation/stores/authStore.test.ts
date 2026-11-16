@@ -1,4 +1,4 @@
-import { errAsync, okAsync } from "neverthrow";
+import { errAsync, ok, okAsync, type Result, ResultAsync } from "neverthrow";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as authInfra from "@/modules/auth/infrastructure";
@@ -315,6 +315,51 @@ describe("useAuthStore", () => {
           idToken: null,
         }),
       );
+    });
+
+    it("ignores stale refreshSession resolution if logout occurs while refreshAccessToken is in flight", async () => {
+      let markEntered!: () => void;
+      const entered = new Promise<void>((resolve) => {
+        markEntered = resolve;
+      });
+      type RefreshResult = Result<
+        { access_token: string; expires_in: number },
+        "token-refresh-failed"
+      >;
+      let resolveRefresh!: (res: RefreshResult) => void;
+      vi.spyOn(authInfra, "createGoogleAccessTokenService").mockReturnValue({
+        requestAuthCode: vi.fn(),
+        exchangeAuthorizationCode: vi.fn(),
+        refreshAccessToken: vi.fn(
+          () =>
+            new ResultAsync(
+              new Promise<RefreshResult>((resolve) => {
+                resolveRefresh = resolve;
+                markEntered();
+              }),
+            ),
+        ),
+      });
+      const saveSpy = vi.spyOn(authInfra, "saveAuthTokens");
+
+      const store = useAuthStore();
+      store.accessToken = "old-token";
+      store.refreshToken = "old-refresh";
+      store.expiresAt = Date.now() - 1000;
+
+      const refreshPromise = store.refreshSession(true);
+      await entered;
+      store.logout();
+      saveSpy.mockClear();
+
+      resolveRefresh(ok({ access_token: "stale-refreshed-token", expires_in: 3600 }));
+      const result = await refreshPromise;
+
+      expect(result.isErr()).toBe(true);
+      expect(store.accessToken).toBeNull();
+      expect(store.refreshToken).toBeNull();
+      expect(store.isLoggedIn).toBe(false);
+      expect(saveSpy).not.toHaveBeenCalled();
     });
   });
 });

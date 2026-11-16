@@ -1,20 +1,18 @@
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 
-export const COACHING_MODELS = [
-  "gemini-3.8-flash",
-  "gemini-2.5-flash",
-  "gemini-3.5-flash-lite",
-] as const;
+export const COACHING_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash-lite"] as const;
 
-export const CLASSIFICATION_MODELS = ["gemini-2.5-flash", "gemini-3.5-flash-lite"] as const;
+export const CLASSIFICATION_MODELS = ["gemini-3.5-flash-lite", "gemini-3.8-flash"] as const;
 
 export interface GeminiContent {
   role: "user" | "model";
   parts: Array<{ text: string }>;
 }
 
+export type GeminiThinkingLevel = "minimal" | "low" | "medium" | "high";
+
 export interface GeminiThinkingConfig {
-  thinkingBudget: number;
+  level: GeminiThinkingLevel;
   includeThoughts: boolean;
 }
 
@@ -106,14 +104,55 @@ function computeAttemptTimeoutMs(
   return Math.max(3000, Math.floor(remainingBudgetMs / remainingModels));
 }
 
-export function buildGeminiRequestBody(options: {
-  contents: GeminiContent[];
-  systemInstruction?: string;
-  responseJsonSchema: Record<string, unknown>;
-  temperature: number;
-  topP?: number;
-  thinkingConfig?: GeminiThinkingConfig;
-}): Record<string, unknown> {
+const LEGACY_THINKING_BUDGETS: Record<GeminiThinkingLevel, number> = {
+  minimal: 0,
+  low: 256,
+  medium: 1024,
+  high: 4096,
+};
+
+function resolveModelThinkingConfig(
+  model: string,
+  thinking: GeminiThinkingConfig,
+): Record<string, unknown> {
+  if (model.startsWith("gemini-2.5")) {
+    return {
+      thinkingBudget: LEGACY_THINKING_BUDGETS[thinking.level],
+      includeThoughts: thinking.includeThoughts,
+    };
+  }
+  const supportedLevel =
+    thinking.level === "minimal" && !model.includes("lite") ? "low" : thinking.level;
+  return {
+    thinkingLevel: supportedLevel.toUpperCase(),
+    includeThoughts: thinking.includeThoughts,
+  };
+}
+
+function extractSafeUpstreamErrorCode(rawBody: string): string {
+  try {
+    const parsed = JSON.parse(rawBody) as { error?: { status?: unknown } };
+    const status = parsed?.error?.status;
+    if (typeof status === "string" && /^[A-Z0-9_]{1,40}$/.test(status)) {
+      return status;
+    }
+  } catch {
+    // Non-JSON upstream error body; omit body details to avoid leaking sensitive context
+  }
+  return "";
+}
+
+export function buildGeminiRequestBody(
+  options: {
+    contents: GeminiContent[];
+    systemInstruction?: string;
+    responseJsonSchema: Record<string, unknown>;
+    temperature: number;
+    topP?: number;
+    thinkingConfig?: GeminiThinkingConfig;
+  },
+  model = "gemini-3.8-flash",
+): Record<string, unknown> {
   const generationConfig: Record<string, unknown> = {
     responseMimeType: "application/json",
     responseJsonSchema: options.responseJsonSchema,
@@ -123,7 +162,7 @@ export function buildGeminiRequestBody(options: {
     generationConfig.topP = options.topP;
   }
   if (options.thinkingConfig) {
-    generationConfig.thinkingConfig = options.thinkingConfig;
+    generationConfig.thinkingConfig = resolveModelThinkingConfig(model, options.thinkingConfig);
   }
 
   const requestBody: Record<string, unknown> = {
@@ -175,7 +214,12 @@ async function fetchGeminiResponse(
   });
 
   if (!res.ok) {
-    await res.text().catch(() => "");
+    const errorBody = await res.text().catch(() => "");
+    const safeCode = extractSafeUpstreamErrorCode(errorBody);
+    const modelTag = /\/models\/([^/:]+)/.exec(url)?.[1] ?? "unknown";
+    console.warn(
+      `[gemini] model=${modelTag} status=${res.status}${safeCode ? ` code=${safeCode}` : ""}`,
+    );
     if (isRetryableStatus(res.status)) {
       throw new RetryableModelError(`upstream-http-${res.status}`);
     }
@@ -318,9 +362,11 @@ async function streamSingleGeminiModel<T>(
       if (!text) return;
 
       accumulatedText += text;
+      if (accumulatedText.trim().length > 0) {
+        timer.extendToDeadline();
+      }
       if (onAccumulatedText?.(accumulatedText) === true) {
         markCommitted();
-        timer.extendToDeadline();
       }
     };
 
@@ -377,10 +423,9 @@ async function streamSingleGeminiModel<T>(
 
 function isRetryableFailure(err: unknown): boolean {
   if (err instanceof RetryableModelError) return true;
-  return (
-    err instanceof Error &&
-    (err.name === "AbortError" || err.name === "TimeoutError" || err.name === "TypeError")
-  );
+  if (!err || typeof err !== "object" || !("name" in err)) return false;
+  const name = (err as { name: unknown }).name;
+  return name === "AbortError" || name === "TimeoutError" || name === "TypeError";
 }
 
 export interface GenerateWithFallbackOptions<T> {
@@ -413,7 +458,6 @@ async function runModelsWithFallback<T>(
 ): Promise<{ data: T; model: string }> {
   const { models, timeoutMs } = options;
   const deadlineMs = Date.now() + timeoutMs;
-  const requestBody = buildGeminiRequestBody(options);
   let lastError: unknown;
 
   for (let i = 0; i < models.length; i++) {
@@ -423,6 +467,7 @@ async function runModelsWithFallback<T>(
     const attemptTimeoutMs = computeAttemptTimeoutMs(deadlineMs, timeoutMs, i, models.length - i);
     if (attemptTimeoutMs <= 0) break;
 
+    const requestBody = buildGeminiRequestBody(options, model);
     let committed = false;
     try {
       const data = await executeAttempt(model, requestBody, attemptTimeoutMs, deadlineMs, () => {

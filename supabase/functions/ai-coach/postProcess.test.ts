@@ -239,5 +239,24 @@ describe("postProcessCoachingAdvice", () => {
     };
     const capped = postProcessCoachingAdvice(eightSessionWeekAdvice, "planning", "none");
     expect(capped.recommendedWorkout?.[0]?.exerciseName).toBe("Exercise 1");
+    expect(capped.trainingPlan?.sessions).toHaveLength(7);
+    expect(new Set(capped.trainingPlan?.sessions.map((s) => s.dayOfWeek)).size).toBe(7);
+
+    const collidingRestored = postProcessCoachingAdvice(collidingPlanAdvice, "planning", "none");
+    expect(collidingRestored.trainingPlan?.sessions.map((s) => s.dayOfWeek)).toEqual([1, 2]);
+  });
+
+  it("does not coerce zero duration or zero distance strings into invalid zero targets", () => {
+    const zeroAdvice: CoachingAdvice = {
+      coachMessage: "Keep moving",
+      recommendedWorkout: [
+        { exerciseName: "Rowing", targetSets: 1, targetReps: "0m" },
+        { exerciseName: "Plank", targetSets: 3, targetReps: "0 secs" },
+      ],
+    };
+
+    const result = postProcessCoachingAdvice(zeroAdvice, "planning", "none");
+    expect(result.recommendedWorkout?.[0]?.targetDistanceMeters).toBeUndefined();
+    expect(result.recommendedWorkout?.[1]?.targetDurationSeconds).toBeUndefined();
   });
 });

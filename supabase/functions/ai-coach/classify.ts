@@ -5,6 +5,7 @@ import {
 } from "../_shared/gemini.ts";
 import { jsonResponse } from "../_shared/http.ts";
 import { formatQuotaPayload, type QuotaRow } from "../_shared/quota.ts";
+import { sanitizePromptText } from "./prompt.ts";
 import {
   type ClassifyActionRequestDto,
   createExerciseCleanupJsonSchema,
@@ -16,13 +17,16 @@ export function buildClassifyPrompt(
   exerciseNames: readonly string[],
   muscleGroupsList: readonly string[],
 ): string {
-  const muscleGroupsPromptList = muscleGroupsList.join(", ");
+  const muscleGroupsPromptList = muscleGroupsList
+    .map((m) => sanitizePromptText(m).slice(0, 60))
+    .filter(Boolean)
+    .join(", ");
   return `You are a fitness data expert. For each exercise name in the list below, classify it:
 
 Assign the primary muscle group and any significant secondary muscles. Use only: ${muscleGroupsPromptList}.
 
 Exercise names to process:
-${exerciseNames.map((n, i) => `${i + 1}. ${n}`).join("\n")}
+${exerciseNames.map((n, i) => `${i + 1}. ${sanitizePromptText(n).slice(0, 120)}`).join("\n")}
 
 Important rules:
 - Classify ALL exercises in the list, including locale variants (e.g. "Bankdrücken", "RDL") — assign their muscles directly, do not redirect to a canonical name.
@@ -46,6 +50,7 @@ export async function executeClassifyAction(
     contents: [{ role: "user", parts: [{ text: classifyPrompt }] }],
     responseJsonSchema: createExerciseCleanupJsonSchema(dto.muscleGroups),
     temperature: 0.1,
+    thinkingConfig: { level: "minimal", includeThoughts: false },
     timeoutMs: 30_000,
     parseResponse: parseClassifyResponse,
   });

@@ -57,24 +57,26 @@ sequenceDiagram
 
     Note over Athlete, Client: 2. Authenticated AI Coaching Request
     Athlete->>Client: Requests Coaching / Mesocycle Advice
-    Client->>AiCoach: POST /functions/v1/ai-coach (Bearer <id_token>, CoachActionRequestDto)
-    AiCoach->>GoogleAuth: Verify ID Token (JWKS, Issuer, Audience, Expiry)
+    Client->>AiCoach: POST /functions/v1/ai-coach (Bearer <google_token>, CoachActionRequestDto)
+    AiCoach->>GoogleAuth: Verify Token (ID Token via JWKS or Access Token via tokeninfo)
     GoogleAuth-->>AiCoach: Valid Claims (sub = user_id)
     AiCoach->>AiCoach: Validate <=100KB body & Zod DTO, sanitize text, assemble prompt
+    AiCoach->>Postgres: Claim idempotency lock in ai_request_results (clientRequestId)
     AiCoach->>Postgres: RPC consume_ai_quota(user_id, kind='coach', daily_limit=15)
     alt Quota Exceeded
         Postgres-->>AiCoach: Quota error (HTTP 429)
         AiCoach-->>Client: 429 Too Many Requests (reset timestamp)
     else Quota Available
         Postgres-->>AiCoach: OK (current_usage, remaining)
-        AiCoach->>Gemini: GenerateContent (GEMINI_API_KEY, Server System Prompt, thinkingConfig, Contents)
+        AiCoach->>Gemini: StreamGenerateContent?alt=sse (EdgeRuntime.waitUntil, thinkingLevel)
         alt Gemini Error / Invalid Schema across Fallbacks
             Gemini-->>AiCoach: Error
-            AiCoach->>Postgres: RPC refund_ai_quota(user_id, kind='coach', usage_date)
-            AiCoach-->>Client: 502 Error (Quota refunded)
+            AiCoach->>Postgres: RPC refund_ai_quota & mark ai_request_results failed
+            AiCoach-->>Client: SSE event: error (Quota refunded) / 502 on recover
         else Gemini Success & Zod ACL Valid
-            Gemini-->>AiCoach: Structured JSON -> Server Post-Processing
-            AiCoach-->>Client: { advice, quota } (zero prompt disclosure)
+            Gemini-->>AiCoach: SSE preview chunks -> Structured JSON -> Server Post-Processing
+            AiCoach->>Postgres: Persist completed { advice, quota } (TTL 30m, delete-on-recovery)
+            AiCoach-->>Client: SSE event: complete { advice, quota } (zero prompt disclosure)
         end
     end
 ```
@@ -104,12 +106,13 @@ To prevent denial-of-wallet and quota exhaustion:
 
 ### 4.4. Backend IP Protection, Input Hardening & GDPR Art. 9 Controls
 - **Closed Structured DTO & Server-Side Prompt Assembly**: Clients send structured training metrics (`CoachActionRequestDto`) rather than free-form `contents` arrays. System instructions, prompt assembly (`prompt.ts`), response Zod ACLs (`schemas.ts`), and clinical post-processing (`postProcess.ts`) run exclusively inside the `ai-coach` Edge Function. Prompt payloads (`requestPayload`) are never returned by the server, and the client's `"Debug Data"` inspector is gated strictly behind `import.meta.env.DEV`.
-- **Modular Edge Architecture**: Shared HTTP/size limits (`_shared/http.ts`), OIDC/token verification (`_shared/auth.ts`), quota RPC helpers (`_shared/quota.ts`), and Gemini fallback + Zod validation (`_shared/gemini.ts`) are cleanly isolated from domain logic and verified via `src/modules/architecture.boundaries.test.ts`.
+- **Modular Edge Architecture**: Shared HTTP/size limits (`_shared/http.ts`), OIDC/token verification (`_shared/auth.ts`), quota RPC helpers (`_shared/quota.ts`), Gemini streaming/fallback + Zod validation (`_shared/gemini.ts`), exercise classification (`ai-coach/classify.ts`), and idempotency/recovery storage (`ai-coach/requestResults.ts`) are cleanly isolated from domain logic and verified via `src/modules/architecture.boundaries.test.ts`.
 - **Body Size & Length Bounds**: Inbound JSON bodies are capped at `100 KB` (`413 payload-too-large`). Zod bounds enforce `recentLogs <= 500`, `previousMessages <= 40`, `events <= 50`, `question <= 2000`, `freeUserInput <= 2000`. Conversation history strips `trainingPlan` and `scratchpad` payloads before serialization.
 - **Prompt Injection Sanitization**: User-controlled text fields (`question`, `freeUserInput`, custom event types, and history turns) strip leading markdown section headers (`# ...`) and protocol control tokens (`[NEXT_SESSION]`, `[DONE]`) before server-side prompt assembly.
-- **GDPR Art. 9 Zero-PII Logging**: Edge Functions never log user health telemetry, workout logs, athlete free-text notes, raw prompts, or upstream model outputs (`console.*` logs are restricted to error class names and action types), and never forward emails, display names, or OAuth tokens to Gemini.
-- **Cost & Latency Controls**: Execution requests apply `thinkingConfig: { thinkingBudget: 256, includeThoughts: false }` (and omit `trainingPlan` schema unless `shouldAllowPlanUpdate` detects explicit plan modification intent); planning requests apply `thinkingBudget: 1024, includeThoughts: false`. Background exercise classification runs non-blocking so coaching responses never stall.
-- **Response Completeness & Schema Verification**: `generateWithFallback` validates incomplete `finishReason` values (`!== "STOP"`), strips markdown fences, parses JSON, and runs Zod ACL validation (`parseCoachingAdviceResponse`) **inside** each model attempt so schema violations automatically trigger fallback models before refunding quota (`502`).
+- **GDPR Art. 9 Zero-PII Logging**: Edge Functions never log user health telemetry, workout logs, athlete free-text notes, raw prompts, or upstream model outputs (`console.*` logs are restricted to error class names, action types, and non-PII upstream status codes such as `[gemini] model=<m> status=<s>`), and never forward emails, display names, or OAuth tokens to Gemini.
+- **Cost & Latency Controls**: Execution requests apply `thinkingConfig: { level: "low", includeThoughts: false }` (`thinkingLevel: "LOW"`, omitting `trainingPlan` schema unless `shouldAllowPlanUpdate` detects explicit plan modification intent); planning requests apply `{ level: "medium", includeThoughts: false }` (`thinkingLevel: "MEDIUM"`); exercise classification uses `{ level: "minimal", includeThoughts: false }`. Background exercise classification runs non-blocking so coaching responses never stall.
+- **Response Completeness & Schema Verification**: `streamWithFallback` (`coach` SSE streaming via `EdgeRuntime.waitUntil(...)`) and `generateWithFallback` (`classify`) validate incomplete `finishReason` values (`!== "STOP"`), strip markdown fences, parse JSON, and enforce Zod ACLs (`parseCoachingAdviceResponse` / `parseClassifyResponse`) **inside** each model attempt. Pre-commit model errors automatically fall back before refunding quota (`refund_ai_quota`).
+- **Idempotency & Interrupt Recovery (`ai_request_results`)**: When a valid UUID v4 `clientRequestId` is sent, an atomic lock prevents parallel Gemini billing on retries, decouples upstream completion from mobile background/socket disconnects via `EdgeRuntime.waitUntil(...)`, and serves single-use `DELETE ... RETURNING` recovery via `action: "recover"`.
 
 ### 4.5. Content Security Policy (CSP), Framing & Defense-in-Depth
 - **CSP & Framing Headers (`index.html` & `public/_headers`)**:
@@ -118,9 +121,10 @@ To prevent denial-of-wallet and quota exhaustion:
   - `script-src`: Restricts script execution to `'self'`, `'unsafe-inline'`, `data:` (needed for Vite's inline legacy/module detection scripts), Google Identity Services (`https://accounts.google.com`), and Google API/Picker bundles (`https://apis.google.com`, `https://*.gstatic.com`). `'unsafe-eval'` is omitted.
   - `frame-src`: Restricted to `'self'`, `https://accounts.google.com` for Google authentication iframes, and Google Picker (`https://docs.google.com`, `https://drive.google.com`, `https://apis.google.com`).
 - **Database Row-Level Security (RLS)**:
-  - Table `public.ai_daily_usage` has RLS enabled.
-  - Direct public client access is completely blocked (`FOR ALL TO service_role USING (true)`).
-  - Quota functions run with `SECURITY INVOKER`, an empty search path (`SET search_path = ''`) to eliminate search-path hijacking, and execution permissions granted exclusively to `service_role` (revoked from `public`, `anon`, and `authenticated`).
+  - Tables `public.ai_daily_usage` and `public.ai_request_results` have RLS enabled.
+  - Direct public client access is completely blocked (`FOR ALL TO service_role USING (true)`, revoked from `public`, `anon`, and `authenticated`).
+  - `public.ai_request_results` stores zero athlete input DTOs—only idempotency status, error code, and completed `{ advice, quota }` payloads bounded by Delete-on-Recovery and a 30-minute TTL.
+  - Quota and recovery helper functions run with `SECURITY INVOKER` / strict `service_role` grants and an empty search path (`SET search_path = ''`) to eliminate search-path hijacking.
 - **Rate-Limiting Defense In Depth**: `auth-token` enforces per-isolate token exchange rate-limiting (30 req/min per IP) as a baseline defense against local flooding, which can be backed by centralized Redis/PostgreSQL if targeted distributed abuse arises.
 - **Telemetry Sanitization**: Sentry `beforeSend` in `src/main.ts` drops `user` PII, strips sensitive request headers (`authorization`, `cookie`, `x-api-key`), and redacts `access_token` / `id_token` / `code` query parameters before events leave the client.
 
@@ -148,5 +152,5 @@ To prevent denial-of-wallet and quota exhaustion:
 - [RFC 6749: The OAuth 2.0 Authorization Framework](https://datatracker.ietf.org/doc/html/rfc6749)
 - [RFC 7519: JSON Web Token (JWT) & OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html)
 - Related Architecture Boundary Tests: `src/modules/architecture.boundaries.test.ts`
-- Edge Function Implementations: `supabase/functions/ai-coach/index.ts`, `supabase/functions/auth-token/index.ts`
-- Database Migrations: `supabase/migrations/20261111165942_create_ai_daily_usage_and_quota_rpc.sql`, `supabase/migrations/20261111170047_add_service_role_policy_on_ai_daily_usage.sql`, `supabase/migrations/20261111191000_create_refund_ai_quota_rpc.sql`, `supabase/migrations/20261111221000_add_retention_prune_to_consume_quota.sql`, `supabase/migrations/20261112070000_add_usage_date_index_and_global_cap.sql`, `supabase/migrations/20261113171000_add_refund_usage_date_and_global_cap_flag.sql`
+- Edge Function Implementations: `supabase/functions/ai-coach/index.ts`, `supabase/functions/ai-coach/classify.ts`, `supabase/functions/ai-coach/requestResults.ts`, `supabase/functions/auth-token/index.ts`
+- Database Migrations: `supabase/migrations/20261111165942_create_ai_daily_usage_and_quota_rpc.sql`, `supabase/migrations/20261111170047_add_service_role_policy_on_ai_daily_usage.sql`, `supabase/migrations/20261111191000_create_refund_ai_quota_rpc.sql`, `supabase/migrations/20261111221000_add_retention_prune_to_consume_quota.sql`, `supabase/migrations/20261112070000_add_usage_date_index_and_global_cap.sql`, `supabase/migrations/20261113171000_add_refund_usage_date_and_global_cap_flag.sql`, `supabase/migrations/20261115183000_create_ai_request_results.sql`

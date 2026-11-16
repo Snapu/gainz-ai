@@ -380,4 +380,167 @@ describe("streamWithFallback", () => {
     expect(cancelSpy).toHaveBeenCalledTimes(1);
     expect((capturedBody as ReadableStream<Uint8Array> | null)?.locked).toBe(false);
   });
+
+  it("sends model-specific thinkingConfig (thinkingLevel on Gemini 3, thinkingBudget on Gemini 2.5)", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("rate limit", { status: 429 }))
+      .mockResolvedValueOnce(
+        new Response(
+          makeSseStream([
+            `data: ${makeChunkPayload([{ text: '{"coachMessage": "Recovered"}' }], "STOP")}\n\n`,
+          ]),
+          { status: 200 },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await streamWithFallback({
+      geminiApiKey: "test-key",
+      models: ["gemini-3.8-flash", "gemini-2.5-flash"],
+      contents: [{ role: "user", parts: [{ text: "Hi" }] }],
+      responseJsonSchema: { type: "object" },
+      temperature: 0.4,
+      timeoutMs: 10_000,
+      thinkingConfig: { level: "minimal", includeThoughts: false },
+      parseResponse: (json) => json,
+    });
+
+    const gemini3Body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      generationConfig: { thinkingConfig: Record<string, unknown> };
+    };
+    const gemini25Body = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)) as {
+      generationConfig: { thinkingConfig: Record<string, unknown> };
+    };
+
+    // gemini-3.8-flash clamps unsupported "minimal" to "LOW" and never sends thinkingBudget
+    expect(gemini3Body.generationConfig.thinkingConfig).toEqual({
+      thinkingLevel: "LOW",
+      includeThoughts: false,
+    });
+    // gemini-2.5-flash uses integer thinkingBudget and never sends thinkingLevel
+    expect(gemini25Body.generationConfig.thinkingConfig).toEqual({
+      thinkingBudget: 0,
+      includeThoughts: false,
+    });
+  });
+
+  it("extends timeout budget to deadlineMs on answer progress even when onAccumulatedText returns false, and still allows pre-commit fallback", async () => {
+    vi.useFakeTimers();
+    const encoder = new TextEncoder();
+    let firstAttemptSignal: AbortSignal | null | undefined;
+    let attemptCount = 0;
+
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      attemptCount++;
+      if (attemptCount === 1) {
+        firstAttemptSignal = init?.signal;
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            init?.signal?.addEventListener("abort", () => {
+              controller.error(new DOMException("Aborted", "AbortError"));
+            });
+            setTimeout(() => {
+              if (init?.signal?.aborted) return;
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${makeChunkPayload([{ text: '{"coachMessage": "Background' }])}\n\n`,
+                ),
+              );
+            }, 1_000);
+            // Fails past 55% (30.25s) cleanly after progress started -> triggers fallback before deadline
+            setTimeout(() => {
+              if (init?.signal?.aborted) return;
+              controller.close();
+            }, 35_000);
+          },
+        });
+        return new Response(body, { status: 200 });
+      }
+      return new Response(
+        makeSseStream([
+          `data: ${makeChunkPayload([{ text: '{"coachMessage": "Fallback ok"}' }], "STOP")}\n\n`,
+        ]),
+        { status: 200 },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const promise = streamWithFallback({
+      geminiApiKey: "test-key",
+      models: ["gemini-3.8-flash", "gemini-3.5-flash-lite"],
+      contents: [{ role: "user", parts: [{ text: "Hi" }] }],
+      responseJsonSchema: { type: "object" },
+      temperature: 0.4,
+      timeoutMs: 55_000,
+      // Simulates disconnected client where SSE emit returns false
+      onAccumulatedText: () => false,
+      parseResponse: (json) => json,
+    });
+
+    await vi.advanceTimersByTimeAsync(36_000);
+    const result = await promise;
+
+    expect(firstAttemptSignal?.aborted).toBe(false);
+    expect(attemptCount).toBe(2);
+    expect(result).toEqual({
+      data: { coachMessage: "Fallback ok" },
+      model: "gemini-3.5-flash-lite",
+    });
+  });
+
+  it("does not extend primary attempt timeout when stream emits only whitespace chunks", async () => {
+    vi.useFakeTimers();
+    let capturedSignal: AbortSignal | undefined;
+    const encoder = new TextEncoder();
+
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(async (_url: string, init?: RequestInit) => {
+        capturedSignal = init?.signal ?? undefined;
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            init?.signal?.addEventListener("abort", () => {
+              controller.error(new DOMException("Aborted", "AbortError"));
+            });
+            setTimeout(() => {
+              if (init?.signal?.aborted) return;
+              controller.enqueue(
+                encoder.encode(`data: ${makeChunkPayload([{ text: "   \n\t " }])}\n\n`),
+              );
+            }, 1_000);
+          },
+        });
+        return new Response(body, { status: 200 });
+      })
+      .mockResolvedValueOnce(
+        new Response(
+          makeSseStream([
+            `data: ${makeChunkPayload([{ text: '{"coachMessage": "Fallback ok"}' }], "STOP")}\n\n`,
+          ]),
+          { status: 200 },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const promise = streamWithFallback({
+      geminiApiKey: "test-key",
+      models: ["gemini-3.8-flash", "gemini-3.5-flash-lite"],
+      contents: [{ role: "user", parts: [{ text: "Hi" }] }],
+      responseJsonSchema: { type: "object" },
+      temperature: 0.4,
+      timeoutMs: 10_000,
+      parseResponse: (json) => json,
+    });
+
+    // Primary attempt phase is 55% of 10_000ms = 5_500ms.
+    // Whitespace-only chunks must not extend to 10_000ms deadline, so primary aborts at 5.5s & falls back.
+    await vi.advanceTimersByTimeAsync(6_000);
+    expect(capturedSignal?.aborted).toBe(true);
+    const result = await promise;
+    expect(result).toEqual({
+      data: { coachMessage: "Fallback ok" },
+      model: "gemini-3.5-flash-lite",
+    });
+  });
 });

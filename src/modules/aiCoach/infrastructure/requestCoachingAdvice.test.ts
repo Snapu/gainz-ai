@@ -544,4 +544,122 @@ describe("requestCoachingAdvice", () => {
     expect(capturedBody).not.toBeNull();
     expect((capturedBody as ReadableStream<Uint8Array> | null)?.locked).toBe(false);
   });
+
+  it("preserves isMetabolicProtocol on planned trainingPlan exercises through response parsing and DTO mapping", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        advice: {
+          coachMessage: "Circuit week ready!",
+          trainingPlan: {
+            cycleWeeks: 1,
+            sessions: [
+              {
+                dayOfWeek: 1,
+                weekNumber: 1,
+                sessionLabel: "Metabolic",
+                focusDescription: "Conditioning",
+                exercises: [
+                  {
+                    exerciseName: "Battle Ropes",
+                    targetSets: 4,
+                    targetDurationSeconds: 30,
+                    isMetabolicProtocol: true,
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      }),
+    });
+
+    const result = await requestCoachingAdvice(createBaseRequest({ mode: "planning" }));
+    expect(result.isOk()).toBe(true);
+    if (result.isOk() && result.value.advice.trainingPlan) {
+      expect(result.value.advice.trainingPlan.sessions[0]?.exercises[0]?.isMetabolicProtocol).toBe(
+        true,
+      );
+      const savedPlan = TrainingPlan.create(
+        "2026-11-15T10:00:00.000Z",
+        result.value.advice.trainingPlan.cycleWeeks,
+        result.value.advice.trainingPlan.sessions,
+      );
+      const roundTrippedDto = buildCoachActionRequestDto(
+        createBaseRequest({
+          mode: "execution",
+          activePlan: savedPlan,
+        }),
+      );
+      expect(roundTrippedDto.activePlan?.sessions[0]?.exercises[0]?.isMetabolicProtocol).toBe(true);
+    }
+  });
+
+  it("maps malformed or truncated JSON inside an SSE frame cleanly to coaching-request-failed instead of throwing SyntaxError", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const encoder = new TextEncoder();
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode('event: preview\ndata: {"text":"Valid"}\n\n'));
+          controller.enqueue(
+            encoder.encode('event: complete\ndata: {"advice":{"coachMessage":"Cut\n\n'),
+          );
+          controller.close();
+        },
+      });
+      fetchMock.mockResolvedValueOnce(
+        new Response(body, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        }),
+      );
+
+      const result = await requestCoachingAdvice(createBaseRequest());
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBe("coaching-request-failed");
+      }
+      expect(consoleErrorSpy).toHaveBeenCalled();
+      const loggedErr = consoleErrorSpy.mock.calls[0]?.[1];
+      expect(loggedErr).toBeInstanceOf(Error);
+      expect(loggedErr).not.toBeInstanceOf(SyntaxError);
+      expect((loggedErr as Error).message).toBe("coaching-stream-incomplete");
+      expect(body.locked).toBe(false);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it("maps primitive or null JSON SSE payloads cleanly to coaching-request-failed instead of TypeError", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const encoder = new TextEncoder();
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode("event: preview\ndata: null\n\n"));
+          controller.close();
+        },
+      });
+      fetchMock.mockResolvedValueOnce(
+        new Response(body, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        }),
+      );
+
+      const result = await requestCoachingAdvice(createBaseRequest());
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBe("coaching-request-failed");
+      }
+      const loggedErr = consoleErrorSpy.mock.calls[0]?.[1];
+      expect(loggedErr).toBeInstanceOf(Error);
+      expect(loggedErr).not.toBeInstanceOf(TypeError);
+      expect((loggedErr as Error).message).toBe("coaching-stream-incomplete");
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
 });

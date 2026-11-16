@@ -3,6 +3,7 @@ import type { CoachingMessage } from "../domain";
 
 const STORAGE_KEY = "ai-sessions-v1";
 const LEGACY_STORAGE_KEY_PREFIX = "ai-messages-";
+const PENDING_REQUEST_STORAGE_KEY = "ai-coach:pending-request";
 // Match plan cycle length so messages survive the full 2-week mesocycle.
 // Plan-scoped session IDs (plan-YYYY-MM-DD) need this to stay alive for 28 days.
 const MAX_SESSION_AGE_DAYS = 28;
@@ -69,6 +70,7 @@ export class LocalStorageMessageRepository {
 
   public clearAllSessions(): void {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(PENDING_REQUEST_STORAGE_KEY);
   }
 
   public cleanOldSessions(): void {

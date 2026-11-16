@@ -138,11 +138,16 @@ export const useAuthStore = defineStore("auth", () => {
         if (!currentRefreshToken) {
           return err("token-refresh-failed");
         }
+        const expectedGeneration = authGeneration;
 
         const result = await refreshAccessToken(
           createGoogleAccessTokenService(),
           currentRefreshToken,
         );
+
+        if (expectedGeneration !== authGeneration) {
+          return err("token-refresh-failed");
+        }
 
         if (result.isOk()) {
           applyTokenResponse(result.value);

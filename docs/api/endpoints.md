@@ -20,7 +20,7 @@ This document provides the authoritative technical reference for the Gainz AI ba
 | :--- | :--- | :--- |
 | `apikey` | **Yes** | Supabase anonymous public API key. |
 | `Content-Type` | **Yes** | Must be `application/json`. |
-| `Authorization` | Conditional | `Bearer <google_id_token>` (Mandatory for `/ai-coach`; not required for `/auth-token`). |
+| `Authorization` | Conditional | `Bearer <google_token>` — Google OIDC ID token (primary) or OAuth access token fallback (mandatory for `/ai-coach`; not required for `/auth-token`). |
 
 ---
 
@@ -133,10 +133,10 @@ curl -X POST "https://<PROJECT_REF>.supabase.co/functions/v1/auth-token" \
 ## 3. AI Coaching & Classification Endpoint: `/ai-coach`
 
 - **Endpoint Path**: `POST /functions/v1/ai-coach`
-- **Authentication**: **Mandatory** `Authorization: Bearer <google_id_token>`
+- **Authentication**: **Mandatory** `Authorization: Bearer <google_token>` (Google OIDC ID token via JWKS, or OAuth access token fallback via `tokeninfo`)
 - **Upstream Models**:
-  - Coaching: `gemini-3.8-flash` (Primary) → `gemini-2.5-flash` → `gemini-3.5-flash-lite`
-  - Classification: `gemini-2.5-flash` (Primary) → `gemini-3.5-flash-lite`
+  - Coaching: `gemini-3.8-flash` (Primary) → `gemini-3.5-flash-lite`
+  - Classification: `gemini-3.5-flash-lite` (Primary) → `gemini-3.8-flash`
 - **Daily Quotas**:
   - `coach`: Default 15 requests per UTC day (configured via `AI_DAILY_COACH_LIMIT`).
   - `classify`: Default 50 requests per UTC day (configured via `AI_DAILY_CLASSIFY_LIMIT`).
@@ -155,7 +155,7 @@ Generates customized mesocycle adjustments, exercise progression guidance, fatig
 POST /functions/v1/ai-coach HTTP/1.1
 Host: <PROJECT_REF>.supabase.co
 apikey: <SUPABASE_ANON_KEY>
-Authorization: Bearer <GOOGLE_ID_TOKEN>
+Authorization: Bearer <GOOGLE_TOKEN>
 Content-Type: application/json
 ```
 
@@ -221,23 +221,24 @@ Requests are validated with strict Zod schemas and capped at `100 KB` HTTP body 
 #### Constraints, Cost Guardrails & Timeouts
 
 - **Server-Side IP & Prompt Assembly**: Prompt templates, system instructions, Zod response validation, and clinical post-processing (`supabase/functions/ai-coach/prompt.ts`, `schemas.ts`, `postProcess.ts`) reside exclusively on the server.
-- **Closed Schema & Thinking Budgets**:
-  - `mode: "planning"`: `thinkingConfig: { thinkingBudget: 1024, includeThoughts: false }`, includes `trainingPlan` output schema.
-  - `mode: "execution"`: `thinkingConfig: { thinkingBudget: 256, includeThoughts: false }`; `trainingPlan` output schema is only enabled if the athlete's `question` explicitly requests a schedule/split/plan update (`shouldAllowPlanUpdate`).
+- **Closed Schema & Thinking Levels**:
+  - `mode: "planning"`: `thinkingConfig: { level: "medium", includeThoughts: false }` (`thinkingLevel: "MEDIUM"` on Gemini 3), includes `trainingPlan` output schema.
+  - `mode: "execution"`: `thinkingConfig: { level: "low", includeThoughts: false }` (`thinkingLevel: "LOW"` on Gemini 3); `trainingPlan` output schema is only enabled if the athlete's `question` explicitly requests a schedule/split/plan update (`shouldAllowPlanUpdate`).
+  - `action: "classify"`: `thinkingConfig: { level: "minimal", includeThoughts: false }` (`thinkingLevel: "MINIMAL"` on Gemini 3 lite / `"LOW"` fallback).
 - **Idempotency & Lock Recovery (`clientRequestId`)**: When a valid UUID v4 `clientRequestId` is provided on `action: "coach"`, the Edge Function claims an atomic lock in `public.ai_request_results` before consuming quota:
-  - Duplicate request while the original execution is still running returns `202 Accepted` (`{ "status": "processing" }`) without double-charging quota.
-  - Duplicate request after completion returns `200 OK` with the cached `{ advice, quota }` payload without re-running Gemini or double-charging quota.
+  - Duplicate `action: "coach"` request while the original execution is still running returns `202 Accepted` (`{ "status": "processing" }`) without double-charging quota (or `200 OK` JSON `{ advice, quota }` if already completed, or `502 Bad Gateway` if already failed).
+  - For interrupted mobile runs, the client calls `action: "recover"`, which uses atomic `DELETE ... RETURNING` on terminal `completed` / `failed` rows (single-use recovery; subsequent `recover` calls return `404`).
 - **Response Validation & Fallback**: For `coach`, structured JSON outputs are validated with `parseCoachingAdviceResponse` inside `streamWithFallback` (while `classify` validates via `generateWithFallback`). On `coach`, malformed model JSON or upstream stream errors automatically fall back across configured Gemini models until the first non-whitespace `preview` chunk commits; post-commit or all-model failures invoke `refund_ai_quota`, mark the idempotency row `failed`, and emit an SSE `event: error` payload.
 - **Timeouts**:
-  - Server: `55,000ms` (Planning / Initial Coaching), `40,000ms` (Coaching Follow-ups), `30,000ms` (Classify).
-  - Client: `65,000ms` (planning / initial evaluation), `48,000ms` (follow-ups), `35,000ms` (Classify).
+  - Server: `55,000ms` (`mode === "planning" || previousMessages.length === 0 || workoutPhase === "planning"`), `40,000ms` (Coaching Follow-ups), `30,000ms` (`classify`).
+  - Client: `65,000ms` (`mode === "planning" || previousMessages.length === 0 || workoutPhase === "planning"`), `48,000ms` (Coaching Follow-ups), `35,000ms` (`classify`), `15,000ms` (`recover`).
 
 #### Example Request
 
 ```bash
 curl -X POST "https://<PROJECT_REF>.supabase.co/functions/v1/ai-coach" \
   -H "apikey: <SUPABASE_ANON_KEY>" \
-  -H "Authorization: Bearer <GOOGLE_ID_TOKEN>" \
+  -H "Authorization: Bearer <GOOGLE_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
     "action": "coach",
@@ -286,7 +287,7 @@ New accepted `action: "coach"` requests stream Server-Sent Events (SSE) backed b
   - `Cache-Control: no-store, no-transform`
   - `X-Content-Type-Options: nosniff`
 - **Resilience**: Upstream Gemini generation runs inside a server `AbortController` and `EdgeRuntime.waitUntil(...)`, decoupled from client socket disconnects so interrupted runs still finish and persist for `action: "recover"`. Model fallback only occurs before the first `preview` event is emitted.
-- **Duplicate `clientRequestId` Hits**: Idempotent retries matching an existing lock still return standard JSON (`200 OK` `{ advice, quota }` if completed, `202 Accepted` `{ "status": "processing" }` while active, or `502 Bad Gateway` if failed).
+- **Duplicate `clientRequestId` Hits**: Idempotent `action: "coach"` retries matching an existing lock return standard JSON (`200 OK` `{ advice, quota }` if completed, `202 Accepted` `{ "status": "processing" }` while active—signaling the client to poll `action: "recover"`—or `502 Bad Gateway` if failed).
 
 ```text
 event: preview
@@ -332,7 +333,7 @@ Classifies a list of free-text exercise names into standardized muscle groups an
 ```bash
 curl -X POST "https://<PROJECT_REF>.supabase.co/functions/v1/ai-coach" \
   -H "apikey: <SUPABASE_ANON_KEY>" \
-  -H "Authorization: Bearer <GOOGLE_ID_TOKEN>" \
+  -H "Authorization: Bearer <GOOGLE_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
     "action": "classify",
@@ -403,10 +404,10 @@ When an athlete reaches their daily limit (15 coach / 50 classify) or the platfo
 
 | Status Code | Meaning | Client Handling |
 | :--- | :--- | :--- |
-| `200 OK` | Request succeeded (or SSE stream opened for `coach`). | For live `coach`, consume SSE `preview` / `complete` / `error` events; for cached duplicate `coach` or `recover`, consume JSON `{ advice, quota }`; for `classify`, parse JSON `{ text }`. |
+| `200 OK` | Request succeeded (or SSE stream opened for `coach`). | For live `coach`, consume SSE `preview` / `complete` / `error` events; for cached duplicate `coach`, consume JSON `{ advice, quota }`; for `recover`, consume JSON `{ status: "completed", advice, quota }`; for `classify`, parse JSON `{ text }`. |
 | `202 Accepted` | Request with matching `clientRequestId` is still executing. | Show loading state and poll `action: "recover"` while foregrounded. |
 | `400 Bad Request` | Invalid DTO payload or JSON. | Check closed DTO schema structure and bounds. |
-| `401 Unauthorized` | Invalid or expired Google ID Token. | Refresh token via `/auth-token` and retry. |
+| `401 Unauthorized` | Invalid or expired Google token (OIDC ID token or OAuth access token). | Refresh token via `/auth-token` and retry. |
 | `404 Not Found` | `recover` target missing, expired (>30m), or already consumed. | Clear pending local recovery state and allow retry. |
 | `413 Payload Too Large` | Request body exceeded `100 KB`. | Trim excess historical logs/messages cleanly on client. |
 | `429 Too Many Requests` | Daily user quota or platform cap reached. | Show friendly quota limit alert with reset time. |

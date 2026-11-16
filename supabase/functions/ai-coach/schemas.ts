@@ -127,6 +127,7 @@ const plannedExerciseDtoSchema = z.object({
   restSeconds: z.number().int().min(0).max(600).optional(),
   notes: z.string().max(300).optional(),
   supersetId: z.string().max(20).optional(),
+  isMetabolicProtocol: z.boolean().optional(),
   primaryMuscle: z.string().max(40).optional(),
 });
 
@@ -331,7 +332,7 @@ function buildExerciseProperties(muscleGroupsList: string[]): Record<string, unk
   );
 
   return {
-    exerciseName: { type: "string" },
+    exerciseName: { type: "string", minLength: 1 },
     targetSets: { type: "integer", minimum: 1, maximum: 20 },
     targetReps: {
       type: "string",
@@ -381,6 +382,11 @@ function buildExerciseProperties(muscleGroupsList: string[]): Record<string, unk
       description:
         "Optional. Assign the same identifier (e.g. 'A', 'B') to exercises that should be performed together as a superset.",
     },
+    isMetabolicProtocol: {
+      type: "boolean",
+      description:
+        "Set to true for drop-sets, myo-reps, or rest-pause sets to bypass strict rest periods.",
+    },
     primaryMuscle: muscleProp,
     secondaryMuscles: {
       type: "array",
@@ -411,14 +417,7 @@ export function createCoachingAdviceJsonSchema(
 
   const recommendedExerciseSchema = {
     type: "object",
-    properties: {
-      ...exerciseProps,
-      isMetabolicProtocol: {
-        type: "boolean",
-        description:
-          "Set to true for drop-sets, myo-reps, or rest-pause sets to bypass strict rest periods.",
-      },
-    },
+    properties: exerciseProps,
     required: ["exerciseName", "targetSets", "restSeconds"],
   };
 
@@ -441,6 +440,7 @@ export function createCoachingAdviceJsonSchema(
       sessions: {
         type: "array",
         minItems: 1,
+        maxItems: 28,
         items: {
           type: "object",
           properties: {
@@ -458,12 +458,14 @@ export function createCoachingAdviceJsonSchema(
             },
             sessionLabel: {
               type: "string",
+              minLength: 1,
               description: "e.g., 'Unit A — Push Focus'",
             },
-            focusDescription: { type: "string" },
+            focusDescription: { type: "string", minLength: 1 },
             exercises: {
               type: "array",
               minItems: 1,
+              maxItems: 30,
               items: plannedExerciseSchema,
             },
           },
@@ -503,6 +505,7 @@ export function createCoachingAdviceJsonSchema(
   const properties: Record<string, unknown> = {
     coachMessage: {
       type: "string",
+      minLength: 1,
       description:
         "The empathetic, motivating, and analytical message from the coach. Max 2-3 short paragraphs.",
     },
@@ -520,6 +523,7 @@ export function createCoachingAdviceJsonSchema(
     suggestedFollowUps: suggestedFollowUpsSchema,
     recommendedWorkout: {
       type: "array",
+      maxItems: 30,
       description:
         mode === "planning"
           ? "Today's first workout session from the generated training plan. Output an empty array [] ONLY if sickness, injury, or severe fatigue requires a rest day today."
@@ -834,6 +838,7 @@ function buildExerciseFields() {
     restSeconds: validationIntSchemas.rest.optional(),
     notes: z.string().optional(),
     supersetId: z.string().optional(),
+    isMetabolicProtocol: z.boolean().optional(),
     primaryMuscle: z.string().optional(),
     secondaryMuscles: z.array(secondaryMuscleSchema).optional(),
   };
@@ -861,14 +866,7 @@ const coachingAdviceValidationSchema = z.object({
   coachMessage: z.string().trim().min(1),
   startDeload: z.boolean().optional(),
   suggestedFollowUps: z.unknown().optional().transform(sanitizeSuggestedFollowUps),
-  recommendedWorkout: z
-    .array(
-      z.object({
-        ...buildExerciseFields(),
-        isMetabolicProtocol: z.boolean().optional(),
-      }),
-    )
-    .optional(),
+  recommendedWorkout: z.array(z.object(buildExerciseFields())).optional(),
   trainingPlan: buildTrainingPlanSchema().optional(),
 });
 

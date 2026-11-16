@@ -7,6 +7,7 @@ const CACHE_OWNER_KEY = "gainz:cacheSpreadsheetId";
 const clearPlanMock = vi.fn();
 const clearCompletedSessionsMock = vi.fn();
 const resetAllSessionsMock = vi.fn();
+const clearPendingRequestMock = vi.fn();
 const clearEventsMock = vi.fn();
 const clearMapMock = vi.fn();
 const userProfileState = reactive({
@@ -35,6 +36,9 @@ vi.mock("@/modules/aiCoach/presentation", () => ({
   }),
   useCoachChatStore: () => ({
     resetAllSessions: resetAllSessionsMock,
+  }),
+  useAiOrchestratorStore: () => ({
+    clearPendingRequest: clearPendingRequestMock,
   }),
 }));
 
@@ -96,6 +100,7 @@ describe("useSheetCacheSync", () => {
     expect(clearPlanMock).toHaveBeenCalledTimes(1);
     expect(clearCompletedSessionsMock).toHaveBeenCalledTimes(1);
     expect(resetAllSessionsMock).toHaveBeenCalledTimes(1);
+    expect(clearPendingRequestMock).toHaveBeenCalledTimes(1);
     expect(clearEventsMock).toHaveBeenCalledTimes(1);
     expect(clearMapMock).toHaveBeenCalledTimes(1);
     expect(userProfileState.hasCompletedSetup).toBe(false);
@@ -129,6 +134,7 @@ describe("useSheetCacheSync", () => {
     expect(clearPlanMock).toHaveBeenCalledTimes(1);
     expect(clearCompletedSessionsMock).toHaveBeenCalledTimes(1);
     expect(resetAllSessionsMock).toHaveBeenCalledTimes(1);
+    expect(clearPendingRequestMock).toHaveBeenCalledTimes(1);
     expect(clearEventsMock).toHaveBeenCalledTimes(1);
     expect(clearMapMock).toHaveBeenCalledTimes(1);
     expect(userProfileState.hasCompletedSetup).toBe(false);

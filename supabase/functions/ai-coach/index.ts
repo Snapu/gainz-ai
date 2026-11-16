@@ -91,7 +91,7 @@ async function executeCoachAction(
   onAccumulatedText?: (accumulatedText: string) => boolean | undefined,
 ) {
   const allowPlanUpdate = shouldAllowPlanUpdate(dto.mode, dto.question);
-  const thinkingBudget = dto.mode === "planning" ? 1024 : 256;
+  const thinkingLevel = dto.mode === "planning" ? "medium" : "low";
   const isPlanningTimeout =
     dto.mode === "planning" || dto.previousMessages.length === 0 || dto.workoutPhase === "planning";
   const timeoutMs = isPlanningTimeout ? 55_000 : 40_000;
@@ -106,7 +106,7 @@ async function executeCoachAction(
     responseJsonSchema: createCoachingAdviceJsonSchema(dto.muscleGroups, dto.mode, allowPlanUpdate),
     temperature: 0.7,
     topP: 0.9,
-    thinkingConfig: { thinkingBudget, includeThoughts: false },
+    thinkingConfig: { level: thinkingLevel, includeThoughts: false },
     timeoutMs,
     parseResponse: (parsedJson) => parseCoachingAdviceResponse(parsedJson, dto.mode),
     onAccumulatedText,

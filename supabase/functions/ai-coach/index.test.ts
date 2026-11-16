@@ -258,7 +258,7 @@ describe("handleAiCoachRequest", () => {
     expect(await response.json()).toEqual({ error: "unauthorized" });
   });
 
-  it("streams SSE with security headers and uses thinkingBudget 256 without trainingPlan schema for routine execution chat", async () => {
+  it("streams SSE with security headers and uses thinkingLevel low without trainingPlan schema for routine execution chat", async () => {
     const { deps, streamSpy } = createDeps();
     const response = await handleAiCoachRequest(
       createJsonRequest(createValidCoachDto({ mode: "execution", question: "Weight for Bench?" })),
@@ -285,7 +285,7 @@ describe("handleAiCoachRequest", () => {
     });
 
     const genCall = streamSpy.mock.calls[0]?.[0];
-    expect(genCall?.thinkingConfig).toEqual({ thinkingBudget: 256, includeThoughts: false });
+    expect(genCall?.thinkingConfig).toEqual({ level: "low", includeThoughts: false });
     expect(genCall?.timeoutMs).toBe(55_000);
     expect(
       (genCall?.responseJsonSchema.properties as Record<string, unknown>)?.trainingPlan,
@@ -321,7 +321,7 @@ describe("handleAiCoachRequest", () => {
     expect(genCall?.timeoutMs).toBe(40_000);
   });
 
-  it("uses thinkingBudget 1024 and enables trainingPlan schema for planning mode", async () => {
+  it("uses thinkingLevel medium and enables trainingPlan schema for planning mode", async () => {
     const { deps, streamSpy } = createDeps();
     const response = await handleAiCoachRequest(
       createJsonRequest(
@@ -333,7 +333,7 @@ describe("handleAiCoachRequest", () => {
     expect(response.status).toBe(200);
     await readSseEvents(response);
     const genCall = streamSpy.mock.calls[0]?.[0];
-    expect(genCall?.thinkingConfig).toEqual({ thinkingBudget: 1024, includeThoughts: false });
+    expect(genCall?.thinkingConfig).toEqual({ level: "medium", includeThoughts: false });
     expect(
       (genCall?.responseJsonSchema.properties as Record<string, unknown>)?.trainingPlan,
     ).toBeDefined();
@@ -354,7 +354,7 @@ describe("handleAiCoachRequest", () => {
     expect(response.status).toBe(200);
     await readSseEvents(response);
     const genCall = streamSpy.mock.calls[0]?.[0];
-    expect(genCall?.thinkingConfig).toEqual({ thinkingBudget: 256, includeThoughts: false });
+    expect(genCall?.thinkingConfig).toEqual({ level: "low", includeThoughts: false });
     expect(
       (genCall?.responseJsonSchema.properties as Record<string, unknown>)?.trainingPlan,
     ).toBeDefined();
@@ -558,21 +558,24 @@ describe("handleAiCoachRequest", () => {
     }
   });
 
-  it("keeps action classify non-streaming JSON", async () => {
+  it("keeps action classify non-streaming JSON with minimal thinking config", async () => {
+    const generateMock = vi.fn(async (_options: unknown) => ({
+      data: {
+        classifications: [
+          {
+            exerciseName: "Barbell Row",
+            primaryMuscle: "Upper Back",
+            secondaryMuscles: [{ muscleGroup: "Biceps", contribution: 0.4 }],
+            confidence: 0.92,
+          },
+        ],
+      },
+      model: "gemini-3.5-flash-lite",
+    }));
     const { deps, streamSpy } = createDeps({
-      generateWithFallback: vi.fn(async () => ({
-        data: {
-          classifications: [
-            {
-              exerciseName: "Barbell Row",
-              primaryMuscle: "Upper Back",
-              secondaryMuscles: [{ muscleGroup: "Biceps", contribution: 0.4 }],
-              confidence: 0.92,
-            },
-          ],
-        },
-        model: "gemini-2.5-flash",
-      })) as unknown as NonNullable<AiCoachHandlerDeps["generateWithFallback"]>,
+      generateWithFallback: generateMock as unknown as NonNullable<
+        AiCoachHandlerDeps["generateWithFallback"]
+      >,
     });
 
     const response = await handleAiCoachRequest(
@@ -587,6 +590,10 @@ describe("handleAiCoachRequest", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toBe("application/json");
     expect(streamSpy).not.toHaveBeenCalled();
+    expect(generateMock.mock.calls[0]?.[0]).toMatchObject({
+      models: ["gemini-3.5-flash-lite", "gemini-3.8-flash"],
+      thinkingConfig: { level: "minimal", includeThoughts: false },
+    });
   });
 });
 
@@ -827,17 +834,17 @@ describe("ai-coach idempotency and request recovery", () => {
         response_payload: storedPayload,
         error_code: null,
       },
-      [`other-user:22222222-2222-4222-8222-222222222222`]: {
+      "other-user:22222222-2222-4222-8222-222222222222": {
         status: "completed",
         response_payload: storedPayload,
         error_code: null,
       },
-      [`google-sub-123:33333333-3333-4333-8333-333333333333`]: {
+      "google-sub-123:33333333-3333-4333-8333-333333333333": {
         status: "processing",
         response_payload: null,
         error_code: null,
       },
-      [`google-sub-123:44444444-4444-4444-8444-444444444444`]: {
+      "google-sub-123:44444444-4444-4444-8444-444444444444": {
         status: "failed",
         response_payload: null,
         error_code: "coaching-request-failed",

@@ -335,9 +335,14 @@ function formatWorkload(insights: CoachActionRequestDto["insights"]): string {
   const deload = insights.deloadStatus;
   if (deload !== "none") {
     const parts = [`status: ${deload}`];
-    if (insights.deloadEndsAt) parts.push(`ended: ${insights.deloadEndsAt.slice(0, 10)}`);
+    if (insights.deloadEndsAt) {
+      parts.push(`ended: ${sanitizePromptText(insights.deloadEndsAt).slice(0, 10)}`);
+    }
     if (insights.deloadTriggerSnapshot) {
-      parts.push(`triggers: [${insights.deloadTriggerSnapshot.triggeredBy.join(",")}]`);
+      const safeTriggers = insights.deloadTriggerSnapshot.triggeredBy.map((t) =>
+        sanitizePromptText(t),
+      );
+      parts.push(`triggers: [${safeTriggers.join(",")}]`);
       parts.push(`risk: ${insights.deloadTriggerSnapshot.riskScore}`);
     }
     if (deload === "active" && insights.deloadTimeRemainingMs !== null) {
@@ -419,7 +424,7 @@ function formatExercises(
       const dateOffset = data.trendDates.length - trendSlice.length + i;
       const trendDate = data.trendDates[dateOffset];
       if (!trendDate) return `${e1rm}`;
-      return `${trendDate.slice(5, 10)}→${e1rm}`;
+      return `${sanitizePromptText(trendDate).slice(5, 10)}→${e1rm}`;
     });
     if (trendParts.length > 0) parts.push(`trend:${trendParts.join(" ")}`);
 
@@ -433,7 +438,7 @@ function formatPlanExercise(ex: PlannedExercise): string {
   let repsStr = "";
   if (ex.targetDistanceMeters != null) repsStr = `${ex.targetDistanceMeters}m`;
   else if (ex.targetDurationSeconds != null) repsStr = `${ex.targetDurationSeconds}s`;
-  else repsStr = ex.targetReps ?? "";
+  else repsStr = ex.targetReps ? sanitizePromptText(ex.targetReps) : "";
 
   const parts = [`${ex.targetSets}×${repsStr}`];
   if (ex.targetWeight) parts.push(`@${sanitizePromptText(ex.targetWeight)}`);
@@ -449,7 +454,9 @@ function formatPlanForPrompt(
   completedKeys: ReadonlySet<string>,
 ): string {
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const lines: string[] = [`cycle: ${plan.cycleWeeks}w, created: ${plan.createdAt.slice(0, 10)}`];
+  const lines: string[] = [
+    `cycle: ${plan.cycleWeeks}w, created: ${sanitizePromptText(plan.createdAt).slice(0, 10)}`,
+  ];
 
   for (const session of plan.sessions) {
     const dayStr = dayNames[session.dayOfWeek] ?? `Day${session.dayOfWeek}`;
@@ -472,20 +479,85 @@ function formatPlanForPrompt(
   return lines.join("\n");
 }
 
+const PRIOR_PLAN_TEXT_FIELDS = [
+  "targetReps",
+  "targetWeight",
+  "notes",
+  "supersetId",
+  "primaryMuscle",
+] as const;
+
+const PRIOR_PLAN_NUMBER_FIELDS = [
+  "targetDurationSeconds",
+  "targetDistanceMeters",
+  "targetRpe",
+  "restSeconds",
+] as const;
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function sanitizeSecondaryMuscles(
+  raw: unknown,
+): NonNullable<PlannedExercise["secondaryMuscles"]> | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const cleaned: NonNullable<PlannedExercise["secondaryMuscles"]> = [];
+  for (const item of raw) {
+    if (!isPlainRecord(item) || typeof item.muscleGroup !== "string") continue;
+    const muscleGroup = sanitizePromptText(item.muscleGroup);
+    if (!muscleGroup) continue;
+    cleaned.push({
+      muscleGroup,
+      ...(typeof item.contribution === "number" && Number.isFinite(item.contribution)
+        ? { contribution: item.contribution }
+        : {}),
+    });
+  }
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
+function sanitizePriorPlanExercise(raw: unknown): PlannedExercise | null {
+  if (!isPlainRecord(raw) || typeof raw.exerciseName !== "string") return null;
+  const exerciseName = sanitizePromptText(raw.exerciseName);
+  if (!exerciseName) return null;
+
+  const targetSets =
+    typeof raw.targetSets === "number" && Number.isFinite(raw.targetSets) ? raw.targetSets : 0;
+  const sanitized: PlannedExercise = { exerciseName, targetSets };
+
+  for (const field of PRIOR_PLAN_TEXT_FIELDS) {
+    const val = raw[field];
+    if (typeof val === "string") sanitized[field] = sanitizePromptText(val);
+  }
+  for (const field of PRIOR_PLAN_NUMBER_FIELDS) {
+    const val = raw[field];
+    if (typeof val === "number" && Number.isFinite(val)) sanitized[field] = val;
+  }
+  if (typeof raw.isMetabolicProtocol === "boolean") {
+    sanitized.isMetabolicProtocol = raw.isMetabolicProtocol;
+  }
+  const secondaryMuscles = sanitizeSecondaryMuscles(raw.secondaryMuscles);
+  if (secondaryMuscles) {
+    sanitized.secondaryMuscles = secondaryMuscles;
+  }
+  return sanitized;
+}
+
 function buildPriorPlanSummary(
   previousMessages: CoachActionRequestDto["previousMessages"],
   todayLogs: LogEntry[],
 ): string | null {
   const coachMessages = previousMessages.filter((m) => m.role === "coach");
 
-  let parsedPlan: { recommendedWorkout: PlannedExercise[] } | null = null;
+  let parsedPlan: { recommendedWorkout: unknown[] } | null = null;
   for (let i = coachMessages.length - 1; i >= 0; i--) {
     try {
       const parsed = JSON.parse(coachMessages[i].content) as {
-        recommendedWorkout?: PlannedExercise[];
+        recommendedWorkout?: unknown;
       };
       if (
-        parsed &&
+        isPlainRecord(parsed) &&
         Array.isArray(parsed.recommendedWorkout) &&
         parsed.recommendedWorkout.length > 0
       ) {
@@ -499,14 +571,19 @@ function buildPriorPlanSummary(
 
   if (!parsedPlan) return null;
 
+  const sanitizedWorkout = parsedPlan.recommendedWorkout
+    .map(sanitizePriorPlanExercise)
+    .filter((ex): ex is PlannedExercise => ex !== null);
+  if (sanitizedWorkout.length === 0) return null;
+
   const todayExercises = new Map<string, number>();
   for (const log of todayLogs) {
     const safeName = sanitizePromptText(log.exerciseName);
     todayExercises.set(safeName, (todayExercises.get(safeName) ?? 0) + 1);
   }
 
-  const lines = parsedPlan.recommendedWorkout.map((ex) => {
-    const safeName = sanitizePromptText(ex.exerciseName);
+  const lines = sanitizedWorkout.map((ex) => {
+    const safeName = ex.exerciseName;
     const done = todayExercises.get(safeName) ?? 0;
     const target = ex.targetSets ?? 0;
     let status: string;
@@ -524,7 +601,7 @@ function buildPriorPlanSummary(
     return `  ${safeName}: ${parts.join(" ")}`;
   });
 
-  const jsonText = `prior plan:\n\`\`\`json\n${JSON.stringify(parsedPlan.recommendedWorkout)}\n\`\`\``;
+  const jsonText = `prior plan:\n\`\`\`json\n${JSON.stringify(sanitizedWorkout)}\n\`\`\``;
   if (todayLogs.length === 0) return jsonText;
   return `progress:\n${lines.join("\n")}\n\n${jsonText}`;
 }
@@ -688,7 +765,12 @@ export function assembleCoachingPrompt(dto: CoachActionRequestDto): string {
 
   if (dto.events && dto.events.length > 0) {
     sections.push(
-      `# events\n${dto.events.map((e) => `${sanitizePromptText(e.type)}: ${e.dates.join(", ")}`).join("\n")}`,
+      `# events\n${dto.events
+        .map(
+          (e) =>
+            `${sanitizePromptText(e.type)}: ${e.dates.map((d) => sanitizePromptText(d)).join(", ")}`,
+        )
+        .join("\n")}`,
     );
   }
 
@@ -777,7 +859,7 @@ function mapPreviousMessageToContent(
 
   return {
     role: "model",
-    parts: [{ text }],
+    parts: [{ text: sanitizePromptText(text) }],
   };
 }
 

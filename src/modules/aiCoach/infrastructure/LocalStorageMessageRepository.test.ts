@@ -98,5 +98,20 @@ describe("LocalStorageMessageRepository", () => {
       repository.cleanOldSessions();
       expect(localStorage.getItem("ai-messages-123")).toBeNull();
     });
+
+    it("clears persisted sessions and pending recovery request in clearAllSessions", () => {
+      repository.saveMessages("session-1", [
+        { id: "1", timestamp: "2026-01-01T00:00:00Z", role: "user", content: "test" },
+      ] as CoachingMessage[]);
+      localStorage.setItem(
+        "ai-coach:pending-request",
+        JSON.stringify({ clientRequestId: "req-1" }),
+      );
+
+      repository.clearAllSessions();
+
+      expect(repository.loadMessages("session-1")._unsafeUnwrap()).toEqual([]);
+      expect(localStorage.getItem("ai-coach:pending-request")).toBeNull();
+    });
   });
 });

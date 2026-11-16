@@ -4,6 +4,7 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { ConfigProvider } from "reka-ui";
 import { onMounted, onUnmounted, watch } from "vue";
 import { useRouter } from "vue-router";
+import { useAiOrchestratorStore } from "@/modules/aiCoach/presentation";
 import { useAuthStore } from "@/modules/auth/presentation";
 import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
 import UiToaster from "@/shared/presentation/components/ui/UiToaster.vue";
@@ -101,6 +102,7 @@ watch(
   (isLoggedIn) => {
     if (isLoggedIn) return;
 
+    useAiOrchestratorStore().clearPendingRequest();
     const currentPath = router.currentRoute.value.path;
     const isPublicRoute = currentPath === "/privacy" || currentPath === "/impressum";
     if (isPublicRoute || currentPath === "/") return;

@@ -82,7 +82,16 @@ async function readCoachSseStream<T>(
     currentEvent = "message";
     if (!rawData) return;
 
-    const parsed = JSON.parse(rawData) as Record<string, unknown>;
+    let parsed: Record<string, unknown>;
+    try {
+      const value: unknown = JSON.parse(rawData);
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        throw new Error("coaching-stream-incomplete");
+      }
+      parsed = value as Record<string, unknown>;
+    } catch {
+      throw new Error("coaching-stream-incomplete");
+    }
     if (eventName === "preview") {
       if (typeof parsed.text === "string") onPreview?.(parsed.text);
       return;

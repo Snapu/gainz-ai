@@ -223,6 +223,7 @@ export type CoachActionRequestDto = {
         restSeconds?: number;
         notes?: string;
         supersetId?: string;
+        isMetabolicProtocol?: boolean;
         primaryMuscle?: string;
       }>;
     }>;
@@ -424,6 +425,7 @@ function mapPlannedExerciseDto(
     restSeconds: clampOptionalInt(ex.restSeconds, 0, 600),
     notes: ex.notes?.slice(0, 300),
     supersetId: ex.supersetId?.slice(0, 20),
+    isMetabolicProtocol: ex.isMetabolicProtocol,
     primaryMuscle: ex.primaryMuscle?.slice(0, 40),
   });
 }

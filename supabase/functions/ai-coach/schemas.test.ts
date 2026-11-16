@@ -144,7 +144,8 @@ describe("createCoachingAdviceJsonSchema", () => {
     ]);
 
     const planningSchema = createCoachingAdviceJsonSchema(["Chest"], "planning", false);
-    expect((planningSchema.properties as Record<string, unknown>).trainingPlan).toBeDefined();
+    const planningProps = planningSchema.properties as Record<string, Record<string, unknown>>;
+    expect(planningProps.trainingPlan).toBeDefined();
     expect(planningSchema.required).toContain("trainingPlan");
     expect(planningSchema.propertyOrdering).toEqual([
       "coachMessage",
@@ -154,6 +155,27 @@ describe("createCoachingAdviceJsonSchema", () => {
       "recommendedWorkout",
       "trainingPlan",
     ]);
+
+    expect(planningProps.coachMessage?.minLength).toBe(1);
+    expect(planningProps.recommendedWorkout?.maxItems).toBe(30);
+    const recItemProps = (planningProps.recommendedWorkout?.items as Record<string, unknown>)
+      ?.properties as Record<string, Record<string, unknown>>;
+    expect(recItemProps.exerciseName?.minLength).toBe(1);
+
+    const planProps = planningProps.trainingPlan?.properties as Record<
+      string,
+      Record<string, unknown>
+    >;
+    expect(planProps.sessions?.maxItems).toBe(28);
+    const sessionProps = (planProps.sessions?.items as Record<string, unknown>)
+      ?.properties as Record<string, Record<string, unknown>>;
+    expect(sessionProps.sessionLabel?.minLength).toBe(1);
+    expect(sessionProps.focusDescription?.minLength).toBe(1);
+    expect(sessionProps.exercises?.maxItems).toBe(30);
+    const planExProps = (sessionProps.exercises?.items as Record<string, unknown>)
+      ?.properties as Record<string, Record<string, unknown>>;
+    expect(planExProps.exerciseName?.minLength).toBe(1);
+    expect(planExProps.isMetabolicProtocol).toMatchObject({ type: "boolean" });
   });
 });
 
@@ -306,6 +328,36 @@ describe("parseCoachingAdviceResponse", () => {
     });
     expect(valid.classifications).toHaveLength(1);
     expect(() => parseClassifyResponse({ wrong: true })).toThrow();
+  });
+
+  it("preserves isMetabolicProtocol on planned trainingPlan exercises", () => {
+    const parsed = parseCoachingAdviceResponse(
+      {
+        coachMessage: "Circuit ready!",
+        trainingPlan: {
+          cycleWeeks: 1,
+          sessions: [
+            {
+              dayOfWeek: 1,
+              weekNumber: 1,
+              sessionLabel: "Conditioning",
+              focusDescription: "Metabolic",
+              exercises: [
+                {
+                  exerciseName: "Kettlebell Swing",
+                  targetSets: 4,
+                  targetDurationSeconds: 40,
+                  isMetabolicProtocol: true,
+                },
+              ],
+            },
+          ],
+        },
+      },
+      "planning",
+    );
+
+    expect(parsed.trainingPlan?.sessions[0]?.exercises[0]?.isMetabolicProtocol).toBe(true);
   });
 });
 

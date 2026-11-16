@@ -1,8 +1,10 @@
-import { errAsync, okAsync, ResultAsync } from "neverthrow";
+import { errAsync, ok, okAsync, type Result, ResultAsync } from "neverthrow";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick, ref } from "vue";
 import { TrainingPlan } from "@/modules/aiCoach/domain";
+import { LocalStorageMessageRepository } from "@/modules/aiCoach/infrastructure";
+import { isoDateString } from "@/modules/sharedKernel/domain";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 import { useToast } from "@/shared/presentation/composables/useToast";
 
@@ -1200,6 +1202,187 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
     }
   });
 
+  it("clears pendingCoachRequest on logged-out initialize and resets pendingEnsureSessionAdvice", async () => {
+    localStorage.setItem(
+      "ai-coach:pending-request",
+      JSON.stringify({
+        clientRequestId: "11111111-1111-4111-8111-111111111111",
+        userMessageId: "pre-init-msg",
+        sessionId: "2026-11-15",
+        mode: "execution",
+        startedAt: Date.now(),
+      }),
+    );
+    mockIsLoggedIn.value = false;
+    const orchestrator = useAiOrchestratorStore();
+    orchestrator.ensureSessionAdvice();
+    orchestrator.initialize();
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    expect(localStorage.getItem("ai-coach:pending-request")).toBeNull();
+
+    // Verify pendingEnsureSessionAdvice was cleared (re-logging in synchronously won't spuriously ask)
+    mockIsLoggedIn.value = true;
+    mockExerciseLogs.value = [];
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    expect(mockAsk).not.toHaveBeenCalled();
+  });
+
+  it("terminates recovery immediately on non-retryable errors and fails fast on offline or consecutive transport failures", async () => {
+    // 1. Non-retryable recovery errors stop polling immediately (1 call, not 35)
+    localStorage.setItem(
+      "ai-coach:pending-request",
+      JSON.stringify({
+        clientRequestId: "22222222-2222-4222-8222-222222222222",
+        userMessageId: "term-err-msg",
+        sessionId: "2026-11-15",
+        mode: "execution",
+        startedAt: Date.now(),
+      }),
+    );
+    mockRecover.mockReturnValueOnce(errAsync("coaching-request-server-error" as const));
+    const orchestrator = useAiOrchestratorStore();
+    orchestrator.initialize();
+    for (let i = 0; i < 15; i++) await Promise.resolve();
+    expect(mockRecover).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem("ai-coach:pending-request")).toBeNull();
+
+    // 2. Consecutive transport errors pause polling fast (2 calls, not 35) while keeping pendingCoachRequest intact
+    vi.useFakeTimers();
+    try {
+      mockRecover.mockClear();
+      mockRecover.mockReturnValue(errAsync("coaching-request-failed" as const));
+      mockAsk.mockReturnValueOnce(errAsync("coaching-request-failed" as const));
+      const reqPromise = orchestrator.requestAdvice("Online then dropped");
+      for (let i = 0; i < 15; i++) await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(2500);
+      for (let i = 0; i < 15; i++) await Promise.resolve();
+      const res = await reqPromise;
+      expect(res.isErr()).toBe(true);
+      expect(mockRecover).toHaveBeenCalledTimes(2);
+      expect(localStorage.getItem("ai-coach:pending-request")).not.toBeNull();
+
+      // 3. Offline skips polling immediately without forfeiting pendingCoachRequest, then recovers once back online
+      const hadOwnOnLine = Object.getOwnPropertyDescriptor(navigator, "onLine");
+      let isOnline = false;
+      Object.defineProperty(navigator, "onLine", { get: () => isOnline, configurable: true });
+      try {
+        localStorage.removeItem("ai-coach:pending-request");
+        mockRecover.mockClear();
+        mockAsk.mockReturnValueOnce(errAsync("coaching-request-failed" as const));
+        const offlineRes = await orchestrator.requestAdvice("While offline");
+        expect(offlineRes.isErr()).toBe(true);
+        expect(mockRecover).not.toHaveBeenCalled();
+        expect(localStorage.getItem("ai-coach:pending-request")).not.toBeNull();
+
+        isOnline = true;
+        mockRecover.mockReturnValueOnce(
+          okAsync({
+            status: "completed" as const,
+            advice: { coachMessage: "Recovered once back online!" },
+          }),
+        );
+        window.dispatchEvent(new Event("online"));
+        for (let i = 0; i < 15; i++) await Promise.resolve();
+        expect(mockRecover).toHaveBeenCalledTimes(1);
+        expect(localStorage.getItem("ai-coach:pending-request")).toBeNull();
+        expect(
+          useCoachChatStore().messages.some(
+            (m) => m.role === "coach" && m.content.includes("Recovered once back online!"),
+          ),
+        ).toBe(true);
+      } finally {
+        if (hadOwnOnLine) Object.defineProperty(navigator, "onLine", hadOwnOnLine);
+        else delete (navigator as unknown as Record<string, unknown>).onLine;
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not race visibility recovery before activeAttemptRequestId is assigned and preserves pendingRequest across 401 retry", async () => {
+    const originalVisibility = Object.getOwnPropertyDescriptor(document, "visibilityState");
+    let vis: DocumentVisibilityState = "hidden";
+    Object.defineProperty(document, "visibilityState", {
+      get: () => vis,
+      configurable: true,
+    });
+    const orchestrator = useAiOrchestratorStore();
+    try {
+      // Simulate slow ensureValidIdToken holding execution before activeAttemptRequestId exists,
+      // with a pre-existing pendingCoachRequest from earlier
+      type TokenResult = Result<string, "token-refresh-failed" | "refresh-token-invalid">;
+      let resolveToken!: (res: TokenResult) => void;
+      mockEnsureValidIdToken = vi.fn(
+        () =>
+          new ResultAsync(
+            new Promise<TokenResult>((resolve) => {
+              resolveToken = resolve;
+            }),
+          ),
+      );
+      localStorage.setItem(
+        "ai-coach:pending-request",
+        JSON.stringify({
+          clientRequestId: "33333333-3333-4333-8333-333333333333",
+          userMessageId: "stale-pending",
+          sessionId: "2026-11-15",
+          mode: "execution",
+          startedAt: Date.now(),
+        }),
+      );
+      orchestrator.initialize();
+      for (let i = 0; i < 5; i++) await Promise.resolve();
+      // Start live request -> token fetch is suspended before requestId exists
+      mockAsk.mockReturnValueOnce(okAsync({ advice: { coachMessage: "Token ready ok" } }));
+      const livePromise = orchestrator.requestAdvice("Before token resolves");
+      await Promise.resolve();
+
+      mockRecover.mockClear();
+      vis = "visible";
+      document.dispatchEvent(new Event("visibilitychange"));
+      await nextTick();
+      expect(mockRecover).not.toHaveBeenCalled();
+
+      resolveToken(ok("fresh-id-token"));
+      for (let i = 0; i < 15; i++) await Promise.resolve();
+      await livePromise;
+
+      // Now test 401 retry preserving planning escalation whether escalated before or during 401
+      mockRefreshToken.value = "valid-refresh-token";
+      mockIdToken.value = "valid-id-token";
+      let resolveTokenForEscalation!: (val: TokenResult) => void;
+      mockEnsureValidIdToken = vi.fn(
+        () =>
+          new ResultAsync(
+            new Promise<TokenResult>((resolve) => {
+              resolveTokenForEscalation = resolve;
+            }),
+          ),
+      );
+      mockAsk
+        .mockReturnValueOnce(errAsync("unauthorized" as const))
+        .mockReturnValueOnce(okAsync({ advice: { coachMessage: "Retried planning!" } }));
+      mockRefreshSession = vi.fn(() => okAsync("refreshed-access"));
+
+      const firstAsk = orchestrator.requestAdvice("Routine check", "execution");
+      // Escalate while initial token fetch is in flight -> consumed before attempt 1, then preserved across 401 retry
+      await orchestrator.requestAdvice("Switch to planning", "planning");
+      resolveTokenForEscalation(ok("expired-id-token"));
+      const finalRes = await firstAsk;
+      for (let i = 0; i < 15; i++) await Promise.resolve();
+
+      expect(finalRes.isOk()).toBe(true);
+      expect(mockAsk).toHaveBeenCalledTimes(3);
+      const retryCallArgs = mockAsk.mock.calls.at(-1)?.[0] as { mode?: string } | undefined;
+      expect(retryCallArgs?.mode).toBe("planning");
+    } finally {
+      mockEnsureValidIdToken = undefined;
+      mockRefreshSession = undefined;
+      if (originalVisibility)
+        Object.defineProperty(document, "visibilityState", originalVisibility);
+    }
+  });
+
   it("does not poll recover on terminal server HTTP errors or while live request stays active during brief lock, and drains queued request after recovery", async () => {
     // 1. Terminal server error skips recovery and returns coaching-request-failed without swallowing error
     mockAsk.mockReturnValueOnce(errAsync("coaching-request-server-error" as const));
@@ -1561,5 +1744,176 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
     expect(chatStore.streamingCoachMessage).toBe("");
     const coachMsg = chatStore.messages.find((m) => m.role === "coach");
     expect(coachMsg?.content).toContain("Recovered full response!");
+  });
+
+  it("excludes time suspended in background waitForForeground from the 90s foreground recovery wall clock", async () => {
+    vi.useFakeTimers();
+    const originalVisibility = Object.getOwnPropertyDescriptor(document, "visibilityState");
+    let vis: DocumentVisibilityState = "visible";
+    Object.defineProperty(document, "visibilityState", {
+      get: () => vis,
+      configurable: true,
+    });
+    try {
+      localStorage.setItem(
+        "ai-coach:pending-request",
+        JSON.stringify({
+          clientRequestId: "44444444-4444-4444-8444-444444444444",
+          userMessageId: "bg-pause-user",
+          sessionId: isoDateString(new Date()),
+          mode: "execution",
+          startedAt: Date.now(),
+        }),
+      );
+      let pollCount = 0;
+      mockRecover.mockImplementation(() => {
+        pollCount++;
+        if (pollCount === 1) {
+          // App moves to background right after first "processing" response before waitBeforeNextPoll runs
+          vis = "hidden";
+          document.dispatchEvent(new Event("visibilitychange"));
+          return okAsync({ status: "processing" as const });
+        }
+        return okAsync({
+          status: "completed" as const,
+          advice: { coachMessage: "Recovered after 2m background lock!" },
+        });
+      });
+
+      const orchestrator = useAiOrchestratorStore();
+      orchestrator.initialize();
+      for (let i = 0; i < 15; i++) await Promise.resolve();
+      expect(pollCount).toBe(1);
+
+      // Suspend in background longer than RECOVERY_MAX_WALL_CLOCK_MS (90s), well inside 30m TTL
+      await vi.advanceTimersByTimeAsync(2 * 60 * 1000);
+      expect(localStorage.getItem("ai-coach:pending-request")).not.toBeNull();
+
+      vis = "visible";
+      document.dispatchEvent(new Event("visibilitychange"));
+      for (let i = 0; i < 20; i++) await Promise.resolve();
+
+      expect(pollCount).toBe(2);
+      expect(localStorage.getItem("ai-coach:pending-request")).toBeNull();
+      expect(
+        useCoachChatStore().messages.some(
+          (m) => m.role === "coach" && m.content.includes("Recovered after 2m background lock!"),
+        ),
+      ).toBe(true);
+    } finally {
+      if (originalVisibility)
+        Object.defineProperty(document, "visibilityState", originalVisibility);
+      vi.useRealTimers();
+    }
+  });
+
+  it("excludes OS sleep overshoot during the visible 2s poll wait from the 90s foreground recovery wall clock", async () => {
+    vi.useFakeTimers();
+    try {
+      const baseTime = Date.now();
+      localStorage.setItem(
+        "ai-coach:pending-request",
+        JSON.stringify({
+          clientRequestId: "55555555-5555-4555-8555-555555555555",
+          userMessageId: "os-freeze-user",
+          sessionId: isoDateString(new Date()),
+          mode: "execution",
+          startedAt: baseTime,
+        }),
+      );
+      mockRecover
+        .mockReturnValueOnce(okAsync({ status: "processing" as const }))
+        .mockReturnValueOnce(
+          okAsync({
+            status: "completed" as const,
+            advice: { coachMessage: "Recovered after OS timer freeze!" },
+          }),
+        );
+
+      const orchestrator = useAiOrchestratorStore();
+      orchestrator.initialize();
+      for (let i = 0; i < 15; i++) await Promise.resolve();
+      expect(mockRecover).toHaveBeenCalledTimes(1);
+
+      // Simulate OS screen lock freezing wall clock for 2m while 2s timer stays "visible"
+      vi.setSystemTime(baseTime + 2 * 60 * 1000);
+      await vi.advanceTimersByTimeAsync(2000);
+      for (let i = 0; i < 15; i++) await Promise.resolve();
+
+      expect(mockRecover).toHaveBeenCalledTimes(2);
+      expect(localStorage.getItem("ai-coach:pending-request")).toBeNull();
+      expect(
+        useCoachChatStore().messages.some(
+          (m) => m.role === "coach" && m.content.includes("Recovered after OS timer freeze!"),
+        ),
+      ).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("preserves persisted day messages when clearPendingRequest is called before chatStore initializes", () => {
+    const todayId = isoDateString(new Date());
+    const repo = new LocalStorageMessageRepository();
+    repo.saveMessages(todayId, [
+      {
+        id: "saved-before-logout",
+        role: "coach",
+        content: JSON.stringify({ coachMessage: "Keep me!" }),
+        timestamp: new Date().toISOString(),
+        sessionId: todayId,
+        logsCount: 0,
+      },
+      {
+        id: "pending-user-msg",
+        role: "user",
+        content: "Aborted request",
+        timestamp: new Date().toISOString(),
+        sessionId: todayId,
+        logsCount: 0,
+      },
+    ]);
+    localStorage.setItem(
+      "ai-coach:pending-request",
+      JSON.stringify({
+        clientRequestId: "55555555-5555-4555-8555-555555555555",
+        userMessageId: "pending-user-msg",
+        sessionId: todayId,
+        mode: "execution",
+        startedAt: Date.now(),
+      }),
+    );
+
+    const chatStore = useCoachChatStore();
+    expect(chatStore.hasInitialized).toBe(false);
+    useAiOrchestratorStore().clearPendingRequest();
+
+    expect(localStorage.getItem("ai-coach:pending-request")).toBeNull();
+    const persisted = repo.loadMessages(todayId)._unsafeUnwrap();
+    expect(persisted.map((m) => m.id)).toEqual(["saved-before-logout"]);
+  });
+
+  it("clears streamingCoachMessage and suppresses further preview chunks after clearPendingRequest", async () => {
+    mockRefreshToken.value = "valid-refresh-token";
+    mockEnsureValidIdToken = vi.fn().mockReturnValue(okAsync("valid-id-token"));
+
+    let emitPreview: ((text: string) => void) | undefined;
+    mockAsk.mockImplementationOnce((req: { onStreamPreview?: (text: string) => void }) => {
+      emitPreview = req.onStreamPreview;
+      req.onStreamPreview?.("Old sheet preview");
+      return new ResultAsync(new Promise<never>(() => {}));
+    });
+
+    const chatStore = useCoachChatStore();
+    const orchestrator = useAiOrchestratorStore();
+    void orchestrator.requestAdvice("Sheet A request");
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    expect(chatStore.streamingCoachMessage).toBe("Old sheet preview");
+
+    orchestrator.clearPendingRequest();
+    expect(chatStore.streamingCoachMessage).toBe("");
+
+    emitPreview?.("Leaked chunk after sheet switch");
+    expect(chatStore.streamingCoachMessage).toBe("");
   });
 });

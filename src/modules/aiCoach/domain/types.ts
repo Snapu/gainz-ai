@@ -151,6 +151,7 @@ interface PlannedExercise {
   restSeconds?: number;
   notes?: string;
   supersetId?: string;
+  isMetabolicProtocol?: boolean;
   primaryMuscle?: string;
   secondaryMuscles?: Array<{ muscleGroup: string; contribution?: number }>;
 }

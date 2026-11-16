@@ -22,7 +22,6 @@ import {
   type CoachingAdviceError,
   type CoachingMessage,
   type CoachingMode,
-  type PlannedSession,
   type RecoverCoachingAdviceError,
   type RecoverCoachingAdviceResult,
   resolveEffectiveCoachingMode,
@@ -83,6 +82,12 @@ const PENDING_REQUEST_STORAGE_KEY = "ai-coach:pending-request";
 const PENDING_REQUEST_TTL_MS = 30 * 60 * 1000;
 const RECOVERY_POLL_INTERVAL_MS = 2_000;
 const RECOVERY_MAX_POLL_ATTEMPTS = 35;
+const RECOVERY_MAX_CONSECUTIVE_TRANSPORT_ERRORS = 2;
+const RECOVERY_MAX_WALL_CLOCK_MS = 90_000;
+
+function isDeviceOffline(): boolean {
+  return typeof navigator !== "undefined" && navigator.onLine === false;
+}
 
 interface PendingCoachRequest {
   clientRequestId: string;
@@ -124,7 +129,7 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
   const pendingCoachRequest = useLocalStorage<PendingCoachRequest | null>(
     PENDING_REQUEST_STORAGE_KEY,
     null,
-    { serializer: StorageSerializers.object, flush: "sync" },
+    { serializer: StorageSerializers.object, flush: "sync", listenToStorageChanges: false },
   );
 
   let hasInitialized = false;
@@ -154,8 +159,17 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     const userMessageId = pendingCoachRequest.value?.userMessageId;
     pendingCoachRequest.value = null;
     if (removeUserMessage && userMessageId) {
+      chatStore.initialize();
       chatStore.removeMessage(userMessageId);
     }
+  }
+
+  function clearPendingRequest(): void {
+    pendingEnsureSessionAdvice = false;
+    pendingRequest = null;
+    activeAttemptRequestId = null;
+    chatStore.streamingCoachMessage = "";
+    clearPendingCoachRequest(true);
   }
 
   function pruneExpiredPendingRequest(): PendingCoachRequest | null {
@@ -209,11 +223,11 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     const preInitPendingRequestId = pendingCoachRequest.value?.clientRequestId;
 
     void (authStore.init?.() ?? Promise.resolve()).then(() => {
-      if (activeAttemptRequestId || inFlightMode) {
+      if (inFlightMode || activeAttemptToken) {
         return;
       }
       if (!authStore.isLoggedIn) {
-        clearPendingCoachRequest(true);
+        clearPendingRequest();
         return;
       }
       if (preInitPendingRequestId && pruneExpiredPendingRequest()) {
@@ -319,29 +333,6 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     return request;
   }
 
-  /** Surfaces bad model output when `TrainingPlan.create` had to move a session to a free day. */
-  function reportRescheduledSessions(
-    requested: PlannedSession[],
-    created: readonly PlannedSession[],
-  ): void {
-    const createdByWeekAndLabel = new Map(
-      created.map((s) => [`${s.weekNumber}:${s.sessionLabel}`, s]),
-    );
-    const moved = requested.filter((session) => {
-      const match = createdByWeekAndLabel.get(`${session.weekNumber}:${session.sessionLabel}`);
-      return match && match.dayOfWeek !== session.dayOfWeek;
-    });
-    if (moved.length === 0) return;
-
-    Sentry.captureMessage("AI training plan contained colliding session days", {
-      level: "warning",
-      tags: { scope: "ai-store", feature: "plan-day-collision" },
-      extra: {
-        moved: moved.map((s) => ({ week: s.weekNumber, day: s.dayOfWeek, label: s.sessionLabel })),
-      },
-    });
-  }
-
   function applyTrainingPlanIfPresent(
     advice: CoachingAdvice,
     userMessageId: string,
@@ -371,7 +362,6 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
         advice.trainingPlan.cycleWeeks,
         advice.trainingPlan.sessions,
       );
-      reportRescheduledSessions(advice.trainingPlan.sessions, newPlan.sessions);
       if (isFullPlanReset) {
         planStore.clearCompletedSessions();
       }
@@ -454,58 +444,73 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     });
   }
 
-  async function waitBeforeNextPoll(pending: PendingCoachRequest): Promise<boolean> {
+  async function waitBeforeNextPoll(
+    pending: PendingCoachRequest,
+  ): Promise<{ continue: boolean; pausedMs: number }> {
     if (visibility.value !== "visible") {
+      const pauseStartedAt = Date.now();
       const canRecover = await waitForForeground();
       if (!canRecover) {
         if (pendingCoachRequest.value?.clientRequestId === pending.clientRequestId) {
           clearPendingCoachRequest(true);
         }
-        return false;
+        return { continue: false, pausedMs: 0 };
       }
-      return true;
+      return { continue: true, pausedMs: Date.now() - pauseStartedAt };
     }
+    const sleepStartedAt = Date.now();
     await new Promise((resolve) => setTimeout(resolve, RECOVERY_POLL_INTERVAL_MS));
-    return true;
+    return {
+      continue: true,
+      pausedMs: Math.max(0, Date.now() - sleepStartedAt - RECOVERY_POLL_INTERVAL_MS),
+    };
   }
 
-  async function pollRecoveryOnce(
-    pending: PendingCoachRequest,
-  ): Promise<{ done: boolean; result?: Result<void, CoachingAdviceError> }> {
+  type PollStepOutcome =
+    | { kind: "done"; result: Result<void, CoachingAdviceError> }
+    | { kind: "pause" }
+    | { kind: "processing" }
+    | { kind: "transient-error" };
+
+  const TERMINAL_RECOVERY_ERRORS: readonly RecoverCoachingAdviceError[] = [
+    "not-found",
+    "server-failed",
+    "unauthorized",
+    "rate-limit-exceeded",
+    "coaching-request-server-error",
+    "generate-content-stream-failed",
+  ];
+
+  async function pollRecoveryOnce(pending: PendingCoachRequest): Promise<PollStepOutcome> {
     if (pendingCoachRequest.value?.clientRequestId !== pending.clientRequestId) {
-      return { done: true, result: ok(undefined) };
+      return { kind: "done", result: ok(undefined) };
     }
     if (isPendingRequestExpired(pending) || !authStore.isLoggedIn) {
       clearPendingCoachRequest(true);
-      return { done: true, result: err("coaching-request-failed") };
+      return { kind: "done", result: err("coaching-request-failed") };
+    }
+    if (isDeviceOffline()) {
+      return { kind: "pause" };
     }
 
     const tokenRes = await resolveAccessToken();
     if (tokenRes.isErr()) {
-      if (tokenRes.error === "unauthorized") {
-        clearPendingCoachRequest(true);
-        return { done: true, result: err("unauthorized") };
-      }
-      return { done: false };
+      if (tokenRes.error !== "unauthorized") return { kind: "transient-error" };
+      clearPendingCoachRequest(true);
+      return { kind: "done", result: err("unauthorized") };
     }
 
     const recoverRes = await recoverOnceWithAuthRetry(pending.clientRequestId, tokenRes.value);
     if (recoverRes.isOk()) {
       if (recoverRes.value.status === "completed") {
         applyRecoveredAdvice(pending, recoverRes.value.advice);
-        return { done: true, result: ok(undefined) };
+        return { kind: "done", result: ok(undefined) };
       }
-      return { done: false };
+      return { kind: "processing" };
     }
 
-    const terminalErrors: RecoverCoachingAdviceError[] = [
-      "not-found",
-      "server-failed",
-      "unauthorized",
-      "rate-limit-exceeded",
-    ];
-    if (!terminalErrors.includes(recoverRes.error)) {
-      return { done: false };
+    if (!TERMINAL_RECOVERY_ERRORS.includes(recoverRes.error)) {
+      return { kind: "transient-error" };
     }
 
     clearPendingCoachRequest(true);
@@ -513,12 +518,19 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
       recoverRes.error === "unauthorized" || recoverRes.error === "rate-limit-exceeded"
         ? recoverRes.error
         : "coaching-request-failed";
-    return { done: true, result: err(mappedError) };
+    return { kind: "done", result: err(mappedError) };
   }
 
   function recoverPendingRequest(): Promise<Result<void, CoachingAdviceError>> {
     const pending = pruneExpiredPendingRequest();
-    if (!pending || !authStore.isLoggedIn) {
+    if (!pending) {
+      return Promise.resolve(err("coaching-request-failed"));
+    }
+    if (!authStore.isLoggedIn) {
+      clearPendingCoachRequest(true);
+      return Promise.resolve(err("coaching-request-failed"));
+    }
+    if (isDeviceOffline()) {
       return Promise.resolve(err("coaching-request-failed"));
     }
     if (inFlightRecovery) {
@@ -527,14 +539,30 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
 
     chatStore.isLoading = true;
     const run = (async (): Promise<Result<void, CoachingAdviceError>> => {
+      let recoveryStartedAt = Date.now();
+      let consecutiveTransportErrors = 0;
       for (let attempt = 0; attempt < RECOVERY_MAX_POLL_ATTEMPTS; attempt++) {
+        if (isDeviceOffline()) {
+          return err("coaching-request-failed");
+        }
+        if (Date.now() - recoveryStartedAt >= RECOVERY_MAX_WALL_CLOCK_MS) {
+          break;
+        }
         const step = await pollRecoveryOnce(pending);
-        if (step.done && step.result) return step.result;
+        if (step.kind === "done") return step.result;
+        if (step.kind === "pause") return err("coaching-request-failed");
+
+        consecutiveTransportErrors =
+          step.kind === "transient-error" ? consecutiveTransportErrors + 1 : 0;
+        if (consecutiveTransportErrors >= RECOVERY_MAX_CONSECUTIVE_TRANSPORT_ERRORS) {
+          return err("coaching-request-failed");
+        }
         if (attempt < RECOVERY_MAX_POLL_ATTEMPTS - 1) {
-          const canContinue = await waitBeforeNextPoll(pending);
-          if (!canContinue) {
+          const waitResult = await waitBeforeNextPoll(pending);
+          if (!waitResult.continue) {
             return err("coaching-request-failed");
           }
+          recoveryStartedAt += waitResult.pausedMs;
         }
       }
 
@@ -611,13 +639,8 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     question: string | undefined,
     mode: CoachingMode,
   ): ResultAsync<{ advice: CoachingAdvice; requestPayload?: string }, CoachingAdviceError> {
-    let activeQuestion = question;
-    let activeMode = mode;
-    if (pendingRequest?.mode === "planning") {
-      activeQuestion = pendingRequest.question ?? activeQuestion;
-      activeMode = "planning";
-      pendingRequest = null;
-    }
+    const activeQuestion = question;
+    const activeMode = mode;
 
     const currentId = chatStore.currentSessionId;
     const currentSession = resolveCurrentSession(exerciseLogsStore.exerciseLogs);
@@ -628,6 +651,10 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
       hasActivePlan: Boolean(planStore.activePlan && planStore.activePlan.sessions.length > 0),
     });
     inFlightMode = effectiveMode;
+
+    if (pendingCoachRequest.value) {
+      clearPendingCoachRequest(true);
+    }
 
     const previousMessages = [...chatStore.messages];
     const userMessage = createUserMessagePlaceholder(currentId, todayLogsCount, todayLogsChecksum);
@@ -704,8 +731,16 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
         const normalizedError: CoachingAdviceError =
           error === "coaching-request-server-error" ? "coaching-request-failed" : error;
 
+        if (pendingCoachRequest.value?.clientRequestId !== attemptClientRequestId) {
+          return errAsync(normalizedError);
+        }
+
         if (error !== "coaching-request-failed") {
           clearPendingCoachIfMatches(attemptClientRequestId);
+          return errAsync(normalizedError);
+        }
+
+        if (isDeviceOffline()) {
           return errAsync(normalizedError);
         }
 
@@ -758,20 +793,34 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     pendingRequest = null;
     inFlightMode = initialEffectiveMode;
 
+    let attemptQuestion = question;
+    let attemptMode = mode;
+    const consumePlanningEscalation = () => {
+      if (pendingRequest?.mode === "planning") {
+        attemptQuestion = pendingRequest.question ?? attemptQuestion;
+        attemptMode = "planning";
+        pendingRequest = null;
+      }
+    };
+
     return resolveAccessToken()
       .andThen((accessToken) => {
+        consumePlanningEscalation();
         void classifyExercisesIfNeeded(accessToken);
-        return executeCoachingAttempt(accessToken, question, mode).orElse((error) => {
+        return executeCoachingAttempt(accessToken, attemptQuestion, attemptMode).orElse((error) => {
           if (error !== "unauthorized") {
             return errAsync(error);
           }
           return refreshAuthAfterUnauthorized().andThen((freshToken) => {
+            consumePlanningEscalation();
             void classifyExercisesIfNeeded(freshToken);
-            return executeCoachingAttempt(freshToken, question, mode).orTee((retryErr) => {
-              if (retryErr === "unauthorized") {
-                authStore.logout();
-              }
-            });
+            return executeCoachingAttempt(freshToken, attemptQuestion, attemptMode).orTee(
+              (retryErr) => {
+                if (retryErr === "unauthorized") {
+                  authStore.logout();
+                }
+              },
+            );
           });
         });
       })
@@ -922,8 +971,11 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
 
     if (
       inFlightRecovery ||
-      (!activeAttemptRequestId && !inFlightMode && pruneExpiredPendingRequest())
+      (!activeAttemptToken && !inFlightMode && pruneExpiredPendingRequest())
     ) {
+      if (!inFlightRecovery && !isDeviceOffline()) {
+        void recoverPendingRequest();
+      }
       pendingEnsureSessionAdvice = true;
       return okAsync(undefined);
     }
@@ -975,24 +1027,36 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     () => authStore.isLoggedIn,
     (loggedIn, prevLoggedIn) => {
       if (prevLoggedIn && !loggedIn) {
-        clearPendingCoachRequest(true);
+        clearPendingRequest();
       }
     },
   );
 
   watch(visibility, (state) => {
-    if (state === "visible" && pendingCoachRequest.value && !activeAttemptRequestId) {
+    if (state === "visible" && pendingCoachRequest.value && !inFlightMode && !activeAttemptToken) {
       void recoverPendingRequest();
     }
   });
 
   const appStateListenerPromise = CapacitorApp.addListener("appStateChange", ({ isActive }) => {
-    if (isActive && pendingCoachRequest.value && !activeAttemptRequestId) {
+    if (isActive && pendingCoachRequest.value && !inFlightMode && !activeAttemptToken) {
       void recoverPendingRequest();
     }
   });
 
+  const onDeviceOnline = () => {
+    if (pendingCoachRequest.value && !inFlightMode && !activeAttemptToken) {
+      void recoverPendingRequest();
+    }
+  };
+  if (typeof window !== "undefined") {
+    window.addEventListener("online", onDeviceOnline);
+  }
+
   onScopeDispose(() => {
+    if (typeof window !== "undefined") {
+      window.removeEventListener("online", onDeviceOnline);
+    }
     void appStateListenerPromise.then((handle) => handle.remove()).catch(() => {});
   });
 
@@ -1002,5 +1066,6 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     generateNewPlan,
     ensureSessionAdvice,
     classifyExercisesIfNeeded,
+    clearPendingRequest,
   };
 });
