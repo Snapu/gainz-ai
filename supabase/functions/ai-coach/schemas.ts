@@ -334,8 +334,8 @@ function buildExerciseProperties(muscleGroupsList: string[]): Record<string, unk
   );
 
   return {
-    exerciseName: { type: "string", minLength: 1 },
-    targetSets: { type: "integer", minimum: 1, maximum: 20 },
+    exerciseName: { type: "string" },
+    targetSets: { type: "integer", description: "Number of sets (1–20)." },
     targetReps: {
       type: "string",
       description:
@@ -343,17 +343,13 @@ function buildExerciseProperties(muscleGroupsList: string[]): Record<string, unk
     },
     targetDurationSeconds: {
       type: "integer",
-      minimum: 1,
-      maximum: 14400,
       description:
-        "Used ONLY for time-based exercises like planks or isometric holds (e.g. 30, 60). Do NOT use targetReps if this is used.",
+        "Used ONLY for time-based exercises like planks or isometric holds (1–14400s, e.g. 30, 60). Do NOT use targetReps if this is used.",
     },
     targetDistanceMeters: {
       type: "integer",
-      minimum: 1,
-      maximum: 100000,
       description:
-        "Used ONLY for distance-based cardio like running or rowing (e.g. 500, 1000). Do NOT use targetReps if this is used.",
+        "Used ONLY for distance-based cardio like running or rowing (1–100000m, e.g. 500, 1000). Do NOT use targetReps if this is used.",
     },
     targetWeight: {
       type: "string",
@@ -362,17 +358,13 @@ function buildExerciseProperties(muscleGroupsList: string[]): Record<string, unk
     },
     targetRpe: {
       type: "number",
-      minimum: 1,
-      maximum: 10,
       description:
         "Target RPE (Rate of Perceived Exertion) from 6.0 to 10.0 (e.g. 8.5). Prescribe for all lifting/resistance exercises (8.0-9.0 for hypertrophy, 8.5-9.5 for strength, 6.0-6.5 for deload).",
     },
     restSeconds: {
       type: "integer",
-      minimum: 0,
-      maximum: 600,
       description:
-        "Recommended rest between sets in seconds. 180–300 for strength (1–5 reps), 120–180 for hypertrophy (6–12 reps), 45–90 for fat loss/endurance (12–20 reps), 15–30 for endurance/circuit (20–25 reps).",
+        "Recommended rest between sets in seconds (0–600). 180–300 for strength (1–5 reps), 120–180 for hypertrophy (6–12 reps), 45–90 for fat loss/endurance (12–20 reps), 15–30 for endurance/circuit (20–25 reps).",
     },
     notes: {
       type: "string",
@@ -435,39 +427,28 @@ export function createCoachingAdviceJsonSchema(
     properties: {
       cycleWeeks: {
         type: "integer",
-        minimum: 1,
-        maximum: 4,
-        description: "Duration of the mesocycle in weeks (typically 2).",
+        description: "Duration of the mesocycle in weeks (1–4, typically 2).",
       },
       sessions: {
         type: "array",
-        minItems: 1,
-        maxItems: 28,
         items: {
           type: "object",
           properties: {
             dayOfWeek: {
               type: "integer",
-              minimum: 0,
-              maximum: 6,
               description: "0=Sun, 1=Mon...6=Sat",
             },
             weekNumber: {
               type: "integer",
-              minimum: 1,
-              maximum: 4,
-              description: "1 or 2",
+              description: "Week number (1–4, typically 1 or 2).",
             },
             sessionLabel: {
               type: "string",
-              minLength: 1,
               description: "e.g., 'Unit A — Push Focus'",
             },
-            focusDescription: { type: "string", minLength: 1 },
+            focusDescription: { type: "string" },
             exercises: {
               type: "array",
-              minItems: 1,
-              maxItems: 30,
               items: plannedExerciseSchema,
             },
           },
@@ -480,8 +461,6 @@ export function createCoachingAdviceJsonSchema(
 
   const suggestedFollowUpsSchema = {
     type: "array",
-    minItems: 2,
-    maxItems: 4,
     description:
       mode === "planning" || !allowPlanUpdate
         ? "2 to 4 context-aware follow-up questions or adjustments the athlete might want to ask next."
@@ -507,7 +486,6 @@ export function createCoachingAdviceJsonSchema(
   const properties: Record<string, unknown> = {
     coachMessage: {
       type: "string",
-      minLength: 1,
       description:
         "The empathetic, motivating, and analytical message from the coach. Max 2-3 short paragraphs.",
     },
@@ -525,7 +503,6 @@ export function createCoachingAdviceJsonSchema(
     suggestedFollowUps: suggestedFollowUpsSchema,
     recommendedWorkout: {
       type: "array",
-      maxItems: 30,
       description:
         mode === "planning"
           ? "Today's first workout session from the generated training plan. Output an empty array [] ONLY if sickness, injury, or severe fatigue requires a rest day today."
@@ -868,7 +845,7 @@ const coachingAdviceValidationSchema = z.object({
   coachMessage: z.string().trim().min(1),
   startDeload: z.boolean().optional(),
   suggestedFollowUps: z.unknown().optional().transform(sanitizeSuggestedFollowUps),
-  recommendedWorkout: z.array(z.object(buildExerciseFields())).optional(),
+  recommendedWorkout: z.array(z.object(buildExerciseFields())).max(30).optional(),
   trainingPlan: buildTrainingPlanSchema().optional(),
 });
 

@@ -202,25 +202,30 @@ describe("createCoachingAdviceJsonSchema", () => {
       "trainingPlan",
     ]);
 
-    expect(planningProps.coachMessage?.minLength).toBe(1);
-    expect(planningProps.recommendedWorkout?.maxItems).toBe(30);
+    // Omit FSM-exploding schema bounds (minLength/minItems/maxItems/minimum/maximum) from Gemini responseJsonSchema;
+    // strict bounds are enforced post-parse by parseCoachingAdviceResponse (Zod).
+    expect(planningProps.coachMessage?.minLength).toBeUndefined();
+    expect(planningProps.recommendedWorkout?.maxItems).toBeUndefined();
     const recItemProps = (planningProps.recommendedWorkout?.items as Record<string, unknown>)
       ?.properties as Record<string, Record<string, unknown>>;
-    expect(recItemProps.exerciseName?.minLength).toBe(1);
+    expect(recItemProps.exerciseName?.minLength).toBeUndefined();
+    expect(recItemProps.targetDurationSeconds?.maximum).toBeUndefined();
 
     const planProps = planningProps.trainingPlan?.properties as Record<
       string,
       Record<string, unknown>
     >;
-    expect(planProps.sessions?.maxItems).toBe(28);
+    expect(planProps.sessions?.maxItems).toBeUndefined();
+    expect(planProps.sessions?.minItems).toBeUndefined();
     const sessionProps = (planProps.sessions?.items as Record<string, unknown>)
       ?.properties as Record<string, Record<string, unknown>>;
-    expect(sessionProps.sessionLabel?.minLength).toBe(1);
-    expect(sessionProps.focusDescription?.minLength).toBe(1);
-    expect(sessionProps.exercises?.maxItems).toBe(30);
+    expect(sessionProps.sessionLabel?.minLength).toBeUndefined();
+    expect(sessionProps.focusDescription?.minLength).toBeUndefined();
+    expect(sessionProps.exercises?.maxItems).toBeUndefined();
+    expect(sessionProps.exercises?.minItems).toBeUndefined();
     const planExProps = (sessionProps.exercises?.items as Record<string, unknown>)
       ?.properties as Record<string, Record<string, unknown>>;
-    expect(planExProps.exerciseName?.minLength).toBe(1);
+    expect(planExProps.exerciseName?.minLength).toBeUndefined();
     expect(planExProps.isMetabolicProtocol).toMatchObject({ type: "boolean" });
   });
 });
