@@ -29,6 +29,7 @@ function createLog(
 describe("trainingSummary", () => {
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it("exposes a ResultAsync contract for loading summaries", async () => {
@@ -238,6 +239,41 @@ describe("trainingSummary", () => {
       const result = aggregateLogsToSummary(logs);
 
       expect(result.map((s) => `${s.year}-${s.month}`)).toEqual(["2024-3", "2025-1", "2025-12"]);
+    });
+
+    it("groups late-evening UTC-5 workoutDays into the local calendar day", () => {
+      vi.spyOn(Date.prototype, "getTimezoneOffset").mockReturnValue(300);
+
+      const logs = [
+        createLog("Squat", new Date("2026-03-15T23:00:00Z"), { reps: 5, weight: 100 }),
+        createLog("Squat", new Date("2026-03-16T01:00:00Z"), { reps: 5, weight: 100 }),
+      ];
+
+      const result = aggregateLogsToSummary(logs);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        year: 2026,
+        month: 3,
+        workoutDays: 1,
+        sets: 2,
+      });
+    });
+
+    it("counts workoutDays by local calendar boundaries in UTC+2", () => {
+      vi.spyOn(Date.prototype, "getTimezoneOffset").mockReturnValue(-120);
+
+      const sameLocalDay = aggregateLogsToSummary([
+        createLog("Squat", new Date("2026-03-15T22:30:00Z"), { reps: 5, weight: 100 }),
+        createLog("Squat", new Date("2026-03-16T08:00:00Z"), { reps: 5, weight: 100 }),
+      ]);
+      expect(sameLocalDay[0]?.workoutDays).toBe(1);
+
+      const differentLocalDays = aggregateLogsToSummary([
+        createLog("Squat", new Date("2026-03-15T21:30:00Z"), { reps: 5, weight: 100 }),
+        createLog("Squat", new Date("2026-03-15T22:30:00Z"), { reps: 5, weight: 100 }),
+      ]);
+      expect(differentLocalDays[0]?.workoutDays).toBe(2);
     });
   });
 

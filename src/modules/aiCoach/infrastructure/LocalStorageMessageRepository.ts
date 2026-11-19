@@ -1,4 +1,5 @@
 import { ok, Result, type Result as ResultType } from "neverthrow";
+import { isoDateString } from "@/modules/sharedKernel/domain";
 import type { CoachingMessage } from "../domain";
 
 const STORAGE_KEY = "ai-sessions-v1";
@@ -76,7 +77,7 @@ export class LocalStorageMessageRepository {
   public cleanOldSessions(): void {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - MAX_SESSION_AGE_DAYS);
-    const cutoffIsoString = cutoffDate.toISOString().slice(0, 10);
+    const cutoffIsoString = isoDateString(cutoffDate);
 
     getSessionsMap().andTee((sessionsMap) => {
       let hasChanges = false;

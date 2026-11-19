@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { isoDateString } from "@/modules/sharedKernel/domain";
 import type { CoachingMessage } from "../domain";
 import {
   createPlanSessionId,
@@ -12,6 +13,11 @@ describe("LocalStorageMessageRepository", () => {
   beforeEach(() => {
     localStorage.clear();
     repository = new LocalStorageMessageRepository();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   describe("ID extractors", () => {
@@ -72,8 +78,8 @@ describe("LocalStorageMessageRepository", () => {
       const oldDate = new Date(now);
       oldDate.setDate(now.getDate() - 30);
 
-      const validSession = validDate.toISOString().slice(0, 10);
-      const oldSession = oldDate.toISOString().slice(0, 10);
+      const validSession = isoDateString(validDate);
+      const oldSession = isoDateString(oldDate);
       const oldPlanSession = `plan-${oldSession}`;
 
       repository.saveMessages(validSession, [
@@ -91,6 +97,44 @@ describe("LocalStorageMessageRepository", () => {
       expect(repository.loadMessages(validSession)._unsafeUnwrap()).toHaveLength(1);
       expect(repository.loadMessages(oldSession)._unsafeUnwrap()).toHaveLength(0);
       expect(repository.loadMessages(oldPlanSession)._unsafeUnwrap()).toHaveLength(0);
+    });
+
+    it("applies the 28-day cutoff using local calendar dates in UTC-5", () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-06-16T01:00:00Z"));
+      vi.spyOn(Date.prototype, "getTimezoneOffset").mockReturnValue(300);
+
+      const message = { id: "1", timestamp: "1", role: "user", content: "msg" } as CoachingMessage;
+      repository.saveMessages("2026-05-18", [message]);
+      repository.saveMessages("plan-2026-05-18", [message]);
+      repository.saveMessages("2026-05-17", [message]);
+      repository.saveMessages("plan-2026-05-17", [message]);
+
+      repository.cleanOldSessions();
+
+      expect(repository.loadMessages("2026-05-18")._unsafeUnwrap()).toHaveLength(1);
+      expect(repository.loadMessages("plan-2026-05-18")._unsafeUnwrap()).toHaveLength(1);
+      expect(repository.loadMessages("2026-05-17")._unsafeUnwrap()).toHaveLength(0);
+      expect(repository.loadMessages("plan-2026-05-17")._unsafeUnwrap()).toHaveLength(0);
+    });
+
+    it("applies the 28-day cutoff using local calendar dates in UTC+2", () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-06-15T22:30:00Z"));
+      vi.spyOn(Date.prototype, "getTimezoneOffset").mockReturnValue(-120);
+
+      const message = { id: "1", timestamp: "1", role: "user", content: "msg" } as CoachingMessage;
+      repository.saveMessages("2026-05-19", [message]);
+      repository.saveMessages("plan-2026-05-19", [message]);
+      repository.saveMessages("2026-05-18", [message]);
+      repository.saveMessages("plan-2026-05-18", [message]);
+
+      repository.cleanOldSessions();
+
+      expect(repository.loadMessages("2026-05-19")._unsafeUnwrap()).toHaveLength(1);
+      expect(repository.loadMessages("plan-2026-05-19")._unsafeUnwrap()).toHaveLength(1);
+      expect(repository.loadMessages("2026-05-18")._unsafeUnwrap()).toHaveLength(0);
+      expect(repository.loadMessages("plan-2026-05-18")._unsafeUnwrap()).toHaveLength(0);
     });
 
     it("removes legacy storage keys", () => {

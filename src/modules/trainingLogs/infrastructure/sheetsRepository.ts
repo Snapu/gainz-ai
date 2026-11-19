@@ -1,7 +1,11 @@
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { errAsync, ResultAsync } from "neverthrow";
 import { ZodError, z } from "zod";
-import { isAuthExpiredError, isNonRetryableClientError } from "@/modules/platform/infrastructure";
+import {
+  getHttpErrorStatus,
+  isAuthExpiredError,
+  isNonRetryableClientError,
+} from "@/modules/platform/infrastructure";
 import { parseData } from "@/modules/sharedKernel/domain";
 import type { ExerciseLogRepository } from "@/modules/trainingLogs/application";
 import { type ExerciseLog, ExerciseLogSchema } from "../domain/exerciseLog";
@@ -27,7 +31,6 @@ function mapMutationError<TTransient extends string>(
 }
 
 const LOGS_SHEET_PREFIX = "Logs";
-const SHEET_NAME = LOGS_SHEET_PREFIX + new Date().getFullYear();
 const CANONICAL_HEADERS = [
   "id",
   "exerciseName",
@@ -46,19 +49,42 @@ const CANONICAL_HEADERS = [
 export class ExerciseLogsSheetsRepository {
   constructor(private doc: GoogleSpreadsheet) {}
 
-  private getSheet() {
-    return this.doc.sheetsByTitle[SHEET_NAME];
+  private getSheet(year: number) {
+    return this.doc.sheetsByTitle[`${LOGS_SHEET_PREFIX}${year}`];
   }
 
-  private async addSheet() {
+  private async addSheet(year: number) {
     return this.doc.addSheet({
-      title: SHEET_NAME,
+      title: `${LOGS_SHEET_PREFIX}${year}`,
       headerValues: CANONICAL_HEADERS,
     });
   }
 
-  private async migrateExistingLogs(): Promise<void> {
-    const sheet = this.getSheet();
+  private async findSheet(year: number) {
+    const existing = this.getSheet(year);
+    if (existing) return existing;
+    await this.doc.loadInfo();
+    return this.getSheet(year);
+  }
+
+  private async getOrCreateSheet(year: number) {
+    const existing = await this.findSheet(year);
+    if (existing) return existing;
+
+    try {
+      return await this.addSheet(year);
+    } catch (error) {
+      if (getHttpErrorStatus(error) === 400) {
+        await this.doc.loadInfo();
+        const createdConcurrently = this.getSheet(year);
+        if (createdConcurrently) return createdConcurrently;
+      }
+      throw error;
+    }
+  }
+
+  private async migrateExistingLogs(year: number): Promise<void> {
+    const sheet = this.getSheet(year);
     if (!sheet) return;
 
     await sheet.loadHeaderRow();
@@ -98,8 +124,9 @@ export class ExerciseLogsSheetsRepository {
   > {
     return ResultAsync.fromThrowable(
       async () => {
-        const sheet = this.getSheet() ?? (await this.addSheet());
-        await this.migrateExistingLogs();
+        const year = new Date().getFullYear();
+        const sheet = await this.getOrCreateSheet(year);
+        await this.migrateExistingLogs(year);
         const rows = await sheet.getRows<ExerciseLog>();
         console.debug("Fetched rows", rows);
         return rows.map((row) => row.toObject());
@@ -122,7 +149,7 @@ export class ExerciseLogsSheetsRepository {
           ...log,
           id: log.id || crypto.randomUUID(),
         });
-        const sheet = this.getSheet() ?? (await this.addSheet());
+        const sheet = await this.getOrCreateSheet(parsedLog.loggedAt.getFullYear());
         await sheet.addRow(parsedLog);
       },
       (error) => mapMutationError("add", "add-failed", error),
@@ -132,13 +159,13 @@ export class ExerciseLogsSheetsRepository {
   deleteLog(
     log: ExerciseLog,
   ): ResultAsync<void, "delete-failed" | "validation-failed" | "auth-failed"> {
-    const sheet = this.getSheet();
-    if (!sheet) {
-      console.error("Failed to delete exercise log. Sheet does not exist.");
-      return errAsync("delete-failed" as const);
-    }
     return ResultAsync.fromThrowable(
       async () => {
+        const loggedAt = ExerciseLogSchema.shape.loggedAt.parse(log.loggedAt);
+        const sheet = await this.findSheet(loggedAt.getFullYear());
+        if (!sheet) {
+          throw new Error("Sheet does not exist.");
+        }
         const rows = await sheet.getRows<ExerciseLog>();
         const rowToDelete = rows.find((row) => row.get("id") === log.id);
         console.debug("Deleting row:", rowToDelete);
@@ -151,14 +178,13 @@ export class ExerciseLogsSheetsRepository {
   updateLog(
     log: ExerciseLog,
   ): ResultAsync<void, "update-failed" | "validation-failed" | "not-found" | "auth-failed"> {
-    const sheet = this.getSheet();
-    if (!sheet) {
-      console.error("Failed to update exercise log. Sheet does not exist.");
-      return errAsync("update-failed" as const);
-    }
     return ResultAsync.fromThrowable(
       async () => {
         const parsedLog = ExerciseLogSchema.parse(log);
+        const sheet = await this.findSheet(parsedLog.loggedAt.getFullYear());
+        if (!sheet) {
+          throw new Error("Sheet does not exist.");
+        }
         const rows = await sheet.getRows<ExerciseLog>();
         const rowToUpdate = rows.find((row) => row.get("id") === log.id);
         if (!rowToUpdate) {
@@ -198,8 +224,7 @@ export class ExerciseLogsSheetsRepository {
     ExerciseLog[],
     "load-failed" | "parse-data-failed" | "sheet-not-found" | "auth-failed"
   > {
-    const sheetName = LOGS_SHEET_PREFIX + year;
-    const sheet = this.doc.sheetsByTitle[sheetName];
+    const sheet = this.getSheet(year);
 
     if (!sheet) return errAsync("sheet-not-found" as const);
 

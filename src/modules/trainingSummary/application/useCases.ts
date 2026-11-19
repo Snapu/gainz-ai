@@ -1,4 +1,5 @@
 import { okAsync, type ResultAsync } from "neverthrow";
+import { isoDateString } from "@/modules/sharedKernel/domain";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 import type { TrainingSummary } from "@/modules/trainingSummary/domain";
 
@@ -51,7 +52,7 @@ export function aggregateLogsToSummary(logs: ExerciseLog[]): TrainingSummary[] {
     const year = Number(parts[0]);
     const month = Number(parts[1]);
 
-    const uniqueDays = new Set(monthLogs.map((log) => log.loggedAt.toISOString().slice(0, 10)));
+    const uniqueDays = new Set(monthLogs.map((log) => isoDateString(log.loggedAt)));
     const workoutDays = uniqueDays.size;
 
     const byExercise = new Map<string, ExerciseLog[]>();
