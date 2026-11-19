@@ -14,6 +14,19 @@ import { CLIENT_ID } from "@/modules/auth/presentation";
 import { purgeLegacyApiKeys } from "@/modules/profile/presentation";
 import { scrubSentryEvent } from "@/sentryScrubber";
 
+const PRELOAD_RELOAD_KEY = "gainz-preload-reload";
+window.addEventListener("vite:preloadError", (event) => {
+  try {
+    if (!sessionStorage.getItem(PRELOAD_RELOAD_KEY)) {
+      sessionStorage.setItem(PRELOAD_RELOAD_KEY, "1");
+      event.preventDefault();
+      window.location.reload();
+    }
+  } catch {
+    // Ignore restricted sessionStorage; let Vite's error propagate
+  }
+});
+
 purgeLegacyApiKeys();
 
 const app = createApp(App).use(createPinia()).use(router).use(vue3GoogleLogin, {
@@ -31,4 +44,9 @@ Sentry.init({
 
 router.isReady().then(() => {
   app.mount("#app");
+  try {
+    sessionStorage.removeItem(PRELOAD_RELOAD_KEY);
+  } catch {
+    // Ignore restricted sessionStorage
+  }
 });

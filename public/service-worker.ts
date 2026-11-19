@@ -63,7 +63,7 @@ self.addEventListener("message", (event) => {
   if (!data?.type) return;
 
   if (data.type === "SKIP_WAITING") {
-    self.skipWaiting();
+    event.waitUntil(self.skipWaiting());
     return;
   }
 
