@@ -401,28 +401,68 @@ describe("streamWithFallback", () => {
       contents: [{ role: "user", parts: [{ text: "Hi" }] }],
       responseJsonSchema: { type: "object" },
       temperature: 0.4,
+      topP: 0.9,
       timeoutMs: 10_000,
       thinkingConfig: { level: "minimal", includeThoughts: false },
       parseResponse: (json) => json,
     });
 
     const gemini3Body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
-      generationConfig: { thinkingConfig: Record<string, unknown> };
+      generationConfig: Record<string, unknown>;
     };
     const gemini25Body = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)) as {
-      generationConfig: { thinkingConfig: Record<string, unknown> };
+      generationConfig: Record<string, unknown>;
     };
 
-    // gemini-3.8-flash clamps unsupported "minimal" to "LOW" and never sends thinkingBudget
+    // gemini-3.8-flash clamps unsupported "minimal" to "LOW", omits legacy sampling params, and never sends thinkingBudget
     expect(gemini3Body.generationConfig.thinkingConfig).toEqual({
       thinkingLevel: "LOW",
       includeThoughts: false,
     });
-    // gemini-2.5-flash uses integer thinkingBudget and never sends thinkingLevel
+    expect(gemini3Body.generationConfig.temperature).toBeUndefined();
+    expect(gemini3Body.generationConfig.topP).toBeUndefined();
+
+    // gemini-2.5-flash uses integer thinkingBudget and keeps temperature/topP
     expect(gemini25Body.generationConfig.thinkingConfig).toEqual({
       thinkingBudget: 0,
       includeThoughts: false,
     });
+    expect(gemini25Body.generationConfig.temperature).toBe(0.4);
+    expect(gemini25Body.generationConfig.topP).toBe(0.9);
+  });
+
+  it("logs sanitized upstream error message on 4xx responses", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            error: {
+              status: "INVALID_ARGUMENT",
+              message: "Invalid value at\n'generation_config.temperature'",
+            },
+          }),
+          { status: 400 },
+        ),
+      ),
+    );
+
+    await expect(
+      streamWithFallback({
+        geminiApiKey: "test-key",
+        models: ["gemini-3.5-flash-lite"],
+        contents: [{ role: "user", parts: [{ text: "Hi" }] }],
+        responseJsonSchema: { type: "object" },
+        temperature: 0.7,
+        timeoutMs: 10_000,
+        parseResponse: (json) => json,
+      }),
+    ).rejects.toBeInstanceOf(NonRetryableModelError);
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[gemini] model=gemini-3.5-flash-lite status=400 code=INVALID_ARGUMENT msg=Invalid value at 'generation_config.temperature'",
+    );
   });
 
   it("extends timeout budget to deadlineMs on answer progress even when onAccumulatedText returns false, and still allows pre-commit fallback", async () => {

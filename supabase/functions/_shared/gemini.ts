@@ -129,17 +129,27 @@ function resolveModelThinkingConfig(
   };
 }
 
-function extractSafeUpstreamErrorCode(rawBody: string): string {
+function extractSafeUpstreamErrorDetails(rawBody: string): { code: string; message: string } {
   try {
-    const parsed = JSON.parse(rawBody) as { error?: { status?: unknown } };
-    const status = parsed?.error?.status;
-    if (typeof status === "string" && /^[A-Z0-9_]{1,40}$/.test(status)) {
-      return status;
-    }
+    const parsed = JSON.parse(rawBody) as {
+      error?: { status?: unknown; message?: unknown };
+    };
+    const rawStatus = parsed?.error?.status;
+    const code =
+      typeof rawStatus === "string" && /^[A-Z0-9_]{1,40}$/.test(rawStatus) ? rawStatus : "";
+    const rawMessage = parsed?.error?.message;
+    const message =
+      typeof rawMessage === "string"
+        ? rawMessage
+            .replace(/[\r\n\t]+/g, " ")
+            .trim()
+            .slice(0, 200)
+        : "";
+    return { code, message };
   } catch {
     // Non-JSON upstream error body; omit body details to avoid leaking sensitive context
+    return { code: "", message: "" };
   }
-  return "";
 }
 
 export function buildGeminiRequestBody(
@@ -156,10 +166,12 @@ export function buildGeminiRequestBody(
   const generationConfig: Record<string, unknown> = {
     responseMimeType: "application/json",
     responseJsonSchema: options.responseJsonSchema,
-    temperature: options.temperature,
   };
-  if (options.topP !== undefined) {
-    generationConfig.topP = options.topP;
+  if (model.startsWith("gemini-2.5")) {
+    generationConfig.temperature = options.temperature;
+    if (options.topP !== undefined) {
+      generationConfig.topP = options.topP;
+    }
   }
   if (options.thinkingConfig) {
     generationConfig.thinkingConfig = resolveModelThinkingConfig(model, options.thinkingConfig);
@@ -215,10 +227,10 @@ async function fetchGeminiResponse(
 
   if (!res.ok) {
     const errorBody = await res.text().catch(() => "");
-    const safeCode = extractSafeUpstreamErrorCode(errorBody);
+    const { code: safeCode, message: safeMessage } = extractSafeUpstreamErrorDetails(errorBody);
     const modelTag = /\/models\/([^/:]+)/.exec(url)?.[1] ?? "unknown";
     console.warn(
-      `[gemini] model=${modelTag} status=${res.status}${safeCode ? ` code=${safeCode}` : ""}`,
+      `[gemini] model=${modelTag} status=${res.status}${safeCode ? ` code=${safeCode}` : ""}${safeMessage ? ` msg=${safeMessage}` : ""}`,
     );
     if (isRetryableStatus(res.status)) {
       throw new RetryableModelError(`upstream-http-${res.status}`);
@@ -446,6 +458,18 @@ export interface StreamWithFallbackOptions<T> extends GenerateWithFallbackOption
   onAccumulatedText?: (accumulatedText: string) => boolean | undefined;
 }
 
+function logFallbackRetry(model: string, err: unknown, attemptTimeoutMs: number): void {
+  const reason =
+    err instanceof RetryableModelError
+      ? err.code
+      : err && typeof err === "object" && "name" in err
+        ? String((err as { name: unknown }).name)
+        : "unknown";
+  if (!reason.startsWith("upstream-http-")) {
+    console.warn(`[gemini] model=${model} fallback reason=${reason} budgetMs=${attemptTimeoutMs}`);
+  }
+}
+
 async function runModelsWithFallback<T>(
   options: GenerateWithFallbackOptions<T>,
   executeAttempt: (
@@ -478,6 +502,7 @@ async function runModelsWithFallback<T>(
       lastError = err;
       const hasMoreModels = i + 1 < models.length;
       if (!committed && hasMoreModels && isRetryableFailure(err)) {
+        logFallbackRetry(model, err, attemptTimeoutMs);
         continue;
       }
       throw err;
