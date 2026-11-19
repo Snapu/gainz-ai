@@ -206,7 +206,18 @@ Requests are validated with strict Zod schemas and capped at `100 KB` HTTP body 
     e1rm: Record<string, object>;         // Max 200 exercises
   };
   recentLogs: Array<object>;    // Max 500 recent logs (trailing 90 days)
-  trainingSummaries: Array<object>; // Max 60 entries
+  trainingSummaries: Array<{
+    year: number;
+    month: number;
+    workoutDays: number;
+    exercises: Array<{
+      exerciseName: string;
+      sets: number;
+      totalReps?: number;
+      maxWeight?: number;
+      totalVolume?: number;
+    }>;                         // Max 20 exercises per month
+  }>;                           // Max 12 recent months
   previousMessages: Array<{
     role: "user" | "coach";
     content: string;            // Max 8000 chars (strips trainingPlan & scratchpad)

@@ -113,6 +113,52 @@ describe("aiCoachRequestDtoSchema", () => {
     };
     expect(aiCoachRequestDtoSchema.safeParse(tooManyEvents).success).toBe(false);
   });
+
+  it("accepts up to 12 monthly summaries with up to 20 exercises each and rejects oversized summary arrays", () => {
+    const validSummaries = {
+      ...createMinimalCoachDto(),
+      trainingSummaries: Array.from({ length: 12 }, (_, idx) => ({
+        year: 2025 + Math.floor((idx + 10) / 12),
+        month: ((idx + 10) % 12) + 1,
+        workoutDays: 14,
+        exercises: Array.from({ length: 20 }, (__, exIdx) => ({
+          exerciseName: `Exercise ${exIdx + 1}`,
+          sets: 12,
+          totalReps: 100,
+          maxWeight: 80,
+          totalVolume: 8000,
+        })),
+      })),
+    };
+    expect(aiCoachRequestDtoSchema.safeParse(validSummaries).success).toBe(true);
+
+    const tooManyMonths = {
+      ...createMinimalCoachDto(),
+      trainingSummaries: Array.from({ length: 13 }, (_, idx) => ({
+        year: 2025,
+        month: (idx % 12) + 1,
+        workoutDays: 10,
+        exercises: [{ exerciseName: "Squat", sets: 12 }],
+      })),
+    };
+    expect(aiCoachRequestDtoSchema.safeParse(tooManyMonths).success).toBe(false);
+
+    const tooManyExercises = {
+      ...createMinimalCoachDto(),
+      trainingSummaries: [
+        {
+          year: 2026,
+          month: 10,
+          workoutDays: 12,
+          exercises: Array.from({ length: 21 }, (_, idx) => ({
+            exerciseName: `Exercise ${idx + 1}`,
+            sets: 3,
+          })),
+        },
+      ],
+    };
+    expect(aiCoachRequestDtoSchema.safeParse(tooManyExercises).success).toBe(false);
+  });
 });
 
 describe("createCoachingAdviceJsonSchema", () => {

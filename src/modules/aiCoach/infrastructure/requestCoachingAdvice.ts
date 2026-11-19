@@ -187,11 +187,13 @@ export type CoachActionRequestDto = {
     year: number;
     month: number;
     workoutDays: number;
-    exerciseName: string;
-    sets: number;
-    totalReps?: number;
-    maxWeight?: number;
-    totalVolume?: number;
+    exercises: Array<{
+      exerciseName: string;
+      sets: number;
+      totalReps?: number;
+      maxWeight?: number;
+      totalVolume?: number;
+    }>;
   }>;
   previousMessages: Array<{
     role: "user" | "coach";
@@ -234,6 +236,8 @@ export type CoachActionRequestDto = {
 const NINETY_DAYS_MS = 90 * 86_400_000;
 const MAX_PREVIOUS_MESSAGES = 40;
 const MAX_RECENT_LOGS = 500;
+const MAX_SUMMARY_MONTHS = 12;
+const MAX_EXERCISES_PER_MONTH = 20;
 
 function sanitizePreviousMessage(msg: CoachingMessage): {
   role: "user" | "coach";
@@ -298,6 +302,68 @@ function clampNumber(value: number, min: number, max: number): number {
 function clampOptionalInt(value: number | undefined, min: number, max: number): number | undefined {
   if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
   return clampNumber(Math.round(value), min, max);
+}
+
+function finiteOrUndefined(value: number | undefined): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function mapTrainingSummariesDto(
+  summaries: CoachingAdviceRequest["trainingSummaries"],
+): CoachActionRequestDto["trainingSummaries"] {
+  const byMonth = new Map<
+    number,
+    {
+      year: number;
+      month: number;
+      workoutDays: number;
+      exercises: CoachActionRequestDto["trainingSummaries"][number]["exercises"];
+    }
+  >();
+
+  for (const s of summaries) {
+    const year = inRange(Math.round(s.year), 2000, 2100);
+    const month = inRange(Math.round(s.month), 1, 12);
+    const exerciseName = s.exerciseName.trim().slice(0, 120);
+    if (year === undefined || month === undefined || !exerciseName) continue;
+
+    const workoutDays = clampOptionalInt(s.workoutDays, 0, 31) ?? 0;
+    const key = year * 12 + month;
+    let group = byMonth.get(key);
+    if (!group) {
+      group = { year, month, workoutDays, exercises: [] };
+      byMonth.set(key, group);
+    } else if (workoutDays > group.workoutDays) {
+      group.workoutDays = workoutDays;
+    }
+
+    group.exercises.push(
+      compactObject({
+        exerciseName,
+        sets: clampOptionalInt(s.sets, 0, 10000) ?? 0,
+        totalReps: finiteOrUndefined(s.totalReps),
+        maxWeight: finiteOrUndefined(s.maxWeight),
+        totalVolume: finiteOrUndefined(s.totalVolume),
+      }),
+    );
+  }
+
+  return [...byMonth.entries()]
+    .sort(([aKey], [bKey]) => aKey - bKey)
+    .slice(-MAX_SUMMARY_MONTHS)
+    .map(([, group]) => ({
+      year: group.year,
+      month: group.month,
+      workoutDays: group.workoutDays,
+      exercises: group.exercises
+        .sort(
+          (a, b) =>
+            b.sets - a.sets ||
+            (b.totalVolume ?? 0) - (a.totalVolume ?? 0) ||
+            a.exerciseName.localeCompare(b.exerciseName),
+        )
+        .slice(0, MAX_EXERCISES_PER_MONTH),
+    }));
 }
 
 function compactObject<T extends Record<string, unknown>>(obj: T): T {
@@ -499,18 +565,7 @@ export function buildCoachActionRequestDto(
     userProfile: mapUserProfileDto(options.userProfile),
     insights: mapInsightsDto(options.insights, muscleMap),
     recentLogs: mapRecentLogsDto(options.exerciseLogs, now),
-    trainingSummaries: options.trainingSummaries.slice(-12).map((s) =>
-      compactObject({
-        year: s.year,
-        month: s.month,
-        workoutDays: s.workoutDays,
-        exerciseName: s.exerciseName.slice(0, 120),
-        sets: s.sets,
-        totalReps: s.totalReps,
-        maxWeight: s.maxWeight,
-        totalVolume: s.totalVolume,
-      }),
-    ),
+    trainingSummaries: mapTrainingSummariesDto(options.trainingSummaries),
     previousMessages: options.previousMessages
       .slice(-MAX_PREVIOUS_MESSAGES)
       .map(sanitizePreviousMessage),

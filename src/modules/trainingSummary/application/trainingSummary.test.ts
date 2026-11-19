@@ -1,5 +1,5 @@
-import { errAsync, okAsync } from "neverthrow";
-import { describe, expect, it } from "vitest";
+import { errAsync, ok, okAsync } from "neverthrow";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 import {
   aggregateLogsToSummary,
@@ -8,6 +8,7 @@ import {
   loadTrainingSummary,
   migrateUnsummarizedMonths,
   migrateUnsummarizedYears,
+  rebuildAllTrainingSummaries,
   summaryToWorkoutDates,
   type TrainingSummary,
 } from "@/modules/trainingSummary/application";
@@ -26,6 +27,10 @@ function createLog(
 }
 
 describe("trainingSummary", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("exposes a ResultAsync contract for loading summaries", async () => {
     const repository = {
       load: () => okAsync([]),
@@ -222,6 +227,18 @@ describe("trainingSummary", () => {
       expect(result[0]?.maxWeight).toBe(60);
       expect(result[0]?.totalVolume).toBe(600);
     });
+
+    it("orders aggregated summaries chronologically even when logs are unordered", () => {
+      const logs = [
+        createLog("Squat", new Date("2025-12-10"), { reps: 5, weight: 120 }),
+        createLog("Squat", new Date("2024-03-10"), { reps: 5, weight: 100 }),
+        createLog("Squat", new Date("2025-01-10"), { reps: 5, weight: 110 }),
+      ];
+
+      const result = aggregateLogsToSummary(logs);
+
+      expect(result.map((s) => `${s.year}-${s.month}`)).toEqual(["2024-3", "2025-1", "2025-12"]);
+    });
   });
 
   describe("migration use-cases", () => {
@@ -259,6 +276,66 @@ describe("trainingSummary", () => {
       if (result.isErr()) {
         expect(result.error).toBe("load-failed");
       }
+    });
+  });
+
+  describe("rebuildAllTrainingSummaries", () => {
+    it("loads past years in ascending order before current year, excludes current month, and writes chronologically", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-11-16T10:00:00Z"));
+
+      const loadOrder: string[] = [];
+      let replacedSummaries: TrainingSummary[] = [];
+      const summaryRepository = {
+        replaceRows: vi.fn((summaries: TrainingSummary[]) => {
+          replacedSummaries = summaries;
+          return okAsync(undefined);
+        }),
+      } as never;
+      const historyRepository = {
+        findPastYears: () => [2025, 2024],
+        loadYearLogs: vi.fn((year: number) => {
+          loadOrder.push(`year:${year}`);
+          if (year === 2024) {
+            return okAsync([createLog("Squat", new Date("2024-05-10T10:00:00Z"), { reps: 5 })]);
+          }
+          return okAsync([createLog("Bench Press", new Date("2025-02-12T10:00:00Z"), { reps: 8 })]);
+        }),
+        loadCurrentYearLogs: vi.fn(() => {
+          loadOrder.push("current");
+          return okAsync([
+            createLog("Deadlift", new Date("2026-10-01T10:00:00Z"), { reps: 5 }),
+            createLog("Row", new Date("2026-01-15T10:00:00Z"), { reps: 10 }),
+            createLog("Current Month Squat", new Date("2026-11-10T10:00:00Z"), { reps: 5 }),
+          ]);
+        }),
+      } as never;
+
+      const result = await rebuildAllTrainingSummaries(summaryRepository, historyRepository);
+
+      expect(loadOrder).toEqual(["year:2024", "year:2025", "current"]);
+      expect(replacedSummaries.map((s) => `${s.year}-${s.month}:${s.exerciseName}`)).toEqual([
+        "2024-5:Squat",
+        "2025-2:Bench Press",
+        "2026-1:Row",
+        "2026-10:Deadlift",
+      ]);
+      expect(result).toEqual(ok(replacedSummaries));
+    });
+
+    it("does not wipe or replace summaries when loading logs fails with auth-failed", async () => {
+      const replaceRows = vi.fn(() => okAsync(undefined));
+      const summaryRepository = { replaceRows } as never;
+      const historyRepository = {
+        findPastYears: () => [2025],
+        loadYearLogs: () => errAsync("auth-failed" as const),
+        loadCurrentYearLogs: () => okAsync([]),
+      } as never;
+
+      const result = await rebuildAllTrainingSummaries(summaryRepository, historyRepository);
+
+      expect(result.isErr() && result.error).toBe("auth-failed");
+      expect(replaceRows).not.toHaveBeenCalled();
     });
   });
 

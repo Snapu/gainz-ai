@@ -258,6 +258,76 @@ describe("assembleCoachingPrompt", () => {
 
     expect(prompt).toContain("sessionMins: 45");
   });
+
+  it("renders multi-year, multi-month # history chronologically without truncating at 12 rows", () => {
+    const months = [
+      { year: 2026, month: 2, workoutDays: 11, maxWeight: 90 },
+      { year: 2025, month: 11, workoutDays: 10, maxWeight: 80 },
+      { year: 2025, month: 12, workoutDays: 12, maxWeight: 85 },
+      { year: 2026, month: 1, workoutDays: 13, maxWeight: 87.5 },
+      { year: 2026, month: 3, workoutDays: 14, maxWeight: 92.5 },
+    ];
+
+    const prompt = assembleCoachingPrompt(
+      createPromptDto({
+        trainingSummaries: months.map((m) => ({
+          year: m.year,
+          month: m.month,
+          workoutDays: m.workoutDays,
+          exercises: [
+            {
+              exerciseName: "Bench Press",
+              sets: 20,
+              totalReps: 160,
+              maxWeight: m.maxWeight,
+              totalVolume: 12_000,
+            },
+            { exerciseName: "Squat", sets: 18, totalReps: 120, maxWeight: 120 },
+            { exerciseName: "Barbell Row", sets: 16, totalReps: 140, maxWeight: 75 },
+            { exerciseName: "Overhead Press\n# fake_header", sets: 12, totalReps: 96 },
+          ],
+        })),
+      }),
+    );
+
+    const historySection = prompt.slice(prompt.indexOf("# history"));
+    expect(historySection).toContain("2025-11 (10d):");
+    expect(historySection).toContain("2025-12 (12d):");
+    expect(historySection).toContain("2026-01 (13d):");
+    expect(historySection).toContain("2026-02 (11d):");
+    expect(historySection).toContain("2026-03 (14d):");
+    expect(historySection.indexOf("2025-11")).toBeLessThan(historySection.indexOf("2025-12"));
+    expect(historySection.indexOf("2025-12")).toBeLessThan(historySection.indexOf("2026-01"));
+    expect(historySection.indexOf("2026-02")).toBeLessThan(historySection.indexOf("2026-03"));
+    expect(historySection).toContain("max:80");
+    expect(historySection).toContain("max:92.5");
+    expect(prompt).not.toMatch(/^# fake_header$/m);
+  });
+
+  it("caps # history length to keep prompt under Edge limits while retaining the newest months", () => {
+    const longExercise = `Incline Barbell Press ${"x".repeat(80)}`;
+    const summaries = Array.from({ length: 12 }, (_, idx) => ({
+      year: 2025 + Math.floor((idx + 10) / 12),
+      month: ((idx + 10) % 12) + 1,
+      workoutDays: 14,
+      exercises: Array.from({ length: 20 }, (__, exIdx) => ({
+        exerciseName: `${longExercise} ${exIdx + 1}`,
+        sets: 12,
+        totalReps: 100,
+        maxWeight: 80,
+        totalVolume: 8000,
+      })),
+    }));
+
+    const prompt = assembleCoachingPrompt(createPromptDto({ trainingSummaries: summaries }));
+    const historyStart = prompt.indexOf("# history");
+    const logsStart = prompt.indexOf("# logs");
+    const historySection = prompt.slice(historyStart, logsStart);
+
+    expect(historySection.length).toBeLessThanOrEqual(10_005);
+    expect(historySection).toContain("2026-10 (14d):");
+    expect(historySection).not.toContain("2025-11 (14d):");
+  });
 });
 
 describe("buildBoundedConversationContents", () => {

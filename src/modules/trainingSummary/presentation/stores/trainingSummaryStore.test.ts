@@ -229,4 +229,29 @@ describe("useTrainingSummaryStore", () => {
     await rebuildPromise;
     expect(store.isLoading).toBe(false);
   });
+
+  it("retries rebuildAllSummaries on auth-failed and preserves existing summaries when rebuild fails", async () => {
+    const initial = [{ year: 2026, month: 9, exerciseName: "Squat", sets: 3, workoutDays: 1 }];
+    const rebuilt = [{ year: 2026, month: 10, exerciseName: "Squat", sets: 6, workoutDays: 2 }];
+    loadTrainingSummaryMock.mockReturnValueOnce(okAsync(initial));
+
+    const store = useTrainingSummaryStore();
+    reactiveDoc.value = { id: "doc-1" };
+    await vi.waitFor(() => expect(store.summaries).toEqual(initial));
+
+    rebuildAllTrainingSummariesMock
+      .mockReturnValueOnce(errAsync("auth-failed"))
+      .mockReturnValueOnce(okAsync(rebuilt));
+    handleAuthErrorMock.mockResolvedValueOnce(true);
+
+    const retryResult = await store.rebuildAllSummaries();
+    expect(retryResult.isOk()).toBe(true);
+    expect(handleAuthErrorMock).toHaveBeenCalledWith("training-summary-rebuild");
+    expect(store.summaries).toEqual(rebuilt);
+
+    rebuildAllTrainingSummariesMock.mockReturnValueOnce(errAsync("save-failed"));
+    const failResult = await store.rebuildAllSummaries();
+    expect(failResult.isErr()).toBe(true);
+    expect(store.summaries).toEqual(rebuilt);
+  });
 });

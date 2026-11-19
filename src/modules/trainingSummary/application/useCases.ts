@@ -4,8 +4,8 @@ import type { TrainingSummary } from "@/modules/trainingSummary/domain";
 
 export type { TrainingSummary } from "@/modules/trainingSummary/domain";
 
-type TrainingSummaryLoadError = "load-failed" | "parse-data-failed";
-type TrainingSummarySaveError = "save-failed";
+type TrainingSummaryLoadError = "load-failed" | "parse-data-failed" | "auth-failed";
+type TrainingSummarySaveError = "save-failed" | "auth-failed";
 type TrainingSummaryLogsLoadError =
   | "load-failed"
   | "parse-data-failed"
@@ -15,7 +15,7 @@ type TrainingSummaryLogsLoadError =
 export interface TrainingSummaryRepository {
   load: () => ResultAsync<TrainingSummary[], TrainingSummaryLoadError>;
   saveRows: (summaries: TrainingSummary[]) => ResultAsync<void, TrainingSummarySaveError>;
-  clearRows: () => ResultAsync<void, TrainingSummarySaveError>;
+  replaceRows: (summaries: TrainingSummary[]) => ResultAsync<void, TrainingSummarySaveError>;
 }
 
 export interface TrainingLogHistoryRepository {
@@ -102,7 +102,7 @@ export function aggregateLogsToSummary(logs: ExerciseLog[]): TrainingSummary[] {
     }
   }
 
-  return summaries;
+  return summaries.sort((a, b) => a.year - b.year || a.month - b.month);
 }
 
 function getWorkoutDaysFromSummary(summaries: TrainingSummary[]): Map<string, number> {
@@ -201,21 +201,25 @@ export function rebuildAllTrainingSummaries(
   summaryRepository: TrainingSummaryRepository,
   historyRepository: TrainingLogHistoryRepository,
 ): ResultAsync<TrainingSummary[], TrainingSummaryLogsLoadError | TrainingSummarySaveError> {
-  return historyRepository
-    .loadCurrentYearLogs()
-    .andThen((currentYearLogs) => {
-      const years = historyRepository.findPastYears();
-      return years.reduce<ResultAsync<ExerciseLog[], TrainingSummaryLogsLoadError>>(
-        (accResult, year) =>
-          accResult.andThen((logs) =>
-            historyRepository.loadYearLogs(year).map((yearLogs) => [...logs, ...yearLogs]),
-          ),
-        okAsync([...currentYearLogs]),
-      );
-    })
+  const pastYears = [...historyRepository.findPastYears()].sort((a, b) => a - b);
+
+  return pastYears
+    .reduce<ResultAsync<ExerciseLog[], TrainingSummaryLogsLoadError>>(
+      (accResult, year) =>
+        accResult.andThen((logs) =>
+          historyRepository.loadYearLogs(year).map((yearLogs) => [...logs, ...yearLogs]),
+        ),
+      okAsync([]),
+    )
+    .andThen((pastLogs) =>
+      historyRepository
+        .loadCurrentYearLogs()
+        .map((currentYearLogs) => [...pastLogs, ...currentYearLogs]),
+    )
     .andThen((allLogs) => {
-      const currentYear = new Date().getFullYear();
-      const currentMonth = new Date().getMonth() + 1;
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1;
       const logsExcludingCurrentMonth = allLogs.filter(
         (log) =>
           !(
@@ -226,15 +230,7 @@ export function rebuildAllTrainingSummaries(
 
       const summaries = aggregateLogsToSummary(logsExcludingCurrentMonth);
 
-      return summaryRepository
-        .clearRows()
-        .andThen(() => {
-          if (summaries.length > 0) {
-            return summaryRepository.saveRows(summaries);
-          }
-          return okAsync(undefined);
-        })
-        .map(() => summaries);
+      return summaryRepository.replaceRows(summaries).map(() => summaries);
     });
 }
 
@@ -262,7 +258,7 @@ export function migrateUnsummarizedYears(
   logsRepository: TrainingLogHistoryRepository,
   existingSummaries: TrainingSummary[],
 ): ResultAsync<TrainingSummary[], TrainingSummaryLogsLoadError | TrainingSummarySaveError> {
-  const pastYears = logsRepository.findPastYears();
+  const pastYears = [...logsRepository.findPastYears()].sort((a, b) => a - b);
   const summarizedYears = getYearsSummarized(existingSummaries);
 
   const yearsToMigrate = pastYears.filter((year) => !summarizedYears.has(year));

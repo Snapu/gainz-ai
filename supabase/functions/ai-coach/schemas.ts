@@ -139,6 +139,21 @@ const plannedSessionDtoSchema = z.object({
   exercises: z.array(plannedExerciseDtoSchema).max(30),
 });
 
+const trainingSummaryExerciseDtoSchema = z.object({
+  exerciseName: z.string().trim().min(1).max(120),
+  sets: z.number().int().min(0).max(10000),
+  totalReps: z.number().finite().optional(),
+  maxWeight: z.number().finite().optional(),
+  totalVolume: z.number().finite().optional(),
+});
+
+const monthlyTrainingSummaryDtoSchema = z.object({
+  year: z.number().int().min(2000).max(2100),
+  month: z.number().int().min(1).max(12),
+  workoutDays: z.number().int().min(0).max(31),
+  exercises: z.array(trainingSummaryExerciseDtoSchema).max(20),
+});
+
 const uuidV4Schema = z.uuid({ version: "v4" });
 
 export const coachActionRequestDtoSchema = z.object({
@@ -208,20 +223,7 @@ export const coachActionRequestDtoSchema = z.object({
       }),
     )
     .max(500),
-  trainingSummaries: z
-    .array(
-      z.object({
-        year: z.number().int().min(2000).max(2100),
-        month: z.number().int().min(1).max(12),
-        workoutDays: z.number().int().min(0).max(31),
-        exerciseName: z.string().max(120),
-        sets: z.number().int().min(0).max(10000),
-        totalReps: z.number().finite().optional(),
-        maxWeight: z.number().finite().optional(),
-        totalVolume: z.number().finite().optional(),
-      }),
-    )
-    .max(60),
+  trainingSummaries: z.array(monthlyTrainingSummaryDtoSchema).max(12),
   previousMessages: z
     .array(
       z.object({

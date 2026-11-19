@@ -6,6 +6,8 @@ const MIN_INITIAL_LOG_ENTRIES = 12;
 const MAX_CONVERSATION_TURNS = 40;
 const MAX_PART_TEXT_LENGTH = 35_000;
 const MAX_TOTAL_CONVERSATION_CHARS = 50_000;
+const MAX_HISTORY_MONTHS = 12;
+const MAX_HISTORY_CHARS = 10_000;
 
 export interface ConversationContent {
   role: "user" | "model";
@@ -657,30 +659,49 @@ function buildSessionSection(
   return `# session\n${parts.join("\n")}`;
 }
 
+function formatHistoryMonthBlock(m: CoachActionRequestDto["trainingSummaries"][number]): string {
+  const monthKey = `${m.year}-${String(m.month).padStart(2, "0")}`;
+  const lines = [`${monthKey} (${m.workoutDays}d):`];
+
+  for (const s of m.exercises) {
+    const safeName = sanitizePromptText(s.exerciseName);
+    if (!safeName) continue;
+    const parts: string[] = [`${s.sets}s`];
+    if (s.totalReps) parts.push(`${s.totalReps}r`);
+    if (s.maxWeight) parts.push(`max:${s.maxWeight}`);
+    if (s.totalVolume && s.totalReps && s.totalReps > 0) {
+      parts.push(`avg:${Math.round((s.totalVolume / s.totalReps) * 10) / 10}`);
+    }
+    lines.push(`  ${safeName}: ${parts.join(" ")}`);
+  }
+
+  return lines.join("\n");
+}
+
 function buildHistorySection(summaries: CoachActionRequestDto["trainingSummaries"]): string {
   if (summaries.length === 0) return "";
-  const lines: string[] = [];
-  const byMonth = new Map<string, CoachActionRequestDto["trainingSummaries"]>();
-  for (const s of summaries.slice(-12)) {
-    const key = `${s.year}-${String(s.month).padStart(2, "0")}`;
-    const existing = byMonth.get(key) ?? [];
-    existing.push(s);
-    byMonth.set(key, existing);
+
+  const sortedMonths = [...summaries]
+    .sort((a, b) => a.year - b.year || a.month - b.month)
+    .slice(-MAX_HISTORY_MONTHS);
+
+  const monthBlocks: string[] = [];
+  let charCount = "# history\n".length;
+
+  // Walk newest -> oldest so char budget truncation keeps recent months intact.
+  for (let i = sortedMonths.length - 1; i >= 0; i--) {
+    const m = sortedMonths[i];
+    if (!m) continue;
+
+    const block = formatHistoryMonthBlock(m);
+    const addedLength = block.length + (monthBlocks.length > 0 ? 1 : 0);
+    if (monthBlocks.length > 0 && charCount + addedLength > MAX_HISTORY_CHARS) break;
+
+    monthBlocks.unshift(block);
+    charCount += addedLength;
   }
-  for (const [monthKey, entries] of byMonth) {
-    const workoutDays = entries[0]?.workoutDays ?? 0;
-    lines.push(`${monthKey} (${workoutDays}d):`);
-    for (const s of entries) {
-      const parts: string[] = [`${s.sets}s`];
-      if (s.totalReps) parts.push(`${s.totalReps}r`);
-      if (s.maxWeight) parts.push(`max:${s.maxWeight}`);
-      if (s.totalVolume && s.totalReps && s.totalReps > 0) {
-        parts.push(`avg:${Math.round((s.totalVolume / s.totalReps) * 10) / 10}`);
-      }
-      lines.push(`  ${sanitizePromptText(s.exerciseName)}: ${parts.join(" ")}`);
-    }
-  }
-  return `# history\n${lines.join("\n")}`;
+
+  return monthBlocks.length > 0 ? `# history\n${monthBlocks.join("\n")}` : "";
 }
 
 function getMidWorkoutNewLogs(

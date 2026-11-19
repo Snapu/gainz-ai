@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { calculateTrainingInsights } from "@/modules/trainingInsights/domain";
+import { assembleCoachingPrompt } from "../../../../supabase/functions/ai-coach/prompt";
 import { coachActionRequestDtoSchema } from "../../../../supabase/functions/ai-coach/schemas";
 import { type CoachingAdviceRequest, TrainingPlan } from "../domain";
 
@@ -261,6 +262,90 @@ describe("requestCoachingAdvice", () => {
     expect(parsed.previousMessages[0]?.content).toBe("Can I press heavier today?");
     expect(parsed.previousMessages[1]?.content).not.toContain("Secret model rationale");
     expect(parsed.previousMessages[1]?.content).not.toContain("trainingPlan");
+  });
+
+  it("groups multi-year trainingSummaries into at most 12 chronological months instead of slicing last 12 rows", () => {
+    const now = new Date("2026-11-15T10:30:00.000Z");
+    const summaries = [];
+
+    // 14 distinct months spanning 2025-09 through 2026-10, 3 exercises each (42 rows > 12),
+    // provided out of chronological order (2026 rows before 2025 rows).
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(Date.UTC(2025, 8 + i, 1));
+      const year = d.getUTCFullYear();
+      const month = d.getUTCMonth() + 1;
+      for (const [exerciseName, sets] of [
+        ["Bench Press", 18],
+        ["Squat", 15],
+        ["Deadlift", 9],
+      ] as const) {
+        summaries.push({
+          year,
+          month,
+          workoutDays: 12,
+          exerciseName,
+          sets,
+          totalReps: sets * 8,
+          maxWeight: 100 + i,
+          totalVolume: sets * 8 * (80 + i),
+        });
+      }
+    }
+
+    // Add >20 exercises in 2026-10 plus dirty rows to verify per-month cap and sanitization
+    for (let j = 1; j <= 20; j++) {
+      summaries.push({
+        year: 2026,
+        month: 10,
+        workoutDays: 12,
+        exerciseName: `Accessory ${j}`,
+        sets: 1,
+      });
+    }
+    summaries.push({
+      year: 2026,
+      month: 10,
+      workoutDays: 99,
+      exerciseName: "   ",
+      sets: 5,
+    });
+
+    const dto = buildCoachActionRequestDto(
+      createBaseRequest({ trainingSummaries: summaries }),
+      {},
+      now,
+    );
+
+    const parsed = coachActionRequestDtoSchema.parse(dto);
+    expect(parsed.trainingSummaries).toHaveLength(12);
+    expect(parsed.trainingSummaries.map((m) => `${m.year}-${m.month}`)).toEqual([
+      "2025-11",
+      "2025-12",
+      "2026-1",
+      "2026-2",
+      "2026-3",
+      "2026-4",
+      "2026-5",
+      "2026-6",
+      "2026-7",
+      "2026-8",
+      "2026-9",
+      "2026-10",
+    ]);
+    const latestMonth = parsed.trainingSummaries.at(-1);
+    expect(latestMonth?.exercises).toHaveLength(20);
+    expect(latestMonth?.exercises.slice(0, 3).map((e) => e.exerciseName)).toEqual([
+      "Bench Press",
+      "Squat",
+      "Deadlift",
+    ]);
+
+    const prompt = assembleCoachingPrompt(parsed);
+    expect(prompt).toContain("2025-11 (12d):");
+    expect(prompt).toContain("2026-10 (12d):");
+    expect(prompt).not.toContain("2025-09 (12d):");
+    expect(prompt.indexOf("2025-11")).toBeLessThan(prompt.indexOf("2026-10"));
+    expect(new TextEncoder().encode(JSON.stringify(parsed)).byteLength).toBeLessThan(100 * 1024);
   });
 
   it("sanitizes out-of-range profile numbers, truncates long e1rm keys, and passes now into session resolution", () => {
