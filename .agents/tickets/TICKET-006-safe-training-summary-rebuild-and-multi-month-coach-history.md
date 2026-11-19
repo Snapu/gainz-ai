@@ -18,7 +18,7 @@
 - [ ] `trainingSummary` Sheets repository maps HTTP `401`/`403` errors via `isAuthError` so store operations trigger automatic token refresh and retry.
 - [ ] Summary rebuild loads and sorts historical and current years in ascending chronological order before writing.
 - [ ] Rebuilding summaries avoids wiping existing data before replacement rows are validated and safely writable (or updates atomically/safely with error recovery so failed writes never leave an empty sheet).
-- [ ] Client DTO mapping and server prompt assembly preserve the most recent *N distinct months* (e.g., up to 12 months aggregated/grouped concisely) rather than slicing the last 12 individual `(month, exercise)` rows, removing redundant double-slicing.
+- [ ] Client DTO mapping and server prompt assembly preserve the most recent _N distinct months_ (e.g., up to 12 months aggregated/grouped concisely) rather than slicing the last 12 individual `(month, exercise)` rows, removing redundant double-slicing.
 - [ ] Schema bounds on the DTO and prompt keep payload size safely under Edge limits even across multiple months.
 
 ## Testing Decisions
