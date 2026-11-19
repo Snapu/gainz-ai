@@ -2,6 +2,7 @@ import { fetchWithTimeout } from "../_shared/http.ts";
 
 const SUPABASE_REST_TIMEOUT_MS = 5000;
 const RESULT_TTL_MS = 30 * 60 * 1000;
+const PATCH_RETRY_DELAYS_MS = [200, 600] as const;
 
 export type AiRequestResultStatus = "processing" | "completed" | "failed";
 
@@ -10,6 +11,12 @@ export interface AiRequestResultRow {
   response_payload: unknown | null;
   error_code: string | null;
 }
+
+export type AiRequestResultWriteResult =
+  | { ok: true }
+  | { ok: false; error: "http-error"; status: number }
+  | { ok: false; error: "not-found" }
+  | { ok: false; error: "request-error"; errorName: string };
 
 export interface AiRequestResultsStore {
   getActive(userId: string, clientRequestId: string): Promise<AiRequestResultRow | null | "error">;
@@ -21,9 +28,32 @@ export interface AiRequestResultsStore {
     userId: string,
     clientRequestId: string,
   ): Promise<"acquired" | "conflict" | "error">;
-  markCompleted(userId: string, clientRequestId: string, responsePayload: unknown): Promise<void>;
-  markFailed(userId: string, clientRequestId: string, errorCode: string): Promise<void>;
+  markCompleted(
+    userId: string,
+    clientRequestId: string,
+    responsePayload: unknown,
+  ): Promise<AiRequestResultWriteResult>;
+  markFailed(
+    userId: string,
+    clientRequestId: string,
+    errorCode: string,
+  ): Promise<AiRequestResultWriteResult>;
   deleteEntry(userId: string, clientRequestId: string): Promise<void>;
+}
+
+function isRetryablePatchStatus(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+function extractErrorName(err: unknown): string {
+  if (err && typeof err === "object" && "name" in err && typeof err.name === "string" && err.name) {
+    return err.name;
+  }
+  return "unknown-error";
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function keyFilter(userId: string, clientRequestId: string): string {
@@ -44,28 +74,85 @@ export function createSupabaseRequestResultsStore(
 ): AiRequestResultsStore {
   const baseUrl = `${supabaseUrl}/rest/v1/ai_request_results`;
 
-  async function patchEntry(
+  async function executePatchAttempt(
     userId: string,
     clientRequestId: string,
     body: Record<string, unknown>,
-  ): Promise<void> {
+    attempt: number,
+    canRetry: boolean,
+  ): Promise<{ result: AiRequestResultWriteResult; willRetry: boolean }> {
     try {
       const res = await fetchWithTimeout(
-        `${baseUrl}?${keyFilter(userId, clientRequestId)}`,
+        `${baseUrl}?${keyFilter(userId, clientRequestId)}&select=client_request_id`,
         {
           method: "PATCH",
-          headers: serviceHeaders(serviceRoleKey, { "Content-Type": "application/json" }),
+          headers: serviceHeaders(serviceRoleKey, {
+            "Content-Type": "application/json",
+            Prefer: "return=representation",
+          }),
           body: JSON.stringify({ ...body, updated_at: new Date().toISOString() }),
         },
         SUPABASE_REST_TIMEOUT_MS,
       );
       if (!res.ok) {
-        console.warn("ai_request_results update failed:", { status: res.status });
+        void res.body?.cancel().catch(() => {});
+        const willRetry = canRetry && isRetryablePatchStatus(res.status);
+        console.warn("ai_request_results update failed:", {
+          status: res.status,
+          attempt,
+          willRetry,
+        });
+        return { result: { ok: false, error: "http-error", status: res.status }, willRetry };
       }
+
+      const rows = (await res.json()) as unknown[];
+      if (Array.isArray(rows) && rows.length > 0) {
+        return { result: { ok: true }, willRetry: false };
+      }
+      if (attempt > 1 && Array.isArray(rows)) {
+        console.warn(
+          "ai_request_results update matched no rows on retry; assuming already claimed:",
+          { attempt },
+        );
+        return { result: { ok: true }, willRetry: false };
+      }
+      console.warn("ai_request_results update matched no rows:", { attempt });
+      return { result: { ok: false, error: "not-found" }, willRetry: false };
     } catch (err) {
+      const errorName = extractErrorName(err);
+      const willRetry = canRetry;
       console.warn("ai_request_results update error:", {
-        error: err instanceof Error ? err.name : "unknown-error",
+        error: errorName,
+        attempt,
+        willRetry,
       });
+      return { result: { ok: false, error: "request-error", errorName }, willRetry };
+    }
+  }
+
+  async function patchEntry(
+    userId: string,
+    clientRequestId: string,
+    body: Record<string, unknown>,
+    retryDelaysMs: readonly number[],
+  ): Promise<AiRequestResultWriteResult> {
+    const maxAttempts = retryDelaysMs.length + 1;
+    for (let attempt = 1; ; attempt++) {
+      const { result, willRetry } = await executePatchAttempt(
+        userId,
+        clientRequestId,
+        body,
+        attempt,
+        attempt < maxAttempts,
+      );
+      if (result.ok || !willRetry) {
+        return result;
+      }
+      const delayMs = retryDelaysMs[attempt - 1];
+      if (delayMs === undefined) {
+        return result;
+      }
+      await wait(delayMs);
     }
   }
 
@@ -156,19 +243,29 @@ export function createSupabaseRequestResultsStore(
     },
 
     markCompleted(userId, clientRequestId, responsePayload) {
-      return patchEntry(userId, clientRequestId, {
-        status: "completed",
-        response_payload: responsePayload,
-        error_code: null,
-      });
+      return patchEntry(
+        userId,
+        clientRequestId,
+        {
+          status: "completed",
+          response_payload: responsePayload,
+          error_code: null,
+        },
+        PATCH_RETRY_DELAYS_MS,
+      );
     },
 
     markFailed(userId, clientRequestId, errorCode) {
-      return patchEntry(userId, clientRequestId, {
-        status: "failed",
-        response_payload: null,
-        error_code: errorCode,
-      });
+      return patchEntry(
+        userId,
+        clientRequestId,
+        {
+          status: "failed",
+          response_payload: null,
+          error_code: errorCode,
+        },
+        [],
+      );
     },
 
     async deleteEntry(userId, clientRequestId) {

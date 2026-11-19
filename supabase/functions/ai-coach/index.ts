@@ -29,6 +29,7 @@ import {
 import {
   type AiRequestResultRow,
   type AiRequestResultsStore,
+  type AiRequestResultWriteResult,
   createSupabaseRequestResultsStore,
 } from "./requestResults.ts";
 import {
@@ -129,6 +130,123 @@ async function executeCoachAction(
   };
 }
 
+function extractErrorName(err: unknown): string {
+  if (err && typeof err === "object" && "name" in err && typeof err.name === "string" && err.name) {
+    return err.name;
+  }
+  return "UnknownError";
+}
+
+function logRequestResultWriteFailure(
+  message: string,
+  action: CoachActionRequestDto["action"],
+  result: Exclude<AiRequestResultWriteResult, { ok: true }>,
+): void {
+  console.error(message, {
+    action,
+    error: result.error,
+    ...(result.error === "http-error" ? { status: result.status } : {}),
+    ...(result.error === "request-error" ? { errorName: result.errorName } : {}),
+  });
+}
+
+function createPreviewEmitter(
+  emit: (event: "preview" | "complete" | "error", data: unknown) => boolean,
+): (accumulatedText: string) => boolean {
+  let lastPreview = "";
+  return (accumulatedText) => {
+    const preview = extractCoachMessageSoFar(accumulatedText);
+    if (!preview || (!lastPreview && !preview.trim()) || preview.length <= lastPreview.length) {
+      return false;
+    }
+    lastPreview = preview;
+    return emit("preview", { text: preview });
+  };
+}
+
+async function persistCoachCompletion(params: {
+  requestResults: AiRequestResultsStore;
+  userId: string;
+  clientRequestId: string | undefined;
+  action: CoachActionRequestDto["action"];
+  payload: unknown;
+}): Promise<AiRequestResultWriteResult> {
+  if (!params.clientRequestId) return { ok: true };
+  try {
+    const persisted = await params.requestResults.markCompleted(
+      params.userId,
+      params.clientRequestId,
+      params.payload,
+    );
+    if (!persisted.ok) {
+      logRequestResultWriteFailure("AI result persistence failed:", params.action, persisted);
+    }
+    return persisted;
+  } catch (err) {
+    const failed: AiRequestResultWriteResult = {
+      ok: false,
+      error: "request-error",
+      errorName: extractErrorName(err),
+    };
+    logRequestResultWriteFailure("AI result persistence failed:", params.action, failed);
+    return failed;
+  }
+}
+
+async function settleCoachFailure(params: {
+  dto: CoachActionRequestDto;
+  userId: string;
+  clientRequestId?: string;
+  config: AiCoachServerConfig;
+  quotaUsageDate: string | undefined;
+  deps: Pick<Required<AiCoachHandlerDeps>, "refundQuota" | "requestResults">;
+  skipMarkFailed: boolean;
+}): Promise<void> {
+  const { dto, userId, clientRequestId, config, quotaUsageDate, deps, skipMarkFailed } = params;
+  const refundTask = Promise.resolve()
+    .then(() =>
+      deps.refundQuota(
+        config.supabaseUrl,
+        config.serviceRoleKey,
+        userId,
+        dto.action,
+        quotaUsageDate,
+      ),
+    )
+    .catch((err) => {
+      console.error("Quota refund failed unexpectedly:", {
+        action: dto.action,
+        errorName: extractErrorName(err),
+      });
+    });
+
+  const markFailedTask =
+    clientRequestId && !skipMarkFailed
+      ? Promise.resolve()
+          .then(() =>
+            deps.requestResults.markFailed(userId, clientRequestId, "coaching-request-failed"),
+          )
+          .then((failedResult) => {
+            if (!failedResult.ok) {
+              logRequestResultWriteFailure(
+                "AI failure status persistence failed:",
+                dto.action,
+                failedResult,
+              );
+            }
+          })
+          .catch((err) => {
+            logRequestResultWriteFailure("AI failure status persistence failed:", dto.action, {
+              ok: false,
+              error: "request-error",
+              errorName: extractErrorName(err),
+            });
+          })
+      : Promise.resolve();
+
+  await Promise.allSettled([refundTask, markFailedTask]);
+}
+
 function createCoachStreamResponse(params: {
   dto: CoachActionRequestDto;
   userId: string;
@@ -168,49 +286,49 @@ function createCoachStreamResponse(params: {
         }
       };
 
+      const failRequest = async (skipMarkFailed = false) => {
+        await settleCoachFailure({
+          dto,
+          userId,
+          clientRequestId,
+          config,
+          quotaUsageDate,
+          deps,
+          skipMarkFailed,
+        });
+        emit("error", { error: "coaching-request-failed" });
+      };
+
       const work = (async () => {
-        let lastPreview = "";
         try {
-          const payload = await executeCoachAction(
-            dto,
-            config.geminiApiKey,
-            quota,
-            deps.streamWithFallback,
-            (accumulatedText) => {
-              const preview = extractCoachMessageSoFar(accumulatedText);
-              if (
-                !preview ||
-                (!lastPreview && !preview.trim()) ||
-                preview.length <= lastPreview.length
-              ) {
-                return false;
-              }
-              lastPreview = preview;
-              return emit("preview", { text: preview });
-            },
-          );
-          if (clientRequestId) {
-            await deps.requestResults.markCompleted(userId, clientRequestId, payload);
+          let payload: Awaited<ReturnType<typeof executeCoachAction>>;
+          try {
+            payload = await executeCoachAction(
+              dto,
+              config.geminiApiKey,
+              quota,
+              deps.streamWithFallback,
+              createPreviewEmitter(emit),
+            );
+          } catch (err) {
+            const errorName = extractErrorName(err);
+            console.error("AI execution failed:", { action: dto.action, errorName });
+            await failRequest();
+            return;
+          }
+
+          const persistence = await persistCoachCompletion({
+            requestResults: deps.requestResults,
+            userId,
+            clientRequestId,
+            action: dto.action,
+            payload,
+          });
+          if (!persistence.ok) {
+            await failRequest(persistence.error === "not-found");
+            return;
           }
           emit("complete", payload);
-        } catch (err) {
-          const errorName = err instanceof Error ? err.name : "UnknownError";
-          console.error("AI execution failed:", { action: dto.action, errorName });
-          await deps.refundQuota(
-            config.supabaseUrl,
-            config.serviceRoleKey,
-            userId,
-            dto.action,
-            quotaUsageDate,
-          );
-          if (clientRequestId) {
-            await deps.requestResults.markFailed(
-              userId,
-              clientRequestId,
-              "coaching-request-failed",
-            );
-          }
-          emit("error", { error: "coaching-request-failed" });
         } finally {
           close();
         }

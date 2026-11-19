@@ -108,6 +108,7 @@ function createMockRequestResultsStore(initial: Record<string, AiRequestResultRo
         response_payload: responsePayload,
         error_code: null,
       });
+      return { ok: true as const };
     }),
     markFailed: vi.fn(async (userId, clientRequestId, errorCode) => {
       rows.set(key(userId, clientRequestId), {
@@ -115,6 +116,7 @@ function createMockRequestResultsStore(initial: Record<string, AiRequestResultRo
         response_payload: null,
         error_code: errorCode,
       });
+      return { ok: true as const };
     }),
     deleteEntry: vi.fn(async (userId, clientRequestId) => {
       rows.delete(key(userId, clientRequestId));
@@ -974,5 +976,440 @@ describe("ai-coach idempotency and request recovery", () => {
 
     expect(res.status).toBe(503);
     expect(await res.json()).toEqual({ error: "recovery-check-failed" });
+  });
+
+  it("retries transient HTTP 503 during markCompleted and returns ok once persisted", async () => {
+    vi.useFakeTimers();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("upstream unavailable", { status: 503 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([{ client_request_id: VALID_UUID_V4 }]), { status: 200 }),
+      );
+
+    try {
+      const store = createSupabaseRequestResultsStore("https://test.supabase.co", "svc-key");
+      const pending = store.markCompleted("google-sub-123", VALID_UUID_V4, {
+        advice: { coachMessage: "Persisted after retry." },
+      });
+
+      await vi.advanceTimersByTimeAsync(200);
+      expect(await pending).toEqual({ ok: true });
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      const patchUrl = String(fetchSpy.mock.calls[0]?.[0]);
+      expect(patchUrl).toContain("select=client_request_id");
+      expect(fetchSpy.mock.calls[0]?.[1]?.method).toBe("PATCH");
+      expect((fetchSpy.mock.calls[0]?.[1]?.headers as Record<string, string>)?.Prefer).toBe(
+        "return=representation",
+      );
+    } finally {
+      warnSpy.mockRestore();
+      fetchSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it("retries timeout AbortError during markCompleted with zero-PII warnings", async () => {
+    vi.useFakeTimers();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementationOnce(
+        (_url, init) =>
+          new Promise((_, reject) => {
+            init?.signal?.addEventListener(
+              "abort",
+              () => reject(new DOMException("The operation was aborted", "AbortError")),
+              { once: true },
+            );
+          }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([{ client_request_id: VALID_UUID_V4 }]), { status: 200 }),
+      );
+
+    try {
+      const store = createSupabaseRequestResultsStore("https://test.supabase.co", "svc-key");
+      const pending = store.markCompleted("google-sub-123", VALID_UUID_V4, {
+        advice: { coachMessage: "Sensitive knee rehab plan" },
+      });
+
+      await vi.advanceTimersByTimeAsync(5000);
+      await vi.advanceTimersByTimeAsync(200);
+
+      expect(await pending).toEqual({ ok: true });
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      const warnText = warnSpy.mock.calls
+        .flat()
+        .map((v) => (typeof v === "string" ? v : JSON.stringify(v)))
+        .join(" ");
+      expect(warnText).toContain("AbortError");
+      expect(warnText).not.toContain("google-sub-123");
+      expect(warnText).not.toContain("Sensitive knee rehab plan");
+    } finally {
+      warnSpy.mockRestore();
+      fetchSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it("returns typed failures after exhausting retries on persistent 503 or AbortError", async () => {
+    vi.useFakeTimers();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("down", { status: 503 }))
+      .mockResolvedValueOnce(new Response("down", { status: 503 }))
+      .mockResolvedValueOnce(new Response("down", { status: 503 }))
+      .mockRejectedValueOnce(new DOMException("Timed out", "AbortError"))
+      .mockRejectedValueOnce(new DOMException("Timed out", "AbortError"))
+      .mockRejectedValueOnce(new DOMException("Timed out", "AbortError"));
+
+    try {
+      const store = createSupabaseRequestResultsStore("https://test.supabase.co", "svc-key");
+
+      const http503Pending = store.markCompleted("google-sub-123", VALID_UUID_V4, { ok: 1 });
+      await vi.advanceTimersByTimeAsync(200);
+      await vi.advanceTimersByTimeAsync(600);
+      expect(await http503Pending).toEqual({ ok: false, error: "http-error", status: 503 });
+
+      const abortPending = store.markCompleted("google-sub-123", VALID_UUID_V4, { ok: 1 });
+      await vi.advanceTimersByTimeAsync(200);
+      await vi.advanceTimersByTimeAsync(600);
+      expect(await abortPending).toEqual({
+        ok: false,
+        error: "request-error",
+        errorName: "AbortError",
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(6);
+    } finally {
+      warnSpy.mockRestore();
+      fetchSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not retry non-retryable HTTP 400 or unmatched rows on markCompleted", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("bad request", { status: 400 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }));
+
+    try {
+      const store = createSupabaseRequestResultsStore("https://test.supabase.co", "svc-key");
+      expect(await store.markCompleted("google-sub-123", VALID_UUID_V4, {})).toEqual({
+        ok: false,
+        error: "http-error",
+        status: 400,
+      });
+      expect(await store.markCompleted("google-sub-123", VALID_UUID_V4, {})).toEqual({
+        ok: false,
+        error: "not-found",
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      warnSpy.mockRestore();
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("refunds quota, marks failed, emits error instead of complete, and logs zero PII when markCompleted fails on open stream", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const consoleInfoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+
+    try {
+      const { store, rows } = createMockRequestResultsStore();
+      vi.mocked(store.markCompleted).mockResolvedValueOnce({
+        ok: false,
+        error: "http-error",
+        status: 503,
+      });
+      const { deps } = createDeps({
+        requestResults: store,
+        consumeQuota: vi.fn(async () => ({
+          allowed: true,
+          current_count: 4,
+          daily_limit: 15,
+          reset_at: "2026-11-16T00:00:00.000Z",
+        })),
+      });
+
+      const response = await handleAiCoachRequest(
+        createJsonRequest(
+          createValidCoachDto({
+            clientRequestId: VALID_UUID_V4,
+            question: "Sensitive knee pain telemetry question",
+            userProfile: {
+              freeUserInput: "Private medical surgery note",
+              workoutDaysPerWeek: 3,
+            },
+          }),
+        ),
+        deps,
+      );
+
+      expect(response.status).toBe(200);
+      const events = await readSseEvents(response);
+      expect(events.map((e) => e.event)).toEqual(["preview", "preview", "error"]);
+      expect(events.find((e) => e.event === "complete")).toBeUndefined();
+      expect(events.at(-1)).toEqual({
+        event: "error",
+        data: { error: "coaching-request-failed" },
+      });
+
+      expect(deps.refundQuota).toHaveBeenCalledWith(
+        "https://test.supabase.co",
+        "test-service-role",
+        "google-sub-123",
+        "coach",
+        "2026-11-15",
+      );
+      expect(store.markFailed).toHaveBeenCalledWith(
+        "google-sub-123",
+        VALID_UUID_V4,
+        "coaching-request-failed",
+      );
+      expect(rows.get(`google-sub-123:${VALID_UUID_V4}`)?.status).toBe("failed");
+
+      const allLoggedText = [
+        ...consoleErrorSpy.mock.calls.flat(),
+        ...consoleWarnSpy.mock.calls.flat(),
+        ...consoleLogSpy.mock.calls.flat(),
+        ...consoleInfoSpy.mock.calls.flat(),
+      ]
+        .map((v) => (typeof v === "string" ? v : JSON.stringify(v)))
+        .join(" ");
+      expect(allLoggedText).not.toContain("Sensitive knee pain");
+      expect(allLoggedText).not.toContain("Private medical surgery note");
+      expect(allLoggedText).not.toContain("google-sub-123");
+      expect(allLoggedText).not.toContain("Focus on progressive overload");
+    } finally {
+      consoleErrorSpy.mockRestore();
+      consoleWarnSpy.mockRestore();
+      consoleLogSpy.mockRestore();
+      consoleInfoSpy.mockRestore();
+    }
+  });
+
+  it("refunds quota and transitions disconnected request to failed for recover when markCompleted fails", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const { store, rows } = createMockRequestResultsStore();
+      vi.mocked(store.markCompleted).mockResolvedValueOnce({
+        ok: false,
+        error: "request-error",
+        errorName: "AbortError",
+      });
+      let resolveGemini!: (val: { data: unknown; model: string }) => void;
+      const geminiDeferred = new Promise<{ data: unknown; model: string }>((resolve) => {
+        resolveGemini = resolve;
+      });
+
+      const { deps, waitUntilPromises } = createDeps({
+        requestResults: store,
+        streamWithFallback: vi.fn(async (opts: StreamWithFallbackOptions<unknown>) => {
+          opts.onAccumulatedText?.('{"coachMessage": "Background answer ');
+          return geminiDeferred;
+        }) as unknown as NonNullable<AiCoachHandlerDeps["streamWithFallback"]>,
+      });
+
+      const res = await handleAiCoachRequest(
+        createJsonRequest(createValidCoachDto({ clientRequestId: VALID_UUID_V4 })),
+        deps,
+      );
+      expect(res.status).toBe(200);
+      if (!res.body) throw new Error("Expected SSE response body");
+      const reader = res.body.getReader();
+      await reader.read();
+      await reader.cancel("client-disconnected");
+      reader.releaseLock();
+
+      resolveGemini({
+        data: { coachMessage: "Background answer completed cleanly." },
+        model: "gemini-3.8-flash",
+      });
+      await Promise.all(waitUntilPromises);
+
+      expect(deps.refundQuota).toHaveBeenCalledTimes(1);
+      expect(store.markFailed).toHaveBeenCalledWith(
+        "google-sub-123",
+        VALID_UUID_V4,
+        "coaching-request-failed",
+      );
+      expect(rows.get(`google-sub-123:${VALID_UUID_V4}`)?.status).toBe("failed");
+
+      const recoverRes = await handleAiCoachRequest(
+        createJsonRequest({ action: "recover", clientRequestId: VALID_UUID_V4 }),
+        deps,
+      );
+      expect(recoverRes.status).toBe(502);
+      expect(await recoverRes.json()).toEqual({
+        status: "failed",
+        error: "coaching-request-failed",
+      });
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it("treats empty representation on markCompleted retry as already claimed by recover", async () => {
+    vi.useFakeTimers();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(new DOMException("The operation was aborted", "AbortError"))
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }));
+
+    try {
+      const store = createSupabaseRequestResultsStore("https://test.supabase.co", "svc-key");
+      const pending = store.markCompleted("google-sub-123", VALID_UUID_V4, {
+        advice: { coachMessage: "Sensitive knee rehab plan" },
+      });
+
+      await vi.advanceTimersByTimeAsync(200);
+      expect(await pending).toEqual({ ok: true });
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      const warnText = warnSpy.mock.calls
+        .flat()
+        .map((v) => (typeof v === "string" ? v : JSON.stringify(v)))
+        .join(" ");
+      expect(warnText).toContain("already claimed");
+      expect(warnText).not.toContain("google-sub-123");
+      expect(warnText).not.toContain("Sensitive knee rehab plan");
+    } finally {
+      warnSpy.mockRestore();
+      fetchSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it("caps markFailed to 1 attempt and logs accurate willRetry flags across markCompleted attempts", async () => {
+    vi.useFakeTimers();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("down", { status: 503 }))
+      .mockResolvedValueOnce(new Response("down", { status: 503 }))
+      .mockResolvedValueOnce(new Response("down", { status: 503 }))
+      .mockResolvedValueOnce(new Response("down", { status: 503 }));
+
+    try {
+      const store = createSupabaseRequestResultsStore("https://test.supabase.co", "svc-key");
+
+      expect(
+        await store.markFailed("google-sub-123", VALID_UUID_V4, "coaching-request-failed"),
+      ).toEqual({
+        ok: false,
+        error: "http-error",
+        status: 503,
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy.mock.calls[0]?.[1]).toEqual({
+        status: 503,
+        attempt: 1,
+        willRetry: false,
+      });
+
+      warnSpy.mockClear();
+      const completedPending = store.markCompleted("google-sub-123", VALID_UUID_V4, {});
+      await vi.advanceTimersByTimeAsync(200);
+      await vi.advanceTimersByTimeAsync(600);
+      expect(await completedPending).toEqual({ ok: false, error: "http-error", status: 503 });
+      expect(fetchSpy).toHaveBeenCalledTimes(4);
+      expect(warnSpy.mock.calls.map((call) => call[1])).toEqual([
+        { status: 503, attempt: 1, willRetry: true },
+        { status: 503, attempt: 2, willRetry: true },
+        { status: 503, attempt: 3, willRetry: false },
+      ]);
+    } finally {
+      warnSpy.mockRestore();
+      fetchSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it("skips markFailed when markCompleted returns not-found on first attempt", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const { store } = createMockRequestResultsStore();
+      vi.mocked(store.markCompleted).mockResolvedValueOnce({ ok: false, error: "not-found" });
+      const { deps } = createDeps({ requestResults: store });
+
+      const response = await handleAiCoachRequest(
+        createJsonRequest(createValidCoachDto({ clientRequestId: VALID_UUID_V4 })),
+        deps,
+      );
+
+      expect(response.status).toBe(200);
+      const events = await readSseEvents(response);
+      expect(events.map((e) => e.event)).toEqual(["preview", "preview", "error"]);
+      expect(events.find((e) => e.event === "complete")).toBeUndefined();
+      expect(deps.refundQuota).toHaveBeenCalledTimes(1);
+      expect(store.markFailed).not.toHaveBeenCalled();
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it("runs refundQuota and markFailed concurrently, isolates unexpected throws, and logs zero-PII markFailed failure", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const { store } = createMockRequestResultsStore();
+      let resolveMarkFailed!: (res: { ok: false; error: "http-error"; status: number }) => void;
+      vi.mocked(store.markFailed).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveMarkFailed = resolve;
+          }),
+      );
+      let rejectRefund!: (err: Error) => void;
+      const refundQuotaSpy = vi.fn(
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            rejectRefund = reject;
+          }),
+      );
+      const { deps, waitUntilPromises } = createDeps({
+        requestResults: store,
+        refundQuota: refundQuotaSpy,
+        streamWithFallback: vi.fn(async () => {
+          throw new Error("Gemini failed");
+        }) as unknown as NonNullable<AiCoachHandlerDeps["streamWithFallback"]>,
+      });
+
+      const response = await handleAiCoachRequest(
+        createJsonRequest(
+          createValidCoachDto({
+            clientRequestId: VALID_UUID_V4,
+            question: "Sensitive lumbar disc query",
+          }),
+        ),
+        deps,
+      );
+      expect(response.status).toBe(200);
+      await vi.waitFor(() => {
+        expect(refundQuotaSpy).toHaveBeenCalledTimes(1);
+        expect(store.markFailed).toHaveBeenCalledTimes(1);
+      });
+
+      rejectRefund(new TypeError("Unexpected network failure"));
+      resolveMarkFailed({ ok: false, error: "http-error", status: 503 });
+      const events = await readSseEvents(response);
+      await expect(Promise.all(waitUntilPromises)).resolves.toBeDefined();
+
+      expect(events).toEqual([{ event: "error", data: { error: "coaching-request-failed" } }]);
+      expect(refundQuotaSpy).toHaveBeenCalledTimes(1);
+      const errorCalls = consoleErrorSpy.mock.calls.map((c) => JSON.stringify(c)).join(" ");
+      expect(errorCalls).toContain("Quota refund failed unexpectedly:");
+      expect(errorCalls).toContain("AI failure status persistence failed:");
+      expect(errorCalls).not.toContain("Sensitive lumbar disc query");
+      expect(errorCalls).not.toContain("google-sub-123");
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 });
