@@ -6,6 +6,7 @@ import vue from "@vitejs/plugin-vue";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 import vueDevTools from "vite-plugin-vue-devtools";
+import { configDefaults } from "vitest/config";
 
 // https://vitejs.dev/config/
 export default defineConfig(() => {
@@ -67,7 +68,7 @@ export default defineConfig(() => {
       {
         name: "vitest-deno-npm-specifier-stub",
         resolveId(id) {
-          if (process.env.VITEST && id === "npm:jose@5") {
+          if (process.env.VITEST && id === "npm:jose@5.10.0") {
             return "\0vitest-npm-jose";
           }
         },
@@ -86,6 +87,7 @@ export default defineConfig(() => {
     test: {
       environment: "jsdom",
       setupFiles: ["src/vitest.setup.ts"],
+      exclude: [...configDefaults.exclude, "**/*.deno.test.ts"],
     },
   };
 });

@@ -8,6 +8,7 @@
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
     "test:unit": "vitest --no-watch",
+    "test:edge": "deno test --no-config --no-lock --allow-env supabase/functions/*/*.deno.test.ts",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
     "lint": "biome check . --write",

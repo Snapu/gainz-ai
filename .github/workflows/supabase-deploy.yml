@@ -7,15 +7,66 @@ on:
       - dev
     paths:
       - "supabase/**"
+      - "package.json"
+      - "vite.config.ts"
+      - "tsconfig.vitest.json"
+      - ".github/workflows/supabase-deploy.yml"
+  pull_request:
+    paths:
+      - "supabase/**"
+      - "package.json"
+      - "vite.config.ts"
+      - "tsconfig.vitest.json"
       - ".github/workflows/supabase-deploy.yml"
   workflow_dispatch:
 
 concurrency:
-  group: supabase-deploy-${{ github.ref == 'refs/heads/main' && 'production' || 'dev' }}
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('supabase-test-{0}', github.ref) || format('supabase-deploy-{0}', github.ref == 'refs/heads/main' && 'production' || 'dev') }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: 2.9.8
+
+      - name: Type-check Edge Functions with Deno
+        run: |
+          deno check --no-config --no-lock supabase/functions/auth-token/index.ts
+          deno check --config supabase/functions/ai-coach/deno.json --no-lock supabase/functions/ai-coach/index.ts
+
+      - name: Run Edge security tests with Deno
+        run: deno test --no-config --no-lock --allow-env supabase/functions/*/*.deno.test.ts
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check Edge formatting and lint rules
+        run: pnpm exec biome check supabase/
+
+      - name: Run Vitest Edge Function and architecture tests
+        run: pnpm vitest run supabase/functions/ src/modules/architecture.boundaries.test.ts
+
   deploy:
+    needs: test
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'dev' }}
     env:

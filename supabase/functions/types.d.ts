@@ -1,8 +1,9 @@
-declare module "npm:jose@5" {
-  export function createRemoteJWKSet(url: URL): unknown;
+declare module "npm:jose@5.10.0" {
+  export type JWTVerifyGetKey = unknown;
+  export function createRemoteJWKSet(url: URL): JWTVerifyGetKey;
   export function jwtVerify(
     jwt: string,
-    jwks: unknown,
-    options: { issuer: string | string[]; audience: string | string[] },
+    jwks: JWTVerifyGetKey,
+    options: { algorithms?: string[]; issuer: string | string[]; audience: string | string[] },
   ): Promise<{ payload: Record<string, unknown> }>;
 }

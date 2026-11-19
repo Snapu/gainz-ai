@@ -1,9 +1,13 @@
-import { createRemoteJWKSet, jwtVerify } from "npm:jose@5";
+import { createRemoteJWKSet, type JWTVerifyGetKey, jwtVerify } from "npm:jose@5.10.0";
 import { fetchWithTimeout } from "./http.ts";
 
 const GOOGLE_TOKENINFO_ENDPOINT = "https://oauth2.googleapis.com/tokeninfo";
 const GOOGLE_TOKENINFO_TIMEOUT_MS = 5000;
 const GOOGLE_JWKS = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"));
+
+export interface VerifyGoogleCallerOptions {
+  jwks?: JWTVerifyGetKey;
+}
 
 export function extractBearerToken(req: Request): string | null {
   const authHeader = req.headers.get("Authorization") ?? req.headers.get("authorization");
@@ -15,9 +19,11 @@ export function extractBearerToken(req: Request): string | null {
 async function verifyGoogleIdToken(
   idToken: string,
   expectedClientId: string,
+  jwks: JWTVerifyGetKey = GOOGLE_JWKS,
 ): Promise<{ userId: string } | null> {
   try {
-    const { payload } = await jwtVerify(idToken, GOOGLE_JWKS, {
+    const { payload } = await jwtVerify(idToken, jwks, {
+      algorithms: ["RS256"],
       issuer: ["https://accounts.google.com", "accounts.google.com"],
       audience: expectedClientId,
     });
@@ -70,10 +76,11 @@ async function verifyGoogleAccessToken(
 export async function verifyGoogleCaller(
   token: string,
   expectedClientId: string,
+  options?: VerifyGoogleCallerOptions,
 ): Promise<{ userId: string } | null> {
   // Never fall back to OAuth access-token introspection for malformed or invalid 3-segment JWTs
   if (token.split(".").length === 3) {
-    return verifyGoogleIdToken(token, expectedClientId);
+    return verifyGoogleIdToken(token, expectedClientId, options?.jwks ?? GOOGLE_JWKS);
   }
 
   return verifyGoogleAccessToken(token, expectedClientId);

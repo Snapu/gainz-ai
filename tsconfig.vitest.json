@@ -9,7 +9,7 @@
     "supabase/functions/auth-token/**/*.ts",
     "supabase/functions/ai-coach/**/*.ts"
   ],
-  "exclude": [],
+  "exclude": ["supabase/functions/**/*.deno.test.ts"],
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.vitest.tsbuildinfo",
     "allowImportingTsExtensions": true,

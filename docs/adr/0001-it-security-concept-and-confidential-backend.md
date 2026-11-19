@@ -125,7 +125,7 @@ To prevent denial-of-wallet and quota exhaustion:
   - Direct public client access is completely blocked (`FOR ALL TO service_role USING (true)`, revoked from `public`, `anon`, and `authenticated`).
   - `public.ai_request_results` stores zero athlete input DTOs—only idempotency status, error code, and completed `{ advice, quota }` payloads bounded by Delete-on-Recovery and a 30-minute TTL.
   - Quota and recovery helper functions run with `SECURITY INVOKER` / strict `service_role` grants and an empty search path (`SET search_path = ''`) to eliminate search-path hijacking.
-- **Rate-Limiting Defense In Depth**: `auth-token` enforces per-isolate token exchange rate-limiting (30 req/min per IP) as a baseline defense against local flooding, which can be backed by centralized Redis/PostgreSQL if targeted distributed abuse arises.
+- **Rate-Limiting Defense In Depth**: `auth-token` enforces per-isolate token exchange rate-limiting (30 req/min per attributed IP, a shared 10 req/min fallback bucket for unattributed requests without client IP headers, and a 2,000-key map cap collapsing overflow keys to the strict bucket) as a low-latency baseline defense against local flooding alongside Cloudflare WAF and Google OAuth quotas, which can be backed by centralized Redis/PostgreSQL if targeted distributed abuse arises.
 - **Telemetry Sanitization**: Sentry `beforeSend` in `src/main.ts` drops `user` PII, strips sensitive request headers (`authorization`, `cookie`, `x-api-key`), and redacts `access_token` / `id_token` / `code` query parameters before events leave the client.
 
 ---

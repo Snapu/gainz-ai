@@ -28,7 +28,7 @@ This document provides the authoritative technical reference for the Gainz AI ba
 
 - **Endpoint Path**: `POST /functions/v1/auth-token`
 - **Authentication**: Public (protected by Supabase `apikey`).
-- **Rate Limit**: Max 30 requests per 60-second window per client IP.
+- **Rate Limit**: Max 30 requests per 60-second window per attributed client IP (and a shared 10 requests per 60-second fallback limit when client IP headers are absent).
 - **Purpose**: Implements the OAuth 2.0 Authorization Code flow and token refresh as a confidential client. Keeps `GOOGLE_CLIENT_SECRET` strictly on the server.
 
 ### 2.1 Action: `authorization_code`
@@ -78,7 +78,7 @@ curl -X POST "https://<PROJECT_REF>.supabase.co/functions/v1/auth-token" \
 | :--- | :--- | :--- |
 | `400 Bad Request` | `{"error": "invalid-request"}` | Payload omitted or malformed `code` / `grantType`. |
 | `401 Unauthorized` | `{"error": "token-exchange-failed", "details": "invalid_grant"}` | The code was already used, expired, or invalid. |
-| `429 Too Many Requests` | `{"error": "rate-limited", "message": "..."}` | Rate limit exceeded (Retry-After: 60s). |
+| `429 Too Many Requests` | `{"error": "rate-limited", "message": "..."}` | Rate limit exceeded (dynamic `Retry-After` header: `1–60s` remaining in window). |
 | `500 Server Error` | `{"error": "missing-server-config"}` | Missing `GOOGLE_CLIENT_SECRET` in Supabase vault. |
 | `502 Bad Gateway` | `{"error": "token-exchange-failed"}` | Google OAuth service unreachable or returned upstream 5xx. |
 
@@ -126,7 +126,7 @@ curl -X POST "https://<PROJECT_REF>.supabase.co/functions/v1/auth-token" \
 | :--- | :--- | :--- |
 | `400 Bad Request` | `{"error": "invalid-request"}` | Missing or empty `refreshToken`. |
 | `401 Unauthorized` | `{"error": "token-refresh-failed", "details": "invalid_grant"}` | The user revoked app permissions or refresh token is invalid. |
-| `429 Too Many Requests` | `{"error": "rate-limited", "message": "..."}` | Rate limit exceeded. |
+| `429 Too Many Requests` | `{"error": "rate-limited", "message": "..."}` | Rate limit exceeded (dynamic `Retry-After` header: `1–60s` remaining in window). |
 
 ---
 
