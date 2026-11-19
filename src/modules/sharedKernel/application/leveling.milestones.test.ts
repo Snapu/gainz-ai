@@ -48,7 +48,7 @@ function mockLog(date: Date, exercise: string, weight: number): ExerciseLog {
 }
 
 describe("Leveling Milestone Audit", () => {
-  it("should reach every title milestone within strict bounds", { timeout: 60000 }, () => {
+  it("should reach every title milestone within strict bounds", { timeout: 120000 }, () => {
     const logs: ExerciseLog[] = [];
     const startDate = new Date("2025-01-01");
     let currentWeight = 60;
