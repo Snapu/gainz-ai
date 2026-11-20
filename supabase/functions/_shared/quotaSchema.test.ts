@@ -64,6 +64,15 @@ describe("ai_daily_global_usage schema and migration contract", () => {
     expect(loadLatestMigrationSection(migrations, REFUND_START, REFUND_END)).toBe(refundBlock);
   });
 
+  it("wraps LOCK TABLE migrations in an explicit transaction (the Supabase CLI adds none)", () => {
+    for (const { name, sql } of migrations) {
+      const lockIdx = sql.search(/^\s*lock table/im);
+      if (lockIdx === -1) continue;
+      expect(sql.slice(0, lockIdx), name).toMatch(/^\s*begin;/im);
+      expect(sql.slice(lockIdx), name).toMatch(/^\s*commit;/im);
+    }
+  });
+
   it("eliminates O(N) daily SUM scans, keeps capped rejections read-only, and enforces atomic backfill + overload cleanup", () => {
     expect(consumeBlock).not.toMatch(/\bsum\s*\(\s*coaching_count\s*\)/i);
     expect(consumeBlock).not.toMatch(/\bsum\s*\(\s*classify_count\s*\)/i);

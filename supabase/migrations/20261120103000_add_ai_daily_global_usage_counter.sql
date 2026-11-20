@@ -1,5 +1,8 @@
 -- Replace O(N) daily SUM scans in consume_ai_quota with an O(1) atomic daily global counter table
 
+-- Explicit transaction: the Supabase CLI adds none, and LOCK TABLE requires one.
+begin;
+
 create table if not exists public.ai_daily_global_usage (
   usage_date date not null default (now() at time zone 'utc')::date,
   coaching_count integer not null default 0 check (coaching_count >= 0),
@@ -257,3 +260,5 @@ $$;
 
 revoke all on function public.refund_ai_quota(text, text, date) from public, anon, authenticated;
 grant execute on function public.refund_ai_quota(text, text, date) to service_role;
+
+commit;
