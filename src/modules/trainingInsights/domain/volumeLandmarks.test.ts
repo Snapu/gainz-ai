@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 import {
+  createMuscleActivationResolver,
+  getMuscleActivation,
+  type MuscleActivation,
+} from "./exerciseMuscleMap";
+import {
   calculateMuscleGroupInsights,
   calculateWeeklyVolume,
   classifyLandmark,
@@ -211,6 +216,224 @@ describe("Volume Landmarks", () => {
       const quadsVolume = volumes.find((v) => v.muscleGroup === "Quads");
 
       expect(quadsVolume?.hoursSinceLastTrained).toBeCloseTo(48, 1);
+    });
+
+    it("returns empty array for empty logs", () => {
+      expect(calculateWeeklyVolume([], baseDate)).toEqual([]);
+    });
+
+    it("enforces exact 29-day cutoff and same-day post-targetDate boundaries", () => {
+      const exactCutoff = new Date(baseDate);
+      exactCutoff.setDate(exactCutoff.getDate() - 28);
+      exactCutoff.setHours(0, 0, 0, 0);
+
+      const justBeforeCutoff = new Date(exactCutoff.getTime() - 1);
+
+      const included = calculateWeeklyVolume(
+        [{ id: "in", exerciseName: "Bench Press", loggedAt: exactCutoff, weight: 100, reps: 5 }],
+        baseDate,
+      );
+      expect(included.find((v) => v.muscleGroup === "Chest")?.sets).toBeGreaterThan(0);
+
+      const excluded = calculateWeeklyVolume(
+        [
+          {
+            id: "out",
+            exerciseName: "Bench Press",
+            loggedAt: justBeforeCutoff,
+            weight: 100,
+            reps: 5,
+          },
+        ],
+        baseDate,
+      );
+      expect(excluded).toEqual([]);
+
+      const middayTarget = new Date("2024-01-14T12:00:00");
+      const laterSameDay = new Date("2024-01-14T18:00:00");
+      const nextDayStart = new Date("2024-01-15T00:00:00.000");
+
+      const sameDayAfterTarget = calculateWeeklyVolume(
+        [
+          {
+            id: "same-day-late",
+            exerciseName: "Bench Press",
+            loggedAt: laterSameDay,
+            weight: 100,
+            reps: 5,
+          },
+        ],
+        middayTarget,
+      );
+      const chest = sameDayAfterTarget.find((v) => v.muscleGroup === "Chest");
+      expect(chest?.sets).toBeGreaterThan(0);
+      expect(chest?.isoWeekSets).toBe(0);
+      expect(chest?.frequencyPerWeek).toBe(0);
+
+      expect(
+        calculateWeeklyVolume(
+          [
+            {
+              id: "next-day",
+              exerciseName: "Bench Press",
+              loggedAt: nextDayStart,
+              weight: 100,
+              reps: 5,
+            },
+          ],
+          middayTarget,
+        ),
+      ).toEqual([]);
+    });
+
+    it("ignores multi-year out-of-window and future logs regardless of log ordering", () => {
+      const log20d = createLog("Bench Press", 20);
+      const log14d = createLog("Squat", 14);
+      const log2d = createLog("Bench Press", 2);
+      const sameDayEarlier: ExerciseLog = {
+        id: "day-1-10am",
+        exerciseName: "Bench Press",
+        loggedAt: new Date("2024-01-13T10:00:00"),
+        weight: 100,
+        reps: 5,
+      };
+      const sameDayLater: ExerciseLog = {
+        id: "day-1-6pm",
+        exerciseName: "Bench Press",
+        loggedAt: new Date("2024-01-13T18:00:00"),
+        weight: 100,
+        reps: 5,
+      };
+      const log1d = createLog("Pull-Ups", 1);
+      const log0d = createLog("Tricep Extension", 0);
+
+      // Chronological order (earlier same-day log before later same-day log)
+      const inWindowOnly: ExerciseLog[] = [
+        log20d,
+        log14d,
+        log2d,
+        sameDayEarlier,
+        sameDayLater,
+        log1d,
+        log0d,
+      ];
+
+      // Shuffled/reversed in-window order (later 18:00 log BEFORE earlier 10:00 log)
+      const multiYearAndFuture: ExerciseLog[] = [
+        {
+          id: "old-2021",
+          exerciseName: "Bench Press",
+          loggedAt: new Date("2021-03-10T10:00:00"),
+          weight: 80,
+          reps: 8,
+        },
+        log0d,
+        sameDayLater,
+        {
+          id: "old-2022",
+          exerciseName: "Squat",
+          loggedAt: new Date("2022-09-01T18:00:00"),
+          weight: 120,
+          reps: 5,
+        },
+        log1d,
+        {
+          id: "future-2d",
+          exerciseName: "Pull-Ups",
+          loggedAt: new Date(baseDate.getTime() + 2 * 86400000),
+          weight: 0,
+          reps: 10,
+        },
+        sameDayEarlier,
+        log14d,
+        {
+          id: "old-2023",
+          exerciseName: "Deadlift",
+          loggedAt: new Date("2023-11-20T12:00:00"),
+          weight: 160,
+          reps: 5,
+        },
+        log2d,
+        {
+          id: "future-30d",
+          exerciseName: "Bench Press",
+          loggedAt: new Date(baseDate.getTime() + 30 * 86400000),
+          weight: 105,
+          reps: 5,
+        },
+        log20d,
+      ];
+
+      const shuffledVolumes = calculateWeeklyVolume(multiYearAndFuture, baseDate);
+      expect(shuffledVolumes).toEqual(calculateWeeklyVolume(inWindowOnly, baseDate));
+      // baseDate is 2024-01-14T23:00:00 -> 29h after sameDayLater (2024-01-13T18:00:00)
+      expect(shuffledVolumes.find((v) => v.muscleGroup === "Chest")?.hoursSinceLastTrained).toBe(
+        29,
+      );
+    });
+
+    it("resolves case/whitespace-insensitive default and override names safely", () => {
+      const overrideMap: Record<string, MuscleActivation> = {
+        "cable crossover": {
+          primaryMuscle: "Chest",
+          secondaryMuscles: [{ muscleGroup: "Front Delts", contribution: 0.25 }],
+        },
+        "Custom Cable Fly": {
+          primaryMuscle: "Chest",
+          secondaryMuscles: [{ muscleGroup: "Front Delts", contribution: 0.2 }],
+        },
+      };
+
+      const logs = [
+        createLog("  bench   press ", 1),
+        createLog("Cable Crossover", 2), // hits lowercase override key via normalized fast path
+        createLog("custom cable fly", 3), // hits mixed-case override fallback
+      ];
+      const volumes = calculateWeeklyVolume(logs, baseDate, overrideMap);
+
+      const chest = volumes.find((v) => v.muscleGroup === "Chest");
+      const frontDelts = volumes.find((v) => v.muscleGroup === "Front Delts");
+      expect(chest?.isoWeekSets).toBe(3);
+      expect(chest?.isoWeekDirectSets).toBe(3);
+      expect(frontDelts?.isoWeekSets).toBeCloseTo(0.75, 5);
+      expect(getMuscleActivation("Cable Crossover", overrideMap)?.primaryMuscle).toBe("Chest");
+      expect(getMuscleActivation("custom cable fly", overrideMap)?.primaryMuscle).toBe("Chest");
+    });
+
+    it("falls through to defaults when override has undefined value and ignores prototype keys or unknown exercises", () => {
+      const sparseOverride = {
+        "bench press": undefined as unknown as MuscleActivation,
+        "Bench Press": undefined as unknown as MuscleActivation,
+      };
+      const resolver = createMuscleActivationResolver(sparseOverride);
+
+      expect(getMuscleActivation("Bench Press", sparseOverride)?.primaryMuscle).toBe("Chest");
+      expect(getMuscleActivation("bench press", sparseOverride)?.primaryMuscle).toBe("Chest");
+      expect(resolver("Bench Press")?.primaryMuscle).toBe("Chest");
+
+      const fallbackVolumes = calculateWeeklyVolume(
+        [createLog("Bench Press", 1)],
+        baseDate,
+        sparseOverride,
+      );
+      expect(fallbackVolumes.find((v) => v.muscleGroup === "Chest")?.isoWeekSets).toBe(1);
+
+      expect(getMuscleActivation("toString")).toBeNull();
+      expect(getMuscleActivation("constructor", sparseOverride)).toBeNull();
+      expect(resolver("toString")).toBeNull();
+      expect(resolver("constructor")).toBeNull();
+
+      expect(
+        calculateWeeklyVolume(
+          [createLog("toString", 1), createLog("constructor", 1)],
+          baseDate,
+          sparseOverride,
+        ),
+      ).toEqual([]);
+
+      expect(
+        calculateWeeklyVolume([createLog("Unmapped Exercise XYZ", 1)], baseDate, sparseOverride),
+      ).toEqual([]);
     });
   });
 

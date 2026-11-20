@@ -1,7 +1,11 @@
-import { VALID_MUSCLE_GROUPS } from "@/modules/sharedKernel/domain";
+import { getLocalDayIndex, VALID_MUSCLE_GROUPS } from "@/modules/sharedKernel/domain";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 import type { ExerciseE1RM } from "./e1rm";
-import { getMuscleActivation, type MuscleActivation, type MuscleGroup } from "./exerciseMuscleMap";
+import {
+  createMuscleActivationResolver,
+  type MuscleActivation,
+  type MuscleGroup,
+} from "./exerciseMuscleMap";
 
 /** Volume landmarks relative to MEV/MAV/MRV */
 export type VolumeLandmark =
@@ -181,55 +185,143 @@ export function getIsoWeekStart(date: Date): Date {
   return d;
 }
 
-/**
- * Accumulates per-muscle-group effective sets and direct sets for all logs
- * that fall within the given date range (startInclusive, endInclusive].
- *
- * Internal helper shared by EWMA and ISO-week calculations.
- */
-function accumulateMuscleVolume(
-  logs: ExerciseLog[],
-  startInclusive: Date,
-  endInclusive: Date,
-  overrideMap?: Record<string, MuscleActivation>,
-): {
+const EWMA_LAMBDA = 0.25;
+const EWMA_LOOKBACK_DAYS = 28;
+const MS_PER_DAY = 86_400_000;
+
+interface DayVolumeBucket {
   muscleVolume: Map<MuscleGroup, number>;
   directMuscleVolume: Map<MuscleGroup, number>;
   muscleLastTrained: Map<MuscleGroup, Date>;
-  muscleTrainingDays: Map<MuscleGroup, Set<string>>;
-} {
-  const muscleVolume = new Map<MuscleGroup, number>();
-  const directMuscleVolume = new Map<MuscleGroup, number>();
-  const muscleLastTrained = new Map<MuscleGroup, Date>();
-  const muscleTrainingDays = new Map<MuscleGroup, Set<string>>();
+}
 
-  const windowLogs = logs.filter((l) => l.loggedAt >= startInclusive && l.loggedAt <= endInclusive);
+interface WindowVolumeBuckets {
+  dayBuckets: (DayVolumeBucket | undefined)[];
+  isoWeekVolume: Map<MuscleGroup, number>;
+  isoWeekDirectVolume: Map<MuscleGroup, number>;
+  muscleTrainingDays: Map<MuscleGroup, Set<number>>;
+  hasActivity: boolean;
+}
 
-  for (const log of windowLogs) {
-    const activation = getMuscleActivation(log.exerciseName, overrideMap);
+function addVolume(map: Map<MuscleGroup, number>, muscleGroup: MuscleGroup, delta: number): void {
+  map.set(muscleGroup, (map.get(muscleGroup) ?? 0) + delta);
+}
+
+function getOrCreateDayBucket(
+  dayBuckets: (DayVolumeBucket | undefined)[],
+  index: number,
+): DayVolumeBucket {
+  let bucket = dayBuckets[index];
+  if (!bucket) {
+    bucket = {
+      muscleVolume: new Map(),
+      directMuscleVolume: new Map(),
+      muscleLastTrained: new Map(),
+    };
+    dayBuckets[index] = bucket;
+  }
+  return bucket;
+}
+
+interface LogExposureContext {
+  dayBucket: DayVolumeBucket;
+  buckets: WindowVolumeBuckets;
+  loggedAt: Date;
+  logDayIndex: number;
+  inIsoWeek: boolean;
+  inLast7Days: boolean;
+}
+
+function recordMuscleExposure(
+  ctx: LogExposureContext,
+  muscleGroup: MuscleGroup,
+  sets: number,
+  isPrimary: boolean,
+): void {
+  addVolume(ctx.dayBucket.muscleVolume, muscleGroup, sets);
+  if (isPrimary) {
+    addVolume(ctx.dayBucket.directMuscleVolume, muscleGroup, sets);
+  }
+
+  const prevLast = ctx.dayBucket.muscleLastTrained.get(muscleGroup);
+  if (!prevLast || ctx.loggedAt > prevLast) {
+    ctx.dayBucket.muscleLastTrained.set(muscleGroup, ctx.loggedAt);
+  }
+
+  if (ctx.inIsoWeek) {
+    addVolume(ctx.buckets.isoWeekVolume, muscleGroup, sets);
+    if (isPrimary) {
+      addVolume(ctx.buckets.isoWeekDirectVolume, muscleGroup, sets);
+    }
+  }
+
+  if (ctx.inLast7Days) {
+    let days = ctx.buckets.muscleTrainingDays.get(muscleGroup);
+    if (!days) {
+      days = new Set<number>();
+      ctx.buckets.muscleTrainingDays.set(muscleGroup, days);
+    }
+    days.add(ctx.logDayIndex);
+  }
+}
+
+/**
+ * Single-pass bucketing of logs into local calendar days across the 29-day
+ * EWMA lookback window, while simultaneously accumulating ISO-week totals
+ * and trailing 7-day training-day frequency.
+ */
+function bucketWindowVolume(
+  logs: ExerciseLog[],
+  targetDate: Date,
+  resolveActivation: (exerciseName: string) => MuscleActivation | null,
+): WindowVolumeBuckets {
+  const targetTime = targetDate.getTime();
+  const isoWeekStartMs = getIsoWeekStart(targetDate).getTime();
+  const sevenDaysAgoMs = targetTime - 7 * MS_PER_DAY;
+
+  const windowStart = new Date(targetDate);
+  windowStart.setDate(windowStart.getDate() - EWMA_LOOKBACK_DAYS);
+  windowStart.setHours(0, 0, 0, 0);
+  const windowStartMs = windowStart.getTime();
+
+  const windowEnd = new Date(targetDate);
+  windowEnd.setHours(23, 59, 59, 999);
+  const windowEndMs = windowEnd.getTime();
+
+  const minDayIndex = getLocalDayIndex(targetDate) - EWMA_LOOKBACK_DAYS;
+
+  const buckets: WindowVolumeBuckets = {
+    dayBuckets: new Array<DayVolumeBucket | undefined>(EWMA_LOOKBACK_DAYS + 1),
+    isoWeekVolume: new Map(),
+    isoWeekDirectVolume: new Map(),
+    muscleTrainingDays: new Map(),
+    hasActivity: false,
+  };
+
+  for (const log of logs) {
+    const logTime = log.loggedAt.getTime();
+    if (!(logTime >= windowStartMs && logTime <= windowEndMs)) continue;
+
+    const activation = resolveActivation(log.exerciseName);
     if (!activation) continue;
 
-    const dayKey = log.loggedAt.toDateString();
-    const markMuscleTraining = (muscleGroup: MuscleGroup): void => {
-      const days = muscleTrainingDays.get(muscleGroup) ?? new Set<string>();
-      days.add(dayKey);
-      muscleTrainingDays.set(muscleGroup, days);
+    const logDayIndex = getLocalDayIndex(log.loggedAt);
+    const bucketIndex = logDayIndex - minDayIndex;
+    if (bucketIndex < 0 || bucketIndex > EWMA_LOOKBACK_DAYS) continue;
 
-      const prevLast = muscleLastTrained.get(muscleGroup);
-      if (!prevLast || log.loggedAt > prevLast) {
-        muscleLastTrained.set(muscleGroup, log.loggedAt);
-      }
+    const dayBucket = getOrCreateDayBucket(buckets.dayBuckets, bucketIndex);
+    buckets.hasActivity = true;
+
+    const ctx: LogExposureContext = {
+      dayBucket,
+      buckets,
+      loggedAt: log.loggedAt,
+      logDayIndex,
+      inIsoWeek: logTime >= isoWeekStartMs && logTime <= targetTime,
+      inLast7Days: logTime >= sevenDaysAgoMs && logTime <= targetTime,
     };
 
-    muscleVolume.set(
-      activation.primaryMuscle,
-      (muscleVolume.get(activation.primaryMuscle) ?? 0) + 1,
-    );
-    directMuscleVolume.set(
-      activation.primaryMuscle,
-      (directMuscleVolume.get(activation.primaryMuscle) ?? 0) + 1,
-    );
-    markMuscleTraining(activation.primaryMuscle);
+    recordMuscleExposure(ctx, activation.primaryMuscle, 1, true);
 
     /**
      * Indirect work contributes a discounted hypertrophy stimulus.
@@ -237,49 +329,21 @@ function accumulateMuscleVolume(
      * readiness signal reflects total weekly muscle stress, not only direct isolation work.
      */
     for (const secondary of activation.secondaryMuscles) {
-      muscleVolume.set(
-        secondary.muscleGroup,
-        (muscleVolume.get(secondary.muscleGroup) ?? 0) + secondary.contribution,
-      );
-      markMuscleTraining(secondary.muscleGroup);
+      recordMuscleExposure(ctx, secondary.muscleGroup, secondary.contribution, false);
     }
   }
 
-  return { muscleVolume, directMuscleVolume, muscleLastTrained, muscleTrainingDays };
+  return buckets;
 }
 
-/**
- * Computes a 7-day trailing EWMA of per-muscle daily set volume.
- *
- * Why EWMA instead of a raw rolling window:
- * - A hard 7-day boundary causes landmarks to flip when a session ages out of the
- *   window (e.g. "Monday morning" drops last Monday's session, reducing volume 33%).
- * - An EWMA applies exponentially decaying weight to each day, so no single day's
- *   boundary causes a discrete jump.
- *
- * λ = 0.25 maps to a characteristic time of 1/λ = 4 days, with significant weight
- * still carried beyond 7 days — matching the "7-day window" semantic while smoothing
- * day-boundary discontinuities.
- *
- * Implementation:
- * - Walk the last 28 days (4 × EWMA characteristic time), day by day oldest-first.
- * - For each day, compute the total sets stimulated for each muscle group.
- * - Calculate an Adaptive Recovery requirement based on the volume ratio to MEV.
- *   (Supported by EIMD dose-dependence (Schoenfeld, 2010) and MPS time-course (Ahtiainen, 2015)).
- * - Feed into EWMA: ewma = λ × daily_sets + (1 - λ) × ewma
- * - The final EWMA value is the smoothed "weekly equivalent" set count for that muscle.
- */
-const EWMA_LAMBDA = 0.25;
-const EWMA_LOOKBACK_DAYS = 28;
-
-export function calculateWeeklyVolume(
+function computeWeeklyVolume(
   logs: ExerciseLog[],
   targetDate: Date,
-  overrideMap?: Record<string, MuscleActivation>,
+  resolveActivation: (exerciseName: string) => MuscleActivation | null,
 ): WeeklyVolume[] {
-  // --- ISO-week raw counts (for display) ---
-  const isoWeekStart = getIsoWeekStart(targetDate);
-  const isoWeekData = accumulateMuscleVolume(logs, isoWeekStart, targetDate, overrideMap);
+  const { dayBuckets, isoWeekVolume, isoWeekDirectVolume, muscleTrainingDays, hasActivity } =
+    bucketWindowVolume(logs, targetDate, resolveActivation);
+  if (!hasActivity) return [];
 
   // --- EWMA-smoothed counts (for classification) ---
   // Initialise one EWMA accumulator per muscle group.
@@ -299,23 +363,14 @@ export function calculateWeeklyVolume(
   }
 
   // Walk oldest → newest across the lookback window, one calendar day at a time.
-  for (let daysBack = EWMA_LOOKBACK_DAYS; daysBack >= 0; daysBack--) {
-    const dayStart = new Date(targetDate);
-    dayStart.setDate(dayStart.getDate() - daysBack);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(dayStart);
-    dayEnd.setHours(23, 59, 59, 999);
-
-    const {
-      muscleVolume: dayVolume,
-      directMuscleVolume: dayDirectVolume,
-      muscleLastTrained: dayLastTrained,
-    } = accumulateMuscleVolume(logs, dayStart, dayEnd, overrideMap);
+  for (let bucketIndex = 0; bucketIndex <= EWMA_LOOKBACK_DAYS; bucketIndex++) {
+    const daysBack = EWMA_LOOKBACK_DAYS - bucketIndex;
+    const dayBucket = dayBuckets[bucketIndex];
 
     // Apply EWMA update for every muscle group.
     for (const mg of VALID_MUSCLE_GROUPS) {
-      const dailySets = dayVolume.get(mg) ?? 0;
-      const dailyDirectSets = dayDirectVolume.get(mg) ?? 0;
+      const dailySets = dayBucket?.muscleVolume.get(mg) ?? 0;
+      const dailyDirectSets = dayBucket?.directMuscleVolume.get(mg) ?? 0;
 
       // Adaptive Recovery Calculation
       // EIMD and MPS response are dose-dependent (Schoenfeld 2010, MacDougall 1995).
@@ -329,7 +384,7 @@ export function calculateWeeklyVolume(
         const adaptiveHours = baseHours * ratio;
 
         // The exact time of the last log for this muscle on this day
-        const sessionDate = dayLastTrained.get(mg);
+        const sessionDate = dayBucket?.muscleLastTrained.get(mg);
         if (!sessionDate) continue;
         const targetTime = sessionDate.getTime() + adaptiveHours * 3600000;
 
@@ -356,15 +411,6 @@ export function calculateWeeklyVolume(
     }
   }
 
-  // --- Frequency from the trailing 7 days (unchanged semantics) ---
-  const sevenDaysAgo = new Date(targetDate.getTime() - 7 * 86400000);
-  const { muscleTrainingDays } = accumulateMuscleVolume(
-    logs,
-    sevenDaysAgo,
-    targetDate,
-    overrideMap,
-  );
-
   // --- Assemble results ---
   const result: WeeklyVolume[] = [];
   for (const muscleGroup of VALID_MUSCLE_GROUPS) {
@@ -372,7 +418,7 @@ export function calculateWeeklyVolume(
     // to compare against the weekly volume landmarks (e.g. MEV = 8 sets/wk).
     const smoothedSets = (ewmaSets.get(muscleGroup) ?? 0) * 7;
     // Only include muscle groups that have been trained at all in the lookback window.
-    if (smoothedSets === 0 && !isoWeekData.muscleVolume.has(muscleGroup)) continue;
+    if (smoothedSets === 0 && !isoWeekVolume.has(muscleGroup)) continue;
 
     const dictating = recoveryDictatingSession.get(muscleGroup);
     const hoursSince = dictating
@@ -390,8 +436,8 @@ export function calculateWeeklyVolume(
       muscleGroup,
       sets: smoothedSets,
       directSets: (ewmaDirectSets.get(muscleGroup) ?? 0) * 7,
-      isoWeekSets: isoWeekData.muscleVolume.get(muscleGroup) ?? 0,
-      isoWeekDirectSets: isoWeekData.directMuscleVolume.get(muscleGroup) ?? 0,
+      isoWeekSets: isoWeekVolume.get(muscleGroup) ?? 0,
+      isoWeekDirectSets: isoWeekDirectVolume.get(muscleGroup) ?? 0,
       frequencyPerWeek: trainedDays,
       hoursSinceLastTrained: hoursSince,
       recoveryHours,
@@ -400,6 +446,35 @@ export function calculateWeeklyVolume(
   }
 
   return result;
+}
+
+/**
+ * Computes a 7-day trailing EWMA of per-muscle daily set volume.
+ *
+ * Why EWMA instead of a raw rolling window:
+ * - A hard 7-day boundary causes landmarks to flip when a session ages out of the
+ *   window (e.g. "Monday morning" drops last Monday's session, reducing volume 33%).
+ * - An EWMA applies exponentially decaying weight to each day, so no single day's
+ *   boundary causes a discrete jump.
+ *
+ * λ = 0.25 maps to a characteristic time of 1/λ = 4 days, with significant weight
+ * still carried beyond 7 days — matching the "7-day window" semantic while smoothing
+ * day-boundary discontinuities.
+ *
+ * Implementation:
+ * - Walk the last 28 days (4 × EWMA characteristic time), day by day oldest-first.
+ * - For each day, compute the total sets stimulated for each muscle group.
+ * - Calculate an Adaptive Recovery requirement based on the volume ratio to MEV.
+ *   (Supported by EIMD dose-dependence (Schoenfeld, 2010) and MPS time-course (Ahtiainen, 2015)).
+ * - Feed into EWMA: ewma = λ × daily_sets + (1 - λ) × ewma
+ * - The final EWMA value is the smoothed "weekly equivalent" set count for that muscle.
+ */
+export function calculateWeeklyVolume(
+  logs: ExerciseLog[],
+  targetDate: Date,
+  overrideMap?: Record<string, MuscleActivation>,
+): WeeklyVolume[] {
+  return computeWeeklyVolume(logs, targetDate, createMuscleActivationResolver(overrideMap));
 }
 
 export function isRecovered(hoursSinceLastTrained: number | null, recoveryHours: number): boolean {
@@ -413,7 +488,9 @@ export function calculateMuscleGroupInsights(
   overrideMap?: Record<string, MuscleActivation>,
   e1rmData?: Record<string, ExerciseE1RM>,
 ): Partial<Record<MuscleGroup, MuscleGroupInsight>> {
-  const weeklyVolumes = calculateWeeklyVolume(logs, targetDate, overrideMap);
+  const resolveActivation = createMuscleActivationResolver(overrideMap);
+  const weeklyVolumes = computeWeeklyVolume(logs, targetDate, resolveActivation);
+  if (weeklyVolumes.length === 0) return {};
   const result: Partial<Record<MuscleGroup, MuscleGroupInsight>> = {};
 
   // Aggregate e1rm trends per muscle group
@@ -423,7 +500,7 @@ export function calculateMuscleGroupInsights(
   >();
   if (e1rmData) {
     for (const [exerciseName, e1rm] of Object.entries(e1rmData)) {
-      const activation = getMuscleActivation(exerciseName, overrideMap);
+      const activation = resolveActivation(exerciseName);
       if (!activation) continue;
 
       // We only consider the primary muscle group for trend aggregation

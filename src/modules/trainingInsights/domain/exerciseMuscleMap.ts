@@ -218,6 +218,13 @@ const DEFAULT_EXERCISE_ACTIVATION_MAP: Record<string, MuscleActivation> = {
   Wadenheben: act("Calves"),
 };
 
+const NORMALIZED_DEFAULT_ACTIVATION_MAP = new Map<string, MuscleActivation>(
+  Object.entries(DEFAULT_EXERCISE_ACTIVATION_MAP).map(([key, activation]) => [
+    normalizeExerciseName(key),
+    activation,
+  ]),
+);
+
 /**
  * Look up the full muscle activation profile for an exercise name.
  * Uses case-insensitive matching with an optional override map.
@@ -230,20 +237,66 @@ export function getMuscleActivation(
 
   // Check override map first
   if (overrideMap) {
-    if (overrideMap[exerciseName]) return overrideMap[exerciseName];
+    if (Object.hasOwn(overrideMap, exerciseName) && overrideMap[exerciseName]) {
+      return overrideMap[exerciseName];
+    }
+    if (
+      normalized !== exerciseName &&
+      Object.hasOwn(overrideMap, normalized) &&
+      overrideMap[normalized]
+    ) {
+      return overrideMap[normalized];
+    }
     for (const [key, activation] of Object.entries(overrideMap)) {
-      if (normalizeExerciseName(key) === normalized) return activation;
+      if (activation && normalizeExerciseName(key) === normalized) return activation;
     }
   }
 
-  // Check default map by exact key
-  if (DEFAULT_EXERCISE_ACTIVATION_MAP[exerciseName])
-    return DEFAULT_EXERCISE_ACTIVATION_MAP[exerciseName];
+  return NORMALIZED_DEFAULT_ACTIVATION_MAP.get(normalized) ?? null;
+}
 
-  // Check default map by normalized key
-  for (const [key, activation] of Object.entries(DEFAULT_EXERCISE_ACTIVATION_MAP)) {
-    if (normalizeExerciseName(key) === normalized) return activation;
-  }
+/**
+ * Build a batch resolver that normalizes `overrideMap` once and memoizes
+ * per-exercise lookups for the duration of a calculation pass.
+ */
+export function createMuscleActivationResolver(
+  overrideMap?: Record<string, MuscleActivation>,
+): (exerciseName: string) => MuscleActivation | null {
+  let normalizedOverrides: Map<string, MuscleActivation> | null | undefined;
+  const cache = new Map<string, MuscleActivation | null>();
 
-  return null;
+  const getNormalizedOverrides = (): Map<string, MuscleActivation> | null => {
+    if (normalizedOverrides !== undefined) return normalizedOverrides;
+    normalizedOverrides = null;
+    if (!overrideMap) return null;
+
+    for (const [key, activation] of Object.entries(overrideMap)) {
+      if (!activation) continue;
+      normalizedOverrides ??= new Map();
+      const normalizedKey = normalizeExerciseName(key);
+      if (key === normalizedKey || !normalizedOverrides.has(normalizedKey)) {
+        normalizedOverrides.set(normalizedKey, activation);
+      }
+    }
+    return normalizedOverrides;
+  };
+
+  return (exerciseName: string): MuscleActivation | null => {
+    const cached = cache.get(exerciseName);
+    if (cached !== undefined) return cached;
+
+    let resolved: MuscleActivation | null = null;
+    if (overrideMap && Object.hasOwn(overrideMap, exerciseName) && overrideMap[exerciseName]) {
+      resolved = overrideMap[exerciseName];
+    } else {
+      const normalized = normalizeExerciseName(exerciseName);
+      resolved =
+        getNormalizedOverrides()?.get(normalized) ??
+        NORMALIZED_DEFAULT_ACTIVATION_MAP.get(normalized) ??
+        null;
+    }
+
+    cache.set(exerciseName, resolved);
+    return resolved;
+  };
 }
