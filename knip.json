@@ -1,5 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": ["scripts/simulate_leveling.ts"],
-  "project": ["src/**/*.{ts,vue,css}", "scripts/**/*.{ts,js}"]
+  "project": ["src/**/*.{ts,vue,css}", "scripts/**/*.{ts,js}"],
+  "ignore": ["**/*.deno.test.ts"]
 }

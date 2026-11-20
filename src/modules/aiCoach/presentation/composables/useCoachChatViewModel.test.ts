@@ -609,7 +609,6 @@ describe("useCoachChatViewModel", () => {
 
     const prodVm = useCoachChatViewModel({ isDev: false });
     expect(prodVm.isDev).toBe(false);
-    expect(prodVm.coachMessages.value[0]?.requestPayload).toBeNull();
     const coachBubble = prodVm.chatMessages.value.find((m) => m.role === "coach");
     expect(coachBubble?.requestPayload).toBeNull();
     expect(coachBubble?.scratchpad).toBe("Solid progression from last week.");

@@ -6,13 +6,16 @@ import {
   type CoachingAdviceError,
   type CoachingMessage,
   extractUserQuestion,
+  isDuration,
   type PlannedSession,
+  parseFirstRep,
   sanitizeSuggestedFollowUps,
+  splitReps,
   type TrainingPlan,
   upcastLegacyExercise,
 } from "../../domain";
 
-export { extractUserQuestion };
+export { extractUserQuestion, isDuration, parseFirstRep, splitReps };
 
 // ---------------------------------------------------------------------------
 // View-model types
@@ -34,15 +37,6 @@ export interface DisplayWorkoutGroup {
   id: string;
   isSuperset: boolean;
   exercises: DisplayExercise[];
-}
-
-export interface DisplayInsight {
-  id: string;
-  timestamp: string;
-  isLatest: boolean;
-  rawContent: string;
-  parsedData: CoachingAdvice | null;
-  requestPayload: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -209,7 +203,7 @@ export function groupWorkout(workout: DisplayExercise[] | undefined): DisplayWor
 }
 
 // ---------------------------------------------------------------------------
-// Weight / rep string parsing
+// Weight string parsing
 // ---------------------------------------------------------------------------
 
 /** Extracts numeric weight in kg from strings like "80kg", "80.5 kg", "80,5kg". */
@@ -217,18 +211,6 @@ export function parseWeight(targetWeight?: string): number | undefined {
   if (!targetWeight) return undefined;
   const match = targetWeight.match(/(\d+(?:[.,]\d+)?)\s*kg/i);
   return match?.[1] ? parseFloat(match[1].replace(",", ".")) : undefined;
-}
-
-/**
- * Extracts the upper bound of a rep range from strings like "8-12" → 12, "10" → 10.
- * Uses the upper bound so the prefill starts at the target ceiling.
- */
-export function parseFirstRep(targetReps?: string): number | undefined {
-  if (!targetReps) return undefined;
-  const rangeMatch = targetReps.match(/(\d+)\s*-\s*(\d+)/);
-  if (rangeMatch?.[2]) return parseInt(rangeMatch[2], 10);
-  const singleMatch = targetReps.match(/(\d+)/);
-  return singleMatch?.[1] ? parseInt(singleMatch[1], 10) : undefined;
 }
 
 /** Splits a weight string like "80.5kg" into `{ value: "80.5", unit: "kg" }`. Also handles "bodyweight" elegantly. */
@@ -251,33 +233,6 @@ export function splitWeight(weightStr?: string): { value: string; unit: string }
     return { value: match[1], unit: match[2] || "kg" };
   }
   return { value: weightStr, unit: "" };
-}
-
-/** LEGACY: Determines if a reps string represents a duration. Used for backward compatibility with older plans. */
-export function isDuration(reps?: string): boolean {
-  if (!reps) return false;
-  const lower = reps.toLowerCase();
-  return (
-    lower.includes("sec") ||
-    lower.includes("min") ||
-    lower.includes("hr") ||
-    lower.includes("time") ||
-    lower.includes("hold") ||
-    /^[\d\s.,-]+s$/.test(lower)
-  );
-}
-
-/** LEGACY: Splits a reps string like "30 secs" into `{ value: "30", unit: "secs" }`. Returns single value for simple ranges. */
-export function splitReps(reps?: string): { value: string; unit: string } {
-  if (!reps) return { value: "", unit: "" };
-
-  // Match leading numbers, dots, commas, hyphens and spaces
-  const match = reps.match(/^([\d\s.,-]+)(.*)$/);
-  if (match && match[1].trim() !== "") {
-    return { value: match[1].trim(), unit: match[2].trim() };
-  }
-
-  return { value: reps, unit: "" };
 }
 
 // ---------------------------------------------------------------------------

@@ -8,7 +8,6 @@ import {
 } from "@/modules/aiCoach/domain";
 import {
   type DisplayExercise,
-  type DisplayInsight,
   getAiErrorDescription,
   renderMarkdown,
   tryParseCoachingAdvice,
@@ -113,7 +112,6 @@ export function useCoachChatViewModel(options: { isDev?: boolean } = {}) {
   const { toast } = useToast();
   const { isKeyboardVisible } = useKeyboard();
 
-  const currentPageIndex = ref(0);
   const userQuestion = ref("");
   const openScratchpads = ref<string[]>([]);
   const openRequestPayloads = ref<string[]>([]);
@@ -126,31 +124,6 @@ export function useCoachChatViewModel(options: { isDev?: boolean } = {}) {
     const date = typeof d === "string" ? new Date(d) : d;
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
-
-  // Preserved for backwards compatibility with tests and existing callers
-  const coachMessages = computed<DisplayInsight[]>(() => {
-    const allMessages = chatStore.messages;
-    const indexById = new Map(allMessages.map((m, i) => [m.id, i]));
-    const coachMessagesList = allMessages.filter((m) => m.role === "coach");
-    return coachMessagesList.map((msg, idx) => {
-      const parsedData = tryParseCoachingAdvice(msg.content);
-      const msgIndex = indexById.get(msg.id);
-      const previous =
-        typeof msgIndex === "number" && msgIndex > 0 ? allMessages[msgIndex - 1] : null;
-      const requestPayload =
-        isDev && previous?.role === "user" && previous.content && previous.content !== "AI request"
-          ? previous.content
-          : null;
-      return {
-        id: msg.id,
-        timestamp: msg.timestamp,
-        isLatest: idx === coachMessagesList.length - 1,
-        rawContent: msg.content,
-        parsedData,
-        requestPayload,
-      };
-    });
-  });
 
   // Conversation stream containing user questions and coach responses
   const chatMessages = computed<ChatBubbleMessage[]>(() => {
@@ -285,14 +258,6 @@ export function useCoachChatViewModel(options: { isDev?: boolean } = {}) {
   }
 
   watch(
-    () => coachMessages.value.length,
-    (newLength) => {
-      currentPageIndex.value = newLength > 0 ? newLength - 1 : 0;
-    },
-    { immediate: true },
-  );
-
-  watch(
     () => chatStore.messages.length,
     (newLength, oldLength) => {
       if (newLength > (oldLength || 0)) {
@@ -326,12 +291,10 @@ export function useCoachChatViewModel(options: { isDev?: boolean } = {}) {
     isDev,
     isLoading,
     streamingCoachMessage,
-    currentPageIndex,
     userQuestion,
     openScratchpads,
     openRequestPayloads,
     scrollContainerRef,
-    coachMessages,
     chatMessages,
     quickPrompts,
     isKeyboardVisible,

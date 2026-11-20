@@ -6,7 +6,8 @@ import type {
   WorkoutPhase,
 } from "./schemas.ts";
 
-function isDuration(reps: string): boolean {
+export function isDuration(reps?: string): boolean {
+  if (!reps) return false;
   const lower = reps.toLowerCase();
   return (
     lower.includes("sec") ||
@@ -18,14 +19,16 @@ function isDuration(reps: string): boolean {
   );
 }
 
-function parseFirstRep(targetReps: string): number | undefined {
+export function parseFirstRep(targetReps?: string): number | undefined {
+  if (!targetReps) return undefined;
   const rangeMatch = targetReps.match(/(\d+)\s*-\s*(\d+)/);
   if (rangeMatch?.[2]) return Number.parseInt(rangeMatch[2], 10);
   const singleMatch = targetReps.match(/(\d+)/);
   return singleMatch?.[1] ? Number.parseInt(singleMatch[1], 10) : undefined;
 }
 
-function splitReps(reps: string): { value: string; unit: string } {
+export function splitReps(reps?: string): { value: string; unit: string } {
+  if (!reps) return { value: "", unit: "" };
   const match = reps.match(/^([\d\s.,-]+)(.*)$/);
   if (match?.[1] && match[1].trim() !== "") {
     return { value: match[1].trim(), unit: (match[2] ?? "").trim() };

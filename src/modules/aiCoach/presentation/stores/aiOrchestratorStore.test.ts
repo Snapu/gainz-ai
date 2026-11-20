@@ -251,34 +251,6 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
     vi.useRealTimers();
   });
 
-  it("resets currentPageIndex to 0 when coachMessages are cleared", async () => {
-    const chatStore = useCoachChatStore();
-    chatStore.addMessage({
-      id: "m1",
-      role: "coach",
-      content: "First advice",
-      timestamp: "2026-10-28T10:00:00.000Z",
-      sessionId: "2026-10-28",
-      logsCount: 0,
-    });
-    chatStore.addMessage({
-      id: "m2",
-      role: "coach",
-      content: "Second advice",
-      timestamp: "2026-10-28T11:00:00.000Z",
-      sessionId: "2026-10-28",
-      logsCount: 1,
-    });
-
-    const vm = useCoachChatViewModel();
-    expect(vm.currentPageIndex.value).toBe(1);
-
-    chatStore.clearMessages();
-    await nextTick();
-
-    expect(vm.currentPageIndex.value).toBe(0);
-  });
-
   it("reactively updates coachChatStore currentSessionId and hasTodayCoachMessage across midnight rollover", () => {
     vi.useFakeTimers();
     try {

@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** complete
 
 ---
 
@@ -15,10 +15,10 @@
 
 ## Acceptance Criteria
 
-- [ ] `coachMessages`, `currentPageIndex`, and the `watch` linking them are removed from `useCoachChatViewModel` along with their obsolete assertions in `aiOrchestratorStore.test.ts` and `useCoachChatViewModel.test.ts`.
-- [ ] `aiCoach/presentation/helpers/aiCoachPageHelpers.ts` reuses `isDuration`, `parseFirstRep`, and `splitReps` exported through the `@/modules/aiCoach/domain` barrel instead of duplicating them in presentation.
-- [ ] `architecture.boundaries.test.ts` and hermetic `supabase/functions/` isolation rules remain intact (`supabase/functions/` never imports from `@/modules/*` or `src/`), and contract tests verify parity between client and Edge `sanitizeSuggestedFollowUps` and rep/duration parsing edge cases (`45s`, `8-12`, `0m`).
-- [ ] `pnpm knip`, `pnpm test:unit`, `pnpm type-check`, and `pnpm lint` pass cleanly.
+- [x] `coachMessages`, `currentPageIndex`, and the `watch` linking them are removed from `useCoachChatViewModel` along with their obsolete assertions in `aiOrchestratorStore.test.ts` and `useCoachChatViewModel.test.ts`.
+- [x] `aiCoach/presentation/helpers/aiCoachPageHelpers.ts` reuses `isDuration`, `parseFirstRep`, and `splitReps` exported through the `@/modules/aiCoach/domain` barrel instead of duplicating them in presentation.
+- [x] `architecture.boundaries.test.ts` and hermetic `supabase/functions/` isolation rules remain intact (`supabase/functions/` never imports from `@/modules/*` or `src/`), and contract tests verify parity between client and Edge `sanitizeSuggestedFollowUps` and rep/duration parsing edge cases (`45s`, `8-12`, `0m`).
+- [x] `pnpm knip`, `pnpm test:unit`, `pnpm type-check`, and `pnpm lint` pass cleanly.
 
 ## Testing Decisions
 

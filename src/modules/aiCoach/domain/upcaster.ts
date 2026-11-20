@@ -1,15 +1,13 @@
 /**
- * TODO(TechDebt): Legacy Parsing Functions
- * The functions below (`isDuration`, `parseFirstRep`, `splitReps`) are only kept around
- * to support upcasting old plans that used `targetReps: "30s"`.
- * Once all active plans have been migrated to the new explicit `targetDurationSeconds`
- * and `targetDistanceMeters` schema, this entire file can be deleted.
+ * Pure parsing helpers for rep, duration, and distance strings.
+ * Used for exercise upcasting, exercise cards, and plan views.
  */
 
 /**
  * Determines if a reps string represents a duration.
  */
-function isDuration(reps: string): boolean {
+export function isDuration(reps?: string): boolean {
+  if (!reps) return false;
   const lower = reps.toLowerCase();
   return (
     lower.includes("sec") ||
@@ -23,8 +21,10 @@ function isDuration(reps: string): boolean {
 
 /**
  * Extracts the upper bound of a rep range from strings like "8-12" → 12, "10" → 10.
+ * Uses the upper bound so the prefill starts at the target ceiling.
  */
-function parseFirstRep(targetReps: string): number | undefined {
+export function parseFirstRep(targetReps?: string): number | undefined {
+  if (!targetReps) return undefined;
   const rangeMatch = targetReps.match(/(\d+)\s*-\s*(\d+)/);
   if (rangeMatch?.[2]) return parseInt(rangeMatch[2], 10);
   const singleMatch = targetReps.match(/(\d+)/);
@@ -34,7 +34,8 @@ function parseFirstRep(targetReps: string): number | undefined {
 /**
  * Splits a reps string like "30 secs" into `{ value: "30", unit: "secs" }`.
  */
-function splitReps(reps: string): { value: string; unit: string } {
+export function splitReps(reps?: string): { value: string; unit: string } {
+  if (!reps) return { value: "", unit: "" };
   const match = reps.match(/^([\d\s.,-]+)(.*)$/);
   if (match && match[1].trim() !== "") {
     return { value: match[1].trim(), unit: match[2].trim() };
