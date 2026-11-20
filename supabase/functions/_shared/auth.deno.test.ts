@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { createLocalJWKSet, exportJWK, generateKeyPair, type KeyLike, SignJWT } from "npm:jose@5.10.0";
+import {
+  createLocalJWKSet,
+  exportJWK,
+  generateKeyPair,
+  type KeyLike,
+  SignJWT,
+} from "npm:jose@5.10.0";
 import { extractBearerToken, verifyGoogleCaller } from "./auth.ts";
 
 const CLIENT_ID = "test-google-client-id.apps.googleusercontent.com";
