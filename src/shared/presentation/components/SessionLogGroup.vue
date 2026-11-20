@@ -28,7 +28,7 @@ defineEmits<{
 </script>
 
 <template>
-  <div class="mt-4 overflow-hidden">
+  <div class="mt-4 overflow-hidden shrink-0">
     <!-- Session Header -->
     <UiCard 
       as="button"

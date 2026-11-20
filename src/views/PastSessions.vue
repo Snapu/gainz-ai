@@ -104,11 +104,11 @@ async function deleteLog(log: ExerciseLog) {
 </script>
 
 <template>
-  <div class="min-h-screen bg-background flex flex-col pt-safe">
-    <AppHeader show-back title="Past Sessions" @back="router.back()" />
+  <div class="h-full bg-background flex flex-col overflow-hidden pt-safe">
+    <AppHeader show-back title="Past Sessions" class="shrink-0" @back="router.back()" />
 
     <main
-      class="flex-1 w-full max-w-2xl mx-auto px-4 pt-4 pb-28 overflow-y-auto no-scrollbar flex flex-col gap-4"
+      class="flex-1 min-h-0 w-full max-w-2xl mx-auto px-4 pt-4 pb-28 overflow-y-auto overscroll-y-contain no-scrollbar flex flex-col gap-4"
     >
       <SessionLogGroup
         v-for="session in groupedLogs"

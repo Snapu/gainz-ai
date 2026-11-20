@@ -134,4 +134,41 @@ describe("PastSessions.vue", () => {
 
     app.unmount();
   });
+
+  it("applies layout classes allowing vertical scrolling within fixed app shell", async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const logsStore = useExerciseLogsStore();
+    logsStore.exerciseLogs = [
+      {
+        id: "1",
+        exerciseName: "Squat",
+        loggedAt: new Date("2026-11-05T09:00:00"),
+        weight: 100,
+        reps: 5,
+      },
+    ];
+
+    const container = document.createElement("div");
+    const app = createApp(PastSessions);
+    app.use(pinia);
+    app.mount(container);
+    await nextTick();
+
+    const root = container.firstElementChild as HTMLElement;
+    expect(root.classList.contains("h-full")).toBe(true);
+    expect(root.classList.contains("overflow-hidden")).toBe(true);
+
+    const main = container.querySelector("main") as HTMLElement;
+    expect(main).not.toBeNull();
+    expect(main.classList.contains("flex-1")).toBe(true);
+    expect(main.classList.contains("min-h-0")).toBe(true);
+    expect(main.classList.contains("overflow-y-auto")).toBe(true);
+
+    const group = main.firstElementChild as HTMLElement;
+    expect(group).not.toBeNull();
+    expect(group.classList.contains("shrink-0")).toBe(true);
+
+    app.unmount();
+  });
 });

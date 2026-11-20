@@ -72,9 +72,9 @@ function remove(id: string) {
 </script>
 
 <template>
-  <div class="min-h-screen bg-background flex flex-col pt-safe">
+  <div class="h-full bg-background flex flex-col overflow-hidden pt-safe">
     <!-- Header -->
-    <AppHeader show-back title="Rest & Recovery" @back="router.back()">
+    <AppHeader show-back title="Rest & Recovery" class="shrink-0" @back="router.back()">
       <template #actions>
         <UiButton variant="ghost" size="icon" @click="isAddOpen = true" aria-label="Add Rest Event">
           <Plus class="w-5 h-5" />
@@ -82,10 +82,10 @@ function remove(id: string) {
       </template>
     </AppHeader>
 
-    <p class="px-6 pt-4 text-sm text-muted-foreground">Track rest days, illness, injuries, and other off days so your AI coach can account for them.</p>
+    <p class="px-6 pt-4 text-sm text-muted-foreground shrink-0">Track rest days, illness, injuries, and other off days so your AI coach can account for them.</p>
 
     <!-- Event List -->
-    <main class="flex-1 px-6 py-6 overflow-y-auto pb-32">
+    <main class="flex-1 min-h-0 px-6 pt-6 pb-32 overflow-y-auto overscroll-y-contain no-scrollbar">
       <EmptyState 
         v-if="sortedEvents.length === 0"
         :icon="Bed"
