@@ -75,6 +75,7 @@ Deno.test("consumeQuota sends service_role RPC request and handles allowed/denie
       p_kind: "coach",
       p_daily_limit: 15,
     });
+    assert.equal("p_global_cap" in JSON.parse(capturedBody), false);
 
     nextResponse = async () => new Response(JSON.stringify([globalCappedRow]), { status: 200 });
     const res2 = await consumeQuota(SUPABASE_URL, SERVICE_KEY, USER_ID, "classify", 50);
@@ -84,6 +85,7 @@ Deno.test("consumeQuota sends service_role RPC request and handles allowed/denie
       p_kind: "classify",
       p_daily_limit: 50,
     });
+    assert.equal("p_global_cap" in JSON.parse(capturedBody), false);
   } finally {
     globalThis.fetch = originalFetch;
   }

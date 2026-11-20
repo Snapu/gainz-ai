@@ -98,11 +98,11 @@ All calls to the `ai-coach` Edge Function require an `Authorization: Bearer <goo
 
 ### 4.3. Multi-Tiered Quota & Anti-Abuse Rate Limiting
 To prevent denial-of-wallet and quota exhaustion:
-- **Atomic Database RPC**: Daily usage is tracked in PostgreSQL via `consume_ai_quota(p_user_id, p_kind, p_daily_limit)`.
+- **Atomic Database RPC**: Daily usage is tracked in PostgreSQL via `consume_ai_quota(p_user_id, p_kind, p_daily_limit, p_global_cap default null)`, backed by `public.ai_daily_usage` (per-user) and `public.ai_daily_global_usage` (O(1) daily aggregate).
 - **User-Level Cap**: Users are bounded to a fair-use limit of 15 coaching requests and 50 classification requests per UTC calendar day (`AI_DAILY_COACH_LIMIT`, `AI_DAILY_CLASSIFY_LIMIT`).
-- **Global Platform Kill-Switch**: A global safety ceiling (`v_global_daily_cap = 10000` for coaching, `20000` for classification) prevents runaway platform billing in the event of distributed bot proliferation.
-- **Atomic Upstream Refund (`refund_ai_quota`)**: If AI execution fails inside `executeAction` (for example upstream Gemini API errors, invalid model JSON across fallback models, or timeouts), the consumed quota slot is atomically refunded for the request's original UTC `usage_date` (`p_usage_date`).
-- **Probabilistic 30-Day Retention Pruning**: Historical records older than 30 days are pruned probabilistically (`random() < 0.01`) during quota check transactions, eliminating hot-path index lock churn while maintaining GDPR data-retention compliance.
+- **Global Platform Kill-Switch**: A global safety ceiling (`10000` for coaching, `20000` for classification by default, overridable via `p_global_cap`) is enforced atomically via `public.ai_daily_global_usage` to prevent runaway platform billing in the event of distributed bot proliferation.
+- **Atomic Upstream Refund (`refund_ai_quota`)**: If AI execution fails inside `executeAction` (for example upstream Gemini API errors, invalid model JSON across fallback models, or timeouts), the consumed quota slot is atomically refunded for the request's original UTC `usage_date` (`p_usage_date`) across both `public.ai_daily_usage` and `public.ai_daily_global_usage`.
+- **Probabilistic 30-Day Retention Pruning**: Historical records older than 30 days in both `public.ai_daily_usage` and `public.ai_daily_global_usage` are pruned probabilistically (`random() < 0.01`) during quota check transactions, eliminating hot-path index lock churn while maintaining GDPR data-retention compliance.
 
 ### 4.4. Backend IP Protection, Input Hardening & GDPR Art. 9 Controls
 - **Closed Structured DTO & Server-Side Prompt Assembly**: Clients send structured training metrics (`CoachActionRequestDto`) rather than free-form `contents` arrays. System instructions, prompt assembly (`prompt.ts`), response Zod ACLs (`schemas.ts`), and clinical post-processing (`postProcess.ts`) run exclusively inside the `ai-coach` Edge Function. Prompt payloads (`requestPayload`) are never returned by the server, and the client's `"Debug Data"` inspector is gated strictly behind `import.meta.env.DEV`.
@@ -121,7 +121,7 @@ To prevent denial-of-wallet and quota exhaustion:
   - `script-src`: Restricts script execution to `'self'`, `'unsafe-inline'`, `data:` (needed for Vite's inline legacy/module detection scripts), Google Identity Services (`https://accounts.google.com`), and Google API/Picker bundles (`https://apis.google.com`, `https://*.gstatic.com`). `'unsafe-eval'` is omitted.
   - `frame-src`: Restricted to `'self'`, `https://accounts.google.com` for Google authentication iframes, and Google Picker (`https://docs.google.com`, `https://drive.google.com`, `https://apis.google.com`).
 - **Database Row-Level Security (RLS)**:
-  - Tables `public.ai_daily_usage` and `public.ai_request_results` have RLS enabled.
+  - Tables `public.ai_daily_usage`, `public.ai_daily_global_usage`, and `public.ai_request_results` have RLS enabled.
   - Direct public client access is completely blocked (`FOR ALL TO service_role USING (true)`, revoked from `public`, `anon`, and `authenticated`).
   - `public.ai_request_results` stores zero athlete input DTOs—only idempotency status, error code, and completed `{ advice, quota }` payloads bounded by Delete-on-Recovery and a 30-minute TTL.
   - Quota and recovery helper functions run with `SECURITY INVOKER` / strict `service_role` grants and an empty search path (`SET search_path = ''`) to eliminate search-path hijacking.
@@ -153,4 +153,4 @@ To prevent denial-of-wallet and quota exhaustion:
 - [RFC 7519: JSON Web Token (JWT) & OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html)
 - Related Architecture Boundary Tests: `src/modules/architecture.boundaries.test.ts`
 - Edge Function Implementations: `supabase/functions/ai-coach/index.ts`, `supabase/functions/ai-coach/classify.ts`, `supabase/functions/ai-coach/requestResults.ts`, `supabase/functions/auth-token/index.ts`
-- Database Migrations: `supabase/migrations/20261111165942_create_ai_daily_usage_and_quota_rpc.sql`, `supabase/migrations/20261111170047_add_service_role_policy_on_ai_daily_usage.sql`, `supabase/migrations/20261111191000_create_refund_ai_quota_rpc.sql`, `supabase/migrations/20261111221000_add_retention_prune_to_consume_quota.sql`, `supabase/migrations/20261112070000_add_usage_date_index_and_global_cap.sql`, `supabase/migrations/20261113171000_add_refund_usage_date_and_global_cap_flag.sql`, `supabase/migrations/20261115183000_create_ai_request_results.sql`
+- Database Migrations: `supabase/migrations/20261111165942_create_ai_daily_usage_and_quota_rpc.sql`, `supabase/migrations/20261111170047_add_service_role_policy_on_ai_daily_usage.sql`, `supabase/migrations/20261111191000_create_refund_ai_quota_rpc.sql`, `supabase/migrations/20261111221000_add_retention_prune_to_consume_quota.sql`, `supabase/migrations/20261112070000_add_usage_date_index_and_global_cap.sql`, `supabase/migrations/20261113171000_add_refund_usage_date_and_global_cap_flag.sql`, `supabase/migrations/20261115183000_create_ai_request_results.sql`, `supabase/migrations/20261120103000_add_ai_daily_global_usage_counter.sql`

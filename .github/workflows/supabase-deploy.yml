@@ -64,6 +64,17 @@ jobs:
       - name: Run Vitest Edge Function and architecture tests
         run: pnpm vitest run supabase/functions/ src/modules/architecture.boundaries.test.ts
 
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 3.1.0
+
+      - name: Start local Supabase database
+        run: supabase start -x gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+
+      - name: Run database pgTAP tests
+        run: supabase test db
+
   deploy:
     needs: test
     if: github.event_name != 'pull_request'

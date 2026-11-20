@@ -716,6 +716,46 @@ describe("ai-coach idempotency and request recovery", () => {
     expect(errRows.size).toBe(0);
   });
 
+  it("returns 429, releases processing lock, and warns without PII when global_capped is true", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { store } = createMockRequestResultsStore();
+    const { deps, streamSpy } = createDeps({
+      requestResults: store,
+      consumeQuota: vi.fn(async () => ({
+        allowed: false,
+        current_count: 15,
+        daily_limit: 15,
+        reset_at: "2026-11-16T00:00:00.000Z",
+        global_capped: true,
+      })),
+    });
+
+    try {
+      const res = await handleAiCoachRequest(
+        createJsonRequest(createValidCoachDto({ clientRequestId: VALID_UUID_V4 })),
+        deps,
+      );
+
+      expect(res.status).toBe(429);
+      expect(await res.json()).toEqual({
+        error: "rate-limit-exceeded",
+        quota: {
+          currentCount: 15,
+          dailyLimit: 15,
+          resetAt: "2026-11-16T00:00:00.000Z",
+        },
+      });
+      expect(store.deleteEntry).toHaveBeenCalledWith("google-sub-123", VALID_UUID_V4);
+      expect(streamSpy).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledWith(
+        "Global daily AI quota ceiling reached for action: coach",
+      );
+      expect(JSON.stringify(warnSpy.mock.calls)).not.toContain("google-sub-123");
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
   it("stores only { advice, quota } without any input DTO fields on completion", async () => {
     const { store } = createMockRequestResultsStore();
     const { deps } = createDeps({ requestResults: store });
