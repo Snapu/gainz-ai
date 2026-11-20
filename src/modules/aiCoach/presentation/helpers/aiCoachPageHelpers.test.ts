@@ -158,6 +158,48 @@ describe("groupWorkout", () => {
     const groups = groupWorkout(workout);
     expect(groups?.[0].id).not.toBe(groups?.[1].id);
   });
+
+  it("produces identical group ids when called twice with identical exercise sequences", () => {
+    const createWorkout = () => [
+      { exerciseName: "Squat", targetSets: 3, targetReps: "8" },
+      { exerciseName: "Curl", targetSets: 3, targetReps: "12", supersetId: "ss-1" },
+      { exerciseName: "Tricep Extension", targetSets: 3, targetReps: "12", supersetId: "ss-1" },
+      { exerciseName: "Bench Press", targetSets: 4, targetReps: "6" },
+    ];
+
+    const firstIds = groupWorkout(createWorkout())?.map((g) => g.id);
+    const secondIds = groupWorkout(createWorkout())?.map((g) => g.id);
+
+    expect(firstIds).toEqual(secondIds);
+    expect(new Set(firstIds).size).toBe(3);
+  });
+
+  it("assigns unique deterministic ids when duplicate standalone exercises exist", () => {
+    const createWorkout = () => [
+      { exerciseName: "Bench Press", targetSets: 3, targetReps: "5" },
+      { exerciseName: "  bench  press ", targetSets: 2, targetReps: "12" },
+    ];
+
+    const firstIds = groupWorkout(createWorkout())?.map((g) => g.id);
+    const secondIds = groupWorkout(createWorkout())?.map((g) => g.id);
+
+    expect(firstIds).toHaveLength(2);
+    expect(new Set(firstIds).size).toBe(2);
+    expect(firstIds).toEqual(secondIds);
+  });
+
+  it("does not collide when a standalone exercise name matches a supersetId", () => {
+    const workout = [
+      { exerciseName: "ss-1", targetSets: 3, targetReps: "10" },
+      { exerciseName: "Curl", targetSets: 3, targetReps: "12", supersetId: "ss-1" },
+      { exerciseName: "Pushdown", targetSets: 3, targetReps: "12", supersetId: "ss-1" },
+    ];
+
+    const groups = groupWorkout(workout);
+    expect(groups).toHaveLength(2);
+    expect(groups?.[0].id).not.toBe(groups?.[1].id);
+    expect(groups?.[1].id).toBe("ss-1");
+  });
 });
 
 // ---------------------------------------------------------------------------

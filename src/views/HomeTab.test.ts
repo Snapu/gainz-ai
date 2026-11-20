@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp, nextTick, ref } from "vue";
-import type { DisplayExercise, DisplayWorkoutGroup } from "@/modules/aiCoach/presentation";
+import {
+  type DisplayExercise,
+  type DisplayWorkoutGroup,
+  groupWorkout,
+} from "@/modules/aiCoach/presentation";
 
 // Mock child components that are not under test
 vi.mock("@/shared/presentation/components/TrainInteractionDeck.vue", () => ({
@@ -22,9 +26,17 @@ vi.mock("@/shared/presentation/components/TrainInteractionDeck.vue", () => ({
     `,
   },
 }));
-vi.mock("@/modules/aiCoach/presentation", () => ({
-  WorkoutExerciseCard: { template: "<div class='exercise-card'>Card</div>" },
-}));
+vi.mock("@/modules/aiCoach/presentation", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/modules/aiCoach/presentation")>();
+  return {
+    ...actual,
+    WorkoutExerciseCard: {
+      props: ["exercise", "loggedSets"],
+      template:
+        "<div class='exercise-card'>{{ exercise?.exerciseName }} ({{ loggedSets?.length ?? 0 }})</div>",
+    },
+  };
+});
 vi.mock("@/shared/presentation/components/EmptyState.vue", () => ({
   default: { template: "<div>EmptyState</div>" },
 }));
@@ -41,6 +53,7 @@ vi.mock("@/shared/presentation/components/ui/UiTelemetryLoader.vue", () => ({
 const mockAllWorkoutGroups = ref<DisplayWorkoutGroup[] | null>(null);
 const mockVisibleGroupIndex = ref(0);
 const mockCompletedMap = ref(new Map<string, boolean>());
+const mockLogsByExercise = ref(new Map<string, { id: string }[]>());
 const mockSupersetAlternatives = ref<DisplayExercise[]>([]);
 const mockActiveExerciseForDeck = ref<DisplayExercise | null>(null);
 const mockSelectedSupersetExerciseName = ref<string | null>(null);
@@ -65,7 +78,7 @@ vi.mock("@/views/composables/useHomeWorkoutViewModel", () => ({
     getExerciseProgression: () => null,
     isHighlighted: () => false,
     getLastSessionSummary: () => null,
-    getTodaysLogsForExercise: () => [],
+    getTodaysLogsForExercise: (name: string) => mockLogsByExercise.value.get(name) ?? [],
     handleLogArbitrary: vi.fn(),
     skipRest: vi.fn(),
     visibleGroupIndex: mockVisibleGroupIndex,
@@ -86,6 +99,7 @@ import HomeTab from "./HomeTab.vue";
 describe("HomeTab Stepper Highlights", () => {
   beforeEach(() => {
     mockCompletedMap.value = new Map<string, boolean>();
+    mockLogsByExercise.value = new Map<string, { id: string }[]>();
     mockVisibleGroupIndex.value = 0;
     mockAllWorkoutGroups.value = [
       {
@@ -507,5 +521,61 @@ describe("HomeTab Stepper Highlights", () => {
 
       app.unmount();
     });
+  });
+
+  it("preserves DOM identity of cards, slides, and stepper buttons when logging a set recomputes allWorkoutGroups", async () => {
+    const workout: DisplayExercise[] = [
+      { exerciseName: "Bench Press", targetSets: 1, targetReps: "8" },
+      { exerciseName: "Squat", targetSets: 3, targetReps: "5" },
+      { exerciseName: "Curl", targetSets: 3, targetReps: "12", supersetId: "ss-1" },
+      { exerciseName: "Tricep Extension", targetSets: 3, targetReps: "12", supersetId: "ss-1" },
+    ];
+    mockAllWorkoutGroups.value = groupWorkout(workout);
+
+    const container = document.createElement("div");
+    const app = createApp(HomeTab);
+    app.mount(container);
+    await nextTick();
+
+    const initialStepButtons = Array.from(container.querySelectorAll("button[aria-label]"));
+    const gallery = container.querySelector(".overflow-x-auto") as HTMLElement;
+    const initialSlides = Array.from(gallery.children);
+    const initialCards = Array.from(
+      container.querySelectorAll<HTMLElement>("[data-exercise-name]"),
+    );
+
+    expect(initialStepButtons).toHaveLength(3);
+    expect(initialSlides).toHaveLength(3);
+    expect(initialCards).toHaveLength(4);
+
+    initialCards[0].scrollTop = 42;
+
+    mockLogsByExercise.value.set("Bench Press", [{ id: "set-1" }]);
+    mockCompletedMap.value.set("Bench Press", true);
+    mockAllWorkoutGroups.value = groupWorkout(workout.map((ex) => ({ ...ex })));
+    await nextTick();
+
+    const nextStepButtons = Array.from(container.querySelectorAll("button[aria-label]"));
+    const nextSlides = Array.from(gallery.children);
+    const nextCards = Array.from(container.querySelectorAll<HTMLElement>("[data-exercise-name]"));
+
+    expect(nextStepButtons).toHaveLength(3);
+    nextStepButtons.forEach((btn, idx) => {
+      expect(btn).toBe(initialStepButtons[idx]);
+    });
+    expect(nextSlides).toHaveLength(3);
+    nextSlides.forEach((slide, idx) => {
+      expect(slide).toBe(initialSlides[idx]);
+    });
+    expect(nextCards).toHaveLength(4);
+    nextCards.forEach((card, idx) => {
+      expect(card).toBe(initialCards[idx]);
+    });
+
+    expect(initialCards[0].scrollTop).toBe(42);
+    expect(initialCards[0].textContent).toContain("(1)");
+    expect(initialStepButtons[0].querySelector("div")?.className).toContain("bg-emerald-500");
+
+    app.unmount();
   });
 });

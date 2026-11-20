@@ -746,4 +746,59 @@ describe("useHomeWorkoutViewModel", () => {
       vi.useRealTimers();
     });
   });
+
+  it("keeps allWorkoutGroups ids stable when logging sets and adding mid-workout coach Q&A messages", async () => {
+    const { nextTick } = await import("vue");
+    const chatStore = useCoachChatStore();
+    const logsStore = useExerciseLogsStore();
+
+    chatStore.addMessage({
+      id: "coach-workout",
+      role: "coach",
+      content: JSON.stringify({
+        coachMessage: "Push day ready.",
+        recommendedWorkout: [
+          { exerciseName: "Bench Press", targetSets: 3, targetReps: "8" },
+          { exerciseName: "Curl", targetSets: 3, targetReps: "12", supersetId: "ss-1" },
+          { exerciseName: "Pushdown", targetSets: 3, targetReps: "12", supersetId: "ss-1" },
+        ],
+      }),
+      timestamp: new Date().toISOString(),
+      sessionId: chatStore.currentSessionId,
+      logsCount: 0,
+    });
+
+    const vm = useHomeWorkoutViewModel();
+    const initialIds = vm.allWorkoutGroups.value?.map((g) => g.id);
+    expect(initialIds).toHaveLength(2);
+
+    logsStore.addExerciseLog({
+      id: "set-1",
+      exerciseName: "Bench Press",
+      reps: 8,
+      weight: 80,
+      loggedAt: new Date(),
+    });
+    chatStore.addMessage({
+      id: "user-qa",
+      role: "user",
+      content: "Should I pause at the bottom?",
+      timestamp: new Date().toISOString(),
+      sessionId: chatStore.currentSessionId,
+      logsCount: 1,
+    });
+    chatStore.addMessage({
+      id: "coach-qa",
+      role: "coach",
+      content: JSON.stringify({
+        coachMessage: "Keep a controlled 1-second pause on the chest.",
+      }),
+      timestamp: new Date().toISOString(),
+      sessionId: chatStore.currentSessionId,
+      logsCount: 1,
+    });
+    await nextTick();
+
+    expect(vm.allWorkoutGroups.value?.map((g) => g.id)).toEqual(initialIds);
+  });
 });

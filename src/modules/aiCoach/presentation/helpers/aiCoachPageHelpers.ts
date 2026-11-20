@@ -1,6 +1,6 @@
 import DOMPurify from "dompurify";
 import { marked } from "marked";
-import { isoDateString } from "@/modules/sharedKernel/domain";
+import { exerciseNameKey, isoDateString } from "@/modules/sharedKernel/domain";
 import {
   type CoachingAdvice,
   type CoachingAdviceError,
@@ -184,6 +184,8 @@ export function groupWorkout(workout: DisplayExercise[] | undefined): DisplayWor
   if (!workout || workout.length === 0) return null;
 
   const groups: DisplayWorkoutGroup[] = [];
+  const standaloneCounts = new Map<string, number>();
+
   workout.forEach((ex) => {
     if (ex.supersetId) {
       const existing = groups.find((g) => g.isSuperset && g.id === ex.supersetId);
@@ -193,7 +195,14 @@ export function groupWorkout(workout: DisplayExercise[] | undefined): DisplayWor
         groups.push({ id: ex.supersetId, isSuperset: true, exercises: [ex] });
       }
     } else {
-      groups.push({ id: crypto.randomUUID(), isSuperset: false, exercises: [ex] });
+      const normalized = exerciseNameKey(ex.exerciseName);
+      const occurrence = standaloneCounts.get(normalized) ?? 0;
+      standaloneCounts.set(normalized, occurrence + 1);
+      groups.push({
+        id: `exercise:${normalized}:${occurrence}`,
+        isSuperset: false,
+        exercises: [ex],
+      });
     }
   });
   return groups;
