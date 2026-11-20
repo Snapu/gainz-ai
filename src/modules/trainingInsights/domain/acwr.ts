@@ -2,8 +2,6 @@ import { getLocalDayIndex } from "@/modules/sharedKernel/domain";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 import { computeEwma, DEFAULT_EWMA_LAMBDA_ACUTE, DEFAULT_EWMA_LAMBDA_CHRONIC } from "./ewma";
 
-const MS_PER_DAY = 86_400_000;
-
 /**
  * Calculates the internal load of a single set for ACWR purposes.
  * Previously used Tonnage (weight * reps), which incorrectly tracked phase
@@ -35,66 +33,6 @@ function buildDailyLoadMap(logs: ExerciseLog[], targetDate: Date): Map<number, n
   }
 
   return dailyLoads;
-}
-
-/**
- * Computes the Acute:Chronic Workload Ratio (ACWR) using a simple rolling-average method.
- *
- * - Acute load  = total volume load in the 7 days ending on `targetDate`
- * - Chronic load = average weekly volume load over the 28-day window (always ÷ 4)
- * - ACWR = Acute / Chronic
- *
- * The chronic denominator is always 4 regardless of how many weeks contain data.
- * Dividing by fewer weeks during early training would artificially inflate the ratio
- * and create false injury-risk signals — a documented limitation of variable-denominator
- * approaches (Windt & Gabbett, 2019).
- *
- * Returns `null` when:
- * - There are no logs at all, or
- * - All logs fall within the acute window (< 8 days old) — insufficient chronic baseline.
- *
- * The "sweet spot" zone of ACWR 0.8–1.3 is associated with lower injury risk (Gabbett, 2016),
- * though this threshold is contested for resistance training. Prefer `computeEWMAACWR` for
- * a more sensitive and statistically robust estimate.
- *
- * References:
- * - Gabbett TJ (2016). The training—injury prevention paradox: should athletes be training
- *   smarter and harder? Br J Sports Med, 50(5), 273-280.
- * - Hulin BT et al. (2014). Spikes in acute workload are associated with increased injury
- *   risk in elite cricket fast bowlers. Br J Sports Med, 48(8), 708-712.
- * - Windt J & Gabbett TJ (2019). Is it all for naught? What does mathematical coupling mean
- *   for acute:chronic workload ratios? Br J Sports Med, 53(16), 988-990.
- */
-export function computeACWR(logs: ExerciseLog[], targetDate: Date): number | null {
-  const now = targetDate.getTime();
-
-  const hasPreAcuteData = logs.some((l) => {
-    const age = now - l.loggedAt.getTime();
-    return age > 7 * MS_PER_DAY && age <= 28 * MS_PER_DAY;
-  });
-
-  if (!hasPreAcuteData) return null;
-
-  const acuteLoad = logs
-    .filter((l) => {
-      const age = now - l.loggedAt.getTime();
-      return age >= 0 && age <= 7 * MS_PER_DAY;
-    })
-    .reduce((s, l) => s + calculateSetLoad(l), 0);
-
-  const chronicTotal = logs
-    .filter((l) => {
-      const age = now - l.loggedAt.getTime();
-      return age >= 0 && age <= 28 * MS_PER_DAY;
-    })
-    .reduce((s, l) => s + calculateSetLoad(l), 0);
-
-  // Always divide by 4 weeks — see JSDoc above.
-  const chronicWeekly = chronicTotal / 4;
-
-  if (chronicWeekly === 0) return null;
-
-  return Math.round((acuteLoad / chronicWeekly) * 100) / 100;
 }
 
 /**

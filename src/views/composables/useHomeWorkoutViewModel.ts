@@ -13,7 +13,7 @@ import {
   useTrainingPlanStore,
 } from "@/modules/aiCoach/presentation";
 import { useExerciseMuscleMapStore, useRestTimerStore } from "@/modules/platform/presentation";
-import { isoDateString } from "@/modules/sharedKernel/presentation";
+import { exerciseNameKey, isoDateString } from "@/modules/sharedKernel/presentation";
 import {
   getMuscleActivation,
   normalizeExerciseName,
@@ -165,13 +165,14 @@ export function useHomeWorkoutViewModel() {
   const completedSetsMap = computed<Map<string, number>>(() => {
     const map = new Map<string, number>();
     for (const log of todaysLogs.value) {
-      map.set(log.exerciseName, (map.get(log.exerciseName) || 0) + 1);
+      const key = exerciseNameKey(log.exerciseName);
+      map.set(key, (map.get(key) || 0) + 1);
     }
     return map;
   });
 
   function getExerciseProgress(exerciseName: string, targetSets: number) {
-    const done = completedSetsMap.value.get(exerciseName) || 0;
+    const done = completedSetsMap.value.get(exerciseNameKey(exerciseName)) || 0;
     const isCompleted = done >= targetSets;
     const progressPercent = Math.min(100, Math.round((done / targetSets) * 100));
     return { done, isCompleted, progressPercent };
@@ -225,7 +226,9 @@ export function useHomeWorkoutViewModel() {
     if (!exercise || getExerciseProgress(exercise.exerciseName, exercise.targetSets).isCompleted) {
       return false;
     }
-    return exercise.exerciseName === activeExerciseForDeck.value?.exerciseName;
+    const active = activeExerciseForDeck.value;
+    if (!active) return false;
+    return exerciseNameKey(exercise.exerciseName) === exerciseNameKey(active.exerciseName);
   }
 
   function getLastSessionSummary(exerciseName: string): string | null {
@@ -233,9 +236,10 @@ export function useHomeWorkoutViewModel() {
       currentSession.value,
       currentReactiveTime.value.getTime(),
     );
+    const key = exerciseNameKey(exerciseName);
 
     const pastLogs = logsStore.exerciseLogs.filter(
-      (l) => l.exerciseName === exerciseName && l.loggedAt.getTime() < sessionBoundary,
+      (l) => exerciseNameKey(l.exerciseName) === key && l.loggedAt.getTime() < sessionBoundary,
     );
 
     if (!pastLogs.length) return null;
@@ -284,18 +288,19 @@ export function useHomeWorkoutViewModel() {
 
     const byExercise = new Map<string, ExerciseLog[]>();
     for (const log of logs) {
-      let list = byExercise.get(log.exerciseName);
+      const key = exerciseNameKey(log.exerciseName);
+      let list = byExercise.get(key);
       if (!list) {
         list = [];
-        byExercise.set(log.exerciseName, list);
+        byExercise.set(key, list);
       }
       list.push(log);
     }
 
-    for (const [exerciseName, pastLogs] of byExercise.entries()) {
+    for (const [exerciseKey, pastLogs] of byExercise.entries()) {
       const sessions = buildExerciseProgression(pastLogs);
       if (sessions.length > 0) {
-        map.set(exerciseName, sessions);
+        map.set(exerciseKey, sessions);
       }
     }
 
@@ -303,17 +308,18 @@ export function useHomeWorkoutViewModel() {
   });
 
   function getExerciseProgression(exerciseName: string): ProgressionSessionItem[] | null {
-    return exerciseProgressions.value.get(exerciseName) ?? null;
+    return exerciseProgressions.value.get(exerciseNameKey(exerciseName)) ?? null;
   }
 
   function getTodaysLogsForExercise(exerciseName: string): ExerciseLog[] {
+    const key = exerciseNameKey(exerciseName);
     const currentSession = resolveCurrentSession(
       logsStore.exerciseLogs,
       currentReactiveTime.value.getTime(),
     );
     if (currentSession) {
       return currentSession.logs
-        .filter((l) => l.exerciseName === exerciseName)
+        .filter((l) => exerciseNameKey(l.exerciseName) === key)
         .sort((a, b) => a.loggedAt.getTime() - b.loggedAt.getTime());
     }
 
@@ -321,7 +327,9 @@ export function useHomeWorkoutViewModel() {
     today.setHours(0, 0, 0, 0);
 
     return logsStore.exerciseLogs
-      .filter((l) => l.exerciseName === exerciseName && l.loggedAt.getTime() >= today.getTime())
+      .filter(
+        (l) => exerciseNameKey(l.exerciseName) === key && l.loggedAt.getTime() >= today.getTime(),
+      )
       .sort((a, b) => a.loggedAt.getTime() - b.loggedAt.getTime());
   }
 
@@ -331,7 +339,7 @@ export function useHomeWorkoutViewModel() {
     const metrics = resolvePrefillMetrics(exercise, lastLog);
 
     const planned = chatStore.currentWorkoutPlan?.find(
-      (ex) => ex.exerciseName === exercise.exerciseName,
+      (ex) => exerciseNameKey(ex.exerciseName) === exerciseNameKey(exercise.exerciseName),
     );
     const restSeconds = planned?.restSeconds ?? null;
 
@@ -395,8 +403,9 @@ export function useHomeWorkoutViewModel() {
     const group = activeGroupForDeck.value;
     if (!group) return null;
     if (group.isSuperset && selectedSupersetExerciseName.value) {
+      const selectedKey = exerciseNameKey(selectedSupersetExerciseName.value);
       const selected = group.exercises.find(
-        (ex) => ex.exerciseName === selectedSupersetExerciseName.value,
+        (ex) => exerciseNameKey(ex.exerciseName) === selectedKey,
       );
       if (selected) return selected;
     }
@@ -407,7 +416,8 @@ export function useHomeWorkoutViewModel() {
     const group = activeGroupForDeck.value;
     const current = activeExerciseForDeck.value;
     if (!group?.isSuperset || !current) return [];
-    return group.exercises.filter((ex) => ex.exerciseName !== current.exerciseName);
+    const currentKey = exerciseNameKey(current.exerciseName);
+    return group.exercises.filter((ex) => exerciseNameKey(ex.exerciseName) !== currentKey);
   });
 
   function selectSupersetExercise(exerciseName: string) {

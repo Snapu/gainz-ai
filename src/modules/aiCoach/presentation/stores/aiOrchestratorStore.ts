@@ -14,7 +14,6 @@ import {
   classifyExerciseNames,
   evaluateCompletedSessions,
   getTodayLogsCount,
-  mapTrainingFatigueTriggersToDeload,
   requestAdviceWithSingleRetry,
 } from "@/modules/aiCoach/application";
 import {
@@ -390,7 +389,7 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
 
     if (result.advice.startDeload === true && !deloadStore.active) {
       const { riskScore, triggeredBy } = trainingInsightsStore.insights.fatigue;
-      deloadStore.startDeload(riskScore, mapTrainingFatigueTriggersToDeload(triggeredBy));
+      deloadStore.startDeload(riskScore, triggeredBy);
     }
 
     const coachMessage = createCoachMessage(

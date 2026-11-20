@@ -81,5 +81,3 @@ export function requestAdviceWithSingleRetry(
     ).andThen(() => askWithOptions(retryOptions));
   });
 }
-
-export * from "./fatigueTriggerMapper";

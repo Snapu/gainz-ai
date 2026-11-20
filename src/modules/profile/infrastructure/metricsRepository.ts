@@ -1,7 +1,11 @@
 import * as Sentry from "@sentry/vue";
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { ResultAsync } from "neverthrow";
-import { isAuthError } from "@/modules/platform/infrastructure";
+import {
+  ensureSheetHeaders,
+  getOrCreateSheet,
+  isAuthError,
+} from "@/modules/platform/infrastructure";
 import type {
   MetricsLoadError,
   MetricsRepository,
@@ -12,28 +16,6 @@ import { isMuscleGroup } from "@/modules/sharedKernel/domain";
 
 const SHEET_NAME = "Physiological Metrics";
 const METRICS_HEADERS = ["muscleGroup", "personalMAV", "personalMRV", "lastUpdated"] as const;
-
-const getSheet = (doc: GoogleSpreadsheet) => doc.sheetsByTitle[SHEET_NAME];
-const addSheet = (doc: GoogleSpreadsheet) =>
-  doc.addSheet({
-    title: SHEET_NAME,
-    headerValues: [...METRICS_HEADERS],
-  });
-
-interface HeaderManagedSheet {
-  loadHeaderRow: () => Promise<void>;
-  setHeaderRow: (headers: string[]) => Promise<void>;
-  headerValues?: string[];
-}
-
-async function ensureMetricsHeaders(sheet: HeaderManagedSheet): Promise<void> {
-  await sheet.loadHeaderRow();
-  const currentHeaders: string[] = Array.isArray(sheet.headerValues) ? sheet.headerValues : [];
-  const missingHeaders = METRICS_HEADERS.filter((h) => !currentHeaders.includes(h));
-  if (missingHeaders.length === 0) return;
-  await sheet.setHeaderRow([...currentHeaders, ...missingHeaders]);
-  await sheet.loadHeaderRow();
-}
 
 function parseRow(
   row: Record<string, string | number | boolean | undefined>,
@@ -74,8 +56,8 @@ function loadMetricsInfra(
   };
 
   return ResultAsync.fromThrowable(async () => {
-    const sheet = getSheet(doc) ?? (await addSheet(doc));
-    await ensureMetricsHeaders(sheet);
+    const sheet = await getOrCreateSheet(doc, SHEET_NAME, METRICS_HEADERS);
+    await ensureSheetHeaders(sheet, METRICS_HEADERS);
     const rows = await sheet.getRows();
 
     const metricsMap: PhysiologicalMetricsMap = {} as PhysiologicalMetricsMap;
@@ -106,8 +88,8 @@ function saveMetricsInfra(
   };
 
   return ResultAsync.fromThrowable(async () => {
-    const sheet = getSheet(doc) ?? (await addSheet(doc));
-    await ensureMetricsHeaders(sheet);
+    const sheet = await getOrCreateSheet(doc, SHEET_NAME, METRICS_HEADERS);
+    await ensureSheetHeaders(sheet, METRICS_HEADERS);
     const rows = await sheet.getRows();
 
     const rowByMuscle = new Map(rows.map((row) => [String(row.get("muscleGroup")), row]));

@@ -140,3 +140,57 @@ export function createSpreadsheet(
     (error) => mapCreateSpreadsheetError(name, error),
   )();
 }
+
+export interface HeaderManagedSheet {
+  loadHeaderRow?: () => Promise<void>;
+  setHeaderRow?: (headers: string[]) => Promise<void>;
+  headerValues?: string[];
+}
+
+export async function findSheet(doc: GoogleSpreadsheet, title: string) {
+  const existing = doc.sheetsByTitle[title];
+  if (existing) return existing;
+  if (typeof doc.loadInfo === "function") {
+    await doc.loadInfo();
+  }
+  return doc.sheetsByTitle[title];
+}
+
+export async function getOrCreateSheet(
+  doc: GoogleSpreadsheet,
+  title: string,
+  headerValues: readonly string[],
+) {
+  const existing = await findSheet(doc, title);
+  if (existing) return existing;
+  try {
+    return await doc.addSheet({
+      title,
+      headerValues: [...headerValues],
+    });
+  } catch (error) {
+    if (getHttpErrorStatus(error) === 400) {
+      if (typeof doc.loadInfo === "function") {
+        await doc.loadInfo();
+      }
+      const createdConcurrently = doc.sheetsByTitle[title];
+      if (createdConcurrently) return createdConcurrently;
+    }
+    throw error;
+  }
+}
+
+export async function ensureSheetHeaders(
+  sheet: HeaderManagedSheet,
+  requiredHeaders: readonly string[],
+): Promise<void> {
+  if (typeof sheet.loadHeaderRow !== "function" || typeof sheet.setHeaderRow !== "function") {
+    return;
+  }
+  await sheet.loadHeaderRow();
+  const currentHeaders: string[] = Array.isArray(sheet.headerValues) ? sheet.headerValues : [];
+  const missingHeaders = requiredHeaders.filter((h) => !currentHeaders.includes(h));
+  if (missingHeaders.length === 0) return;
+  await sheet.setHeaderRow([...currentHeaders, ...missingHeaders]);
+  await sheet.loadHeaderRow();
+}

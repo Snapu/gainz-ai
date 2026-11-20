@@ -427,4 +427,128 @@ describe("ExerciseLogsSheetsRepository dynamic year rollover", () => {
     );
     expect(loadInfo).not.toHaveBeenCalled();
   });
+
+  it("skips corrupted rows instead of failing loadCurrentYear or loadYear", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const currentYear = new Date().getFullYear();
+    const validRow = {
+      ...VALID_LOG,
+      loggedAt: new Date(currentYear, 2, 10).toISOString(),
+    };
+    const corruptedRow = { id: "not-a-uuid", exerciseName: "", loggedAt: "bad-date" };
+    const sheet = {
+      headerValues: [
+        "id",
+        "exerciseName",
+        "reps",
+        "weight",
+        "distance",
+        "duration",
+        "rpe",
+        "loggedAt",
+      ],
+      loadHeaderRow: vi.fn().mockResolvedValue(undefined),
+      getRows: vi
+        .fn()
+        .mockResolvedValue([{ toObject: () => validRow }, { toObject: () => corruptedRow }]),
+    };
+    const repository = new ExerciseLogsSheetsRepository({
+      sheetsByTitle: { [`Logs${currentYear}`]: sheet, Logs2024: sheet },
+    } as never);
+
+    const currentResult = await repository.loadCurrentYear();
+    expect(currentResult.isOk()).toBe(true);
+    expect(currentResult._unsafeUnwrap()).toHaveLength(1);
+    expect(currentResult._unsafeUnwrap()[0]?.exerciseName).toBe(VALID_LOG.exerciseName);
+
+    const pastResult = await repository.loadYear(2024);
+    expect(pastResult.isOk()).toBe(true);
+    expect(pastResult._unsafeUnwrap()).toHaveLength(1);
+
+    const allCorruptedSheet = {
+      headerValues: [
+        "id",
+        "exerciseName",
+        "reps",
+        "weight",
+        "distance",
+        "duration",
+        "rpe",
+        "loggedAt",
+      ],
+      loadHeaderRow: vi.fn().mockResolvedValue(undefined),
+      getRows: vi.fn().mockResolvedValue([{ toObject: () => corruptedRow }]),
+    };
+    const allCorruptedRepo = new ExerciseLogsSheetsRepository({
+      sheetsByTitle: { [`Logs${currentYear}`]: allCorruptedSheet },
+    } as never);
+    expect(await allCorruptedRepo.loadCurrentYear()).toEqual(err("parse-data-failed"));
+  });
+
+  it("appends rows with UUIDs before deleting legacy rows during UUID migration", async () => {
+    const currentYear = new Date().getFullYear();
+    const callOrder: string[] = [];
+    const originalHeaders = [
+      "exerciseName",
+      "reps",
+      "weight",
+      "distance",
+      "duration",
+      "rpe",
+      "loggedAt",
+    ];
+    const legacyRow = { exerciseName: "Squat", reps: 5, weight: 100, loggedAt: "2026-01-01" };
+    const sheet = {
+      headerValues: [...originalHeaders],
+      loadHeaderRow: vi.fn().mockResolvedValue(undefined),
+      setHeaderRow: vi.fn().mockImplementation(async (headers: string[]) => {
+        callOrder.push("setHeaderRow");
+        sheet.headerValues = headers;
+      }),
+      getRows: vi
+        .fn()
+        .mockResolvedValueOnce([{ toObject: () => legacyRow }])
+        .mockResolvedValueOnce([]),
+      addRows: vi.fn().mockImplementation(async () => {
+        callOrder.push("addRows");
+      }),
+      deleteRows: vi.fn().mockImplementation(async () => {
+        callOrder.push("deleteRows");
+      }),
+      clearRows: vi.fn().mockImplementation(async () => {
+        callOrder.push("clearRows");
+      }),
+    };
+    const repository = new ExerciseLogsSheetsRepository({
+      sheetsByTitle: { [`Logs${currentYear}`]: sheet },
+    } as never);
+
+    expect(await repository.loadCurrentYear()).toEqual(ok([]));
+    expect(callOrder).toEqual(["setHeaderRow", "addRows", "deleteRows"]);
+    expect(sheet.setHeaderRow).toHaveBeenCalledWith([...originalHeaders, "id"]);
+    expect(sheet.deleteRows).toHaveBeenCalledWith(1, 2);
+    expect(sheet.clearRows).not.toHaveBeenCalled();
+
+    // Verify failed addRows restores headers and does not delete legacy rows
+    const failingHeaders = ["exerciseName", "reps", "weight", "loggedAt"];
+    const failingSheet = {
+      headerValues: [...failingHeaders],
+      loadHeaderRow: vi.fn().mockResolvedValue(undefined),
+      setHeaderRow: vi.fn().mockResolvedValue(undefined),
+      getRows: vi.fn().mockResolvedValue([{ toObject: () => legacyRow }]),
+      addRows: vi.fn().mockRejectedValue(new Error("write failed")),
+      deleteRows: vi.fn(),
+      clearRows: vi.fn(),
+    };
+    const failingRepo = new ExerciseLogsSheetsRepository({
+      sheetsByTitle: { [`Logs${currentYear}`]: failingSheet },
+    } as never);
+
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(await failingRepo.loadCurrentYear()).toEqual(err("load-failed"));
+    expect(failingSheet.setHeaderRow).toHaveBeenNthCalledWith(1, [...failingHeaders, "id"]);
+    expect(failingSheet.setHeaderRow).toHaveBeenNthCalledWith(2, failingHeaders);
+    expect(failingSheet.deleteRows).not.toHaveBeenCalled();
+    expect(failingSheet.clearRows).not.toHaveBeenCalled();
+  });
 });

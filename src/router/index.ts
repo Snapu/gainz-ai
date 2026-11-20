@@ -50,11 +50,6 @@ const router = createRouter({
       ],
     },
     {
-      path: "/exercise-migration",
-      name: "exercise-migration",
-      component: () => import("../views/ExerciseMigration.vue"),
-    },
-    {
       path: "/rest-recovery",
       name: "rest-recovery",
       component: () => import("../views/RestRecovery.vue"),

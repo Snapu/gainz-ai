@@ -4,7 +4,7 @@ import { useAiOrchestratorStore } from "@/modules/aiCoach/presentation";
 import { useDeloadStore } from "@/modules/deload/presentation";
 import { useExerciseMuscleMapStore, useUserProgressStore } from "@/modules/platform/presentation";
 import { useMetricsStore } from "@/modules/profile/presentation";
-import type { MuscleGroup } from "@/modules/sharedKernel/domain";
+import { getLocalDayIndex, type MuscleGroup } from "@/modules/sharedKernel/domain";
 import {
   MAX_FATIGUE_RISK_SCORE,
   normalizeExerciseName,
@@ -83,9 +83,9 @@ export function useInsightsTabViewModel() {
     }
 
     if (acwr < 0.6) {
-      const now = Date.now();
+      const todayDayIndex = getLocalDayIndex(new Date());
       const hasRecentLogs = trainingInsightsStore.allLogs.some(
-        (log) => (now - log.loggedAt.getTime()) / (1000 * 60 * 60 * 24) <= 7,
+        (log) => todayDayIndex - getLocalDayIndex(log.loggedAt) <= 7,
       );
 
       return {
@@ -190,7 +190,7 @@ export function useInsightsTabViewModel() {
       }
     }
 
-    const now = Date.now();
+    const todayDayIndex = getLocalDayIndex(new Date());
 
     return Object.entries(insights.value.e1rm)
       .map(([name, data]) => {
@@ -219,7 +219,10 @@ export function useInsightsTabViewModel() {
         const canonical = normalizeExerciseName(name);
         const lastLogTime = latestDates.get(canonical) ?? 0;
 
-        const daysAgo = Math.floor((now - lastLogTime) / (1000 * 60 * 60 * 24));
+        const daysAgo =
+          lastLogTime > 0
+            ? Math.max(0, todayDayIndex - getLocalDayIndex(new Date(lastLogTime)))
+            : Number.POSITIVE_INFINITY;
         let lastTrainedLabel = "";
         if (daysAgo === 0) lastTrainedLabel = "Today";
         else if (daysAgo < 7) lastTrainedLabel = `${daysAgo}d ago`;

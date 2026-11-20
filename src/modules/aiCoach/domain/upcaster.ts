@@ -46,7 +46,8 @@ export function splitReps(reps?: string): { value: string; unit: string } {
 function tryParseDistanceMeters(targetReps: string): number | undefined {
   const lower = targetReps.toLowerCase().trim();
   if (/m$/.test(lower) && !lower.includes("min") && !lower.includes("time")) {
-    return parseFirstRep(targetReps);
+    const distance = parseFirstRep(targetReps);
+    return distance !== undefined && distance > 0 ? distance : undefined;
   }
   return undefined;
 }
@@ -55,12 +56,16 @@ function tryParseDurationSeconds(targetReps: string): number | undefined {
   if (!isDuration(targetReps)) return undefined;
 
   const parsed = parseFirstRep(targetReps);
-  if (parsed === undefined) return undefined;
+  if (parsed === undefined || parsed <= 0) return undefined;
 
   const unit = splitReps(targetReps).unit.toLowerCase();
-  if (unit.includes("hr")) return parsed * 3600;
-  if (unit.includes("min")) return parsed * 60;
-  return parsed;
+  const rawSeconds = unit.includes("hr")
+    ? parsed * 3600
+    : unit.includes("min")
+      ? parsed * 60
+      : parsed;
+  const durationSeconds = Math.round(rawSeconds);
+  return durationSeconds > 0 ? durationSeconds : undefined;
 }
 
 /**

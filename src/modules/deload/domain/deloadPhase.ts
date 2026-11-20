@@ -2,7 +2,7 @@
  * Deload Phase — Type definitions and duration logic.
  */
 
-import { type FatigueTriggerId, isFatigueTriggerId } from "@/modules/sharedKernel/domain";
+import type { FatigueTriggerId } from "@/modules/sharedKernel/domain";
 
 /** Duration of a standard deload week in milliseconds (7 days). */
 export const DELOAD_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -20,10 +20,6 @@ export interface DeloadPhase {
 }
 
 export type DeloadStatus = "active" | "completed" | "canceled" | "none";
-
-export function isDeloadFatigueTriggerId(value: string): value is FatigueTriggerId {
-  return isFatigueTriggerId(value);
-}
 
 export function getDeloadStatus(phase: DeloadPhase | null, now: Date = new Date()): DeloadStatus {
   if (!phase) return "none";

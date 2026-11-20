@@ -119,24 +119,6 @@ function getWorkoutDaysFromSummary(summaries: TrainingSummary[]): Map<string, nu
   return workoutDaysMap;
 }
 
-export function summaryToWorkoutDates(summaries: TrainingSummary[]): Date[] {
-  const workoutDaysMap = getWorkoutDaysFromSummary(summaries);
-  const dates: Date[] = [];
-
-  for (const [key, days] of workoutDaysMap) {
-    const parts = key.split("-");
-    const year = Number(parts[0]);
-    const month = Number(parts[1]);
-
-    for (let i = 0; i < days; i++) {
-      const dayOfMonth = Math.min(1 + i * 2, 28);
-      dates.push(new Date(year, month - 1, dayOfMonth));
-    }
-  }
-
-  return dates;
-}
-
 /**
  * Reconstruct ExerciseLogs from TrainingSummary for XP calculation.
  * This is an approximation since raw log data for summarized months is archived.

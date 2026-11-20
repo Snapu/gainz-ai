@@ -11,6 +11,7 @@ import {
   migrateUnsummarizedMonths,
   migrateUnsummarizedYears,
   rebuildAllTrainingSummaries,
+  summaryToExerciseLogs,
   type TrainingSummary,
 } from "@/modules/trainingSummary/application";
 import { createTrainingSummaryRepository } from "@/modules/trainingSummary/infrastructure";
@@ -21,6 +22,7 @@ export const useTrainingSummaryStore = defineStore("trainingSummary", () => {
   const logsStore = useExerciseLogsStore();
 
   const summaries = ref<TrainingSummary[]>([]);
+  const historicalLogs = computed(() => summaryToExerciseLogs(summaries.value));
   const isRefreshing = ref(false);
   const isRebuilding = ref(false);
   const isLoading = computed(() => isRefreshing.value || isRebuilding.value);
@@ -32,7 +34,7 @@ export const useTrainingSummaryStore = defineStore("trainingSummary", () => {
     doc: GoogleSpreadsheet,
   ): ResultAsync<TrainingSummary[], "repository-unavailable" | "refresh-failed" | "auth-failed"> {
     const summaryRepository = summaryRepoFactory.createRepository(doc);
-    const logsReader = logsStore.createHistoryReader(doc);
+    const logsReader = logsStore.createHistoryReader(doc, { reuseLoadedCurrentYear: true });
     if (!summaryRepository || !logsReader) return errAsync("repository-unavailable");
 
     return loadTrainingSummary(summaryRepository)
@@ -89,7 +91,7 @@ export const useTrainingSummaryStore = defineStore("trainingSummary", () => {
     if (!doc) return errAsync("repository-unavailable" as const);
 
     const summaryRepository = summaryRepoFactory.createRepository(doc);
-    const logsReader = logsStore.createHistoryReader(doc);
+    const logsReader = logsStore.createHistoryReader(doc, { reuseLoadedCurrentYear: false });
     if (!summaryRepository || !logsReader) return errAsync("repository-unavailable" as const);
 
     const rebuildId = ++latestRebuildId;
@@ -146,5 +148,5 @@ export const useTrainingSummaryStore = defineStore("trainingSummary", () => {
     { immediate: true },
   );
 
-  return { summaries, isLoading, isInitialized, refresh, rebuildAllSummaries };
+  return { summaries, historicalLogs, isLoading, isInitialized, refresh, rebuildAllSummaries };
 });

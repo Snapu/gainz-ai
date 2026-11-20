@@ -2,11 +2,13 @@ import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { errAsync, ResultAsync } from "neverthrow";
 import { ZodError, z } from "zod";
 import {
-  getHttpErrorStatus,
+  ensureSheetHeaders,
+  findSheet,
+  getOrCreateSheet,
   isAuthExpiredError,
   isNonRetryableClientError,
 } from "@/modules/platform/infrastructure";
-import { parseData } from "@/modules/sharedKernel/domain";
+import { parseRows } from "@/modules/sharedKernel/domain";
 import type { ExerciseLogRepository } from "@/modules/trainingLogs/application";
 import { type ExerciseLog, ExerciseLogSchema } from "../domain/exerciseLog";
 
@@ -49,38 +51,12 @@ const CANONICAL_HEADERS = [
 export class ExerciseLogsSheetsRepository {
   constructor(private doc: GoogleSpreadsheet) {}
 
+  private sheetTitle(year: number) {
+    return `${LOGS_SHEET_PREFIX}${year}`;
+  }
+
   private getSheet(year: number) {
-    return this.doc.sheetsByTitle[`${LOGS_SHEET_PREFIX}${year}`];
-  }
-
-  private async addSheet(year: number) {
-    return this.doc.addSheet({
-      title: `${LOGS_SHEET_PREFIX}${year}`,
-      headerValues: CANONICAL_HEADERS,
-    });
-  }
-
-  private async findSheet(year: number) {
-    const existing = this.getSheet(year);
-    if (existing) return existing;
-    await this.doc.loadInfo();
-    return this.getSheet(year);
-  }
-
-  private async getOrCreateSheet(year: number) {
-    const existing = await this.findSheet(year);
-    if (existing) return existing;
-
-    try {
-      return await this.addSheet(year);
-    } catch (error) {
-      if (getHttpErrorStatus(error) === 400) {
-        await this.doc.loadInfo();
-        const createdConcurrently = this.getSheet(year);
-        if (createdConcurrently) return createdConcurrently;
-      }
-      throw error;
-    }
+    return this.doc.sheetsByTitle[this.sheetTitle(year)];
   }
 
   private async migrateExistingLogs(year: number): Promise<void> {
@@ -96,26 +72,29 @@ export class ExerciseLogsSheetsRepository {
       const rows = await sheet.getRows();
       const rowData = rows.map((row) => row.toObject());
 
-      await sheet.setHeaderRow(["id", ...headers]);
+      // Append "id" at the end so legacy columns stay aligned while old rows remain on disk.
+      await sheet.setHeaderRow([...headers, "id"]);
       await sheet.loadHeaderRow();
-      await sheet.clearRows();
 
       const rowsWithIds = rowData.map((row) => ({
-        id: crypto.randomUUID(),
         ...row,
+        id: crypto.randomUUID(),
       }));
 
-      await sheet.addRows(rowsWithIds);
+      if (rowsWithIds.length > 0) {
+        try {
+          // Append migrated rows before removing legacy rows so an interrupted write never wipes data.
+          await sheet.addRows(rowsWithIds);
+        } catch (error) {
+          await sheet.setHeaderRow(headers).catch(() => {});
+          throw error;
+        }
+        await sheet.deleteRows(1, 1 + rows.length);
+      }
       console.log(`Migration complete - added UUIDs to ${rowsWithIds.length} existing logs`);
     }
 
-    await sheet.loadHeaderRow();
-    const currentHeaders = sheet.headerValues;
-    const missingHeaders = CANONICAL_HEADERS.filter((h) => !currentHeaders.includes(h));
-    if (missingHeaders.length > 0) {
-      console.log("Adding missing columns to exercise logs sheet:", missingHeaders);
-      await sheet.setHeaderRow([...currentHeaders, ...missingHeaders]);
-    }
+    await ensureSheetHeaders(sheet, CANONICAL_HEADERS);
   }
 
   loadCurrentYear(): ResultAsync<
@@ -125,7 +104,7 @@ export class ExerciseLogsSheetsRepository {
     return ResultAsync.fromThrowable(
       async () => {
         const year = new Date().getFullYear();
-        const sheet = await this.getOrCreateSheet(year);
+        const sheet = await getOrCreateSheet(this.doc, this.sheetTitle(year), CANONICAL_HEADERS);
         await this.migrateExistingLogs(year);
         const rows = await sheet.getRows<ExerciseLog>();
         console.debug("Fetched rows", rows);
@@ -139,7 +118,7 @@ export class ExerciseLogsSheetsRepository {
         console.error("Failed to load exercise logs. Error:", error);
         return "load-failed" as const;
       },
-    )().andThen((rows) => parseData(ExerciseLogSchema.array(), rows));
+    )().andThen((rows) => parseRows(ExerciseLogSchema, rows));
   }
 
   addLog(log: ExerciseLog): ResultAsync<void, "add-failed" | "validation-failed" | "auth-failed"> {
@@ -149,7 +128,11 @@ export class ExerciseLogsSheetsRepository {
           ...log,
           id: log.id || crypto.randomUUID(),
         });
-        const sheet = await this.getOrCreateSheet(parsedLog.loggedAt.getFullYear());
+        const sheet = await getOrCreateSheet(
+          this.doc,
+          this.sheetTitle(parsedLog.loggedAt.getFullYear()),
+          CANONICAL_HEADERS,
+        );
         await sheet.addRow(parsedLog);
       },
       (error) => mapMutationError("add", "add-failed", error),
@@ -162,7 +145,7 @@ export class ExerciseLogsSheetsRepository {
     return ResultAsync.fromThrowable(
       async () => {
         const loggedAt = ExerciseLogSchema.shape.loggedAt.parse(log.loggedAt);
-        const sheet = await this.findSheet(loggedAt.getFullYear());
+        const sheet = await findSheet(this.doc, this.sheetTitle(loggedAt.getFullYear()));
         if (!sheet) {
           throw new Error("Sheet does not exist.");
         }
@@ -181,7 +164,7 @@ export class ExerciseLogsSheetsRepository {
     return ResultAsync.fromThrowable(
       async () => {
         const parsedLog = ExerciseLogSchema.parse(log);
-        const sheet = await this.findSheet(parsedLog.loggedAt.getFullYear());
+        const sheet = await findSheet(this.doc, this.sheetTitle(parsedLog.loggedAt.getFullYear()));
         if (!sheet) {
           throw new Error("Sheet does not exist.");
         }
@@ -247,7 +230,7 @@ export class ExerciseLogsSheetsRepository {
         console.error(`Failed to load logs from year ${year}. Error:`, error);
         return "load-failed" as const;
       },
-    )().andThen((rows) => parseData(ExerciseLogSchema.array(), rows));
+    )().andThen((rows) => parseRows(ExerciseLogSchema, rows));
   }
 }
 

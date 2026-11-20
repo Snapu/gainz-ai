@@ -3,9 +3,16 @@ import {
   isDuration as edgeIsDuration,
   parseFirstRep as edgeParseFirstRep,
   splitReps as edgeSplitReps,
+  upcastLegacyExercise as edgeUpcastLegacyExercise,
 } from "../../../../supabase/functions/ai-coach/postProcess";
 import { sanitizeSuggestedFollowUps as edgeSanitizeSuggestedFollowUps } from "../../../../supabase/functions/ai-coach/schemas";
-import { isDuration, parseFirstRep, sanitizeSuggestedFollowUps, splitReps } from "./index";
+import {
+  isDuration,
+  parseFirstRep,
+  sanitizeSuggestedFollowUps,
+  splitReps,
+  upcastLegacyExercise,
+} from "./index";
 
 describe("aiCoach Client & Edge cross-boundary contract parity", () => {
   const repEdgeCases: Array<string | undefined> = [
@@ -39,6 +46,13 @@ describe("aiCoach Client & Edge cross-boundary contract parity", () => {
   it("maintains 100% parity on splitReps across all rep and unit edge cases", () => {
     for (const input of repEdgeCases) {
       expect(splitReps(input)).toEqual(edgeSplitReps(input));
+    }
+  });
+
+  it("maintains 100% parity on upcastLegacyExercise across all rep, distance, and duration cases", () => {
+    for (const targetReps of [...repEdgeCases, "0s", "2 hr", "1.5 min"]) {
+      const legacy = { exerciseName: "Plank", targetReps };
+      expect(upcastLegacyExercise(legacy)).toEqual(edgeUpcastLegacyExercise(legacy));
     }
   });
 

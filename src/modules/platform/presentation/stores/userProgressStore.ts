@@ -3,20 +3,17 @@ import { computed } from "vue";
 import { useUserProfileStore } from "@/modules/profile/presentation";
 import { calculateUserProgress, type UserProgress } from "@/modules/sharedKernel/presentation";
 import { type ExerciseLog, useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
-import {
-  summaryToExerciseLogs,
-  useTrainingSummaryStore,
-} from "@/modules/trainingSummary/presentation";
+import { useTrainingSummaryStore } from "@/modules/trainingSummary/presentation";
 
 export const useUserProgressStore = defineStore("userProgress", () => {
   const logsStore = useExerciseLogsStore();
   const summaryStore = useTrainingSummaryStore();
   const profileStore = useUserProfileStore();
 
-  const allLogs = computed<ExerciseLog[]>(() => {
-    const historicalLogs = summaryToExerciseLogs(summaryStore.summaries);
-    return [...historicalLogs, ...logsStore.exerciseLogs];
-  });
+  const allLogs = computed<ExerciseLog[]>(() => [
+    ...summaryStore.historicalLogs,
+    ...logsStore.exerciseLogs,
+  ]);
 
   const userProgress = computed<UserProgress>(() => {
     return calculateUserProgress(allLogs.value, profileStore.userProfile.workoutDaysPerWeek || 3);

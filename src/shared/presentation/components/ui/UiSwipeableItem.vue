@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Trash } from "@lucide/vue";
 import { useElementSize, usePointerSwipe } from "@vueuse/core";
 import { hapticTrigger } from "ios-haptics";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
@@ -158,7 +159,9 @@ onBeforeUnmount(() => {
       :style="{ width: `${visualOffset}px`, transition: 'background-color 150ms' }"
     >
       <div :class="{ 'scale-110 opacity-100': isThresholdReached, 'opacity-0': !isBackgroundActionVisible }" class="transition-all duration-200">
-        <slot name="background" />
+        <slot name="background">
+          <Trash class="w-5 h-5 text-destructive" />
+        </slot>
       </div>
     </div>
 

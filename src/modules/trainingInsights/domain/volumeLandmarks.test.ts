@@ -11,6 +11,7 @@ import {
   classifyLandmark,
   getIsoWeekStart,
   isRecovered,
+  resolveVolumeLandmarks,
 } from "./volumeLandmarks";
 
 describe("Volume Landmarks", () => {
@@ -489,6 +490,38 @@ describe("Volume Landmarks", () => {
       const logs = [createLog("Bench Press", 1)];
       const insights = calculateMuscleGroupInsights(logs, baseDate);
       expect(Number.isInteger(insights.Chest!.sets * 10)).toBe(true);
+    });
+
+    it("applies personal MAV/MRV overrides to muscle landmark classification", () => {
+      // Establish improving e1RM trend -> static without override at 22 sets is still at_MAV;
+      // Without trend (stable/undefined), static Chest MRV is 22 and mavHigh is 18.
+      // Lower personalMRV to 15 should classify ~15.4 sets as above_MRV even below static 22.
+      const defaultLandmarks = resolveVolumeLandmarks("Chest");
+      expect(defaultLandmarks.mrv).toBe(22);
+
+      const loweredMRV = resolveVolumeLandmarks("Chest", { personalMRV: 15 });
+      expect(loweredMRV).toEqual({ mev: 8, mavLow: 12, mavHigh: 15, mrv: 15 });
+      expect(classifyLandmark(15, "Chest", undefined, { personalMRV: 15 })).toBe("above_MRV");
+      expect(classifyLandmark(14, "Chest", undefined, { personalMRV: 15 })).toBe("at_MAV");
+
+      const raisedMAV = resolveVolumeLandmarks("Chest", { personalMAV: 24 });
+      expect(raisedMAV).toEqual({ mev: 8, mavLow: 12, mavHigh: 24, mrv: 26 });
+      expect(classifyLandmark(22, "Chest", undefined, { personalMAV: 24 })).toBe("at_MAV");
+
+      const loweredMAV = resolveVolumeLandmarks("Chest", { personalMAV: 14 });
+      expect(loweredMAV).toEqual({ mev: 8, mavLow: 12, mavHigh: 14, mrv: 22 });
+      expect(classifyLandmark(14, "Chest", undefined, { personalMAV: 14 })).toBe("approaching_MRV");
+
+      const logs = Array(10)
+        .fill(null)
+        .map(() => createLog("Bench Press", 1));
+      const withoutOverride = calculateMuscleGroupInsights(logs, baseDate);
+      const withPersonalMRV = calculateMuscleGroupInsights(logs, baseDate, undefined, undefined, {
+        Chest: { personalMRV: 12 },
+      });
+
+      expect(withoutOverride.Chest?.landmark).toBe("at_MAV");
+      expect(withPersonalMRV.Chest?.landmark).toBe("above_MRV");
     });
   });
 });

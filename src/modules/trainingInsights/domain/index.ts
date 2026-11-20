@@ -16,6 +16,7 @@
  * - Gabbett TJ (2016). Br J Sports Med, 50(5), 273-280.
  */
 
+import type { MuscleGroup } from "@/modules/sharedKernel/domain";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 import { computeEWMAACWR } from "./acwr";
 import {
@@ -27,7 +28,11 @@ import {
 import { calculateE1RMInsights, type ExerciseE1RM } from "./e1rm";
 import type { MuscleActivation } from "./exerciseMuscleMap";
 import { calculateFatigueInsight } from "./fatigueDetection";
-import { calculateMuscleGroupInsights, type MuscleGroupInsight } from "./volumeLandmarks";
+import {
+  calculateMuscleGroupInsights,
+  type MuscleGroupInsight,
+  type PersonalLandmarkOverride,
+} from "./volumeLandmarks";
 
 export * from "./acwr";
 export * from "./deloadPhase";
@@ -36,7 +41,6 @@ export * from "./e1rm";
 export * from "./ewma";
 export * from "./exerciseMuscleMap";
 export * from "./fatigueDetection";
-export * from "./restPeriods";
 export * from "./volumeLandmarks";
 
 /** High-level training phase shown in the UI. */
@@ -104,6 +108,7 @@ export function calculateTrainingInsights(
   overrideMap?: Record<string, MuscleActivation>,
   _bodyWeightKg?: number,
   deloadPhase?: DeloadPhase | null,
+  personalMetrics?: Partial<Record<MuscleGroup, PersonalLandmarkOverride>>,
 ): TrainingInsights {
   const phase = deloadPhase ?? null;
   const deloadActive = isDeloadActive(phase, targetDate);
@@ -123,7 +128,13 @@ export function calculateTrainingInsights(
   // preventing a false volume spike when training resumes.
   const fatigue = calculateFatigueInsight(logs, e1rm, deloadActive, targetDate, excludeRanges);
   const acwr = computeEWMAACWR(logs, targetDate);
-  const muscleGroups = calculateMuscleGroupInsights(logs, targetDate, overrideMap, e1rm);
+  const muscleGroups = calculateMuscleGroupInsights(
+    logs,
+    targetDate,
+    overrideMap,
+    e1rm,
+    personalMetrics,
+  );
   const systemicPhase = derivePhase(acwr, fatigue.shouldDeload, deloadStatus, muscleGroups);
 
   const deloadEndsAt = phase?.endsAt ?? null;

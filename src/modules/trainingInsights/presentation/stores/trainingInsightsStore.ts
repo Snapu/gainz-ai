@@ -3,12 +3,8 @@ import { defineStore } from "pinia";
 import { computed } from "vue";
 import { useDeloadStore } from "@/modules/deload/presentation";
 import { useExerciseMuscleMapStore } from "@/modules/platform/presentation";
-import { useUserProfileStore } from "@/modules/profile/presentation";
-import {
-  calculateInsights,
-  summaryToExerciseLogs,
-  type TrainingInsights,
-} from "@/modules/trainingInsights/application";
+import { useMetricsStore, useUserProfileStore } from "@/modules/profile/presentation";
+import { calculateInsights, type TrainingInsights } from "@/modules/trainingInsights/application";
 import { type ExerciseLog, useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
 import { useTrainingSummaryStore } from "@/modules/trainingSummary/presentation";
 
@@ -24,15 +20,16 @@ export const useTrainingInsightsStore = defineStore("trainingInsights", () => {
   const logsStore = useExerciseLogsStore();
   const summaryStore = useTrainingSummaryStore();
   const profileStore = useUserProfileStore();
+  const metricsStore = useMetricsStore();
   const muscleMapStore = useExerciseMuscleMapStore();
   const deloadStore = useDeloadStore();
   const now = useNow({ scheduler: (cb) => useIntervalFn(cb, 60000) });
 
   /** Historical + current logs combined — same window used by all insight calculations. */
-  const allLogs = computed<ExerciseLog[]>(() => {
-    const historical = summaryToExerciseLogs(summaryStore.summaries);
-    return [...historical, ...logsStore.exerciseLogs];
-  });
+  const allLogs = computed<ExerciseLog[]>(() => [
+    ...summaryStore.historicalLogs,
+    ...logsStore.exerciseLogs,
+  ]);
 
   const insights = computed<TrainingInsights>(() =>
     calculateInsights(
@@ -41,6 +38,7 @@ export const useTrainingInsightsStore = defineStore("trainingInsights", () => {
       muscleMapStore.learnedMap,
       profileStore.userProfile.weightKg,
       deloadStore.phase,
+      metricsStore.metrics,
     ),
   );
 

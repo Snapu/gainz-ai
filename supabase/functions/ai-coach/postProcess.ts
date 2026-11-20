@@ -36,7 +36,7 @@ export function splitReps(reps?: string): { value: string; unit: string } {
   return { value: reps, unit: "" };
 }
 
-function upcastLegacyExercise<
+export function upcastLegacyExercise<
   T extends { targetReps?: string; targetDurationSeconds?: number; targetDistanceMeters?: number },
 >(ex: T): T {
   if (!ex.targetReps) return ex;

@@ -16,12 +16,6 @@ export function usePlanTabViewModel() {
 
   const activePlan = computed(() => planStore.activePlan);
   const isLoading = computed(() => chatStore.isLoading);
-  const currentDayOfWeek = computed(() => new Date().getDay());
-
-  const currentWeekNumber = computed<number>(() => {
-    if (!planStore.activePlan) return 1;
-    return planStore.activePlan.getCurrentWeekNumber(new Date());
-  });
 
   const activeSessionIndex = computed<number>(() => {
     if (!planStore.activePlan) return -1;
@@ -84,32 +78,6 @@ export function usePlanTabViewModel() {
       });
   }
 
-  function copyDebugState() {
-    const debugState = {
-      activePlan: planStore.activePlan,
-      completedSessions: Array.from(planStore.completedSessions),
-      activeSessionIndex: activeSessionIndex.value,
-      currentWeekNumber: currentWeekNumber.value,
-      currentDayOfWeek: currentDayOfWeek.value,
-    };
-
-    navigator.clipboard
-      .writeText(JSON.stringify(debugState, null, 2))
-      .then(() => {
-        toast({
-          title: "Copied!",
-          description: "Debug state copied to clipboard.",
-        });
-      })
-      .catch((_err) => {
-        toast({
-          title: "Error",
-          description: "Failed to copy debug state.",
-          variant: "destructive",
-        });
-      });
-  }
-
   onMounted(() => {
     orchestratorStore.initialize();
   });
@@ -119,12 +87,9 @@ export function usePlanTabViewModel() {
     isLoading,
     activePlan,
     activeSessionIndex,
-    currentDayOfWeek,
-    currentWeekNumber,
     isPlanSessionCompleted,
     isRegenerating,
     regeneratePlan,
     copyPlanJson,
-    copyDebugState,
   };
 }

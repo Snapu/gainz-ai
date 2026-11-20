@@ -4,6 +4,7 @@ import { storeToRefs } from "pinia";
 import { computed, nextTick, ref, watch } from "vue";
 import { useDeloadStore } from "@/modules/deload/presentation";
 import { useRestTimerStore } from "@/modules/platform/presentation";
+import { exerciseNameKey } from "@/modules/sharedKernel/presentation";
 import type { ExerciseLog } from "@/modules/trainingLogs/presentation";
 import {
   buildExerciseLogErrorToast,
@@ -147,7 +148,7 @@ function toggleDurationUnit() {
 
 function applyFormData(data: ExerciseFormData | null | undefined) {
   isApplyingPrefill.value = true;
-  const normalizedName = data?.exerciseName?.trim().toLowerCase() ?? "";
+  const normalizedName = data?.exerciseName ? exerciseNameKey(data.exerciseName) : "";
   const isSameExercise = Boolean(
     normalizedName && normalizedName === lastConfiguredExerciseName.value,
   );
@@ -204,7 +205,7 @@ watch(formExerciseName, (name) => {
   isProgressionExpanded.value = false;
   if (!name || isApplyingPrefill.value) return;
 
-  const normalizedName = name.trim().toLowerCase();
+  const normalizedName = exerciseNameKey(name);
   const isSameExercise = Boolean(
     normalizedName && normalizedName === lastConfiguredExerciseName.value,
   );
@@ -234,8 +235,9 @@ const latestExerciseLogs = computed(() => {
   for (const log of [...exerciseLogs.value].sort(
     (a, b) => b.loggedAt.getTime() - a.loggedAt.getTime(),
   )) {
-    if (!latestByExercise.has(log.exerciseName)) {
-      latestByExercise.set(log.exerciseName, log);
+    const key = exerciseNameKey(log.exerciseName);
+    if (!latestByExercise.has(key)) {
+      latestByExercise.set(key, log);
     }
   }
 
@@ -243,12 +245,14 @@ const latestExerciseLogs = computed(() => {
 });
 
 const exerciseOptions = computed(() => {
-  return [...latestExerciseLogs.value.entries()]
+  return [...latestExerciseLogs.value.values()]
     .sort((left, right) => {
-      const loggedAtDiff = right[1].loggedAt.getTime() - left[1].loggedAt.getTime();
-      return loggedAtDiff !== 0 ? loggedAtDiff : left[0].localeCompare(right[0]);
+      const loggedAtDiff = right.loggedAt.getTime() - left.loggedAt.getTime();
+      return loggedAtDiff !== 0
+        ? loggedAtDiff
+        : left.exerciseName.localeCompare(right.exerciseName);
     })
-    .map(([exerciseName]) => exerciseName);
+    .map((log) => log.exerciseName);
 });
 
 function formatMetric(value: number | undefined, suffix: string): string | null {
@@ -286,7 +290,7 @@ function formatLastUsed(loggedAt: Date): string {
 const exerciseOptionDetails = computed<Record<string, ExerciseSelectorOptionDetails>>(() => {
   return Object.fromEntries(
     exerciseOptions.value.map((exerciseName) => {
-      const lastLog = latestExerciseLogs.value.get(exerciseName);
+      const lastLog = latestExerciseLogs.value.get(exerciseNameKey(exerciseName));
       const meta = [
         formatMetric(lastLog?.weight, "kg"),
         formatMetric(lastLog?.reps, " reps"),
@@ -311,9 +315,9 @@ const exerciseOptionDetails = computed<Record<string, ExerciseSelectorOptionDeta
 });
 
 const exerciseLogsForCurrentName = computed(() => {
-  const name = formExerciseName.value.trim().toLowerCase();
+  const name = exerciseNameKey(formExerciseName.value);
   if (!name) return [];
-  return exerciseLogs.value.filter((l) => l.exerciseName.trim().toLowerCase() === name);
+  return exerciseLogs.value.filter((l) => exerciseNameKey(l.exerciseName) === name);
 });
 
 const exerciseProgression = computed(() => {

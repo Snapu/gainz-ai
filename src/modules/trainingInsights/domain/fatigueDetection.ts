@@ -1,13 +1,9 @@
-import {
-  type FatigueTriggerId,
-  getLocalDayIndex,
-  isFatigueTriggerId as isSharedFatigueTriggerId,
-} from "@/modules/sharedKernel/domain";
+import { type FatigueTriggerId, getLocalDayIndex } from "@/modules/sharedKernel/domain";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 import type { ExerciseE1RM } from "./e1rm";
 import { computeEwma } from "./ewma";
 
-export type { FatigueTriggerId } from "@/modules/sharedKernel/domain";
+export { type FatigueTriggerId, isFatigueTriggerId } from "@/modules/sharedKernel/domain";
 
 /** Fatigue accumulation insight for deload decisions. */
 export interface FatigueInsight {
@@ -51,7 +47,6 @@ const TONNAGE_SPIKE_MULTIPLIER = 1.5;
 const DECLINE_THRESHOLD = 0.95;
 const MIN_DECLINING_EXERCISES = 2;
 const ACUTE_FATIGUE_RECENCY_DAYS = 14;
-const MS_PER_DAY = 86400000;
 
 const TRIGGER_WEIGHTS: Record<FatigueTriggerId, number> = {
   volumeSpike: 2,
@@ -78,10 +73,6 @@ const TRIGGER_REASON: Record<FatigueTriggerId, string> = {
   volumeSpike: "Volume spike detected (>25% vs prior 3-week average)",
   volumeIncreasing: "4-week progressive volume ramp",
 };
-
-export function isFatigueTriggerId(value: string): value is FatigueTriggerId {
-  return isSharedFatigueTriggerId(value);
-}
 
 function calculateFatigueRiskScore(triggeredBy: FatigueTriggerId[]): number {
   return triggeredBy.reduce((score, triggerId) => score + TRIGGER_WEIGHTS[triggerId], 0);
@@ -236,7 +227,7 @@ export function calculateFatigueInsight(
 
       const lastLogDate = data.trendDates[data.trendDates.length - 1];
       if (!lastLogDate) continue;
-      const daysSinceLastLog = (targetDate.getTime() - lastLogDate.getTime()) / MS_PER_DAY;
+      const daysSinceLastLog = getLocalDayIndex(targetDate) - getLocalDayIndex(lastLogDate);
 
       // If the exercise hasn't been trained recently,
       // any drop is likely detraining or an old drop, not a current fatigue indicator.

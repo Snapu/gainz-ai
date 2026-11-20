@@ -6,6 +6,7 @@ import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
 import { retryOnAuthError, useAuthStore } from "@/modules/auth/presentation";
 import { useSpreadsheetRepositoryFactory } from "@/modules/platform/presentation";
+import { exerciseNameKey } from "@/modules/sharedKernel/domain";
 import {
   addExerciseLog as addExerciseLog_,
   deleteExerciseLog as deleteExerciseLog_,
@@ -114,6 +115,11 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
   let hadAuthenticatedSession = authStore.isLoggedIn || authStore.expiresAt !== null;
   let remoteSyncEpoch = 0;
   let currentlyFlushingMutation: PendingLogMutation | null = null;
+  let activeRemoteLoad: {
+    doc: GoogleSpreadsheet;
+    result: ResultAsync<ExerciseLog[], RefreshLogsError>;
+  } | null = null;
+  let lastLoadedRemoteLogs: { doc: GoogleSpreadsheet; logs: ExerciseLog[] } | null = null;
 
   function isSessionExpired(): boolean {
     if (authStore.isLoggedIn || authStore.expiresAt !== null) {
@@ -164,18 +170,40 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
     }
 
     const startEpoch = remoteSyncEpoch;
-    return retryOnAuthError("exercise-log-load", () => loadExerciseLogs(repository), {
-      fallbackError: "load-failed",
-    }).andThen((remoteLogs) => {
-      if (spreadsheetStore.doc !== activeDoc) {
+    const chainedLoad: ResultAsync<ExerciseLog[], RefreshLogsError> = retryOnAuthError(
+      "exercise-log-load",
+      () => loadExerciseLogs(repository),
+      {
+        fallbackError: "load-failed",
+      },
+    )
+      .andThen((remoteLogs) => {
+        if (spreadsheetStore.doc !== activeDoc) {
+          return okAsync(remoteLogs);
+        }
+        if (remoteSyncEpoch !== startEpoch && staleRetries > 0) {
+          return loadRemoteLogs(staleRetries - 1);
+        }
+        if (remoteSyncEpoch === startEpoch) {
+          lastLoadedRemoteLogs = { doc: activeDoc, logs: remoteLogs };
+        }
+        exerciseLogs.value = applyPendingMutations(remoteLogs, pendingMutations.value);
         return okAsync(remoteLogs);
-      }
-      if (remoteSyncEpoch !== startEpoch && staleRetries > 0) {
-        return loadRemoteLogs(staleRetries - 1);
-      }
-      exerciseLogs.value = applyPendingMutations(remoteLogs, pendingMutations.value);
-      return okAsync(remoteLogs);
-    });
+      })
+      .andTee(() => {
+        if (activeRemoteLoad?.result === chainedLoad) {
+          activeRemoteLoad = null;
+        }
+      })
+      .mapErr((error) => {
+        if (activeRemoteLoad?.result === chainedLoad) {
+          activeRemoteLoad = null;
+        }
+        return error;
+      });
+
+    activeRemoteLoad = { doc: activeDoc, result: chainedLoad };
+    return chainedLoad;
   }
 
   function flushMutationEntry(
@@ -301,6 +329,7 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
       return errAsync("validation-failed");
     }
 
+    lastLoadedRemoteLogs = null;
     const nextPending = computeNextPendingQueue(mutation);
     persistPending(nextPending);
     exerciseLogs.value = applyPendingMutations(exerciseLogs.value, [mutation]);
@@ -315,12 +344,28 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
     return okAsync("synced");
   }
 
-  function createHistoryReader(docOverride?: GoogleSpreadsheet): ExerciseLogHistoryReader | null {
+  function createHistoryReader(
+    docOverride?: GoogleSpreadsheet,
+    options?: { reuseLoadedCurrentYear?: boolean },
+  ): ExerciseLogHistoryReader | null {
     const repository = createRepository(docOverride);
     if (!repository) return null;
+    const targetDoc = docOverride ?? spreadsheetStore.doc;
 
     return {
-      loadCurrentYearLogs: () => loadExerciseLogs(repository),
+      loadCurrentYearLogs: () => {
+        if (options?.reuseLoadedCurrentYear && targetDoc) {
+          if (lastLoadedRemoteLogs?.doc === targetDoc) {
+            return okAsync(lastLoadedRemoteLogs.logs);
+          }
+          if (activeRemoteLoad?.doc === targetDoc) {
+            return activeRemoteLoad.result.mapErr((error) =>
+              error === "refresh-in-progress" ? ("load-failed" as const) : error,
+            );
+          }
+        }
+        return loadExerciseLogs(repository);
+      },
       findPastYears: () => findPastYearLogSheets(repository),
       loadYearLogs: (year: number) => loadLogsFromYear(year, repository),
     };
@@ -341,6 +386,12 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
   watch(
     () => spreadsheetStore.doc,
     (doc) => {
+      if (lastLoadedRemoteLogs?.doc !== doc) {
+        lastLoadedRemoteLogs = null;
+      }
+      if (activeRemoteLoad?.doc !== doc) {
+        activeRemoteLoad = null;
+      }
       if (!doc) {
         exerciseLogs.value = applyPendingMutations([], pendingMutations.value);
         isLoading.value = false;
@@ -413,8 +464,9 @@ export const useExerciseLogsStore = defineStore("exerciseLogs", () => {
   }
 
   function lastLogForExercise(exerciseName: string): ExerciseLog | undefined {
+    const key = exerciseNameKey(exerciseName);
     return exerciseLogs.value
-      .filter((log) => exerciseName === log.exerciseName)
+      .filter((log) => exerciseNameKey(log.exerciseName) === key)
       .sort((a, b) => b.loggedAt.getTime() - a.loggedAt.getTime())?.[0];
   }
 

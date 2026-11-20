@@ -181,4 +181,31 @@ describe("trainingSummary sheetsRepository", () => {
       expect(emptySheet.clearRows).not.toHaveBeenCalled();
     });
   });
+
+  describe("resilient row parsing", () => {
+    it("skips corrupted rows instead of failing the entire summary load", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      const valid = makeSummary({ year: 2024, month: 5, exerciseName: "Squat" });
+      const corrupted = { year: "not-a-year", month: 99, exerciseName: "" };
+      const sheet = createMockSheet({
+        getRows: vi.fn().mockResolvedValue([createMockRow(valid), createMockRow(corrupted)]),
+      });
+      const repo = createTrainingSummaryRepository(createMockDoc(sheet));
+
+      const result = await repo.load();
+
+      expect(result).toEqual(ok([valid]));
+    });
+
+    it("returns parse-data-failed when all non-empty summary rows are corrupted", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      const corrupted = { year: "not-a-year", month: 99, exerciseName: "" };
+      const sheet = createMockSheet({
+        getRows: vi.fn().mockResolvedValue([createMockRow(corrupted)]),
+      });
+      const repo = createTrainingSummaryRepository(createMockDoc(sheet));
+
+      expect(await repo.load()).toEqual(err("parse-data-failed"));
+    });
+  });
 });

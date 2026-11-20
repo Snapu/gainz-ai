@@ -23,6 +23,13 @@ export interface VolumeLandmarks {
   mrv: number;
 }
 
+export interface PersonalLandmarkOverride {
+  personalMAV?: number;
+  personalMRV?: number;
+}
+
+export type MuscleActivationResolver = (exerciseName: string) => MuscleActivation | null;
+
 interface WeeklyVolume {
   muscleGroup: MuscleGroup;
   /** EWMA-smoothed effective sets — used for landmark classification. Stable against boundary jitter. */
@@ -125,6 +132,43 @@ export const RECOVERY_HOURS: Record<MuscleGroup, number> = {
 };
 
 /**
+ * Resolves effective volume landmarks for a muscle group, applying any
+ * empirically discovered personal MAV/MRV overrides on top of population defaults
+ * while preserving the ordering `mev <= mavLow <= mavHigh <= mrv`.
+ */
+export function resolveVolumeLandmarks(
+  muscleGroup: MuscleGroup,
+  override?: PersonalLandmarkOverride,
+): VolumeLandmarks {
+  const base = VOLUME_LANDMARKS[muscleGroup];
+  if (!override) return base;
+
+  const personalMRV =
+    override.personalMRV !== undefined && override.personalMRV > 0
+      ? override.personalMRV
+      : undefined;
+  const personalMAV =
+    override.personalMAV !== undefined && override.personalMAV > 0
+      ? override.personalMAV
+      : undefined;
+  if (personalMRV === undefined && personalMAV === undefined) return base;
+
+  const mev = base.mev;
+  const mavHighCandidate = personalMAV !== undefined ? Math.max(mev, personalMAV) : base.mavHigh;
+  const mrv =
+    personalMRV !== undefined
+      ? Math.max(mev, personalMRV)
+      : Math.max(
+          base.mrv,
+          personalMAV !== undefined && personalMAV >= base.mrv ? personalMAV + 2 : base.mrv,
+        );
+  const mavHigh = Math.min(mavHighCandidate, mrv);
+  const mavLow = Math.min(base.mavLow, mavHigh);
+
+  return { mev, mavLow, mavHigh, mrv };
+}
+
+/**
  * Classifies weekly set volume into a Volume Landmark tier.
  *
  * Implements the Empirical Override Model:
@@ -137,8 +181,9 @@ export function classifyLandmark(
   sets: number,
   muscleGroup: MuscleGroup,
   trendStatus?: "improving" | "plateau" | "dropping" | "stable",
+  personalOverride?: PersonalLandmarkOverride,
 ): VolumeLandmark {
-  const { mev, mavLow, mavHigh, mrv } = VOLUME_LANDMARKS[muscleGroup];
+  const { mev, mavLow, mavHigh, mrv } = resolveVolumeLandmarks(muscleGroup, personalOverride);
 
   // Absolute floor: If you are doing basically zero volume, you are detraining,
   // regardless of what a lagging 1RM trend says.
@@ -485,10 +530,12 @@ export function isRecovered(hoursSinceLastTrained: number | null, recoveryHours:
 export function calculateMuscleGroupInsights(
   logs: ExerciseLog[],
   targetDate: Date = new Date(),
-  overrideMap?: Record<string, MuscleActivation>,
+  overrideMap?: Record<string, MuscleActivation> | MuscleActivationResolver,
   e1rmData?: Record<string, ExerciseE1RM>,
+  personalMetrics?: Partial<Record<MuscleGroup, PersonalLandmarkOverride>>,
 ): Partial<Record<MuscleGroup, MuscleGroupInsight>> {
-  const resolveActivation = createMuscleActivationResolver(overrideMap);
+  const resolveActivation =
+    typeof overrideMap === "function" ? overrideMap : createMuscleActivationResolver(overrideMap);
   const weeklyVolumes = computeWeeklyVolume(logs, targetDate, resolveActivation);
   if (weeklyVolumes.length === 0) return {};
   const result: Partial<Record<MuscleGroup, MuscleGroupInsight>> = {};
@@ -556,7 +603,12 @@ export function calculateMuscleGroupInsights(
     }
 
     // Landmark classification uses the EWMA-smoothed value — stable against jitter.
-    const landmark = classifyLandmark(volume.sets, volume.muscleGroup, trendStatus);
+    const landmark = classifyLandmark(
+      volume.sets,
+      volume.muscleGroup,
+      trendStatus,
+      personalMetrics?.[volume.muscleGroup],
+    );
     const recovered = isRecovered(volume.hoursSinceLastTrained, volume.recoveryHours);
 
     result[volume.muscleGroup] = {

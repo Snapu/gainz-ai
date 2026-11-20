@@ -1,7 +1,11 @@
 import * as Sentry from "@sentry/vue";
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { err, ok, okAsync, Result, ResultAsync } from "neverthrow";
-import { isAuthError } from "@/modules/platform/infrastructure";
+import {
+  ensureSheetHeaders,
+  getOrCreateSheet,
+  isAuthError,
+} from "@/modules/platform/infrastructure";
 import type { UserProfileRepository } from "@/modules/profile/application";
 import {
   parsePositiveOptionalNumber,
@@ -23,28 +27,6 @@ const USER_PROFILE_HEADERS = [
   "equipmentAccess",
   "freeUserInput",
 ] as const;
-
-const getSheet = (doc: GoogleSpreadsheet) => doc.sheetsByTitle[SHEET_NAME];
-const addSheet = (doc: GoogleSpreadsheet) =>
-  doc.addSheet({
-    title: SHEET_NAME,
-    headerValues: [...USER_PROFILE_HEADERS],
-  });
-
-interface HeaderManagedSheet {
-  loadHeaderRow: () => Promise<void>;
-  setHeaderRow: (headers: string[]) => Promise<void>;
-  headerValues?: string[];
-}
-
-async function ensureUserProfileHeaders(sheet: HeaderManagedSheet): Promise<void> {
-  await sheet.loadHeaderRow();
-  const currentHeaders: string[] = Array.isArray(sheet.headerValues) ? sheet.headerValues : [];
-  const missingHeaders = USER_PROFILE_HEADERS.filter((h) => !currentHeaders.includes(h));
-  if (missingHeaders.length === 0) return;
-  await sheet.setHeaderRow([...currentHeaders, ...missingHeaders]);
-  await sheet.loadHeaderRow();
-}
 
 function serializeForSheet(profile: UserProfile): Record<string, string> {
   return {
@@ -89,8 +71,8 @@ function loadUserProfileInfra(
   };
 
   return ResultAsync.fromThrowable(async () => {
-    const sheet = getSheet(doc) ?? (await addSheet(doc));
-    await ensureUserProfileHeaders(sheet);
+    const sheet = await getOrCreateSheet(doc, SHEET_NAME, USER_PROFILE_HEADERS);
+    await ensureSheetHeaders(sheet, USER_PROFILE_HEADERS);
     const rows = await sheet.getRows();
     if (rows.length === 0) {
       return null;
@@ -119,8 +101,8 @@ function saveUserProfileInfra(
   };
 
   return ResultAsync.fromThrowable(async () => {
-    const sheet = getSheet(doc) ?? (await addSheet(doc));
-    await ensureUserProfileHeaders(sheet);
+    const sheet = await getOrCreateSheet(doc, SHEET_NAME, USER_PROFILE_HEADERS);
+    await ensureSheetHeaders(sheet, USER_PROFILE_HEADERS);
     const rows = await sheet.getRows();
     const serialized = serializeForSheet(profile);
 

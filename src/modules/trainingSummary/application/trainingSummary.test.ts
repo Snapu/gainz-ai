@@ -9,7 +9,6 @@ import {
   migrateUnsummarizedMonths,
   migrateUnsummarizedYears,
   rebuildAllTrainingSummaries,
-  summaryToWorkoutDates,
   type TrainingSummary,
 } from "@/modules/trainingSummary/application";
 
@@ -375,105 +374,6 @@ describe("trainingSummary", () => {
     });
   });
 
-  describe("summaryToWorkoutDates", () => {
-    it("should return empty array for empty summaries", () => {
-      const result = summaryToWorkoutDates([]);
-      expect(result).toEqual([]);
-    });
-
-    it("should generate dates based on workoutDays count", () => {
-      const summaries: TrainingSummary[] = [
-        {
-          year: 2024,
-          month: 3,
-          workoutDays: 3,
-          exerciseName: "Bench Press",
-          sets: 9,
-        },
-      ];
-
-      const result = summaryToWorkoutDates(summaries);
-
-      expect(result).toHaveLength(3);
-      result.forEach((date) => {
-        expect(date.getFullYear()).toBe(2024);
-        expect(date.getMonth()).toBe(2);
-      });
-    });
-
-    it("should not duplicate dates for multiple exercises in same month", () => {
-      const summaries: TrainingSummary[] = [
-        { year: 2024, month: 3, workoutDays: 5, exerciseName: "Bench Press", sets: 15 },
-        { year: 2024, month: 3, workoutDays: 5, exerciseName: "Squat", sets: 12 },
-        { year: 2024, month: 3, workoutDays: 5, exerciseName: "Deadlift", sets: 9 },
-      ];
-
-      const result = summaryToWorkoutDates(summaries);
-
-      expect(result).toHaveLength(5);
-    });
-
-    it("should generate dates across multiple months", () => {
-      const summaries: TrainingSummary[] = [
-        { year: 2024, month: 1, workoutDays: 10, exerciseName: "Squat", sets: 30 },
-        { year: 2024, month: 2, workoutDays: 8, exerciseName: "Squat", sets: 24 },
-        { year: 2024, month: 3, workoutDays: 12, exerciseName: "Squat", sets: 36 },
-      ];
-
-      const result = summaryToWorkoutDates(summaries);
-
-      expect(result).toHaveLength(30);
-
-      const januaryDates = result.filter((d) => d.getMonth() === 0);
-      const februaryDates = result.filter((d) => d.getMonth() === 1);
-      const marchDates = result.filter((d) => d.getMonth() === 2);
-
-      expect(januaryDates).toHaveLength(10);
-      expect(februaryDates).toHaveLength(8);
-      expect(marchDates).toHaveLength(12);
-    });
-
-    it("should generate dates across multiple years", () => {
-      const summaries: TrainingSummary[] = [
-        { year: 2023, month: 12, workoutDays: 10, exerciseName: "Squat", sets: 30 },
-        { year: 2024, month: 1, workoutDays: 12, exerciseName: "Squat", sets: 36 },
-      ];
-
-      const result = summaryToWorkoutDates(summaries);
-
-      expect(result).toHaveLength(22);
-
-      const dates2023 = result.filter((d) => d.getFullYear() === 2023);
-      const dates2024 = result.filter((d) => d.getFullYear() === 2024);
-
-      expect(dates2023).toHaveLength(10);
-      expect(dates2024).toHaveLength(12);
-    });
-
-    it("should spread dates across the month with reasonable distribution", () => {
-      const summaries: TrainingSummary[] = [
-        { year: 2024, month: 3, workoutDays: 5, exerciseName: "Squat", sets: 15 },
-      ];
-
-      const result = summaryToWorkoutDates(summaries);
-
-      const days = result.map((d) => d.getDate());
-      expect(days).toEqual([1, 3, 5, 7, 9]);
-    });
-
-    it("should cap day-of-month at 28 for high workout counts", () => {
-      const summaries: TrainingSummary[] = [
-        { year: 2024, month: 2, workoutDays: 20, exerciseName: "Running", sets: 20 },
-      ];
-
-      const result = summaryToWorkoutDates(summaries);
-
-      result.forEach((date) => {
-        expect(date.getDate()).toBeLessThanOrEqual(28);
-      });
-    });
-  });
-
   describe("getYearsSummarized", () => {
     it("should return empty set for empty summaries", () => {
       const result = getYearsSummarized([]);
@@ -558,41 +458,6 @@ describe("trainingSummary", () => {
       expect(result.has("2023-11")).toBe(true);
       expect(result.has("2023-12")).toBe(true);
       expect(result.has("2024-1")).toBe(true);
-    });
-  });
-
-  describe("integration: aggregateLogsToSummary -> summaryToWorkoutDates", () => {
-    it("should preserve workout day count through the pipeline", () => {
-      const logs = [
-        createLog("Squat", new Date("2024-03-01"), { reps: 5, weight: 100 }),
-        createLog("Squat", new Date("2024-03-03"), { reps: 5, weight: 100 }),
-        createLog("Squat", new Date("2024-03-05"), { reps: 5, weight: 100 }),
-        createLog("Bench Press", new Date("2024-03-01"), { reps: 10, weight: 60 }),
-        createLog("Bench Press", new Date("2024-03-03"), { reps: 10, weight: 60 }),
-      ];
-
-      const summaries = aggregateLogsToSummary(logs);
-      const dates = summaryToWorkoutDates(summaries);
-
-      expect(dates).toHaveLength(3);
-    });
-
-    it("should handle year-spanning data correctly", () => {
-      const logs = [
-        createLog("Squat", new Date("2023-11-15"), { reps: 5, weight: 100 }),
-        createLog("Squat", new Date("2023-12-15"), { reps: 5, weight: 105 }),
-        createLog("Squat", new Date("2024-01-15"), { reps: 5, weight: 110 }),
-        createLog("Squat", new Date("2024-02-15"), { reps: 5, weight: 115 }),
-      ];
-
-      const summaries = aggregateLogsToSummary(logs);
-      const years = getYearsSummarized(summaries);
-      const dates = summaryToWorkoutDates(summaries);
-
-      expect(years.size).toBe(2);
-      expect(years.has(2023)).toBe(true);
-      expect(years.has(2024)).toBe(true);
-      expect(dates).toHaveLength(4);
     });
   });
 });

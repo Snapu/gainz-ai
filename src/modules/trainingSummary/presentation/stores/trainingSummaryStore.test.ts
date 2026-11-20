@@ -67,6 +67,7 @@ vi.mock("@/modules/trainingSummary/application", () => ({
   migrateUnsummarizedYears: migrateUnsummarizedYearsMock,
   migrateUnsummarizedMonths: migrateUnsummarizedMonthsMock,
   rebuildAllTrainingSummaries: rebuildAllTrainingSummariesMock,
+  summaryToExerciseLogs: vi.fn(() => []),
 }));
 
 vi.mock("@/modules/auth/presentation/composables/useAuthErrorHandler", () => ({

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { getLocalTimeZone, parseDate } from "@internationalized/date";
 import type { AppEvent } from "@/modules/events/presentation";
-import UiSwipeToDeleteItem from "@/shared/presentation/components/ui/UiSwipeToDeleteItem.vue";
+import UiSwipeableItem from "@/shared/presentation/components/ui/UiSwipeableItem.vue";
 
 const props = defineProps<{
   event: AppEvent;
@@ -35,10 +35,10 @@ function formatEventDate(dates: string[]) {
 </script>
 
 <template>
-  <UiSwipeToDeleteItem variant="inset" @delete="emit('delete', props.event.id)">
+  <UiSwipeableItem variant="inset" @action="emit('delete', props.event.id)">
     <div class="flex justify-between items-center">
       <h3 class="font-bold text-sm text-foreground tracking-tight">{{ event.type }}</h3>
       <p class="text-xs text-primary font-bold tracking-wider uppercase">{{ formatEventDate(event.dates) }}</p>
     </div>
-  </UiSwipeToDeleteItem>
+  </UiSwipeableItem>
 </template>

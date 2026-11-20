@@ -1,10 +1,7 @@
 import type { DeloadPhase } from "@/modules/deload/domain";
-import type { MuscleActivation } from "@/modules/trainingInsights/domain";
+import type { MuscleGroup } from "@/modules/sharedKernel/domain";
+import type { MuscleActivation, PersonalLandmarkOverride } from "@/modules/trainingInsights/domain";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
-import {
-  summaryToExerciseLogs as summaryToExerciseLogsModule,
-  type TrainingSummary,
-} from "@/modules/trainingSummary/application";
 import { calculateTrainingInsights, type TrainingInsights } from "../domain";
 
 /**
@@ -20,10 +17,14 @@ export function calculateInsights(
   overrideMap?: Record<string, MuscleActivation>,
   bodyWeightKg?: number,
   deloadPhase?: DeloadPhase | null,
+  personalMetrics?: Partial<Record<MuscleGroup, PersonalLandmarkOverride>>,
 ): TrainingInsights {
-  return calculateTrainingInsights(logs, targetDate, overrideMap, bodyWeightKg, deloadPhase);
-}
-
-export function summaryToExerciseLogs(summaries: TrainingSummary[]): ExerciseLog[] {
-  return summaryToExerciseLogsModule(summaries);
+  return calculateTrainingInsights(
+    logs,
+    targetDate,
+    overrideMap,
+    bodyWeightKg,
+    deloadPhase,
+    personalMetrics,
+  );
 }

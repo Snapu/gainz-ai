@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ExerciseLog } from "@/modules/trainingLogs/presentation";
-import UiSwipeToDeleteItem from "@/shared/presentation/components/ui/UiSwipeToDeleteItem.vue";
+import UiSwipeableItem from "@/shared/presentation/components/ui/UiSwipeableItem.vue";
 
 const props = defineProps<{
   log: ExerciseLog;
@@ -14,7 +14,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <UiSwipeToDeleteItem :variant="props.variant ?? 'card'" @delete="emit('delete', props.log)">
+  <UiSwipeableItem :variant="props.variant ?? 'card'" @action="emit('delete', props.log)">
     <div 
       class="flex justify-between items-center w-full cursor-pointer transition-opacity active:opacity-70"
       @click="emit('edit', props.log)"
@@ -39,5 +39,5 @@ const emit = defineEmits<{
         </div>
       </div>
     </div>
-  </UiSwipeToDeleteItem>
+  </UiSwipeableItem>
 </template>

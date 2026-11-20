@@ -9,10 +9,6 @@ const PENDING_REQUEST_STORAGE_KEY = "ai-coach:pending-request";
 // Plan-scoped session IDs (plan-YYYY-MM-DD) need this to stay alive for 28 days.
 const MAX_SESSION_AGE_DAYS = 28;
 
-export function createPlanSessionId(dateIsoString: string): string {
-  return `plan-${dateIsoString}`;
-}
-
 export function extractDateFromSessionId(sessionId: string): string {
   return sessionId.startsWith("plan-") ? sessionId.slice(5) : sessionId;
 }

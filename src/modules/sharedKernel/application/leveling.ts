@@ -42,7 +42,11 @@
  * ====================================================== */
 
 import type { UserProgress } from "@/modules/sharedKernel/domain";
-import { calculateE1RM, calculateMuscleGroupInsights } from "@/modules/trainingInsights/domain";
+import {
+  calculateE1RM,
+  calculateMuscleGroupInsights,
+  createMuscleActivationResolver,
+} from "@/modules/trainingInsights/domain";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 
 const BASE_XP_PER_SESSION = 50;
@@ -367,6 +371,9 @@ export function calculateUserProgress(
   let xpProgression = 0;
   let xpMastery = 0;
 
+  // Reuse one memoized activation resolver across all weekly insight windows.
+  const resolveActivation = createMuscleActivationResolver();
+
   // Sliding window for insights (prevents O(N^2) filtering)
   let windowStartIndex = 0;
   let windowEndIndex = 0;
@@ -410,7 +417,7 @@ export function calculateUserProgress(
     }
 
     const logsForInsights = sortedLogs.slice(windowStartIndex, windowEndIndex);
-    const insights = calculateMuscleGroupInsights(logsForInsights, weekEnd);
+    const insights = calculateMuscleGroupInsights(logsForInsights, weekEnd, resolveActivation);
 
     // Fatigue detection (heuristic: if many groups are above MRV)
     const overreachingGroups = Object.values(insights).filter(

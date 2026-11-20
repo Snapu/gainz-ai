@@ -516,4 +516,135 @@ describe("useExerciseLogsStore", () => {
     expect(repoMocks.loadCurrentYear).toHaveBeenCalledTimes(2);
     expect(store.exerciseLogs).toEqual([historyLog, committedNewLog]);
   });
+
+  it("does not cache stale remote logs in lastLoadedRemoteLogs when stale retries exhaust during concurrent mutations", async () => {
+    const historyLog = makeLog("11111111-1111-4111-8111-111111111111", 100, 5);
+    const newLog1 = makeLog("22222222-2222-4222-8222-222222222222", 80, 8);
+    const newLog2 = makeLog("33333333-3333-4333-8333-333333333333", 90, 6);
+    const newLog3 = makeLog("44444444-4444-4444-8444-444444444444", 70, 10);
+
+    let resolveLoad1!: (logs: ExerciseLog[]) => void;
+    let resolveLoad2!: (logs: ExerciseLog[]) => void;
+    let resolveLoad3!: (logs: ExerciseLog[]) => void;
+
+    repoMocks.loadCurrentYear
+      .mockImplementationOnce(() =>
+        ResultAsync.fromSafePromise(
+          new Promise<ExerciseLog[]>((resolve) => {
+            resolveLoad1 = resolve;
+          }),
+        ),
+      )
+      .mockImplementationOnce(() =>
+        ResultAsync.fromSafePromise(
+          new Promise<ExerciseLog[]>((resolve) => {
+            resolveLoad2 = resolve;
+          }),
+        ),
+      )
+      .mockImplementationOnce(() =>
+        ResultAsync.fromSafePromise(
+          new Promise<ExerciseLog[]>((resolve) => {
+            resolveLoad3 = resolve;
+          }),
+        ),
+      );
+
+    const store = useExerciseLogsStore();
+    await vi.waitFor(() => {
+      expect(repoMocks.loadCurrentYear).toHaveBeenCalledTimes(1);
+    });
+
+    // Mutate 1 while initial load is in flight (startEpoch = 0, current = 1)
+    await store.addExerciseLog(newLog1);
+    // Resolve load 1 -> triggers retry 1 (staleRetries = 1, startEpoch = 1)
+    resolveLoad1([historyLog]);
+
+    await vi.waitFor(() => {
+      expect(repoMocks.loadCurrentYear).toHaveBeenCalledTimes(2);
+    });
+
+    // Mutate 2 while retry 1 is in flight (startEpoch = 1, current = 2)
+    await store.addExerciseLog(newLog2);
+    // Resolve load 2 -> triggers retry 2 (staleRetries = 0, startEpoch = 2)
+    resolveLoad2([historyLog, newLog1]);
+
+    await vi.waitFor(() => {
+      expect(repoMocks.loadCurrentYear).toHaveBeenCalledTimes(3);
+    });
+
+    // Mutate 3 while retry 2 is in flight (startEpoch = 2, current = 3)
+    await store.addExerciseLog(newLog3);
+    // Resolve load 3 -> staleRetries is now 0 and remoteSyncEpoch (3) !== startEpoch (2).
+    resolveLoad3([historyLog, newLog1, newLog2]);
+
+    await vi.waitFor(() => {
+      expect(store.isLoading).toBe(false);
+    });
+
+    // Since retries were exhausted and epoch mismatched, lastLoadedRemoteLogs should NOT be cached.
+    // Therefore, createHistoryReader with reuseLoadedCurrentYear must trigger a new fetch rather than returning stale cached logs.
+    const freshLog = makeLog("55555555-5555-4555-8555-555555555555", 60, 12);
+    repoMocks.loadCurrentYear.mockReturnValueOnce(okAsync([freshLog]));
+
+    const reusableReader = store.createHistoryReader(mockDoc.value as never, {
+      reuseLoadedCurrentYear: true,
+    });
+    const result = await reusableReader!.loadCurrentYearLogs();
+    expect(result).toEqual(ok([freshLog]));
+    expect(repoMocks.loadCurrentYear).toHaveBeenCalledTimes(4);
+  });
+
+  it("shares in-flight and cached current-year loads with createHistoryReader when reuse is enabled", async () => {
+    const remoteLog = makeLog("11111111-1111-4111-8111-111111111111", 100, 5);
+    let resolveLoad!: (logs: ExerciseLog[]) => void;
+    repoMocks.loadCurrentYear.mockImplementationOnce(() =>
+      ResultAsync.fromSafePromise(
+        new Promise<ExerciseLog[]>((resolve) => {
+          resolveLoad = resolve;
+        }),
+      ),
+    );
+
+    const store = useExerciseLogsStore();
+    await vi.waitFor(() => {
+      expect(repoMocks.loadCurrentYear).toHaveBeenCalledTimes(1);
+    });
+
+    const reusableReader = store.createHistoryReader(mockDoc.value as never, {
+      reuseLoadedCurrentYear: true,
+    });
+    const readerPromise = reusableReader!.loadCurrentYearLogs();
+
+    resolveLoad([remoteLog]);
+    const [readerResult] = await Promise.all([readerPromise]);
+
+    expect(readerResult).toEqual(ok([remoteLog]));
+    expect(repoMocks.loadCurrentYear).toHaveBeenCalledTimes(1);
+
+    // Subsequent reusable call uses cached remote logs without another Sheets read.
+    expect(await reusableReader!.loadCurrentYearLogs()).toEqual(ok([remoteLog]));
+    expect(repoMocks.loadCurrentYear).toHaveBeenCalledTimes(1);
+
+    // Non-reusable reader (e.g. rebuildAllSummaries) fetches fresh logs.
+    repoMocks.loadCurrentYear.mockReturnValueOnce(okAsync([remoteLog]));
+    const freshReader = store.createHistoryReader(mockDoc.value as never);
+    expect(await freshReader!.loadCurrentYearLogs()).toEqual(ok([remoteLog]));
+    expect(repoMocks.loadCurrentYear).toHaveBeenCalledTimes(2);
+  });
+
+  it("matches lastLogForExercise case-insensitively and whitespace-normalized", async () => {
+    const benchLog = {
+      ...makeLog("11111111-1111-4111-8111-111111111111", 100, 5),
+      exerciseName: "Bench  Press",
+    };
+    repoMocks.loadCurrentYear.mockReturnValueOnce(okAsync([benchLog]));
+
+    const store = useExerciseLogsStore();
+    await vi.waitFor(() => {
+      expect(store.exerciseLogs).toHaveLength(1);
+    });
+
+    expect(store.lastLogForExercise("bench press")?.id).toBe(benchLog.id);
+  });
 });

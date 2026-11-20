@@ -1,7 +1,11 @@
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { ResultAsync } from "neverthrow";
-import { isAuthError } from "@/modules/platform/infrastructure";
-import { parseData } from "@/modules/sharedKernel/domain";
+import {
+  ensureSheetHeaders,
+  getOrCreateSheet,
+  isAuthError,
+} from "@/modules/platform/infrastructure";
+import { parseRows } from "@/modules/sharedKernel/domain";
 import type { TrainingSummaryRepository } from "@/modules/trainingSummary/application";
 import { type TrainingSummary, TrainingSummarySchema } from "@/modules/trainingSummary/domain";
 
@@ -19,14 +23,6 @@ const HEADER_VALUES = [
   "totalDuration",
 ];
 
-const getSheet = (doc: GoogleSpreadsheet) => doc.sheetsByTitle[SHEET_NAME];
-const addSheet = (doc: GoogleSpreadsheet) =>
-  doc.addSheet({ title: SHEET_NAME, headerValues: HEADER_VALUES });
-
-async function getOrCreateSheet(doc: GoogleSpreadsheet) {
-  return getSheet(doc) ?? (await addSheet(doc));
-}
-
 function mapSaveError(action: string, error: unknown): "save-failed" | "auth-failed" {
   if (isAuthError(error)) return "auth-failed";
   console.error(`Failed to ${action} training summary. Error:`, error);
@@ -38,7 +34,8 @@ function loadTrainingSummaryInfra(
 ): ResultAsync<TrainingSummary[], "load-failed" | "parse-data-failed" | "auth-failed"> {
   return ResultAsync.fromThrowable(
     async () => {
-      const sheet = await getOrCreateSheet(doc);
+      const sheet = await getOrCreateSheet(doc, SHEET_NAME, HEADER_VALUES);
+      await ensureSheetHeaders(sheet, HEADER_VALUES);
       const rows = await sheet.getRows<TrainingSummary>();
       const currentYear = new Date().getFullYear();
       const currentMonth = new Date().getMonth() + 1;
@@ -52,7 +49,7 @@ function loadTrainingSummaryInfra(
       console.error("Failed to load training summary. Error:", error);
       return "load-failed" as const;
     },
-  )().andThen((rows) => parseData(TrainingSummarySchema.array(), rows));
+  )().andThen((rows) => parseRows(TrainingSummarySchema, rows));
 }
 
 function saveTrainingSummaryRowsInfra(
@@ -63,7 +60,8 @@ function saveTrainingSummaryRowsInfra(
     async () => {
       const validatedRows = summaries.map((summary) => TrainingSummarySchema.parse(summary));
       if (validatedRows.length === 0) return;
-      const sheet = await getOrCreateSheet(doc);
+      const sheet = await getOrCreateSheet(doc, SHEET_NAME, HEADER_VALUES);
+      await ensureSheetHeaders(sheet, HEADER_VALUES);
       await sheet.addRows(validatedRows);
     },
     (error) => mapSaveError("save", error),
@@ -77,7 +75,8 @@ function replaceTrainingSummaryRowsInfra(
   return ResultAsync.fromThrowable(
     async () => {
       const validatedRows = summaries.map((summary) => TrainingSummarySchema.parse(summary));
-      const sheet = await getOrCreateSheet(doc);
+      const sheet = await getOrCreateSheet(doc, SHEET_NAME, HEADER_VALUES);
+      await ensureSheetHeaders(sheet, HEADER_VALUES);
       const existingRows = await sheet.getRows();
 
       if (validatedRows.length === 0) {

@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { isoDateString } from "@/modules/sharedKernel/domain";
 import type { CoachingMessage } from "../domain";
 import {
-  createPlanSessionId,
   extractDateFromSessionId,
   LocalStorageMessageRepository,
 } from "./LocalStorageMessageRepository";
@@ -24,10 +23,6 @@ describe("LocalStorageMessageRepository", () => {
     it("extractDateFromSessionId correctly extracts date", () => {
       expect(extractDateFromSessionId("plan-2026-01-01")).toBe("2026-01-01");
       expect(extractDateFromSessionId("2026-01-01")).toBe("2026-01-01");
-    });
-
-    it("createPlanSessionId correctly prefixes date", () => {
-      expect(createPlanSessionId("2026-01-01")).toBe("plan-2026-01-01");
     });
   });
 

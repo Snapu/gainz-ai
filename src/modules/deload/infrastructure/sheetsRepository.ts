@@ -2,9 +2,12 @@ import * as Sentry from "@sentry/vue";
 import type { GoogleSpreadsheet } from "google-spreadsheet";
 import { ResultAsync } from "neverthrow";
 import type { DeloadPhaseRepository } from "@/modules/deload/application";
-import { isDeloadFatigueTriggerId } from "@/modules/deload/domain";
-import { isAuthError } from "@/modules/platform/infrastructure";
-import type { FatigueTriggerId } from "@/modules/sharedKernel/domain";
+import {
+  ensureSheetHeaders,
+  getOrCreateSheet,
+  isAuthError,
+} from "@/modules/platform/infrastructure";
+import { type FatigueTriggerId, isFatigueTriggerId } from "@/modules/sharedKernel/domain";
 import type { DeloadPhase } from "../domain/types";
 
 const SHEET_NAME = "DeloadPhase";
@@ -12,29 +15,6 @@ const HEADERS = ["startedAt", "endsAt", "fatigueRiskScore", "triggeredBy", "canc
 
 type DeloadPhaseLoadError = "load-failed" | "auth-failed";
 type DeloadPhaseSaveError = "save-failed" | "auth-failed";
-
-function getSheet(doc: GoogleSpreadsheet) {
-  return doc.sheetsByTitle[SHEET_NAME];
-}
-
-async function ensureSheet(doc: GoogleSpreadsheet) {
-  return getSheet(doc) ?? (await doc.addSheet({ title: SHEET_NAME, headerValues: [...HEADERS] }));
-}
-
-interface HeaderManagedSheet {
-  loadHeaderRow: () => Promise<void>;
-  setHeaderRow: (headers: string[]) => Promise<void>;
-  headerValues?: string[];
-}
-
-async function ensureHeaders(sheet: HeaderManagedSheet): Promise<void> {
-  await sheet.loadHeaderRow();
-  const current: string[] = Array.isArray(sheet.headerValues) ? sheet.headerValues : [];
-  const missing = HEADERS.filter((h) => !current.includes(h));
-  if (missing.length === 0) return;
-  await sheet.setHeaderRow([...current, ...missing]);
-  await sheet.loadHeaderRow();
-}
 
 function deserialize(raw: Record<string, string>): DeloadPhase | null {
   const { startedAt, endsAt, fatigueRiskScore, triggeredBy, canceledAt } = raw;
@@ -44,7 +24,7 @@ function deserialize(raw: Record<string, string>): DeloadPhase | null {
   const triggers = (triggeredBy ?? "")
     .split(",")
     .map((t) => t.trim())
-    .filter((t): t is FatigueTriggerId => isDeloadFatigueTriggerId(t));
+    .filter((t): t is FatigueTriggerId => isFatigueTriggerId(t));
 
   return {
     startedAt,
@@ -84,8 +64,8 @@ export function loadDeloadPhaseInfra(
   doc: GoogleSpreadsheet,
 ): ResultAsync<DeloadPhase | null, DeloadPhaseLoadError> {
   return ResultAsync.fromThrowable(async () => {
-    const sheet = getSheet(doc) ?? (await ensureSheet(doc));
-    await ensureHeaders(sheet);
+    const sheet = await getOrCreateSheet(doc, SHEET_NAME, HEADERS);
+    await ensureSheetHeaders(sheet, HEADERS);
     const rows = await sheet.getRows();
     if (rows.length === 0) return null;
     return deserialize(rows[0]?.toObject());
@@ -97,8 +77,8 @@ export function saveDeloadPhaseInfra(
   doc: GoogleSpreadsheet,
 ): ResultAsync<void, DeloadPhaseSaveError> {
   return ResultAsync.fromThrowable(async () => {
-    const sheet = await ensureSheet(doc);
-    await ensureHeaders(sheet);
+    const sheet = await getOrCreateSheet(doc, SHEET_NAME, HEADERS);
+    await ensureSheetHeaders(sheet, HEADERS);
     const rows = await sheet.getRows();
     const data = serialize(phase);
     if (rows.length > 0) {
