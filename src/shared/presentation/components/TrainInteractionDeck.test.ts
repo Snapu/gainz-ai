@@ -97,7 +97,7 @@ describe("TrainInteractionDeck", () => {
     app.unmount();
   });
 
-  it("renders rest timer with rest pill, draining progress bar, and icon skip button when isResting is true", async () => {
+  it("renders rest timer with radial ring and icon skip button when isResting is true", async () => {
     let emittedSkipRest = false;
     let emittedLogCurrent = false;
 
@@ -133,23 +133,25 @@ describe("TrainInteractionDeck", () => {
 
     const eyebrow = container.querySelector("[data-testid='deck-mode-eyebrow']");
     expect(eyebrow?.textContent?.trim()).toBe("Rest");
-
-    const progressFill = container.querySelector(
-      "[data-testid='deck-rest-progress-fill']",
-    ) as HTMLElement | null;
-    expect(progressFill).not.toBeNull();
-    expect(progressFill?.className).toContain("bg-emerald-400");
-    expect(Number.parseFloat(progressFill?.style.width || "0")).toBeCloseTo(
-      100 - (25 / 90) * 100,
-      1,
-    );
-
-    const restPill = container.querySelector("[data-testid='deck-rest-pill']");
-    expect(restPill).not.toBeNull();
-    expect(restPill?.textContent).toContain("1:05");
-    expect(restPill?.className).toContain("text-emerald-400");
-    expect(container.querySelector("[data-testid='deck-hold-ring']")).toBeNull();
     expect(eyebrow?.nextElementSibling?.textContent?.trim()).toBe("Bench Press");
+
+    expect(container.querySelector("[data-testid='deck-hold-ring']")).toBeNull();
+
+    const restRing = container.querySelector("[data-testid='deck-rest-ring']");
+    expect(restRing).not.toBeNull();
+    expect(restRing?.textContent).toContain("1:05");
+    expect(restRing?.querySelector("span")?.className).toContain("text-emerald-400");
+
+    const circles = restRing?.querySelectorAll("circle") ?? [];
+    expect(circles.length).toBe(2);
+    const progressCircle = circles[1];
+    const progressClass = progressCircle?.getAttribute("class") ?? "";
+    expect(progressClass).toContain("stroke-emerald-400");
+    expect(progressClass).not.toContain("opacity-0");
+
+    const dashArray = Number.parseFloat(progressCircle?.getAttribute("stroke-dasharray") ?? "0");
+    const dashOffset = Number.parseFloat(progressCircle?.getAttribute("stroke-dashoffset") ?? "0");
+    expect(dashOffset / dashArray).toBeCloseTo(25 / 90, 3);
 
     const add30Btn = container.querySelector("button[data-testid='deck-add-30s']");
     expect(add30Btn).toBeNull();
@@ -173,8 +175,8 @@ describe("TrainInteractionDeck", () => {
     await nextTick();
     expect(emittedLogCurrent).toBe(true);
 
-    // Ensure rest pill, skip icon button, and primary action share the right-side controls container (after exercise title)
-    expect(restPill?.parentElement).toBe(logNextBtn?.parentElement);
+    // Ensure rest ring, skip icon button, and primary action share the right-side controls container (after exercise title)
+    expect(restRing?.parentElement).toBe(logNextBtn?.parentElement);
     expect(skipBtn?.parentElement).toBe(logNextBtn?.parentElement);
 
     app.unmount();
@@ -219,7 +221,7 @@ describe("TrainInteractionDeck", () => {
     app.unmount();
   });
 
-  it("renders overtime visual styling on rest pill, progress bar, and deck container when isOvertime is true", async () => {
+  it("renders overtime visual styling on rest ring and deck container when isOvertime is true", async () => {
     const Host = defineComponent({
       setup() {
         return () =>
@@ -247,19 +249,59 @@ describe("TrainInteractionDeck", () => {
     const eyebrow = container.querySelector("[data-testid='deck-mode-eyebrow']");
     expect(eyebrow?.textContent?.trim()).toBe("Rest Overtime");
 
-    const progressFill = container.querySelector(
-      "[data-testid='deck-rest-progress-fill']",
-    ) as HTMLElement | null;
-    expect(progressFill).not.toBeNull();
-    expect(progressFill?.className).toContain("bg-red-400");
-    expect(progressFill?.style.width).toBe("100%");
+    const restRing = container.querySelector("[data-testid='deck-rest-ring']");
+    expect(restRing).not.toBeNull();
+    expect(restRing?.textContent).toContain("+0:30");
+    expect(restRing?.querySelector("span")?.className).toContain("text-red-400");
 
-    const restPill = container.querySelector("[data-testid='deck-rest-pill']");
-    expect(restPill).not.toBeNull();
-    expect(restPill?.textContent).toContain("+0:30");
-    expect(restPill?.className).toContain("text-red-400");
-    expect(restPill?.className).toContain("bg-red-500/10");
+    const circles = restRing?.querySelectorAll("circle") ?? [];
+    expect(circles.length).toBe(2);
+    const progressCircle = circles[1];
+    const progressClass = progressCircle?.getAttribute("class") ?? "";
+    expect(progressClass).toContain("stroke-red-400");
+    expect(progressClass).toContain("animate-pulse");
+    expect(progressCircle?.getAttribute("stroke-dashoffset")).toBe("0");
     app.unmount();
+  });
+
+  it("compacts long rest readouts inside the 40px rest ring for both overtime and open-ended count-up", async () => {
+    const restFormattedTime = ref("+10:05");
+    const isOvertime = ref(true);
+    const targetRestSeconds = ref<number | null>(90);
+
+    const Host = defineComponent({
+      setup() {
+        return () =>
+          h(TrainInteractionDeck, {
+            currentExercise: defaultExercise,
+            currentProgress: { done: 1, isCompleted: false },
+            isResting: true,
+            restFormattedTime: restFormattedTime.value,
+            restElapsed: 695,
+            targetRestSeconds: targetRestSeconds.value,
+            isOvertime: isOvertime.value,
+          });
+      },
+    });
+
+    const container = document.createElement("div");
+    const app = createApp(Host);
+    try {
+      app.mount(container);
+      await nextTick();
+
+      const restRing = container.querySelector("[data-testid='deck-rest-ring']");
+      expect(restRing?.textContent?.trim()).toBe("+10m");
+
+      restFormattedTime.value = "100:00";
+      isOvertime.value = false;
+      targetRestSeconds.value = null;
+      await nextTick();
+
+      expect(restRing?.textContent?.trim()).toBe("100m");
+    } finally {
+      app.unmount();
+    }
   });
 
   it("renders exercise duration timer with Start and Reset icon toggle and distinct Hold styling", async () => {
@@ -294,8 +336,7 @@ describe("TrainInteractionDeck", () => {
     const eyebrow = container.querySelector("[data-testid='deck-mode-eyebrow']");
     expect(eyebrow?.textContent?.trim()).toBe("Hold");
 
-    expect(container.querySelector("[data-testid='deck-rest-pill']")).toBeNull();
-    expect(container.querySelector("[data-testid='deck-rest-progress']")).toBeNull();
+    expect(container.querySelector("[data-testid='deck-rest-ring']")).toBeNull();
 
     const holdRing = container.querySelector("[data-testid='deck-hold-ring']");
     expect(holdRing).not.toBeNull();
@@ -657,7 +698,7 @@ describe("TrainInteractionDeck", () => {
     app.unmount();
   });
 
-  it("omits rest progress bar for open-ended count-up rest when targetRestSeconds is null", async () => {
+  it("renders static emerald track without progress arc for open-ended count-up rest when targetRestSeconds is null", async () => {
     const Host = defineComponent({
       setup() {
         return () =>
@@ -679,10 +720,15 @@ describe("TrainInteractionDeck", () => {
       app.mount(container);
       await nextTick();
 
-      const restPill = container.querySelector("[data-testid='deck-rest-pill']");
-      expect(restPill).not.toBeNull();
-      expect(restPill?.textContent).toContain("0:42");
-      expect(container.querySelector("[data-testid='deck-rest-progress']")).toBeNull();
+      const restRing = container.querySelector("[data-testid='deck-rest-ring']");
+      expect(restRing).not.toBeNull();
+      expect(restRing?.textContent).toContain("0:42");
+      expect(restRing?.querySelector("span")?.className).toContain("text-emerald-400");
+
+      const circles = restRing?.querySelectorAll("circle") ?? [];
+      expect(circles.length).toBe(2);
+      expect(circles[0]?.getAttribute("class")).toContain("text-emerald-400/30");
+      expect(circles[1]?.getAttribute("class")).toContain("opacity-0");
     } finally {
       app.unmount();
     }

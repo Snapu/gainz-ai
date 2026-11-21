@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { ArrowLeftRight, Check, Hourglass, Play, Plus, RotateCcw, SkipForward } from "@lucide/vue";
+import { ArrowLeftRight, Check, Play, Plus, RotateCcw, SkipForward } from "@lucide/vue";
 import { useWakeLock } from "@vueuse/core";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiRadialProgress from "@/shared/presentation/components/ui/UiRadialProgress.vue";
 
@@ -173,11 +172,37 @@ const currentSetNumber = computed(() => {
   return (props.currentProgress?.done ?? 0) + 1;
 });
 
-const restBarPercent = computed(() => {
+const hasRestTarget = computed(() => {
+  return (props.targetRestSeconds ?? 0) > 0;
+});
+
+const restRingProgress = computed(() => {
   if (props.isOvertime) return 100;
-  if (!props.targetRestSeconds || props.targetRestSeconds <= 0) return 0;
+  if (!hasRestTarget.value) return 0;
   const elapsed = props.restElapsed ?? 0;
-  return Math.min(100, Math.max(0, 100 - (elapsed / props.targetRestSeconds) * 100));
+  return Math.min(100, Math.max(0, 100 - (elapsed / (props.targetRestSeconds ?? 1)) * 100));
+});
+
+const restRingTrackClass = computed(() => {
+  if (props.isOvertime) return "text-red-500/20";
+  if (!hasRestTarget.value) return "text-emerald-400/30";
+  return "text-white/10";
+});
+
+const restRingProgressClass = computed(() => {
+  if (props.isOvertime) return "text-red-400 stroke-red-400 animate-pulse ease-linear";
+  if (restRingProgress.value === 0) {
+    return "text-emerald-400 stroke-emerald-400 opacity-0 ease-linear";
+  }
+  return "text-emerald-400 stroke-emerald-400 ease-linear";
+});
+
+const restRingDisplayTime = computed(() => {
+  if (props.restFormattedTime.length > 5) {
+    const match = /^(\+?)(\d+):/.exec(props.restFormattedTime);
+    if (match) return `${match[1]}${match[2]}m`;
+  }
+  return props.restFormattedTime;
 });
 
 const isHoldComplete = computed(() => {
@@ -272,22 +297,9 @@ const emptyOrCompleteLabel = computed(() => {
       <!-- Tier 2: Main Container (Visually matched to CoachTab Input Container) -->
       <div
         data-testid="deck-main-container"
-        class="relative overflow-hidden flex items-center justify-between gap-3 w-full min-h-[52px] rounded-xl border pl-4 pr-1.5 py-1.5 shadow-sm backdrop-blur-md transition-all duration-200"
+        class="flex items-center justify-between gap-3 w-full min-h-[52px] rounded-xl border pl-4 pr-1.5 py-1.5 shadow-sm backdrop-blur-md transition-all duration-200"
         :class="deckContainerClasses"
       >
-        <div
-          v-if="isResting && (isOvertime || (targetRestSeconds ?? 0) > 0)"
-          data-testid="deck-rest-progress"
-          class="pointer-events-none absolute top-0 left-0 right-0 h-0.5 bg-white/5"
-          aria-hidden="true"
-        >
-          <div
-            data-testid="deck-rest-progress-fill"
-            class="h-full transition-all duration-300 ease-linear"
-            :class="isOvertime ? 'bg-red-400 animate-pulse' : 'bg-emerald-400'"
-            :style="{ width: `${restBarPercent}%` }"
-          />
-        </div>
         
         <!-- State A: Resting (Fixed Left Title + Right Timer & Action Cluster) -->
         <template v-if="isResting">
@@ -304,16 +316,23 @@ const emptyOrCompleteLabel = computed(() => {
             </span>
           </div>
 
-          <!-- Right Cluster: Rest Pill + Skip Icon Button + Primary Action -->
+          <!-- Right Cluster: Radial Ring + Skip Icon Button + Primary Action -->
           <div class="flex items-center gap-2 shrink-0">
-            <UiBadge
-              data-testid="deck-rest-pill"
-              :variant="isOvertime ? 'danger' : 'success'"
-              class="h-8 gap-2 px-3 text-xs font-black tabular-nums tracking-tight normal-case"
+            <UiRadialProgress
+              data-testid="deck-rest-ring"
+              :size="40"
+              :stroke-width="2.5"
+              :progress="restRingProgress"
+              :track-class="restRingTrackClass"
+              :progress-class="restRingProgressClass"
             >
-              <Hourglass class="w-3.5 h-3.5 shrink-0" :class="isOvertime ? 'animate-pulse' : ''" />
-              <span>{{ restFormattedTime }}</span>
-            </UiBadge>
+              <span
+                class="text-micro font-black tabular-nums tracking-tight normal-case"
+                :class="isOvertime ? 'text-red-400' : 'text-emerald-400'"
+              >
+                {{ restRingDisplayTime }}
+              </span>
+            </UiRadialProgress>
 
             <UiButton
               v-if="!isWorkoutComplete"
@@ -407,7 +426,7 @@ const emptyOrCompleteLabel = computed(() => {
             <UiRadialProgress
               data-testid="deck-hold-ring"
               :size="40"
-              :stroke-width="3.2"
+              :stroke-width="2.5"
               :progress="timerProgressPercent"
               track-class="text-white/10"
               :progress-class="holdRingProgressClass"

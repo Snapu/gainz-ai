@@ -7,6 +7,8 @@ import {
 import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
 
+const MAX_OVERTIME_SECONDS = 10 * 60;
+
 export const useRestTimerStore = defineStore("restTimer", () => {
   const restStartTime = useLocalStorage<number | null>("gainz:restStartTime", null, {
     serializer: StorageSerializers.object,
@@ -19,14 +21,22 @@ export const useRestTimerStore = defineStore("restTimer", () => {
 
   function updateRestElapsed() {
     if (restStartTime.value) {
-      restElapsed.value = Math.floor((Date.now() - restStartTime.value) / 1000);
+      const elapsed = Math.floor((Date.now() - restStartTime.value) / 1000);
+      if (
+        targetRestSeconds.value !== null &&
+        elapsed - targetRestSeconds.value >= MAX_OVERTIME_SECONDS
+      ) {
+        reset();
+        return;
+      }
+      restElapsed.value = elapsed;
     } else {
       restElapsed.value = 0;
     }
   }
 
   const { pause, resume } = useIntervalFn(updateRestElapsed, 1000, {
-    immediate: !!restStartTime.value,
+    immediate: false,
   });
 
   // Resync on focus
@@ -42,7 +52,9 @@ export const useRestTimerStore = defineStore("restTimer", () => {
     (v) => {
       if (v) {
         updateRestElapsed();
-        resume();
+        if (restStartTime.value) {
+          resume();
+        }
       } else {
         pause();
         restElapsed.value = 0;
@@ -70,13 +82,17 @@ export const useRestTimerStore = defineStore("restTimer", () => {
   });
 
   function start(duration?: number) {
-    restStartTime.value = Date.now();
     targetRestSeconds.value = duration ?? null;
+    restStartTime.value = Date.now();
+    restElapsed.value = 0;
+    resume();
   }
 
   function reset() {
     restStartTime.value = null;
     targetRestSeconds.value = null;
+    restElapsed.value = 0;
+    pause();
   }
 
   return {
