@@ -10,10 +10,13 @@ import {
 vi.mock("@/shared/presentation/components/TrainInteractionDeck.vue", () => ({
   default: {
     name: "TrainInteractionDeck",
-    props: ["currentExercise", "currentProgress", "supersetAlternatives"],
+    props: ["currentExercise", "currentProgress", "supersetAlternatives", "isWorkoutComplete"],
     emits: ["selectSupersetExercise", "logCurrent", "logCustom", "skipRest"],
     template: `
-      <div>
+      <div
+        data-testid="train-interaction-deck-stub"
+        :data-workout-complete="String(Boolean(isWorkoutComplete))"
+      >
         <button
           v-for="alt in supersetAlternatives"
           :key="alt.exerciseName"
@@ -57,6 +60,7 @@ const mockLogsByExercise = ref(new Map<string, { id: string }[]>());
 const mockSupersetAlternatives = ref<DisplayExercise[]>([]);
 const mockActiveExerciseForDeck = ref<DisplayExercise | null>(null);
 const mockSelectedSupersetExerciseName = ref<string | null>(null);
+const mockIsWorkoutComplete = ref(false);
 const mockRestTimerStore = reactive({
   isResting: false,
   formattedTime: "00:00",
@@ -72,7 +76,7 @@ vi.mock("@/views/composables/useHomeWorkoutViewModel", () => ({
     editLog: vi.fn(),
     chatStore: { isLoading: false },
     isRestDay: false,
-    isWorkoutComplete: false,
+    isWorkoutComplete: mockIsWorkoutComplete,
     allWorkoutGroups: mockAllWorkoutGroups,
     currentSessionElapsedText: null,
     getExerciseProgress: (name: string) => ({
@@ -106,6 +110,7 @@ describe("HomeTab Stepper Highlights", () => {
     mockCompletedMap.value = new Map<string, boolean>();
     mockLogsByExercise.value = new Map<string, { id: string }[]>();
     mockVisibleGroupIndex.value = 0;
+    mockIsWorkoutComplete.value = false;
     mockRestTimerStore.isResting = false;
     mockRestTimerStore.formattedTime = "00:00";
     mockRestTimerStore.isOvertime = false;
@@ -612,6 +617,21 @@ describe("HomeTab Stepper Highlights", () => {
     );
     expect(overtimeRestTime).toBeDefined();
     expect(overtimeRestTime?.className).toContain("text-red-400");
+
+    app.unmount();
+  });
+
+  it("forwards isWorkoutComplete to TrainInteractionDeck without rendering an inline completion banner", async () => {
+    mockIsWorkoutComplete.value = true;
+
+    const container = document.createElement("div");
+    const app = createApp(HomeTab);
+    app.mount(container);
+    await nextTick();
+
+    const deckStub = container.querySelector("[data-testid='train-interaction-deck-stub']");
+    expect(deckStub?.getAttribute("data-workout-complete")).toBe("true");
+    expect(container.querySelector("main")?.textContent).not.toContain("Workout Complete");
 
     app.unmount();
   });

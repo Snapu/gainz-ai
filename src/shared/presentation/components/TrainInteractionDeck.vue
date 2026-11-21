@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { ArrowLeftRight, Check, Play, Plus, RotateCcw, SkipForward } from "@lucide/vue";
+import {
+  ArrowLeftRight,
+  Check,
+  CheckCircle2,
+  Play,
+  Plus,
+  RotateCcw,
+  SkipForward,
+} from "@lucide/vue";
 import { useWakeLock } from "@vueuse/core";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
@@ -226,6 +234,9 @@ const deckContainerClasses = computed(() => {
       ? "border-red-500/20 bg-red-500/10"
       : "border-emerald-500/20 bg-emerald-500/10";
   }
+  if (props.isWorkoutComplete) {
+    return "border-emerald-500/20 bg-emerald-500/10";
+  }
   if (isHoldDeckActive.value) {
     if (isHoldComplete.value) return "border-emerald-500/20 bg-emerald-500/10";
     if (isTimerRunning.value) return "border-primary/20 bg-primary/10";
@@ -251,10 +262,8 @@ const holdRingProgressClass = computed(() => {
   return "text-primary stroke-primary opacity-0 ease-linear";
 });
 
-const emptyOrCompleteLabel = computed(() => {
-  if (props.isWorkoutComplete) return "Workout Complete";
-  if (props.isRestDay) return "Rest Day";
-  return "No Active Workout";
+const emptyDeckLabel = computed(() => {
+  return props.isRestDay ? "Rest Day" : "No Active Workout";
 });
 </script>
 
@@ -360,10 +369,43 @@ const emptyOrCompleteLabel = computed(() => {
           </div>
         </template>
 
-        <!-- State D / F / G: Whole Workout Complete, Rest Day, or No Active Workout -->
-        <template v-else-if="isWorkoutComplete || isRestDay || !currentExercise">
+        <!-- State D: Whole Workout Complete -->
+        <template v-else-if="isWorkoutComplete">
+          <div class="flex items-center gap-3 min-w-0">
+            <CheckCircle2
+              data-testid="deck-workout-complete-icon"
+              class="w-5 h-5 text-emerald-400 shrink-0"
+            />
+            <div class="flex flex-col min-w-0">
+              <span
+                data-testid="deck-mode-eyebrow"
+                class="text-micro leading-tight text-emerald-400"
+              >
+                All Sets Logged
+              </span>
+              <span class="text-sm font-bold text-foreground truncate min-w-0 leading-tight">
+                Workout Complete
+              </span>
+            </div>
+          </div>
+
+          <UiButton
+            type="button"
+            data-testid="deck-log-exercise"
+            size="icon"
+            variant="secondary"
+            class="shrink-0"
+            aria-label="Log Exercise"
+            @click="emit('logCustom')"
+          >
+            <Plus class="w-5 h-5" />
+          </UiButton>
+        </template>
+
+        <!-- State F / G: Rest Day or No Active Workout -->
+        <template v-else-if="isRestDay || !currentExercise">
           <span class="text-sm font-bold text-foreground truncate min-w-0">
-            {{ emptyOrCompleteLabel }}
+            {{ emptyDeckLabel }}
           </span>
 
           <UiButton

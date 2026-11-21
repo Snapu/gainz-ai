@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CheckCircle2, Coffee, Hourglass, Sparkles, Timer } from "@lucide/vue";
+import { Coffee, Hourglass, Sparkles, Timer } from "@lucide/vue";
 import { useDebounceFn, useThrottleFn } from "@vueuse/core";
 import { computed, nextTick, onActivated, onMounted, onUnmounted, ref, watch } from "vue";
 import {
@@ -329,18 +329,6 @@ onActivated(() => {
                     ]"
                   />
                 </button>
-              </div>
-            </div>
-
-            <!-- Workout Complete Banner -->
-            <div
-              v-if="isWorkoutComplete"
-              class="mb-4 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-3 animate-in fade-in duration-300"
-            >
-              <CheckCircle2 class="w-5 h-5 text-emerald-400 shrink-0" />
-              <div class="flex flex-col">
-                <span class="text-sm font-bold text-foreground">Workout Complete!</span>
-                <span class="text-xs text-muted-foreground font-medium">All exercises completed for today.</span>
               </div>
             </div>
 

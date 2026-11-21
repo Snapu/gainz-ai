@@ -184,6 +184,7 @@ describe("TrainInteractionDeck", () => {
 
   it("renders Finish Rest button when resting and workout is completed", async () => {
     let emittedSkipRest = false;
+    const isOvertime = ref(false);
 
     const Host = defineComponent({
       setup() {
@@ -192,9 +193,9 @@ describe("TrainInteractionDeck", () => {
             currentExercise: defaultExercise,
             currentProgress: { done: 3, isCompleted: true },
             isResting: true,
-            restFormattedTime: "1:00",
+            restFormattedTime: isOvertime.value ? "+0:15" : "1:00",
             targetRestSeconds: 90,
-            isOvertime: false,
+            isOvertime: isOvertime.value,
             isWorkoutComplete: true,
             onSkipRest: () => {
               emittedSkipRest = true;
@@ -208,6 +209,12 @@ describe("TrainInteractionDeck", () => {
     app.mount(container);
     await nextTick();
 
+    const mainContainer = container.querySelector("[data-testid='deck-main-container']");
+    expect(mainContainer?.className).toContain("bg-emerald-500/10");
+    expect(mainContainer?.className).toContain("border-emerald-500/20");
+    expect(container.querySelector("[data-testid='deck-workout-complete-icon']")).toBeNull();
+    const eyebrow = container.querySelector("[data-testid='deck-mode-eyebrow']");
+    expect(eyebrow?.textContent?.trim()).toBe("Rest");
     expect(container.textContent).toContain("Workout Complete");
 
     const finishBtn = container.querySelector(
@@ -218,6 +225,16 @@ describe("TrainInteractionDeck", () => {
     await nextTick();
 
     expect(emittedSkipRest).toBe(true);
+
+    isOvertime.value = true;
+    await nextTick();
+
+    expect(mainContainer?.className).toContain("bg-red-500/10");
+    expect(mainContainer?.className).toContain("border-red-500/20");
+    expect(mainContainer?.className).not.toContain("bg-emerald-500/10");
+    expect(eyebrow?.textContent?.trim()).toBe("Rest Overtime");
+    expect(container.querySelector("[data-testid='deck-workout-complete-icon']")).toBeNull();
+
     app.unmount();
   });
 
@@ -569,7 +586,7 @@ describe("TrainInteractionDeck", () => {
     app.unmount();
   });
 
-  it("renders Workout Complete without duplicate custom buttons when isWorkoutComplete is true", async () => {
+  it("renders Workout Complete with emerald success highlight without duplicate custom buttons when isWorkoutComplete is true", async () => {
     let emittedLogCustom = false;
 
     const Host = defineComponent({
@@ -594,19 +611,32 @@ describe("TrainInteractionDeck", () => {
     app.mount(container);
     await nextTick();
 
-    expect(container.textContent).toContain("Workout Complete");
+    const mainContainer = container.querySelector("[data-testid='deck-main-container']");
+    expect(mainContainer?.className).toContain("bg-emerald-500/10");
+    expect(mainContainer?.className).toContain("border-emerald-500/20");
+
+    const completeIcon = container.querySelector("[data-testid='deck-workout-complete-icon']");
+    expect(completeIcon).not.toBeNull();
+    expect(completeIcon?.getAttribute("class")).toContain("text-emerald-400");
+    expect(completeIcon?.getAttribute("aria-hidden")).toBe("true");
+
+    const eyebrow = container.querySelector("[data-testid='deck-mode-eyebrow']");
+    expect(eyebrow?.textContent?.trim()).toBe("All Sets Logged");
+    expect(eyebrow?.className).toContain("text-emerald-400");
+    expect(eyebrow?.nextElementSibling?.textContent?.trim()).toBe("Workout Complete");
 
     // Tier 1 custom button must NOT be rendered in State D
     const tier1Btn = container.querySelector("button[data-testid='deck-custom-exercise']");
     expect(tier1Btn).toBeNull();
 
-    // Single State D button exists
+    // Single State D button exists with secondary styling
     const actionBtn = container.querySelector(
       "button[data-testid='deck-log-exercise']",
     ) as HTMLButtonElement | null;
     expect(actionBtn).not.toBeNull();
     expect(actionBtn?.getAttribute("aria-label")).toBe("Log Exercise");
-    expect(actionBtn?.className).toContain("bg-primary");
+    expect(actionBtn?.className).toContain("bg-white/5");
+    expect(actionBtn?.className).not.toContain("bg-primary");
     actionBtn?.click();
     await nextTick();
 
@@ -614,7 +644,7 @@ describe("TrainInteractionDeck", () => {
     app.unmount();
   });
 
-  it("renders Rest Day state with Log Exercise button when isRestDay is true", async () => {
+  it("renders Rest Day state with neutral surface and primary Log Exercise button when isRestDay is true", async () => {
     let emittedLogCustom = false;
 
     const Host = defineComponent({
@@ -639,12 +669,63 @@ describe("TrainInteractionDeck", () => {
     app.mount(container);
     await nextTick();
 
+    const mainContainer = container.querySelector("[data-testid='deck-main-container']");
+    expect(mainContainer?.className).toContain("bg-white/5");
+    expect(mainContainer?.className).not.toContain("bg-emerald-500/10");
+    expect(container.querySelector("[data-testid='deck-workout-complete-icon']")).toBeNull();
+
     expect(container.textContent).toContain("Rest Day");
 
     const actionBtn = container.querySelector(
       "button[data-testid='deck-log-exercise']",
     ) as HTMLButtonElement | null;
     expect(actionBtn).not.toBeNull();
+    expect(actionBtn?.className).toContain("bg-primary");
+    actionBtn?.click();
+    await nextTick();
+
+    expect(emittedLogCustom).toBe(true);
+    app.unmount();
+  });
+
+  it("renders No Active Workout state with neutral surface and primary Log Exercise button when no exercise is active", async () => {
+    let emittedLogCustom = false;
+
+    const Host = defineComponent({
+      setup() {
+        return () =>
+          h(TrainInteractionDeck, {
+            currentExercise: null,
+            currentProgress: null,
+            isResting: false,
+            restFormattedTime: "00:00",
+            isOvertime: false,
+            isWorkoutComplete: false,
+            isRestDay: false,
+            onLogCustom: () => {
+              emittedLogCustom = true;
+            },
+          });
+      },
+    });
+
+    const container = document.createElement("div");
+    const app = createApp(Host);
+    app.mount(container);
+    await nextTick();
+
+    const mainContainer = container.querySelector("[data-testid='deck-main-container']");
+    expect(mainContainer?.className).toContain("bg-white/5");
+    expect(mainContainer?.className).not.toContain("bg-emerald-500/10");
+    expect(container.querySelector("[data-testid='deck-workout-complete-icon']")).toBeNull();
+
+    expect(container.textContent).toContain("No Active Workout");
+
+    const actionBtn = container.querySelector(
+      "button[data-testid='deck-log-exercise']",
+    ) as HTMLButtonElement | null;
+    expect(actionBtn).not.toBeNull();
+    expect(actionBtn?.className).toContain("bg-primary");
     actionBtn?.click();
     await nextTick();
 
