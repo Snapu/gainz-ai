@@ -6,7 +6,7 @@ const localeDateOptions: Intl.DateTimeFormatOptions = {
 };
 
 export const localeDateString = (date: Date): string =>
-  date.toLocaleDateString(undefined, localeDateOptions);
+  date.toLocaleDateString("en-US", localeDateOptions);
 
 export const isoDateString = (date: Date): string => {
   const offset = date.getTimezoneOffset() * 60000;

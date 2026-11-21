@@ -116,7 +116,7 @@ describe("resolveCurrentSession", () => {
     ];
     const session = resolveCurrentSession(logs, now);
     // sessionDate should be May 8, not May 9
-    const expectedDate = new Date("2026-05-08T23:30:00").toLocaleDateString(undefined, {
+    const expectedDate = new Date("2026-05-08T23:30:00").toLocaleDateString("en-US", {
       weekday: "long",
       year: "numeric",
       month: "numeric",
@@ -235,7 +235,7 @@ describe("groupLogsIntoSessions", () => {
     expect(session?.startTime).toEqual(new Date("2026-05-08T23:30:00"));
     expect(session?.sessionId).toBe("2026-05-08");
     // Date formatted as May 8, NOT May 9
-    const expectedDate = new Date("2026-05-08T23:30:00").toLocaleDateString(undefined, {
+    const expectedDate = new Date("2026-05-08T23:30:00").toLocaleDateString("en-US", {
       weekday: "long",
       year: "numeric",
       month: "numeric",

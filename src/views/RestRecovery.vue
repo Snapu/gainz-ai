@@ -82,10 +82,10 @@ function remove(id: string) {
       </template>
     </AppHeader>
 
-    <p class="px-6 pt-4 text-sm text-muted-foreground shrink-0">Track rest days, illness, injuries, and other off days so your AI coach can account for them.</p>
+    <p class="w-full max-w-2xl mx-auto px-4 pt-4 text-xs font-medium text-muted-foreground shrink-0">Track rest days, illness, injuries, and other off days so your AI coach can account for them.</p>
 
     <!-- Event List -->
-    <main class="flex-1 min-h-0 px-6 pt-6 pb-32 overflow-y-auto overscroll-y-contain no-scrollbar">
+    <main class="flex-1 min-h-0 w-full max-w-2xl mx-auto px-4 pt-4 pb-28 overflow-y-auto overscroll-y-contain no-scrollbar flex flex-col gap-4">
       <EmptyState 
         v-if="sortedEvents.length === 0"
         :icon="Bed"
@@ -111,7 +111,7 @@ function remove(id: string) {
       <!-- Scrollable Content -->
       <div class="flex flex-col gap-6 overflow-y-auto px-6 py-4 no-scrollbar">
         <div>
-          <label class="text-xs font-semibold text-muted-foreground mb-3 block ml-1 uppercase tracking-wider">Type</label>
+          <label class="text-micro text-muted-foreground/60 mb-2 block ml-1">Type</label>
           <UiToggleGroup type="single" v-model="formType" class="grid grid-cols-2 gap-3">
             <UiToggleGroupItem v-for="t in PRESET_TYPES" :key="t" :value="t">
               {{ t }}
@@ -120,12 +120,12 @@ function remove(id: string) {
         </div>
 
         <div v-if="formType === 'Other'" class="animate-in slide-in-from-top-2 fade-in">
-          <label class="text-xs font-semibold text-muted-foreground mb-2 block ml-1 uppercase tracking-wider">Custom Type</label>
+          <label class="text-micro text-muted-foreground/60 mb-2 block ml-1">Custom Type</label>
           <UiInput v-model="formCustomType" placeholder="e.g. Travel" class="h-12" />
         </div>
 
         <div>
-          <label class="text-xs font-semibold text-muted-foreground mb-3 block ml-1 uppercase tracking-wider">Dates</label>
+          <label class="text-micro text-muted-foreground/60 mb-2 block ml-1">Dates</label>
           <UiRangeCalendar v-model="dateRange" />
         </div>
       </div>

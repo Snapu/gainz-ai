@@ -85,13 +85,15 @@ describe("PastSessions.vue", () => {
     // Crucial: Must be ONE session card, NOT two!
     expect(sessionHeaders.length).toBe(1);
 
-    const expectedDate = new Date("2026-11-05T23:20:00").toLocaleDateString(undefined, {
+    const expectedDate = new Date("2026-11-05T23:20:00").toLocaleDateString("en-US", {
       weekday: "long",
       year: "numeric",
       month: "numeric",
       day: "numeric",
     });
     expect(sessionHeaders[0]?.textContent?.trim().toLowerCase()).toBe(expectedDate.toLowerCase());
+    expect(sessionHeaders[0]?.className).toContain("text-micro");
+    expect(sessionHeaders[0]?.className).toContain("tracking-widest");
 
     // Total duration: 23:20 to 00:15 = 55 minutes
     expect(container.textContent).toContain("55");
@@ -168,6 +170,49 @@ describe("PastSessions.vue", () => {
     const group = main.firstElementChild as HTMLElement;
     expect(group).not.toBeNull();
     expect(group.classList.contains("shrink-0")).toBe(true);
+    expect(group.classList.contains("mt-4")).toBe(false);
+    expect(group.classList.contains("gap-2")).toBe(true);
+
+    app.unmount();
+  });
+
+  it("formats exercise log durations and lowercase telemetry units consistently", async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const logsStore = useExerciseLogsStore();
+    logsStore.exerciseLogs = [
+      {
+        id: "1",
+        exerciseName: "Plank",
+        loggedAt: new Date("2026-11-05T09:00:00"),
+        duration: 0.75,
+      },
+      {
+        id: "2",
+        exerciseName: "Bench Press",
+        loggedAt: new Date("2026-11-05T09:10:00"),
+        weight: 80,
+        reps: 8,
+      },
+    ];
+
+    const container = document.createElement("div");
+    const app = createApp(PastSessions);
+    app.use(pinia);
+    app.mount(container);
+    await nextTick();
+
+    expect(container.textContent).toContain("45s");
+    expect(container.textContent).not.toContain("0.75");
+
+    const uppercaseUnitSpans = Array.from(container.querySelectorAll("span")).filter(
+      (el) =>
+        ["min", "sets", "kg", "reps", "m", "s"].includes(
+          el.textContent?.trim().toLowerCase() ?? "",
+        ) &&
+        (el.classList.contains("uppercase") || el.classList.contains("text-micro")),
+    );
+    expect(uppercaseUnitSpans).toHaveLength(0);
 
     app.unmount();
   });

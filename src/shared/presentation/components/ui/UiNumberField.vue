@@ -35,7 +35,7 @@ const defaultLocale = typeof navigator !== "undefined" ? navigator.language : "e
       v-if="label || $slots['label-trailing']"
       class="flex items-center justify-between gap-2 min-h-5"
     >
-      <label v-if="label" class="text-sm font-semibold text-muted-foreground ml-1 truncate">{{
+      <label v-if="label" class="text-micro text-muted-foreground/60 ml-1 truncate">{{
         label
       }}</label>
       <slot name="label-trailing" />
@@ -51,7 +51,7 @@ const defaultLocale = typeof navigator !== "undefined" ? navigator.language : "e
       </NumberFieldDecrement>
       <NumberFieldInput 
         inputmode="decimal"
-        class="flex-1 w-full min-w-0 p-0 text-center bg-transparent border-none text-2xl font-bold focus-visible:outline-none text-foreground z-0" 
+        class="flex-1 w-full min-w-0 p-0 text-center bg-transparent border-none text-2xl font-bold tabular-nums focus-visible:outline-none text-foreground z-0" 
       />
       <NumberFieldIncrement
         :class="cn(

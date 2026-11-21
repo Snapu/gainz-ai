@@ -37,8 +37,8 @@ function formatEventDate(dates: string[]) {
 <template>
   <UiSwipeableItem variant="inset" @action="emit('delete', props.event.id)">
     <div class="flex justify-between items-center">
-      <h3 class="font-bold text-sm text-foreground tracking-tight">{{ event.type }}</h3>
-      <p class="text-xs text-primary font-bold tracking-wider uppercase">{{ formatEventDate(event.dates) }}</p>
+      <h3 class="text-sm font-semibold text-foreground tracking-tight">{{ event.type }}</h3>
+      <p class="text-xs font-semibold tabular-nums text-primary">{{ formatEventDate(event.dates) }}</p>
     </div>
   </UiSwipeableItem>
 </template>

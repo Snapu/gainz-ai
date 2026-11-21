@@ -13,3 +13,24 @@ const MS_PER_DAY = 86_400_000;
 export function getLocalDayIndex(date: Date): number {
   return Math.floor((date.getTime() - date.getTimezoneOffset() * 60_000) / MS_PER_DAY);
 }
+
+export interface FormattedDuration {
+  value: string;
+  unit: "min" | "s";
+}
+
+/** Formats a duration in seconds into a display value and lowercase unit ("min" | "s"). */
+export function formatDurationSeconds(totalSeconds: number): FormattedDuration {
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return { value: "0", unit: "s" };
+  const rounded = Math.round(totalSeconds);
+  if (rounded < 60) return { value: String(rounded), unit: "s" };
+  if (rounded % 60 === 0) return { value: String(rounded / 60), unit: "min" };
+  const mins = Math.floor(rounded / 60);
+  const secs = String(rounded % 60).padStart(2, "0");
+  return { value: `${mins}:${secs}`, unit: "min" };
+}
+
+/** Formats a duration in fractional minutes into a display value and lowercase unit ("min" | "s"). */
+export function formatDurationMinutes(minutes: number): FormattedDuration {
+  return formatDurationSeconds(minutes * 60);
+}

@@ -176,7 +176,7 @@ onBeforeUnmount(() => {
         {
           'transition-transform duration-200 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]': !isSwiping || cancelledByScroll || isSnappingBack || visualOffset < SWIPE_INTENT_PX
         },
-        !isSwiping && props.variant === 'inset' && 'hover:bg-white/[0.05] active:bg-white/[0.08]',
+        !isSwiping && props.variant === 'inset' && 'hover:bg-white/5 active:bg-white/15',
       ]"
       :style="{
         transform: `translateX(-${visualOffset}px)`,

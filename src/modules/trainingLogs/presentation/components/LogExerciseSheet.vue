@@ -4,7 +4,7 @@ import { storeToRefs } from "pinia";
 import { computed, nextTick, ref, watch } from "vue";
 import { useDeloadStore } from "@/modules/deload/presentation";
 import { useRestTimerStore } from "@/modules/platform/presentation";
-import { exerciseNameKey } from "@/modules/sharedKernel/presentation";
+import { exerciseNameKey, formatDurationMinutes } from "@/modules/sharedKernel/presentation";
 import type { ExerciseLog } from "@/modules/trainingLogs/presentation";
 import {
   buildExerciseLogErrorToast,
@@ -291,11 +291,16 @@ const exerciseOptionDetails = computed<Record<string, ExerciseSelectorOptionDeta
   return Object.fromEntries(
     exerciseOptions.value.map((exerciseName) => {
       const lastLog = latestExerciseLogs.value.get(exerciseNameKey(exerciseName));
+      const formattedDur =
+        typeof lastLog?.duration === "number" && lastLog.duration > 0
+          ? formatDurationMinutes(lastLog.duration)
+          : null;
+      const durationMeta = formattedDur ? `${formattedDur.value} ${formattedDur.unit}` : null;
       const meta = [
-        formatMetric(lastLog?.weight, "kg"),
+        formatMetric(lastLog?.weight, " kg"),
         formatMetric(lastLog?.reps, " reps"),
-        formatMetric(lastLog?.distance, "m"),
-        formatMetric(lastLog?.duration, " min"),
+        formatMetric(lastLog?.distance, " m"),
+        durationMeta,
       ]
         .filter((label): label is string => Boolean(label))
         .map((label, index) => ({
@@ -447,20 +452,20 @@ async function deleteLog() {
           class="w-full flex items-center justify-between p-3.5 hover:bg-white/5 active:scale-95 transition-all text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           <div class="flex items-center gap-2.5 min-w-0">
-            <span class="text-micro font-bold uppercase tracking-wider text-muted-foreground/80">
+            <span class="text-micro tracking-widest text-muted-foreground">
               Progression
             </span>
             <UiBadge
               v-if="exercisePrSummary"
-              variant="outline"
-              class="text-micro font-bold uppercase tracking-wider text-primary border-primary/20 bg-primary/10 px-2 py-0.5 truncate"
+              variant="info"
+              class="px-2 py-0.5 truncate"
             >
               {{ exercisePrSummary }}
             </UiBadge>
           </div>
 
           <div class="flex items-center gap-1.5 shrink-0 ml-2">
-            <span class="text-micro font-bold uppercase tracking-wider text-muted-foreground/50">
+            <span class="text-micro text-muted-foreground/60">
               History
             </span>
             <ChevronDown
@@ -560,9 +565,9 @@ async function deleteLog() {
       <!-- RPE Slider -->
       <div class="space-y-3 px-1 mt-1 shrink-0">
         <div class="flex items-center justify-between">
-          <span class="text-micro font-bold uppercase tracking-wider text-muted-foreground/60">Effort (RPE)</span>
+          <span class="text-micro text-muted-foreground/60">Effort (RPE)</span>
           <span
-            class="text-xs font-bold transition-colors duration-200"
+            class="text-xs font-bold tabular-nums transition-colors duration-200"
             :class="isRpeEnabled ? 'text-primary' : 'text-muted-foreground/50'"
           >
             {{ isRpeEnabled ? rpeLabel : 'Optional' }}

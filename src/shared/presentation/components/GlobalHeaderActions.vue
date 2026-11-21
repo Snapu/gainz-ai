@@ -59,7 +59,7 @@ function handleSwitchSpreadsheet(): void {
         </UiButton>
       </template>
       
-      <div class="px-3 py-2 text-xs font-bold uppercase tracking-widest text-muted-foreground/50">
+      <div class="px-3 py-2 text-micro tracking-widest text-muted-foreground/60">
         Quick Edit
       </div>
       
@@ -75,7 +75,7 @@ function handleSwitchSpreadsheet(): void {
 
       <div class="h-px bg-white/5 my-1 mx-3"></div>
       
-      <div class="px-3 py-2 text-xs font-bold uppercase tracking-widest text-muted-foreground/50">
+      <div class="px-3 py-2 text-micro tracking-widest text-muted-foreground/60">
         Data
       </div>
 
@@ -97,7 +97,7 @@ function handleSwitchSpreadsheet(): void {
 
       <div class="h-px bg-white/5 my-1 mx-3"></div>
       
-      <div class="px-3 py-2 text-xs font-bold uppercase tracking-widest text-muted-foreground/50">
+      <div class="px-3 py-2 text-micro tracking-widest text-muted-foreground/60">
         Legal
       </div>
 

@@ -125,11 +125,24 @@ describe("exerciseProgression helper", () => {
     });
 
     it("finds max duration when duration-based", () => {
-      const logs: ExerciseLog[] = [
-        { id: "1", exerciseName: "Plank", duration: 1.5, loggedAt: new Date() },
-        { id: "2", exerciseName: "Plank", duration: 3, loggedAt: new Date() },
-      ];
-      expect(computeExercisePr(logs)).toBe("PR: 3 min");
+      expect(
+        computeExercisePr([
+          { id: "1", exerciseName: "Plank", duration: 1.5, loggedAt: new Date() },
+          { id: "2", exerciseName: "Plank", duration: 3, loggedAt: new Date() },
+        ]),
+      ).toBe("PR: 3 min");
+
+      expect(
+        computeExercisePr([
+          { id: "3", exerciseName: "Plank", duration: 0.75, loggedAt: new Date() },
+        ]),
+      ).toBe("PR: 45 s");
+
+      expect(
+        computeExercisePr([
+          { id: "4", exerciseName: "Plank", duration: 1.5, loggedAt: new Date() },
+        ]),
+      ).toBe("PR: 1:30 min");
     });
 
     it("finds max distance when distance-based", () => {

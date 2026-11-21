@@ -1,6 +1,11 @@
 import DOMPurify from "dompurify";
 import { marked } from "marked";
-import { exerciseNameKey, isoDateString } from "@/modules/sharedKernel/domain";
+import {
+  exerciseNameKey,
+  formatDurationMinutes,
+  formatDurationSeconds,
+  isoDateString,
+} from "@/modules/sharedKernel/domain";
 import {
   type CoachingAdvice,
   type CoachingAdviceError,
@@ -15,7 +20,14 @@ import {
   upcastLegacyExercise,
 } from "../../domain";
 
-export { extractUserQuestion, isDuration, parseFirstRep, splitReps };
+export {
+  extractUserQuestion,
+  formatDurationMinutes,
+  formatDurationSeconds,
+  isDuration,
+  parseFirstRep,
+  splitReps,
+};
 
 // ---------------------------------------------------------------------------
 // View-model types
@@ -233,26 +245,6 @@ export function splitWeight(weightStr?: string): { value: string; unit: string }
     return { value: match[1], unit: match[2] || "kg" };
   }
   return { value: weightStr, unit: "" };
-}
-
-// ---------------------------------------------------------------------------
-// Duration formatting
-// ---------------------------------------------------------------------------
-
-/** Formats a duration in seconds into a display value and lowercase unit ("min" | "s"). */
-export function formatDurationSeconds(totalSeconds: number): { value: string; unit: "min" | "s" } {
-  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return { value: "0", unit: "s" };
-  const rounded = Math.round(totalSeconds);
-  if (rounded < 60) return { value: String(rounded), unit: "s" };
-  if (rounded % 60 === 0) return { value: String(rounded / 60), unit: "min" };
-  const mins = Math.floor(rounded / 60);
-  const secs = String(rounded % 60).padStart(2, "0");
-  return { value: `${mins}:${secs}`, unit: "min" };
-}
-
-/** Formats a duration in fractional minutes into a display value and lowercase unit ("min" | "s"). */
-export function formatDurationMinutes(minutes: number): { value: string; unit: "min" | "s" } {
-  return formatDurationSeconds(minutes * 60);
 }
 
 // ---------------------------------------------------------------------------

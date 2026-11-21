@@ -1,3 +1,4 @@
+import { formatDurationMinutes } from "@/modules/sharedKernel/presentation";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 import type {
   ProgressionSessionItem,
@@ -94,7 +95,8 @@ export function computeExercisePr(logs: ExerciseLog[]): string | null {
   const withDuration = logs.filter((l) => typeof l.duration === "number" && l.duration > 0);
   if (withDuration.length > 0) {
     const maxDuration = withDuration.reduce((max, l) => Math.max(max, l.duration ?? 0), 0);
-    return `PR: ${maxDuration} min`;
+    const formatted = formatDurationMinutes(maxDuration);
+    return `PR: ${formatted.value} ${formatted.unit}`;
   }
 
   // 4. Reps-based (bodyweight exercises without weight)

@@ -28,39 +28,42 @@ defineEmits<{
 </script>
 
 <template>
-  <div class="mt-4 overflow-hidden shrink-0">
+  <div class="flex flex-col gap-2 overflow-hidden shrink-0">
     <!-- Session Header -->
     <UiCard 
       as="button"
       @click="$emit('toggle')"
-      class="w-full flex items-center justify-between p-4 mb-3 hover:border-primary/50 group border-border/40 shadow-sm transition-all duration-200"
+      class="w-full flex items-center justify-between p-4 hover:border-primary/50 group border-border/40 shadow-sm transition-all duration-200"
     >
       <div class="flex flex-col items-start relative z-10 w-full">
-        <h3 class="text-xs font-semibold tracking-wide text-muted-foreground uppercase mb-2 group-hover:text-primary/80 transition-colors">{{ date }}</h3>
+        <h3 class="text-micro tracking-widest text-muted-foreground mb-2 group-hover:text-primary/80 transition-colors">{{ date }}</h3>
         
         <div class="flex items-center gap-3 w-full min-w-0">
           <!-- Duration -->
-          <div v-if="stats.durationMinutes > 0" class="flex items-baseline gap-1 min-w-[2.5rem] shrink-0">
-            <span class="text-2xl font-bold tracking-tight text-foreground group-hover:text-primary transition-colors">{{ stats.durationMinutes }}</span>
-            <span class="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Min</span>
+          <div v-if="stats.durationMinutes > 0" class="flex items-baseline min-w-[2.5rem] shrink-0">
+            <span class="text-2xl font-black tabular-nums tracking-tight text-foreground group-hover:text-primary transition-colors">{{ stats.durationMinutes }}</span>
+            <span class="text-xs font-semibold text-muted-foreground/70 ml-1">min</span>
           </div>
           
-          <div v-if="stats.durationMinutes > 0" class="h-5 w-px bg-border/50 mx-0.5 shrink-0"></div>
+          <div v-if="stats.durationMinutes > 0" class="h-5 w-px bg-white/10 mx-0.5 shrink-0"></div>
           
           <!-- Quick Stats -->
-          <div class="flex justify-end gap-6 sm:gap-8 flex-1 min-w-0">
+          <div
+            class="flex gap-6 sm:gap-8 flex-1 min-w-0"
+            :class="stats.durationMinutes > 0 ? 'justify-end' : 'justify-start'"
+          >
             <div class="flex min-w-0 flex-col items-start gap-0.5">
-              <span class="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Volume</span>
-              <span class="text-sm font-bold text-foreground flex items-baseline gap-1 min-w-0">
+              <span class="text-micro text-muted-foreground/60">Volume</span>
+              <span class="text-sm font-bold tabular-nums text-foreground flex items-baseline min-w-0">
                 <span class="truncate">{{ stats.sets }}</span>
-                <span class="text-xs font-semibold text-muted-foreground uppercase">Sets</span>
+                <span class="text-xs font-semibold text-muted-foreground/70 ml-1">sets</span>
               </span>
             </div>
             <div class="flex min-w-0 flex-col items-start gap-0.5">
-              <span class="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Tonnage</span>
-              <span class="text-sm font-bold text-foreground flex items-baseline gap-1 min-w-0">
-                <span class="truncate">{{ stats.volume.toLocaleString() }}</span>
-                <span class="text-xs font-semibold text-muted-foreground uppercase">KG</span>
+              <span class="text-micro text-muted-foreground/60">Tonnage</span>
+              <span class="text-sm font-bold tabular-nums text-foreground flex items-baseline min-w-0">
+                <span class="truncate">{{ stats.volume.toLocaleString("en-US") }}</span>
+                <span class="text-xs font-semibold text-muted-foreground/70 ml-1">kg</span>
               </span>
             </div>
           </div>

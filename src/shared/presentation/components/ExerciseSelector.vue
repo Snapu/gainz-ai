@@ -69,7 +69,7 @@ watch(isOpen, (val) => {
 </script>
 
 <template>
-  <UiBottomSheet v-model:open="isOpen" title="Choose Exercise" title-class="italic">
+  <UiBottomSheet v-model:open="isOpen" title="Choose Exercise">
     <!-- Trigger -->
     <template #trigger>
       <button
@@ -86,10 +86,6 @@ watch(isOpen, (val) => {
         <span class="truncate">{{ modelValue || props.placeholder }}</span>
         <Search class="w-5 h-5 text-muted-foreground/50" />
       </button>
-    </template>
-
-    <template #title>
-      Choose <span class="text-primary">Exercise</span>
     </template>
 
     <!-- Search Input (Not focused by default) -->
@@ -125,15 +121,15 @@ watch(isOpen, (val) => {
           <Plus class="w-6 h-6" />
         </div>
         <div class="flex-1 text-left">
-          <span class="block text-sm font-bold uppercase tracking-widest opacity-60">Create New</span>
+          <span class="block text-micro text-primary/70 mb-0.5">Create New</span>
           <span class="block text-lg font-bold leading-tight">{{ searchQuery }}</span>
         </div>
       </button>
 
       <!-- Empty State -->
       <div v-if="filteredOptions.length === 0 && !showCreateOption" class="py-12 text-center text-muted-foreground">
-        <p class="text-lg font-medium">No exercises found</p>
-        <p class="text-sm">Type to create a new one</p>
+        <p class="text-sm font-bold text-foreground">No exercises found</p>
+        <p class="text-xs font-medium text-muted-foreground mt-1">Type to create a new one</p>
       </div>
 
       <!-- List Items -->
@@ -169,7 +165,7 @@ watch(isOpen, (val) => {
           </div>
           <div
             v-if="optionDetails?.[option]?.description"
-            class="text-left text-xs italic text-muted-foreground/70"
+            class="text-left text-xs font-medium text-muted-foreground/70"
           >
             {{ optionDetails[option].description }}
           </div>
