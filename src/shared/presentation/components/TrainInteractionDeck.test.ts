@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createApp, defineComponent, h, nextTick, ref } from "vue";
 import TrainInteractionDeck from "./TrainInteractionDeck.vue";
 
@@ -95,7 +95,7 @@ describe("TrainInteractionDeck", () => {
     app.unmount();
   });
 
-  it("renders rest timer with radial ring and icon skip button when isResting is true", async () => {
+  it("renders rest timer with rest pill, draining progress bar, and icon skip button when isResting is true", async () => {
     let emittedSkipRest = false;
     let emittedLogCurrent = false;
 
@@ -125,9 +125,28 @@ describe("TrainInteractionDeck", () => {
     app.mount(container);
     await nextTick();
 
-    const timerRing = container.querySelector("[data-testid='deck-timer-ring']");
-    expect(timerRing).not.toBeNull();
-    expect(timerRing?.textContent).toContain("1:05");
+    const mainContainer = container.querySelector("[data-testid='deck-main-container']");
+    expect(mainContainer?.className).toContain("bg-emerald-500/10");
+    expect(mainContainer?.className).toContain("border-emerald-500/20");
+
+    const eyebrow = container.querySelector("[data-testid='deck-mode-eyebrow']");
+    expect(eyebrow?.textContent?.trim()).toBe("Rest");
+
+    const progressFill = container.querySelector(
+      "[data-testid='deck-rest-progress-fill']",
+    ) as HTMLElement | null;
+    expect(progressFill).not.toBeNull();
+    expect(progressFill?.className).toContain("bg-emerald-400");
+    expect(Number.parseFloat(progressFill?.style.width || "0")).toBeCloseTo(
+      100 - (25 / 90) * 100,
+      1,
+    );
+
+    const restPill = container.querySelector("[data-testid='deck-rest-pill']");
+    expect(restPill).not.toBeNull();
+    expect(restPill?.textContent).toContain("1:05");
+    expect(restPill?.className).toContain("text-emerald-400");
+    expect(container.querySelector("[data-testid='deck-hold-ring']")).toBeNull();
     expect(container.textContent).toContain("Log Bench Press");
 
     const add30Btn = container.querySelector("button[data-testid='deck-add-30s']");
@@ -152,8 +171,8 @@ describe("TrainInteractionDeck", () => {
     await nextTick();
     expect(emittedLogCurrent).toBe(true);
 
-    // Ensure timer ring, skip icon button, and primary action share the right-side controls container (after exercise title)
-    expect(timerRing?.parentElement).toBe(logNextBtn?.parentElement);
+    // Ensure rest pill, skip icon button, and primary action share the right-side controls container (after exercise title)
+    expect(restPill?.parentElement).toBe(logNextBtn?.parentElement);
     expect(skipBtn?.parentElement).toBe(logNextBtn?.parentElement);
 
     app.unmount();
@@ -198,7 +217,7 @@ describe("TrainInteractionDeck", () => {
     app.unmount();
   });
 
-  it("renders overtime visual styling on radial ring when isOvertime is true", async () => {
+  it("renders overtime visual styling on rest pill, progress bar, and deck container when isOvertime is true", async () => {
     const Host = defineComponent({
       setup() {
         return () =>
@@ -219,16 +238,29 @@ describe("TrainInteractionDeck", () => {
     app.mount(container);
     await nextTick();
 
-    const timerRing = container.querySelector("[data-testid='deck-timer-ring']");
-    expect(timerRing).not.toBeNull();
-    expect(timerRing?.textContent).toContain("+0:30");
-    expect(timerRing?.querySelector(".stroke-destructive")).not.toBeNull();
-    const overtimeSpan = container.querySelector(".text-destructive");
-    expect(overtimeSpan).not.toBeNull();
+    const mainContainer = container.querySelector("[data-testid='deck-main-container']");
+    expect(mainContainer?.className).toContain("bg-red-500/10");
+    expect(mainContainer?.className).toContain("border-red-500/20");
+
+    const eyebrow = container.querySelector("[data-testid='deck-mode-eyebrow']");
+    expect(eyebrow?.textContent?.trim()).toBe("Rest Overtime");
+
+    const progressFill = container.querySelector(
+      "[data-testid='deck-rest-progress-fill']",
+    ) as HTMLElement | null;
+    expect(progressFill).not.toBeNull();
+    expect(progressFill?.className).toContain("bg-red-400");
+    expect(progressFill?.style.width).toBe("100%");
+
+    const restPill = container.querySelector("[data-testid='deck-rest-pill']");
+    expect(restPill).not.toBeNull();
+    expect(restPill?.textContent).toContain("+0:30");
+    expect(restPill?.className).toContain("text-red-400");
+    expect(restPill?.className).toContain("bg-red-500/10");
     app.unmount();
   });
 
-  it("renders exercise duration timer with Start and Reset icon toggle and no pause button", async () => {
+  it("renders exercise duration timer with Start and Reset icon toggle and distinct Hold styling", async () => {
     const timedExercise = {
       exerciseName: "Plank",
       targetSets: 3,
@@ -254,9 +286,18 @@ describe("TrainInteractionDeck", () => {
     app.mount(container);
     await nextTick();
 
-    const timerRing = container.querySelector("[data-testid='deck-timer-ring']");
-    expect(timerRing).not.toBeNull();
-    expect(timerRing?.textContent).toContain("1:00");
+    const mainContainer = container.querySelector("[data-testid='deck-main-container']");
+    expect(mainContainer?.className).toContain("bg-white/5");
+
+    const eyebrow = container.querySelector("[data-testid='deck-mode-eyebrow']");
+    expect(eyebrow?.textContent?.trim()).toBe("Hold");
+
+    expect(container.querySelector("[data-testid='deck-rest-pill']")).toBeNull();
+    expect(container.querySelector("[data-testid='deck-rest-progress']")).toBeNull();
+
+    const holdRing = container.querySelector("[data-testid='deck-hold-ring']");
+    expect(holdRing).not.toBeNull();
+    expect(holdRing?.textContent).toContain("1:00");
     expect(container.textContent).toContain("Log Plank");
 
     const timerActionBtn = container.querySelector(
@@ -265,26 +306,94 @@ describe("TrainInteractionDeck", () => {
     const primaryBtn = container.querySelector("button[data-testid='deck-primary-action']");
     expect(timerActionBtn).not.toBeNull();
     expect(primaryBtn).not.toBeNull();
-    expect(timerRing?.parentElement).toBe(primaryBtn?.parentElement);
+    expect(holdRing?.parentElement).toBe(primaryBtn?.parentElement);
     expect(timerActionBtn?.parentElement).toBe(primaryBtn?.parentElement);
 
-    // Initially shows Start Timer
+    // Initially shows Start Timer with tonal primary contrast
     expect(timerActionBtn?.getAttribute("aria-label")).toBe("Start Timer");
+    expect(timerActionBtn?.className).toContain("bg-primary/10");
     expect(timerActionBtn?.textContent?.trim()).toBe("");
 
-    // Clicking starts timer and switches button to Reset Timer (no Pause button, no Tier 1 reset chip)
+    // Clicking starts timer, switches eyebrow to Holding, tints deck primary, and switches button to Reset Timer
     timerActionBtn?.click();
     await nextTick();
+    expect(eyebrow?.textContent?.trim()).toBe("Holding");
+    expect(mainContainer?.className).toContain("bg-primary/10");
+    expect(mainContainer?.className).toContain("border-primary/20");
+    expect(holdRing?.querySelector(".stroke-primary")).not.toBeNull();
     expect(timerActionBtn?.getAttribute("aria-label")).toBe("Reset Timer");
     expect(container.querySelector("button[data-testid='deck-timer-reset']")).toBeNull();
 
-    // Clicking again resets timer and returns to Start Timer
+    // Clicking again resets timer and returns to idle Hold state
     timerActionBtn?.click();
     await nextTick();
+    expect(eyebrow?.textContent?.trim()).toBe("Hold");
+    expect(mainContainer?.className).toContain("bg-white/5");
     expect(timerActionBtn?.getAttribute("aria-label")).toBe("Start Timer");
-    expect(timerRing?.textContent).toContain("1:00");
+    expect(holdRing?.textContent).toContain("1:00");
 
     app.unmount();
+  });
+
+  it("transitions hold timer to emerald Hold Complete state when countdown reaches zero", async () => {
+    vi.useFakeTimers();
+    let app: ReturnType<typeof createApp> | null = null;
+    try {
+      const Host = defineComponent({
+        setup() {
+          return () =>
+            h(TrainInteractionDeck, {
+              currentExercise: {
+                exerciseName: "Plank",
+                targetSets: 3,
+                targetReps: "5s",
+                targetDurationSeconds: 5,
+              },
+              currentProgress: { done: 0, isCompleted: false },
+              isResting: false,
+              restFormattedTime: "0:00",
+              isOvertime: false,
+            });
+        },
+      });
+
+      const container = document.createElement("div");
+      app = createApp(Host);
+      app.mount(container);
+      await nextTick();
+
+      const timerActionBtn = container.querySelector(
+        "button[data-testid='deck-timer-toggle']",
+      ) as HTMLButtonElement | null;
+      timerActionBtn?.click();
+      await nextTick();
+
+      vi.advanceTimersByTime(5200);
+      await nextTick();
+
+      const eyebrow = container.querySelector("[data-testid='deck-mode-eyebrow']");
+      expect(eyebrow?.textContent?.trim()).toBe("Hold Complete");
+
+      const mainContainer = container.querySelector("[data-testid='deck-main-container']");
+      expect(mainContainer?.className).toContain("bg-emerald-500/10");
+      expect(mainContainer?.className).toContain("border-emerald-500/20");
+
+      const holdRing = container.querySelector("[data-testid='deck-hold-ring']");
+      expect(holdRing?.querySelector(".stroke-emerald-400")).not.toBeNull();
+      const completeIcon = holdRing?.querySelector("[data-testid='deck-hold-complete-icon']");
+      expect(completeIcon).not.toBeNull();
+      expect(completeIcon?.getAttribute("aria-hidden")).toBe("true");
+
+      // Clicking Reset returns to idle Hold state
+      timerActionBtn?.click();
+      await nextTick();
+      expect(eyebrow?.textContent?.trim()).toBe("Hold");
+      expect(holdRing?.textContent).toContain("0:05");
+      expect(timerActionBtn?.getAttribute("aria-label")).toBe("Start Timer");
+    } finally {
+      app?.unmount();
+      vi.useRealTimers();
+    }
   });
 
   it("resets countdown timer when swiping to a different exercise", async () => {
@@ -368,7 +477,7 @@ describe("TrainInteractionDeck", () => {
     progress.value = { done: 1, isCompleted: false };
     await nextTick();
     expect(timerActionBtn?.getAttribute("aria-label")).toBe("Start Timer");
-    expect(container.querySelector("[data-testid='deck-timer-ring']")?.textContent).toContain(
+    expect(container.querySelector("[data-testid='deck-hold-ring']")?.textContent).toContain(
       "1:00",
     );
 
@@ -542,5 +651,140 @@ describe("TrainInteractionDeck", () => {
     expect(selectedName).toBe("Barbell Row");
 
     app.unmount();
+  });
+
+  it("omits rest progress bar for open-ended count-up rest when targetRestSeconds is null", async () => {
+    const Host = defineComponent({
+      setup() {
+        return () =>
+          h(TrainInteractionDeck, {
+            currentExercise: defaultExercise,
+            currentProgress: { done: 1, isCompleted: false },
+            isResting: true,
+            restFormattedTime: "0:42",
+            restElapsed: 42,
+            targetRestSeconds: null,
+            isOvertime: false,
+          });
+      },
+    });
+
+    const container = document.createElement("div");
+    const app = createApp(Host);
+    try {
+      app.mount(container);
+      await nextTick();
+
+      const restPill = container.querySelector("[data-testid='deck-rest-pill']");
+      expect(restPill).not.toBeNull();
+      expect(restPill?.textContent).toContain("0:42");
+      expect(container.querySelector("[data-testid='deck-rest-progress']")).toBeNull();
+    } finally {
+      app.unmount();
+    }
+  });
+
+  it("requests screen wake lock while hold timer runs, releases on reset or pending cancellation, and degrades silently on NotAllowedError", async () => {
+    const releaseMock = vi.fn().mockResolvedValue(undefined);
+    const pendingReleaseMock = vi.fn().mockResolvedValue(undefined);
+    let resolvePendingWakeLock!: (sentinel: unknown) => void;
+    const pendingWakeLockPromise = new Promise((resolve) => {
+      resolvePendingWakeLock = resolve;
+    });
+
+    const requestWakeLockMock = vi
+      .fn()
+      .mockRejectedValueOnce(new DOMException("Low power mode", "NotAllowedError"))
+      .mockResolvedValueOnce({
+        released: false,
+        type: "screen",
+        release: releaseMock,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })
+      .mockReturnValueOnce(pendingWakeLockPromise);
+
+    Object.defineProperty(navigator, "wakeLock", {
+      value: { request: requestWakeLockMock },
+      configurable: true,
+    });
+
+    let app: ReturnType<typeof createApp> | null = null;
+    try {
+      const Host = defineComponent({
+        setup() {
+          return () =>
+            h(TrainInteractionDeck, {
+              currentExercise: {
+                exerciseName: "Plank",
+                targetSets: 3,
+                targetReps: "60s",
+                targetDurationSeconds: 60,
+              },
+              currentProgress: { done: 0, isCompleted: false },
+              isResting: false,
+              restFormattedTime: "0:00",
+              isOvertime: false,
+            });
+        },
+      });
+
+      const container = document.createElement("div");
+      app = createApp(Host);
+      app.mount(container);
+      await nextTick();
+
+      const timerActionBtn = container.querySelector(
+        "button[data-testid='deck-timer-toggle']",
+      ) as HTMLButtonElement | null;
+      const eyebrow = container.querySelector("[data-testid='deck-mode-eyebrow']");
+
+      // 1. NotAllowedError must degrade silently without blocking the hold timer
+      timerActionBtn?.click();
+      await nextTick();
+      await Promise.resolve();
+      expect(requestWakeLockMock).toHaveBeenCalledWith("screen");
+      expect(eyebrow?.textContent?.trim()).toBe("Holding");
+      expect(timerActionBtn?.getAttribute("aria-label")).toBe("Reset Timer");
+
+      // Reset back to idle
+      timerActionBtn?.click();
+      await nextTick();
+      await Promise.resolve();
+      expect(eyebrow?.textContent?.trim()).toBe("Hold");
+
+      // 2. Normal acquisition and release on reset
+      timerActionBtn?.click();
+      await nextTick();
+      await Promise.resolve();
+      expect(requestWakeLockMock).toHaveBeenCalledTimes(2);
+
+      timerActionBtn?.click();
+      await nextTick();
+      await Promise.resolve();
+      expect(releaseMock).toHaveBeenCalled();
+
+      // 3. Rapid Start -> Reset while wake lock request is still pending releases once resolved
+      timerActionBtn?.click();
+      await nextTick();
+      expect(requestWakeLockMock).toHaveBeenCalledTimes(3);
+
+      timerActionBtn?.click();
+      await nextTick();
+      expect(eyebrow?.textContent?.trim()).toBe("Hold");
+
+      resolvePendingWakeLock({
+        released: false,
+        type: "screen",
+        release: pendingReleaseMock,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(pendingReleaseMock).toHaveBeenCalled();
+    } finally {
+      app?.unmount();
+      delete (navigator as unknown as { wakeLock?: unknown }).wakeLock;
+    }
   });
 });

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createApp, nextTick, ref } from "vue";
+import { createApp, nextTick, reactive, ref } from "vue";
 import {
   type DisplayExercise,
   type DisplayWorkoutGroup,
@@ -57,6 +57,11 @@ const mockLogsByExercise = ref(new Map<string, { id: string }[]>());
 const mockSupersetAlternatives = ref<DisplayExercise[]>([]);
 const mockActiveExerciseForDeck = ref<DisplayExercise | null>(null);
 const mockSelectedSupersetExerciseName = ref<string | null>(null);
+const mockRestTimerStore = reactive({
+  isResting: false,
+  formattedTime: "00:00",
+  isOvertime: false,
+});
 const mockSelectSupersetExercise = vi.fn((name: string) => {
   mockSelectedSupersetExerciseName.value = name;
 });
@@ -89,7 +94,7 @@ vi.mock("@/views/composables/useHomeWorkoutViewModel", () => ({
     selectSupersetExercise: mockSelectSupersetExercise,
     handleDeckLogCurrent: vi.fn(),
     openGoogleSearch: vi.fn(),
-    restTimerStore: { isResting: false, formattedTime: "00:00", isOvertime: false },
+    restTimerStore: mockRestTimerStore,
     requestOffDayWorkout: vi.fn(),
   }),
 }));
@@ -101,6 +106,9 @@ describe("HomeTab Stepper Highlights", () => {
     mockCompletedMap.value = new Map<string, boolean>();
     mockLogsByExercise.value = new Map<string, { id: string }[]>();
     mockVisibleGroupIndex.value = 0;
+    mockRestTimerStore.isResting = false;
+    mockRestTimerStore.formattedTime = "00:00";
+    mockRestTimerStore.isOvertime = false;
     mockAllWorkoutGroups.value = [
       {
         id: "g-0",
@@ -575,6 +583,35 @@ describe("HomeTab Stepper Highlights", () => {
     expect(initialCards[0].scrollTop).toBe(42);
     expect(initialCards[0].textContent).toContain("(1)");
     expect(initialStepButtons[0].querySelector("div")?.className).toContain("bg-emerald-500");
+
+    app.unmount();
+  });
+
+  it("renders sticky header rest indicator in emerald during rest and red during overtime", async () => {
+    mockRestTimerStore.isResting = true;
+    mockRestTimerStore.formattedTime = "1:15";
+    mockRestTimerStore.isOvertime = false;
+
+    const container = document.createElement("div");
+    const app = createApp(HomeTab);
+    app.mount(container);
+    await nextTick();
+
+    const emeraldRestTime = Array.from(container.querySelectorAll("span")).find((el) =>
+      el.textContent?.includes("1:15"),
+    );
+    expect(emeraldRestTime).toBeDefined();
+    expect(emeraldRestTime?.className).toContain("text-emerald-400");
+
+    mockRestTimerStore.formattedTime = "+0:15";
+    mockRestTimerStore.isOvertime = true;
+    await nextTick();
+
+    const overtimeRestTime = Array.from(container.querySelectorAll("span")).find((el) =>
+      el.textContent?.includes("+0:15"),
+    );
+    expect(overtimeRestTime).toBeDefined();
+    expect(overtimeRestTime?.className).toContain("text-red-400");
 
     app.unmount();
   });

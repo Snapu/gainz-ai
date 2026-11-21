@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ArrowLeftRight, Play, Plus, RotateCcw, SkipForward } from "@lucide/vue";
+import { ArrowLeftRight, Check, Hourglass, Play, Plus, RotateCcw, SkipForward } from "@lucide/vue";
+import { useWakeLock } from "@vueuse/core";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
+import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiRadialProgress from "@/shared/presentation/components/ui/UiRadialProgress.vue";
 
@@ -50,9 +52,28 @@ const parsedDurationSeconds = computed(() => {
 
 const timerRemaining = ref(0);
 const isTimerRunning = ref(false);
+const wakeLock = useWakeLock();
+let isUnmounted = false;
 let timerInterval: ReturnType<typeof setInterval> | null = null;
 let endTime = 0;
 let lastTickRemaining = 0;
+
+watch(isTimerRunning, (running) => {
+  if (running) {
+    void wakeLock
+      .request("screen")
+      .then(() => {
+        if (!isTimerRunning.value || isUnmounted) {
+          void wakeLock.release().catch(() => {});
+        }
+      })
+      .catch(() => {
+        // Silently degrade when Wake Lock is unsupported or denied (e.g. iOS Low Power Mode NotAllowedError)
+      });
+  } else {
+    void wakeLock.release().catch(() => {});
+  }
+});
 
 watch(
   parsedDurationSeconds,
@@ -132,7 +153,9 @@ function handleSkipRest() {
 }
 
 onBeforeUnmount(() => {
+  isUnmounted = true;
   if (timerInterval) clearInterval(timerInterval);
+  void wakeLock.release().catch(() => {});
 });
 
 const timerFormatted = computed(() => {
@@ -156,11 +179,57 @@ const exerciseActionLabel = computed(() => {
   return `${prefix} ${props.currentExercise.exerciseName}`;
 });
 
-const restProgressPercent = computed(() => {
+const restBarPercent = computed(() => {
+  if (props.isOvertime) return 100;
   if (!props.targetRestSeconds || props.targetRestSeconds <= 0) return 0;
-  if (props.isOvertime) return 0;
   const elapsed = props.restElapsed ?? 0;
-  return Math.min(100, Math.max(0, (elapsed / props.targetRestSeconds) * 100));
+  return Math.min(100, Math.max(0, 100 - (elapsed / props.targetRestSeconds) * 100));
+});
+
+const isHoldComplete = computed(() => {
+  return parsedDurationSeconds.value > 0 && timerRemaining.value === 0 && !isTimerRunning.value;
+});
+
+const isHoldDeckActive = computed(() => {
+  return (
+    !props.isResting &&
+    !props.isWorkoutComplete &&
+    !props.isRestDay &&
+    Boolean(props.currentExercise) &&
+    !props.currentProgress?.isCompleted &&
+    isDurationExercise.value
+  );
+});
+
+const deckContainerClasses = computed(() => {
+  if (props.isResting) {
+    return props.isOvertime
+      ? "border-red-500/20 bg-red-500/10"
+      : "border-emerald-500/20 bg-emerald-500/10";
+  }
+  if (isHoldDeckActive.value) {
+    if (isHoldComplete.value) return "border-emerald-500/20 bg-emerald-500/10";
+    if (isTimerRunning.value) return "border-primary/20 bg-primary/10";
+  }
+  return "border-input/50 bg-white/5";
+});
+
+const holdEyebrowLabel = computed(() => {
+  if (isHoldComplete.value) return "Hold Complete";
+  if (isTimerRunning.value) return "Holding";
+  return "Hold";
+});
+
+const holdEyebrowClass = computed(() => {
+  if (isHoldComplete.value) return "text-emerald-400";
+  if (isTimerRunning.value) return "text-primary";
+  return "text-muted-foreground";
+});
+
+const holdRingProgressClass = computed(() => {
+  if (isHoldComplete.value) return "text-emerald-400 stroke-emerald-400 ease-linear";
+  if (isTimerRunning.value) return "text-primary stroke-primary ease-linear";
+  return "text-primary stroke-primary opacity-0 ease-linear";
 });
 
 const emptyOrCompleteLabel = computed(() => {
@@ -209,32 +278,48 @@ const emptyOrCompleteLabel = computed(() => {
       <!-- Tier 2: Main Container (Visually matched to CoachTab Input Container) -->
       <div
         data-testid="deck-main-container"
-        class="flex items-center justify-between gap-3 w-full min-h-[52px] rounded-xl border border-input/50 bg-white/5 pl-4 pr-1.5 py-1.5 shadow-sm backdrop-blur-md transition-all duration-200"
+        class="relative overflow-hidden flex items-center justify-between gap-3 w-full min-h-[52px] rounded-xl border pl-4 pr-1.5 py-1.5 shadow-sm backdrop-blur-md transition-all duration-200"
+        :class="deckContainerClasses"
       >
+        <div
+          v-if="isResting && (isOvertime || (targetRestSeconds ?? 0) > 0)"
+          data-testid="deck-rest-progress"
+          class="pointer-events-none absolute top-0 left-0 right-0 h-0.5 bg-white/5"
+          aria-hidden="true"
+        >
+          <div
+            data-testid="deck-rest-progress-fill"
+            class="h-full transition-all duration-300 ease-linear"
+            :class="isOvertime ? 'bg-red-400 animate-pulse' : 'bg-emerald-400'"
+            :style="{ width: `${restBarPercent}%` }"
+          />
+        </div>
         
         <!-- State A: Resting (Fixed Left Title + Right Timer & Action Cluster) -->
         <template v-if="isResting">
-          <span class="text-sm font-bold text-foreground truncate min-w-0">
-            {{ isWorkoutComplete ? 'Workout Complete' : (currentExercise ? exerciseActionLabel : 'Rest Timer') }}
-          </span>
-
-          <!-- Right Cluster: Radial Countdown Ring + Skip Icon Button + Primary Action -->
-          <div class="flex items-center gap-2 shrink-0">
-            <UiRadialProgress
-              data-testid="deck-timer-ring"
-              :size="40"
-              :stroke-width="3.2"
-              :progress="100 - restProgressPercent"
-              track-class="text-white/10"
-              :progress-class="isOvertime ? 'text-destructive stroke-destructive ease-linear' : 'text-primary stroke-primary ease-linear'"
+          <div class="flex flex-col min-w-0">
+            <span
+              data-testid="deck-mode-eyebrow"
+              class="text-micro leading-tight"
+              :class="isOvertime ? 'text-red-400' : 'text-emerald-400'"
             >
-              <span
-                class="text-micro font-black tabular-nums tracking-tight"
-                :class="isOvertime ? 'text-destructive' : 'text-primary'"
-              >
-                {{ restFormattedTime }}
-              </span>
-            </UiRadialProgress>
+              {{ isOvertime ? "Rest Overtime" : "Rest" }}
+            </span>
+            <span class="text-sm font-bold text-foreground truncate min-w-0 leading-tight">
+              {{ isWorkoutComplete ? 'Workout Complete' : (currentExercise ? exerciseActionLabel : 'Rest Timer') }}
+            </span>
+          </div>
+
+          <!-- Right Cluster: Rest Pill + Skip Icon Button + Primary Action -->
+          <div class="flex items-center gap-2 shrink-0">
+            <UiBadge
+              data-testid="deck-rest-pill"
+              :variant="isOvertime ? 'danger' : 'success'"
+              class="h-8 gap-2 px-3 text-xs font-black tabular-nums tracking-tight normal-case"
+            >
+              <Hourglass class="w-3.5 h-3.5 shrink-0" :class="isOvertime ? 'animate-pulse' : ''" />
+              <span>{{ restFormattedTime }}</span>
+            </UiBadge>
 
             <UiButton
               v-if="!isWorkoutComplete"
@@ -302,21 +387,32 @@ const emptyOrCompleteLabel = computed(() => {
 
         <!-- State B: Timed Exercise (Fixed Left Title + Right Timer & Action Cluster) -->
         <template v-else-if="isDurationExercise">
-          <span class="text-sm font-bold text-foreground truncate min-w-0">
-            {{ exerciseActionLabel }}
-          </span>
+          <div class="flex flex-col min-w-0">
+            <span
+              data-testid="deck-mode-eyebrow"
+              class="text-micro leading-tight"
+              :class="holdEyebrowClass"
+            >
+              {{ holdEyebrowLabel }}
+            </span>
+            <span class="text-sm font-bold text-foreground truncate min-w-0 leading-tight">
+              {{ exerciseActionLabel }}
+            </span>
+          </div>
 
-          <!-- Right Cluster: Radial Countdown Ring + Play/Reset + Primary Action -->
+          <!-- Right Cluster: Filling Radial Ring + Play/Reset + Primary Action -->
           <div class="flex items-center gap-2 shrink-0">
             <UiRadialProgress
-              data-testid="deck-timer-ring"
+              data-testid="deck-hold-ring"
               :size="40"
               :stroke-width="3.2"
-              :progress="100 - timerProgressPercent"
+              :progress="timerProgressPercent"
               track-class="text-white/10"
-              :progress-class="isTimerRunning ? 'text-primary stroke-primary opacity-100 ease-linear' : 'text-primary stroke-primary opacity-40 ease-linear'"
+              :progress-class="holdRingProgressClass"
             >
+              <Check v-if="isHoldComplete" data-testid="deck-hold-complete-icon" class="w-4 h-4 text-emerald-400" />
               <span
+                v-else
                 class="text-micro font-black tabular-nums tracking-tight"
                 :class="isTimerRunning ? 'text-primary' : 'text-foreground'"
               >
@@ -325,7 +421,7 @@ const emptyOrCompleteLabel = computed(() => {
             </UiRadialProgress>
 
             <UiButton
-              variant="secondary"
+              :variant="isTimerActiveOrDirty ? 'secondary' : 'tonal'"
               size="icon"
               data-testid="deck-timer-toggle"
               :aria-label="isTimerActiveOrDirty ? 'Reset Timer' : 'Start Timer'"

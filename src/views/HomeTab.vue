@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CheckCircle2, Coffee, Sparkles, Timer } from "@lucide/vue";
+import { CheckCircle2, Coffee, Hourglass, Sparkles, Timer } from "@lucide/vue";
 import { useDebounceFn, useThrottleFn } from "@vueuse/core";
 import { computed, nextTick, onActivated, onMounted, onUnmounted, ref, watch } from "vue";
 import {
@@ -287,13 +287,13 @@ onActivated(() => {
                 </div>
                 <div class="flex items-center gap-2">
                   <template v-if="restTimerStore.isResting">
-                    <Timer
-                      class="w-4 h-4 animate-pulse"
-                      :class="restTimerStore.isOvertime ? 'text-destructive' : 'text-primary'"
+                    <Hourglass
+                      class="w-3.5 h-3.5"
+                      :class="restTimerStore.isOvertime ? 'text-red-400 animate-pulse' : 'text-emerald-400'"
                     />
                     <span
                       class="text-sm font-bold tabular-nums"
-                      :class="restTimerStore.isOvertime ? 'text-destructive' : 'text-primary'"
+                      :class="restTimerStore.isOvertime ? 'text-red-400' : 'text-emerald-400'"
                     >
                       {{ restTimerStore.formattedTime }}
                     </span>
