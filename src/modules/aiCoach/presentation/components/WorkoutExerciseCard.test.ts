@@ -190,6 +190,53 @@ describe("WorkoutExerciseCard", () => {
 
     expect(container.textContent).toContain("Incline DB Press");
     expect(container.textContent).toContain("Superset");
+
+    const badgeEl = Array.from(container.querySelectorAll("div")).find(
+      (el) => el.textContent?.trim() === "Superset",
+    );
+    expect(badgeEl?.className).toContain("text-primary");
+    app.unmount();
+  });
+
+  it("formats logged fractional duration as m:ss with lowercase unit without uppercase class", async () => {
+    const Host = defineComponent({
+      setup() {
+        return () =>
+          h(WorkoutExerciseCard, {
+            exercise: {
+              exerciseName: "Plank",
+              targetSets: 3,
+              targetDurationSeconds: 60,
+            },
+            isHighlighted: true,
+            loggedSets: [
+              {
+                id: "set-duration-1",
+                exerciseName: "Plank",
+                loggedAt: new Date(),
+                duration: 1.08,
+              },
+            ],
+          });
+      },
+    });
+
+    const container = document.createElement("div");
+    const app = createApp(Host);
+    app.mount(container);
+    await nextTick();
+
+    expect(container.textContent).toContain("1:05");
+    expect(container.textContent).toContain("min");
+
+    const unitSpans = Array.from(container.querySelectorAll("span")).filter(
+      (el) => el.textContent?.trim() === "min",
+    );
+    expect(unitSpans.length).toBeGreaterThan(0);
+    for (const span of unitSpans) {
+      expect(span.className).not.toContain("uppercase");
+    }
+
     app.unmount();
   });
 });

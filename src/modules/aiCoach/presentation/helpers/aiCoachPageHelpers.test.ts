@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatDurationMinutes,
+  formatDurationSeconds,
   getValidSupersetId,
   groupWorkout,
   isDuration,
@@ -319,6 +321,39 @@ describe("splitReps", () => {
 
   it("handles freeform text", () => {
     expect(splitReps("to failure")).toEqual({ value: "to failure", unit: "" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatDurationSeconds & formatDurationMinutes
+// ---------------------------------------------------------------------------
+describe("formatDurationSeconds", () => {
+  it("formats zero, negative, non-finite, and sub-minute seconds", () => {
+    expect(formatDurationSeconds(0)).toEqual({ value: "0", unit: "s" });
+    expect(formatDurationSeconds(-10)).toEqual({ value: "0", unit: "s" });
+    expect(formatDurationSeconds(Number.NaN)).toEqual({ value: "0", unit: "s" });
+    expect(formatDurationSeconds(Number.POSITIVE_INFINITY)).toEqual({ value: "0", unit: "s" });
+    expect(formatDurationSeconds(45)).toEqual({ value: "45", unit: "s" });
+  });
+
+  it("formats exact minute multiples without seconds", () => {
+    expect(formatDurationSeconds(60)).toEqual({ value: "1", unit: "min" });
+    expect(formatDurationSeconds(120)).toEqual({ value: "2", unit: "min" });
+  });
+
+  it("formats non-integer minute durations as m:ss min", () => {
+    expect(formatDurationSeconds(65)).toEqual({ value: "1:05", unit: "min" });
+    expect(formatDurationSeconds(90)).toEqual({ value: "1:30", unit: "min" });
+  });
+});
+
+describe("formatDurationMinutes", () => {
+  it("formats fractional and whole minutes consistently", () => {
+    expect(formatDurationMinutes(0.75)).toEqual({ value: "45", unit: "s" });
+    expect(formatDurationMinutes(1)).toEqual({ value: "1", unit: "min" });
+    expect(formatDurationMinutes(1.08)).toEqual({ value: "1:05", unit: "min" });
+    expect(formatDurationMinutes(1.5)).toEqual({ value: "1:30", unit: "min" });
+    expect(formatDurationMinutes(2)).toEqual({ value: "2", unit: "min" });
   });
 });
 

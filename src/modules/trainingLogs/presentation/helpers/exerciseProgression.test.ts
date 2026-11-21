@@ -25,21 +25,21 @@ describe("exerciseProgression helper", () => {
           exerciseName: "Bench Press",
           weight: 80,
           reps: 8,
-          loggedAt: new Date("2026-10-20T10:00:00Z"),
+          loggedAt: new Date(2026, 9, 20, 10, 0),
         },
         {
           id: "2",
           exerciseName: "Bench Press",
           weight: 82.5,
           reps: 7,
-          loggedAt: new Date("2026-10-20T10:05:00Z"),
+          loggedAt: new Date(2026, 9, 20, 10, 5),
         },
         {
           id: "3",
           exerciseName: "Bench Press",
           weight: 85,
           reps: 6,
-          loggedAt: new Date("2026-10-22T10:00:00Z"),
+          loggedAt: new Date(2026, 9, 22, 10, 0),
         },
       ];
 
@@ -50,8 +50,8 @@ describe("exerciseProgression helper", () => {
         { weight: 82.5, reps: 7, duration: undefined },
       ]);
       expect(sessions[1].sets).toEqual([{ weight: 85, reps: 6, duration: undefined }]);
-      expect(sessions[0].dateLabel).toBeTruthy();
-      expect(sessions[1].dateLabel).toBeTruthy();
+      expect(sessions[0].dateLabel).toBe("Oct 20");
+      expect(sessions[1].dateLabel).toBe("Oct 22");
     });
 
     it("limits sessions to maxSessions", () => {

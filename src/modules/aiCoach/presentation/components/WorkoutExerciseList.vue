@@ -2,6 +2,7 @@
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import {
   type DisplayExercise,
+  formatDurationSeconds,
   getValidSupersetId,
   isSupersetStart,
   supersetConnectorClass,
@@ -15,6 +16,16 @@ defineProps<{
   exercises: WorkoutExerciseListItem[];
   showRest?: boolean;
 }>();
+
+function formatPrescription(ex: WorkoutExerciseListItem): string {
+  if (ex.targetDistanceMeters != null) return `${ex.targetSets} × ${ex.targetDistanceMeters} m`;
+  if (ex.targetDurationSeconds != null) {
+    const d = formatDurationSeconds(ex.targetDurationSeconds);
+    return `${ex.targetSets} × ${d.value} ${d.unit}`;
+  }
+  if (ex.targetReps) return `${ex.targetSets} × ${ex.targetReps}`;
+  return `${ex.targetSets} sets`;
+}
 </script>
 
 <template>
@@ -22,7 +33,7 @@ defineProps<{
     <div
       v-for="(ex, exIdx) in exercises"
       :key="`${ex.exerciseName}-${exIdx}`"
-      class="flex items-center justify-between gap-2 text-xs py-2 relative min-w-0"
+      class="flex items-center justify-between gap-2 py-2.5 relative min-w-0"
     >
       <!-- Superset Indicator Line -->
       <div
@@ -32,37 +43,29 @@ defineProps<{
       />
 
       <!-- Exercise Name + Optional Superset Badge -->
-      <div class="flex items-center gap-1.5 min-w-0 flex-1 pr-2">
-        <span class="font-semibold text-foreground/90 truncate">
+      <div class="flex items-center gap-2 min-w-0 flex-1 pr-2">
+        <span class="text-sm font-semibold text-foreground/90 truncate">
           {{ ex.exerciseName }}
         </span>
         <UiBadge
           v-if="isSupersetStart(exIdx, exercises)"
           variant="info"
-          class="text-micro px-1.5 py-0 uppercase tracking-wider shrink-0"
+          class="px-1.5 py-0"
         >
           Superset
         </UiBadge>
       </div>
 
       <!-- Sets × Reps / Duration / Distance + Optional Weight & Rest -->
-      <div class="flex items-center gap-1.5 shrink-0 tabular-nums text-xs ml-2">
-        <span class="font-bold text-foreground/80">
-          {{
-            ex.targetReps
-              ? `${ex.targetSets} × ${ex.targetReps}`
-              : ex.targetDurationSeconds
-                ? `${ex.targetSets} × ${ex.targetDurationSeconds}s`
-                : ex.targetDistanceMeters
-                  ? `${ex.targetSets} × ${ex.targetDistanceMeters}m`
-                  : `${ex.targetSets} Sets`
-          }}
+      <div class="flex items-center gap-2 shrink-0 tabular-nums text-xs ml-2">
+        <span class="font-bold text-foreground/85">
+          {{ formatPrescription(ex) }}
         </span>
         <span v-if="ex.targetWeight" class="font-bold text-primary">
           {{ ex.targetWeight }}
         </span>
-        <span v-if="showRest && ex.restSeconds" class="text-muted-foreground/60 text-xs">
-          · {{ ex.restSeconds }}s
+        <span v-if="showRest && ex.restSeconds" class="font-semibold text-muted-foreground/60">
+          · {{ ex.restSeconds }} s
         </span>
       </div>
     </div>

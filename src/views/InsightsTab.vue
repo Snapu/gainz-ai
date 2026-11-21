@@ -93,18 +93,18 @@ const isAllExercisesOpen = ref(false);
             </UiBadge>
           </div>
 
-          <!-- 3-Tile Telemetry Dashboard (matching Target Today pattern) -->
+          <!-- 3-Tile Telemetry Dashboard (keeping separate tiles for distinct KPIs) -->
           <div class="grid grid-cols-3 gap-2 sm:gap-3 w-full">
             <!-- Tile 1: Fatigue & ACWR -->
             <div class="flex flex-col justify-between p-2.5 sm:p-3 rounded-xl bg-white/5 border border-white/5 min-w-0">
-              <span class="text-micro font-bold text-muted-foreground/70 uppercase tracking-wider truncate">
+              <span class="text-micro text-muted-foreground/60 truncate">
                 Fatigue Risk
               </span>
               <div class="flex flex-col mt-1.5 min-w-0">
                 <span class="text-lg font-black tabular-nums tracking-tight truncate leading-tight" :class="fatigueRiskToneClass">
                   {{ fatigueRiskLabel }} <span class="text-xs font-bold text-muted-foreground/50">({{ fatigueRiskPercent }}%)</span>
                 </span>
-                <span class="text-[10px] font-bold text-muted-foreground/60 mt-0.5 truncate">
+                <span class="text-xs font-semibold tabular-nums text-muted-foreground/60 mt-0.5 truncate">
                   {{ insights.acwr !== null ? `ACWR ${acwrValueLabel} · ${acwrZone.label}` : 'No baseline' }}
                 </span>
               </div>
@@ -112,14 +112,14 @@ const isAllExercisesOpen = ref(false);
 
             <!-- Tile 2: Weekly Sets -->
             <div class="flex flex-col justify-between p-2.5 sm:p-3 rounded-xl bg-white/5 border border-white/5 min-w-0">
-              <span class="text-micro font-bold text-muted-foreground/70 uppercase tracking-wider truncate">
+              <span class="text-micro text-muted-foreground/60 truncate">
                 Sets / Wk
               </span>
               <div class="flex flex-col mt-1.5 min-w-0">
                 <span class="text-lg font-black tabular-nums tracking-tight text-foreground truncate leading-tight">
                   {{ Math.round(insights.fatigue.loadWindow.sets.current) }}
                 </span>
-                <span class="text-[10px] font-bold mt-0.5 flex items-center gap-0.5 truncate" :class="setsDeltaPct === null ? 'text-muted-foreground/60' : setsDeltaPct >= 30 ? 'text-orange-400' : setsDeltaPct <= -20 ? 'text-muted-foreground/50' : 'text-emerald-400'">
+                <span class="text-xs font-semibold tabular-nums mt-0.5 flex items-center gap-0.5 truncate" :class="setsDeltaPct === null ? 'text-muted-foreground/60' : setsDeltaPct >= 30 ? 'text-orange-400' : setsDeltaPct <= -20 ? 'text-muted-foreground/50' : 'text-emerald-400'">
                   <TrendingUp v-if="setsDeltaPct !== null && setsDeltaPct > 0" class="w-3 h-3 shrink-0" />
                   <TrendingDown v-else-if="setsDeltaPct !== null && setsDeltaPct < 0" class="w-3 h-3 shrink-0" />
                   {{ setsDeltaPct === null ? "-" : `${Math.abs(setsDeltaPct)}%` }}
@@ -129,7 +129,7 @@ const isAllExercisesOpen = ref(false);
 
             <!-- Tile 3: Weekly Tonnage -->
             <div class="flex flex-col justify-between p-2.5 sm:p-3 rounded-xl bg-white/5 border border-white/5 min-w-0">
-              <span class="text-micro font-bold text-muted-foreground/70 uppercase tracking-wider truncate">
+              <span class="text-micro text-muted-foreground/60 truncate">
                 Tonnage
               </span>
               <div class="flex flex-col mt-1.5 min-w-0">
@@ -137,9 +137,9 @@ const isAllExercisesOpen = ref(false);
                   <span class="text-lg font-black tabular-nums tracking-tight text-foreground truncate">
                     {{ Math.round(insights.fatigue.loadWindow.tonnage.current) }}
                   </span>
-                  <span class="text-[10px] font-bold text-muted-foreground/60 ml-0.5 shrink-0">kg</span>
+                  <span class="text-xs font-semibold text-muted-foreground/70 ml-1 shrink-0">kg</span>
                 </div>
-                <span class="text-[10px] font-bold mt-0.5 flex items-center gap-0.5 truncate" :class="tonnageDeltaPct === null ? 'text-muted-foreground/60' : tonnageDeltaPct >= 30 ? 'text-orange-400' : tonnageDeltaPct <= -20 ? 'text-muted-foreground/50' : 'text-emerald-400'">
+                <span class="text-xs font-semibold tabular-nums mt-0.5 flex items-center gap-0.5 truncate" :class="tonnageDeltaPct === null ? 'text-muted-foreground/60' : tonnageDeltaPct >= 30 ? 'text-orange-400' : tonnageDeltaPct <= -20 ? 'text-muted-foreground/50' : 'text-emerald-400'">
                   <TrendingUp v-if="tonnageDeltaPct !== null && tonnageDeltaPct > 0" class="w-3 h-3 shrink-0" />
                   <TrendingDown v-else-if="tonnageDeltaPct !== null && tonnageDeltaPct < 0" class="w-3 h-3 shrink-0" />
                   {{ tonnageDeltaPct === null ? "-" : `${Math.abs(tonnageDeltaPct)}%` }}
@@ -150,13 +150,13 @@ const isAllExercisesOpen = ref(false);
 
           <!-- 4-Week Load Sparkline Trend -->
           <div class="flex flex-col w-full pt-1">
-            <div class="flex items-center justify-between text-[10px] font-bold text-muted-foreground/60 uppercase tracking-wider mb-2">
+            <div class="flex items-center justify-between text-micro text-muted-foreground/60 mb-2">
               <div class="flex items-center gap-3">
-                <div class="flex items-center gap-1.5">
+                <div class="flex items-center gap-2">
                   <div class="w-1.5 h-1.5 rounded-full bg-primary"></div>
                   <span>Sets Trend</span>
                 </div>
-                <div class="flex items-center gap-1.5">
+                <div class="flex items-center gap-2">
                   <div class="w-1.5 h-1.5 rounded-full bg-white/40"></div>
                   <span>Tonnage Trend</span>
                 </div>
@@ -189,7 +189,7 @@ const isAllExercisesOpen = ref(false);
 
             <div class="flex items-center justify-between w-full mt-2 px-1">
               <span v-for="(row, i) in fatigueWeekRows" :key="row.key" 
-                    class="text-[10px] font-bold text-muted-foreground/50 truncate flex-1"
+                    class="text-micro text-muted-foreground/50 truncate flex-1"
                     :class="i === 0 ? 'text-left' : i === fatigueWeekRows.length - 1 ? 'text-right' : 'text-center'">
                 {{ row.label.replace('Week ', 'W') }}
               </span>
@@ -218,7 +218,7 @@ const isAllExercisesOpen = ref(false);
       <!-- ── Section: Exercise Highlights ── -->
       <section>
         <UiCard class="p-4 overflow-visible">
-          <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center justify-between mb-3">
             <div>
               <h3 class="text-sm font-bold text-foreground">Moving the Needle</h3>
               <p class="text-xs text-muted-foreground mt-0.5 line-clamp-1">Top progress & plateaus</p>
@@ -229,15 +229,15 @@ const isAllExercisesOpen = ref(false);
           </div>
 
           <!-- Highlight Lists -->
-          <div class="flex flex-col gap-5">
-            <div v-if="topImprovingExercises.length > 0">
-              <h4 class="text-micro font-bold text-muted-foreground/70 uppercase tracking-wider mb-1 px-1">Top Progress</h4>
+          <div class="flex flex-col gap-4">
+            <div v-if="topImprovingExercises.length > 0" class="flex flex-col gap-2">
+              <h4 class="text-micro text-muted-foreground tracking-widest px-1">Top Progress</h4>
               <div class="flex flex-col divide-y divide-white/5">
-                <div v-for="metric in topImprovingExercises" :key="metric.name" class="flex items-center justify-between py-2 px-1 hover:bg-white/5 transition-colors">
+                <div v-for="metric in topImprovingExercises" :key="metric.name" class="flex items-center justify-between py-2.5 px-1 hover:bg-white/5 transition-colors">
                   <div class="flex flex-col min-w-0 mr-3">
                     <p class="text-sm font-semibold text-foreground/90 truncate">{{ metric.name }}</p>
-                    <div class="flex items-center gap-1.5 mt-0.5">
-                      <span class="text-micro text-muted-foreground/60 uppercase">Est. {{ metric.unit === 'reps' ? 'Max' : '1RM' }}:</span>
+                    <div class="flex items-center gap-2 mt-0.5">
+                      <span class="text-micro text-muted-foreground/60">{{ metric.unit === 'reps' ? 'eMax' : 'e1RM' }}</span>
                       <span class="text-xs font-bold text-foreground tabular-nums">{{ metric.unit === 'reps' ? Math.round(metric.e1rm) : metric.e1rm.toFixed(1) }}</span>
                     </div>
                   </div>
@@ -249,14 +249,14 @@ const isAllExercisesOpen = ref(false);
               </div>
             </div>
 
-            <div v-if="attentionRequiredExercises.length > 0">
-              <h4 class="text-micro font-bold text-muted-foreground/70 uppercase tracking-wider mb-1 px-1">Needs Attention</h4>
+            <div v-if="attentionRequiredExercises.length > 0" class="flex flex-col gap-2">
+              <h4 class="text-micro text-muted-foreground tracking-widest px-1">Needs Attention</h4>
               <div class="flex flex-col divide-y divide-white/5">
-                <div v-for="metric in attentionRequiredExercises" :key="metric.name" class="flex items-center justify-between py-2 px-1 hover:bg-white/5 transition-colors">
+                <div v-for="metric in attentionRequiredExercises" :key="metric.name" class="flex items-center justify-between py-2.5 px-1 hover:bg-white/5 transition-colors">
                   <div class="flex flex-col min-w-0 mr-3">
                     <p class="text-sm font-semibold text-foreground/90 truncate">{{ metric.name }}</p>
-                    <div class="flex items-center gap-1.5 mt-0.5">
-                      <span class="text-micro text-muted-foreground/60 uppercase">Est. {{ metric.unit === 'reps' ? 'Max' : '1RM' }}:</span>
+                    <div class="flex items-center gap-2 mt-0.5">
+                      <span class="text-micro text-muted-foreground/60">{{ metric.unit === 'reps' ? 'eMax' : 'e1RM' }}</span>
                       <span class="text-xs font-bold text-foreground tabular-nums">{{ metric.unit === 'reps' ? Math.round(metric.e1rm) : metric.e1rm.toFixed(1) }}</span>
                     </div>
                   </div>
@@ -290,7 +290,7 @@ const isAllExercisesOpen = ref(false);
           <template v-for="(metric, index) in allExerciseMetrics" :key="metric.name">
             <div 
               v-if="metric.isStale && (index === 0 || !allExerciseMetrics[index - 1].isStale)"
-              class="px-6 py-2 bg-white/5 border-y border-white/5 text-[10px] font-semibold text-foreground/40 tracking-widest uppercase sticky top-0 z-10 backdrop-blur-md"
+              class="px-6 py-2 bg-white/5 border-y border-white/5 text-micro text-muted-foreground/60 tracking-widest sticky top-0 z-10 backdrop-blur-md"
             >
               Inactive (> 4 Weeks)
             </div>
@@ -312,7 +312,7 @@ const isAllExercisesOpen = ref(false);
                       }"
                     ></div>
                   </div>
-                  <div class="mt-1 flex items-center gap-1.5 text-[10px] text-foreground/50 truncate">
+                  <div class="mt-1 flex items-center gap-2 text-xs font-medium text-foreground/50 truncate">
                     <span class="truncate max-w-[140px] sm:max-w-[200px]">
                       {{ metric.learnedMuscleGroups.length > 0 ? metric.learnedMuscleGroups.join(', ') : 'No muscle tags' }}
                     </span>
@@ -323,10 +323,10 @@ const isAllExercisesOpen = ref(false);
 
                 <div class="shrink-0 flex items-center gap-3">
                   <div class="text-right flex flex-col items-end">
-                    <p class="text-[10px] uppercase tracking-wide text-foreground/45 mb-0.5">
+                    <p class="text-micro text-muted-foreground/60 mb-0.5">
                       {{ metric.unit === 'reps' ? 'eMax' : 'e1RM' }}
                     </p>
-                    <p class="text-sm font-bold text-foreground/90 leading-none">
+                    <p class="text-sm font-bold tabular-nums text-foreground leading-none">
                       {{ metric.unit === 'reps' ? Math.round(metric.e1rm) : metric.e1rm.toFixed(1) }}
                     </p>
                   </div>

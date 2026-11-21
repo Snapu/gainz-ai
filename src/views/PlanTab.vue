@@ -61,10 +61,10 @@ const {
               <div class="p-4">
                 <div class="flex items-start justify-between gap-3 mb-1">
                   <div class="flex items-center gap-2 flex-wrap min-w-0">
-                    <h4 class="font-bold text-sm text-foreground">{{ session.sessionLabel }}</h4>
+                    <h4 class="text-base font-bold tracking-tight text-foreground">{{ session.sessionLabel }}</h4>
                     <span
                       v-if="shouldShowWeekBadge(session.sessionLabel)"
-                      class="text-[10px] font-bold text-muted-foreground uppercase tracking-wider shrink-0"
+                      class="text-micro text-muted-foreground/60 shrink-0"
                     >
                       Week {{ session.weekNumber }}
                     </span>
@@ -77,7 +77,7 @@ const {
                     Up Next
                   </UiBadge>
                 </div>
-                <p v-if="session.focusDescription" class="text-xs text-muted-foreground mb-3 pb-3 border-b border-white/5">
+                <p v-if="session.focusDescription" class="text-xs font-medium text-muted-foreground mt-0.5 mb-3 pb-3 border-b border-white/5">
                   {{ session.focusDescription }}
                 </p>
                 

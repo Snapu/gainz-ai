@@ -64,7 +64,7 @@ const formattedXP = computed(() => {
             progress-class="text-primary"
           >
             <div class="flex flex-col items-center justify-center">
-              <span class="text-[9px] font-bold text-white/70 uppercase leading-none mb-0.5">Lvl</span>
+              <span class="text-micro text-white/70 leading-none mb-0.5">Lvl</span>
               <span class="text-xs font-black text-white leading-none">{{ progress?.level ?? 1 }}</span>
             </div>
           </UiRadialProgress>
@@ -75,29 +75,29 @@ const formattedXP = computed(() => {
       <div class="flex-1 flex flex-col justify-between p-3.5 sm:p-4">
         
         <div class="flex flex-col gap-0.5 text-left min-w-0">
-          <span class="text-[10px] font-bold tracking-widest text-muted-foreground/60 uppercase">Rank</span>
-          <h2 class="text-base sm:text-lg font-black tracking-tight text-foreground leading-snug break-words">
+          <span class="text-micro text-muted-foreground/60 truncate">Rank</span>
+          <h2 class="text-lg font-black tracking-tight text-foreground leading-snug break-words">
             {{ progress?.title ?? 'Novice' }}
           </h2>
         </div>
 
         <!-- Lifetime Telemetry (2x2 Grid) -->
-        <div class="grid grid-cols-2 gap-x-3 gap-y-1.5 text-left pt-2 border-t border-white/5">
+        <div class="grid grid-cols-2 gap-x-3 gap-y-2 text-left pt-2 border-t border-white/5">
           <div class="flex flex-col min-w-0">
-            <span class="text-[10px] font-bold tracking-widest text-muted-foreground/60 uppercase truncate">Tonnage</span>
-            <span class="text-xs font-bold text-foreground tabular-nums truncate">{{ formattedTonnage }}</span>
+            <span class="text-micro text-muted-foreground/60 truncate">Tonnage</span>
+            <span class="text-sm font-bold text-foreground tabular-nums truncate">{{ formattedTonnage }}</span>
           </div>
           <div class="flex flex-col min-w-0">
-            <span class="text-[10px] font-bold tracking-widest text-muted-foreground/60 uppercase truncate">Active</span>
-            <span class="text-xs font-bold text-foreground tabular-nums truncate">{{ formattedJourney }}</span>
+            <span class="text-micro text-muted-foreground/60 truncate">Active</span>
+            <span class="text-sm font-bold text-foreground tabular-nums truncate">{{ formattedJourney }}</span>
           </div>
           <div class="flex flex-col min-w-0">
-            <span class="text-[10px] font-bold tracking-widest text-muted-foreground/60 uppercase truncate">Workouts</span>
-            <span class="text-xs font-bold text-foreground tabular-nums truncate">{{ progress?.totalWorkoutDays ?? 0 }}</span>
+            <span class="text-micro text-muted-foreground/60 truncate">Workouts</span>
+            <span class="text-sm font-bold text-foreground tabular-nums truncate">{{ progress?.totalWorkoutDays ?? 0 }}</span>
           </div>
           <div class="flex flex-col min-w-0">
-            <span class="text-[10px] font-bold tracking-widest text-muted-foreground/60 uppercase truncate">Total XP</span>
-            <span class="text-xs font-bold text-foreground tabular-nums truncate">{{ formattedXP }}</span>
+            <span class="text-micro text-muted-foreground/60 truncate">Total XP</span>
+            <span class="text-sm font-bold text-foreground tabular-nums truncate">{{ formattedXP }}</span>
           </div>
         </div>
 

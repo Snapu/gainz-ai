@@ -89,4 +89,40 @@ describe("UiProgressionLine", () => {
 
     app.unmount();
   });
+
+  it("formats duration values as m:ss or seconds and gives 28px left margin to avoid edge clipping", async () => {
+    const sessions = [
+      {
+        key: "s-1",
+        dateLabel: "Oct 20",
+        sets: [{ duration: 1 }, { duration: 1.08 }],
+      },
+      {
+        key: "s-2",
+        dateLabel: "Oct 28",
+        sets: [{ duration: 0.75 }],
+      },
+    ];
+
+    const Host = defineComponent({
+      setup() {
+        return () => h(UiProgressionLine, { sessions });
+      },
+    });
+
+    const container = document.createElement("div");
+    const app = createApp(Host);
+    app.mount(container);
+    await nextTick();
+
+    expect(container.textContent).toContain("1:00");
+    expect(container.textContent).toContain("1:05");
+    expect(container.textContent).toContain("45s");
+    expect(container.textContent).not.toContain("1.08");
+
+    const firstCircle = container.querySelector("circle.fill-primary");
+    expect(firstCircle?.getAttribute("cx")).toBe("28");
+
+    app.unmount();
+  });
 });

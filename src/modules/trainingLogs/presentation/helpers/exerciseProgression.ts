@@ -17,7 +17,7 @@ export function buildExerciseProgression(
   const sortedLogs = [...logs].sort(
     (a, b) => toDate(a.loggedAt).getTime() - toDate(b.loggedAt).getTime(),
   );
-  const formatter = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" });
+  const formatter = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
   const sessionsMap = new Map<string, { date: Date; sets: ProgressionSetItem[] }>();
 
   for (const log of sortedLogs) {

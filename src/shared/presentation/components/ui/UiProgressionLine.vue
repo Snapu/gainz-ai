@@ -83,6 +83,15 @@ const isDurationBased = computed(() => {
   );
 });
 
+function formatPointLabel(val: number): string {
+  if (!isDurationBased.value) return String(val);
+  const totalSec = Math.max(0, Math.round(val * 60));
+  if (totalSec < 60) return `${totalSec}s`;
+  const mins = Math.floor(totalSec / 60);
+  const secs = String(totalSec % 60).padStart(2, "0");
+  return `${mins}:${secs}`;
+}
+
 function getPrimaryValue(set: ProgressionSetItem): number {
   if (isWeightBased.value) return set.weight ?? 0;
   if (isDurationBased.value) return set.duration ?? 0;
@@ -115,9 +124,9 @@ const range = computed(() => {
 });
 
 // SVG dimensions & coordinates
-const SVG_HEIGHT = 120;
-const PADDING_TOP = 22;
-const PADDING_BOTTOM = 38;
+const SVG_HEIGHT = 112;
+const PADDING_TOP = 20;
+const PADDING_BOTTOM = 32;
 const GRAPH_HEIGHT = SVG_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
 const BASELINE_Y = PADDING_TOP + GRAPH_HEIGHT;
 
@@ -129,9 +138,9 @@ function getY(val: number): number {
 }
 
 const SET_GAP = 34;
-const SESSION_GAP = 40;
-const MARGIN_LEFT = 20;
-const MARGIN_RIGHT = 20;
+const SESSION_GAP = 48;
+const MARGIN_LEFT = 28;
+const MARGIN_RIGHT = 28;
 
 interface RenderedPoint {
   x: number;
@@ -299,7 +308,7 @@ const layout = computed(() => {
             text-anchor="middle"
             class="text-[10px] font-bold tabular-nums fill-foreground"
           >
-            {{ p.val }}
+            {{ formatPointLabel(p.val) }}
           </text>
 
           <!-- Rep count under point (when weight-based) -->
@@ -308,7 +317,7 @@ const layout = computed(() => {
             :x="p.x"
             :y="p.y + 14"
             text-anchor="middle"
-            class="text-[9px] font-semibold tabular-nums fill-muted-foreground/80"
+            class="text-[10px] font-semibold tabular-nums fill-muted-foreground/80"
           >
             {{ p.set.reps }}
           </text>
@@ -317,9 +326,9 @@ const layout = computed(() => {
         <!-- Session Date Label -->
         <text
           :x="session.centerX"
-          :y="SVG_HEIGHT - 8"
+          :y="SVG_HEIGHT - 6"
           text-anchor="middle"
-          class="text-[9px] font-bold fill-muted-foreground/50 tracking-wider uppercase"
+          class="text-[10px] font-bold fill-muted-foreground/70 tracking-wider uppercase"
         >
           {{ session.dateLabel }}
         </text>

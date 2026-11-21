@@ -87,7 +87,7 @@ void scrollContainerRef;
             <span class="text-xs font-medium text-muted-foreground/60 tabular-nums">{{ message.formattedTime }}</span>
             <span class="text-xs font-bold text-muted-foreground">You</span>
           </div>
-          <div class="p-3 rounded-xl rounded-tr-none bg-primary/10 border border-primary/20 text-foreground text-sm font-semibold leading-relaxed shadow-sm whitespace-pre-wrap break-words">
+          <div class="p-3 rounded-xl rounded-tr-none bg-primary/10 border border-primary/20 text-foreground text-sm font-medium leading-relaxed shadow-sm whitespace-pre-wrap break-words">
             {{ message.content }}
           </div>
         </div>
@@ -106,14 +106,14 @@ void scrollContainerRef;
           <!-- Recommended Workout Card (Standalone Level 1 Card) -->
           <UiCard
             v-if="message.recommendedWorkout?.length"
-            class="p-4 flex flex-col gap-2.5 shadow-sm"
+            class="p-4 flex flex-col gap-3 shadow-sm"
           >
             <div class="flex items-center justify-between pb-2 border-b border-white/5">
-              <div class="flex items-center gap-1.5">
+              <div class="flex items-center gap-2">
                 <Dumbbell class="w-3.5 h-3.5 text-primary" />
-                <span class="text-xs font-bold text-foreground">Prescribed Workout</span>
+                <span class="text-sm font-bold text-foreground">Prescribed Workout</span>
               </div>
-              <UiBadge variant="surface" class="uppercase tracking-wider text-[10px] px-1.5 py-0">
+              <UiBadge variant="surface">
                 {{ message.recommendedWorkout.length }} Exercises
               </UiBadge>
             </div>
@@ -174,7 +174,7 @@ void scrollContainerRef;
               :id="'scratchpad-' + message.id"
               class="p-3.5 rounded-xl bg-white/5 border border-white/5 text-xs font-medium text-foreground/80 leading-relaxed animate-in fade-in duration-200"
             >
-              <div class="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/50 mb-1">Reasoning & Scratchpad</div>
+              <div class="text-micro text-muted-foreground/60 mb-1">Reasoning & Scratchpad</div>
               <p class="whitespace-pre-wrap">{{ message.scratchpad }}</p>
             </div>
 
@@ -185,7 +185,7 @@ void scrollContainerRef;
               class="p-3.5 rounded-xl bg-muted/20 border border-white/5 text-xs font-mono text-muted-foreground/80 leading-relaxed animate-in fade-in duration-200 flex flex-col gap-2"
             >
               <div class="flex items-center justify-between">
-                <span class="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/50">Sent Prompt Payload</span>
+                <span class="text-micro text-muted-foreground/60">Sent Prompt Payload</span>
                 <button
                   type="button"
                   @click="copyPayload(message.requestPayload)"

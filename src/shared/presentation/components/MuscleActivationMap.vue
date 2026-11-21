@@ -402,8 +402,8 @@ useSwipe(mapContainerRef, {
               </div>
 
               <div class="flex items-center gap-1 mt-[2px]" :style="{ color: getLineColor(muscle.status?.landmark) }">
-                <span class="text-xs sm:text-sm font-mono font-bold whitespace-nowrap opacity-90">
-                  {{ muscle.status?.isoWeekSets != null ? muscle.status.isoWeekSets.toFixed(0) : '0' }} <span class="opacity-50 font-sans text-[10px] sm:text-xs font-medium tracking-wide">SETS/WK</span>
+                <span class="text-xs sm:text-sm tabular-nums font-bold whitespace-nowrap opacity-90">
+                  {{ muscle.status?.isoWeekSets != null ? muscle.status.isoWeekSets.toFixed(0) : '0' }}<span class="text-xs font-semibold opacity-60 ml-1">sets/wk</span>
                 </span>
                 <TrendingUp v-if="muscle.status?.volumeTrend === 'up'" class="w-3.5 h-3.5 opacity-80" />
                 <TrendingDown v-else-if="muscle.status?.volumeTrend === 'down'" class="w-3.5 h-3.5 opacity-80" />
@@ -441,11 +441,11 @@ useSwipe(mapContainerRef, {
           <!-- Volume Section -->
           <div class="px-6 py-5 border-b border-white/5 space-y-3">
             <div class="flex items-center justify-between mb-1">
-              <div class="flex items-center gap-1.5 text-sm font-bold text-foreground/80">
+              <div class="flex items-center gap-2 text-sm font-bold text-foreground">
                 <BarChart2 class="w-4 h-4 text-muted-foreground/70" />
                 <span>Volume</span>
               </div>
-              <span class="text-xs font-bold font-mono" :style="{ color: getLineColor(selectedDetail.landmark) }">
+              <span class="text-xs font-bold tabular-nums" :style="{ color: getLineColor(selectedDetail.landmark) }">
                 {{ selectedDetail.isoWeekSets.toFixed(0) }} sets/wk
               </span>
             </div>
@@ -484,7 +484,7 @@ useSwipe(mapContainerRef, {
             </div>
 
             <!-- Bar axis labels -->
-            <div class="relative h-3.5 text-xs font-mono select-none mt-2">
+            <div class="relative h-4 text-micro tabular-nums select-none mt-2">
               <span class="absolute -translate-x-1/2 text-emerald-400/60" :style="{ left: selectedDetail.bar.mevPct + '%' }">MEV {{ selectedDetail.targets.mev }}</span>
               <span class="absolute -translate-x-1/2 text-cyan-400/60" :style="{ left: ((selectedDetail.bar.mavLowPct + selectedDetail.bar.mavHighPct) / 2) + '%' }">MAV {{ selectedDetail.targets.mavLow }}–{{ selectedDetail.targets.mavHigh }}</span>
               <span class="absolute -translate-x-1/2 text-red-400/60" :style="{ left: selectedDetail.bar.mrvPct + '%' }">MRV {{ selectedDetail.targets.mrv }}</span>
@@ -494,7 +494,7 @@ useSwipe(mapContainerRef, {
           <!-- Recovery Section -->
           <div class="px-6 py-5 border-b border-white/5 space-y-3">
             <div class="flex items-center justify-between mb-1">
-              <div class="flex items-center gap-1.5 text-sm font-bold text-foreground/80">
+              <div class="flex items-center gap-2 text-sm font-bold text-foreground">
                 <Timer class="w-4 h-4 text-muted-foreground/70" />
                 <span>Recovery</span>
               </div>
@@ -512,7 +512,7 @@ useSwipe(mapContainerRef, {
                   :style="{ width: Math.min(100, (selectedDetail.hoursSinceLastTrained / selectedDetail.recoveryHours) * 100) + '%' }"
                 ></div>
               </div>
-              <div class="flex justify-between text-xs text-muted-foreground/50 font-mono mt-1">
+              <div class="flex justify-between text-xs text-muted-foreground/60 tabular-nums mt-1">
                 <template v-if="!selectedDetail.recoveryReady">
                   <span class="text-orange-400/80">{{ Math.max(0, Math.round(selectedDetail.recoveryHours - selectedDetail.hoursSinceLastTrained)) }}h remaining</span>
                   <span>{{ Math.round(selectedDetail.recoveryHours) }}h target</span>
@@ -528,11 +528,11 @@ useSwipe(mapContainerRef, {
 
           <!-- Frequency Row -->
           <div class="flex items-center justify-between px-6 py-5 pb-8">
-            <div class="flex items-center gap-1.5 text-sm font-bold text-foreground/80">
+            <div class="flex items-center gap-2 text-sm font-bold text-foreground">
               <CalendarDays class="w-4 h-4 text-muted-foreground/70" />
               <span>Frequency</span>
             </div>
-            <span class="text-xs font-bold font-mono text-foreground/80">
+            <span class="text-xs font-bold tabular-nums text-foreground/80">
               {{ selectedDetail.frequencyPerWeek > 0 ? selectedDetail.frequencyPerWeek + 'x / week' : 'Not yet trained' }}
             </span>
           </div>
@@ -542,9 +542,3 @@ useSwipe(mapContainerRef, {
 
   </div>
 </template>
-
-<style scoped>
-.font-mono {
-  font-family: 'JetBrains Mono', 'Roboto Mono', monospace;
-}
-</style>

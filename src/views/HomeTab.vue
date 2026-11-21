@@ -279,9 +279,9 @@ onActivated(() => {
             <!-- Sticky Heading & Stepper Bar -->
             <div
               ref="stickyHeaderRef"
-              class="sticky top-0 z-20 bg-background/95 backdrop-blur-md pt-2 pb-2 -mx-4 px-4 mb-2"
+              class="sticky top-0 z-20 bg-background/95 backdrop-blur-md pt-3 pb-1 -mx-4 px-4 mb-2"
             >
-              <div class="mb-3 flex items-center justify-between gap-4">
+              <div class="mb-2 flex items-center justify-between gap-4">
                 <div class="flex items-center gap-2">
                   <h3 class="text-sm font-bold text-foreground">Today's Workout</h3>
                 </div>
@@ -306,7 +306,7 @@ onActivated(() => {
               </div>
 
               <!-- Segmented Stepper Bar -->
-              <div class="flex items-start gap-2 w-full px-1 min-h-[44px] -my-2 py-2">
+              <div class="flex items-center gap-2 w-full px-1 -my-2">
                 <button
                   v-for="(group, gIdx) in allWorkoutGroups"
                   :key="group.id"
@@ -314,7 +314,7 @@ onActivated(() => {
                   @click="scrollToGroup(gIdx, true)"
                   :aria-label="group.isSuperset ? `Superset ${gIdx + 1}` : group.exercises[0]?.exerciseName"
                   :aria-current="gIdx === visibleGroupIndex ? 'step' : undefined"
-                  class="flex-1 flex flex-col justify-start gap-1 pt-0.5 h-full min-h-[36px] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-95 transition-all group cursor-pointer"
+                  class="flex-1 flex flex-col justify-center gap-1 h-full min-h-[44px] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-95 transition-all group cursor-pointer"
                 >
                   <div
                     v-for="ex in group.exercises"
@@ -337,7 +337,7 @@ onActivated(() => {
               ref="galleryRef"
               @scroll="handleGalleryScroll"
               @scrollend="handleGalleryScrollEnd"
-              class="relative flex overflow-x-auto snap-x snap-mandatory no-scrollbar pb-6 gap-4 scroll-smooth"
+              class="relative flex overflow-x-auto snap-x snap-mandatory no-scrollbar pb-4 gap-4 scroll-smooth"
             >
               <div
                 v-for="(group, gIndex) in allWorkoutGroups"
