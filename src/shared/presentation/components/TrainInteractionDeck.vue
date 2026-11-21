@@ -173,12 +173,6 @@ const currentSetNumber = computed(() => {
   return (props.currentProgress?.done ?? 0) + 1;
 });
 
-const exerciseActionLabel = computed(() => {
-  if (!props.currentExercise) return "";
-  const prefix = props.currentProgress?.isCompleted ? "Log extra" : "Log";
-  return `${prefix} ${props.currentExercise.exerciseName}`;
-});
-
 const restBarPercent = computed(() => {
   if (props.isOvertime) return 100;
   if (!props.targetRestSeconds || props.targetRestSeconds <= 0) return 0;
@@ -306,7 +300,7 @@ const emptyOrCompleteLabel = computed(() => {
               {{ isOvertime ? "Rest Overtime" : "Rest" }}
             </span>
             <span class="text-sm font-bold text-foreground truncate min-w-0 leading-tight">
-              {{ isWorkoutComplete ? 'Workout Complete' : (currentExercise ? exerciseActionLabel : 'Rest Timer') }}
+              {{ isWorkoutComplete ? 'Workout Complete' : (currentExercise?.exerciseName ?? 'Rest Timer') }}
             </span>
           </div>
 
@@ -368,9 +362,17 @@ const emptyOrCompleteLabel = computed(() => {
 
         <!-- State E: Single Exercise Completed (when other exercises remain in workout) -->
         <template v-else-if="currentProgress?.isCompleted">
-          <span class="text-sm font-bold text-foreground truncate min-w-0">
-            {{ exerciseActionLabel }}
-          </span>
+          <div class="flex flex-col min-w-0">
+            <span
+              data-testid="deck-mode-eyebrow"
+              class="text-micro leading-tight text-muted-foreground"
+            >
+              Log Extra
+            </span>
+            <span class="text-sm font-bold text-foreground truncate min-w-0 leading-tight">
+              {{ currentExercise.exerciseName }}
+            </span>
+          </div>
 
           <UiButton
             type="button"
@@ -396,7 +398,7 @@ const emptyOrCompleteLabel = computed(() => {
               {{ holdEyebrowLabel }}
             </span>
             <span class="text-sm font-bold text-foreground truncate min-w-0 leading-tight">
-              {{ exerciseActionLabel }}
+              {{ currentExercise.exerciseName }}
             </span>
           </div>
 
@@ -447,9 +449,17 @@ const emptyOrCompleteLabel = computed(() => {
 
         <!-- State C: Standard Reps/Weight Lift -->
         <template v-else>
-          <span class="text-sm font-bold text-foreground truncate min-w-0">
-            {{ exerciseActionLabel }}
-          </span>
+          <div class="flex flex-col min-w-0">
+            <span
+              data-testid="deck-mode-eyebrow"
+              class="text-micro leading-tight text-muted-foreground"
+            >
+              Log
+            </span>
+            <span class="text-sm font-bold text-foreground truncate min-w-0 leading-tight">
+              {{ currentExercise.exerciseName }}
+            </span>
+          </div>
 
           <UiButton
             type="button"

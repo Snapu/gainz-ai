@@ -35,7 +35,9 @@ describe("TrainInteractionDeck", () => {
     app.mount(container);
     await nextTick();
 
-    expect(container.textContent).toContain("Log Bench Press");
+    const eyebrow = container.querySelector("[data-testid='deck-mode-eyebrow']");
+    expect(eyebrow?.textContent?.trim()).toBe("Log");
+    expect(eyebrow?.nextElementSibling?.textContent?.trim()).toBe("Bench Press");
     expect(container.textContent).not.toContain("Set 2 of 3");
 
     const mainContainer = container.querySelector("[data-testid='deck-main-container']");
@@ -147,7 +149,7 @@ describe("TrainInteractionDeck", () => {
     expect(restPill?.textContent).toContain("1:05");
     expect(restPill?.className).toContain("text-emerald-400");
     expect(container.querySelector("[data-testid='deck-hold-ring']")).toBeNull();
-    expect(container.textContent).toContain("Log Bench Press");
+    expect(eyebrow?.nextElementSibling?.textContent?.trim()).toBe("Bench Press");
 
     const add30Btn = container.querySelector("button[data-testid='deck-add-30s']");
     expect(add30Btn).toBeNull();
@@ -298,7 +300,7 @@ describe("TrainInteractionDeck", () => {
     const holdRing = container.querySelector("[data-testid='deck-hold-ring']");
     expect(holdRing).not.toBeNull();
     expect(holdRing?.textContent).toContain("1:00");
-    expect(container.textContent).toContain("Log Plank");
+    expect(eyebrow?.nextElementSibling?.textContent?.trim()).toBe("Plank");
 
     const timerActionBtn = container.querySelector(
       "button[data-testid='deck-timer-toggle']",
@@ -509,7 +511,9 @@ describe("TrainInteractionDeck", () => {
     app.mount(container);
     await nextTick();
 
-    expect(container.textContent).toContain("Log extra Bench Press");
+    const eyebrow = container.querySelector("[data-testid='deck-mode-eyebrow']");
+    expect(eyebrow?.textContent?.trim()).toBe("Log Extra");
+    expect(eyebrow?.nextElementSibling?.textContent?.trim()).toBe("Bench Press");
 
     const extraBtn = container.querySelector(
       "button[data-testid='deck-primary-action']",
