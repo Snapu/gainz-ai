@@ -11,6 +11,7 @@ import type {
   WorkoutLocation,
 } from "@/modules/profile/presentation";
 import { useUserProfileStore, WIZARD_STEPS } from "@/modules/profile/presentation";
+import AppHeader from "@/shared/presentation/components/AppHeader.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiNumberField from "@/shared/presentation/components/ui/UiNumberField.vue";
 import UiTextarea from "@/shared/presentation/components/ui/UiTextarea.vue";
@@ -138,6 +139,8 @@ function handleNext() {
   }
 }
 
+const currentStepTitle = computed(() => stepper.current.value?.title ?? "Edit Profile");
+
 function handleBack() {
   if (stepper.isFirst.value) {
     // Cannot go back further from step 1 in the wizard
@@ -155,25 +158,29 @@ function skipWizard() {
 <template>
   <div class="h-full bg-background flex flex-col pt-safe overflow-hidden">
     <!-- Header -->
-    <header 
-      class="flex items-center justify-between h-13 px-4 shrink-0 bg-background/90 backdrop-blur-xl transition-all z-20 select-none touch-none"
-      :class="{ 'border-b border-white/5': isEditMode }"
-    >
+    <AppHeader
+      v-if="isEditMode"
+      show-back
+      :title="currentStepTitle"
+      class="shrink-0"
+      @back="router.back()"
+    />
+    <AppHeader v-else class="shrink-0 border-b-0">
       <!-- Left: Back Button -->
       <UiButton
-        v-if="!stepper.isFirst.value || isEditMode"
+        v-if="!stepper.isFirst.value"
         variant="ghost"
         size="icon"
-        class="rounded-full w-10 h-10 -ml-1"
+        class="-ml-1 shrink-0"
         aria-label="Back"
-        @click="isEditMode ? skipWizard() : handleBack()"
+        @click="handleBack"
       >
         <ArrowLeft class="w-5 h-5" />
       </UiButton>
-      <div v-else class="w-10 h-10"></div>
+      <div v-else class="w-9 h-9 shrink-0"></div>
 
-      <!-- Center: Progress or Title -->
-      <div v-if="!isEditMode" class="flex gap-2 items-center mx-4 flex-1 justify-center max-w-[200px]">
+      <!-- Center: Progress -->
+      <div class="flex gap-2 items-center mx-auto flex-1 justify-center max-w-[200px]">
         <div
           v-for="idx in totalSteps"
           :key="idx"
@@ -185,21 +192,18 @@ function skipWizard() {
           ]"
         ></div>
       </div>
-      <div v-else class="flex-1 text-center">
-        <h1 class="text-sm font-bold uppercase tracking-widest text-muted-foreground/60 italic">Edit Profile</h1>
-      </div>
 
-      <!-- Right: Skip or Spacer -->
-      <UiButton
-        v-if="!isEditMode"
-        variant="ghost"
-        class="text-primary font-semibold tracking-wide"
-        @click="skipWizard"
-      >
-        Skip
-      </UiButton>
-      <div v-else class="w-10 h-10"></div>
-    </header>
+      <!-- Right: Skip -->
+      <template #actions>
+        <UiButton
+          variant="ghost"
+          class="text-primary font-semibold tracking-wide"
+          @click="skipWizard"
+        >
+          Skip
+        </UiButton>
+      </template>
+    </AppHeader>
 
     <!-- Content Area -->
     <main class="flex-1 overflow-y-auto overscroll-y-contain px-6 pb-32 flex flex-col mt-4">

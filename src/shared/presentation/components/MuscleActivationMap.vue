@@ -11,7 +11,7 @@ import {
   TrendingDown,
   TrendingUp,
 } from "@lucide/vue";
-import { useScroll } from "@vueuse/core";
+import { useScroll, useSwipe } from "@vueuse/core";
 import { computed, onMounted, ref, watch } from "vue";
 import { useMetricsStore } from "@/modules/profile/presentation";
 import {
@@ -284,6 +284,19 @@ const sheetStyle = computed(() => {
   }
   return {};
 });
+
+watch(currentViewIndex, () => {
+  selectedMuscle.value = null;
+});
+
+useSwipe(mapContainerRef, {
+  passive: true,
+  onSwipeEnd(_e, direction) {
+    if (direction === "left" || direction === "right") {
+      currentViewIndex.value = currentViewIndex.value === 0 ? 1 : 0;
+    }
+  },
+});
 </script>
 
 <template>
@@ -300,7 +313,7 @@ const sheetStyle = computed(() => {
       </div>
     </div>
 
-    <div ref="mapContainerRef" class="relative w-full aspect-[1/1.85] min-h-[480px] overflow-hidden rounded-xl">
+    <div ref="mapContainerRef" class="relative w-full aspect-[1/1.85] min-h-[480px] overflow-hidden rounded-xl touch-pan-y">
       <div class="absolute inset-0 w-full h-full">
 
           <!-- IMAGE LAYER (Screen blended on the stacking context root to drop the black background) -->

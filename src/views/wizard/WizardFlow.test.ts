@@ -9,6 +9,7 @@ const route = reactive<{ params: { step?: string }; query: Record<string, string
 });
 const pushMock = vi.fn();
 const replaceMock = vi.fn();
+const backMock = vi.fn();
 const userProfileRef = ref<UserProfile>({});
 const hasCompletedSetupRef = ref(false);
 
@@ -22,6 +23,7 @@ vi.mock("vue-router", () => ({
   useRouter: () => ({
     push: pushMock,
     replace: replaceMock,
+    back: backMock,
   }),
 }));
 
@@ -113,5 +115,25 @@ describe("WizardFlow.vue", () => {
     min60Btn.click();
     await nextTick();
     expect(userProfileRef.value.workoutDurationMinutes).toBeUndefined();
+  });
+
+  it("renders AppHeader title and navigates back in edit mode", async () => {
+    route.params = { step: "days" };
+    route.query = { mode: "edit" };
+    const mounted = mountWizard();
+    unmountWizard = mounted.unmount;
+    await nextTick();
+
+    const header = mounted.container.querySelector("header");
+    expect(header).not.toBeNull();
+    const h1 = header?.querySelector("h1");
+    expect(h1?.textContent).toBe("Workout Days");
+
+    const backBtn = header?.querySelector<HTMLButtonElement>('button[aria-label="Go Back"]');
+    expect(backBtn).not.toBeNull();
+    backBtn?.click();
+    await nextTick();
+    expect(backMock).toHaveBeenCalledTimes(1);
+    expect(pushMock).not.toHaveBeenCalled();
   });
 });
