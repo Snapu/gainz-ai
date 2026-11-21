@@ -312,7 +312,7 @@ const emptyDeckLabel = computed(() => {
         
         <!-- State A: Resting (Fixed Left Title + Right Timer & Action Cluster) -->
         <template v-if="isResting">
-          <div class="flex flex-col min-w-0">
+          <div class="flex flex-col gap-0.5 min-w-0">
             <span
               data-testid="deck-mode-eyebrow"
               class="text-micro leading-tight"
@@ -376,7 +376,7 @@ const emptyDeckLabel = computed(() => {
               data-testid="deck-workout-complete-icon"
               class="w-5 h-5 text-emerald-400 shrink-0"
             />
-            <div class="flex flex-col min-w-0">
+            <div class="flex flex-col gap-0.5 min-w-0">
               <span
                 data-testid="deck-mode-eyebrow"
                 class="text-micro leading-tight text-emerald-400"
@@ -423,7 +423,7 @@ const emptyDeckLabel = computed(() => {
 
         <!-- State E: Single Exercise Completed (when other exercises remain in workout) -->
         <template v-else-if="currentProgress?.isCompleted">
-          <div class="flex flex-col min-w-0">
+          <div class="flex flex-col gap-0.5 min-w-0">
             <span
               data-testid="deck-mode-eyebrow"
               class="text-micro leading-tight text-muted-foreground"
@@ -450,7 +450,7 @@ const emptyDeckLabel = computed(() => {
 
         <!-- State B: Timed Exercise (Fixed Left Title + Right Timer & Action Cluster) -->
         <template v-else-if="isDurationExercise">
-          <div class="flex flex-col min-w-0">
+          <div class="flex flex-col gap-0.5 min-w-0">
             <span
               data-testid="deck-mode-eyebrow"
               class="text-micro leading-tight"
@@ -510,7 +510,7 @@ const emptyDeckLabel = computed(() => {
 
         <!-- State C: Standard Reps/Weight Lift -->
         <template v-else>
-          <div class="flex flex-col min-w-0">
+          <div class="flex flex-col gap-0.5 min-w-0">
             <span
               data-testid="deck-mode-eyebrow"
               class="text-micro leading-tight text-muted-foreground"
