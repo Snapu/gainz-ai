@@ -39,6 +39,9 @@ export default defineConfig(() => {
           type: "module",
         },
         includeAssets: ["favicon.png", "icon-192.png", "icon-512.png"],
+        injectManifest: {
+          globPatterns: ["**/*.{js,css,html,woff2}"],
+        },
         manifest: {
           name: "Gainz AI",
           short_name: "Gainz AI",

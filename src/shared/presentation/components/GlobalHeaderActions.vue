@@ -138,6 +138,14 @@ function handleSwitchSpreadsheet(): void {
       </UiDropdownMenuItem>
 
       <UiDropdownMenuItem 
+        @select="router.push('/terms')"
+        class="group"
+      >
+        <span>{{ t("nav.termsOfUse") }}</span>
+        <ChevronRight class="w-4 h-4 ml-auto opacity-40 group-hover:text-primary transition-colors" />
+      </UiDropdownMenuItem>
+
+      <UiDropdownMenuItem 
         @select="router.push('/impressum')"
         class="group"
       >

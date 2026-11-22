@@ -285,6 +285,13 @@ void scrollContainerRef;
             <ArrowUp class="w-5 h-5" />
           </UiButton>
         </div>
+
+        <p
+          v-if="!isKeyboardVisible"
+          class="text-xs font-medium text-muted-foreground/70 text-center leading-snug"
+        >
+          {{ t("coach.disclaimer") }}
+        </p>
       </div>
     </div>
   </div>

@@ -44,6 +44,7 @@ export const de: MessageSchema = {
     openSpreadsheet: "Tabelle öffnen",
     switchSpreadsheet: "Tabelle wechseln",
     privacyPolicy: "Datenschutz",
+    termsOfUse: "Nutzungsbedingungen",
     impressum: "Impressum",
     syncing: "Synchronisiere...",
     pendingSync: "{count} ausstehend",
@@ -170,6 +171,8 @@ export const de: MessageSchema = {
         heading: "Zusätzliche Hinweise",
         subtitle: "Gibt es Verletzungen, Schwerpunkte oder Einschränkungen?",
         placeholder: "z. B. linkes Knie schonen, Fokus auf Explosivkraft...",
+        healthPrivacyNote:
+          "Optionale Angaben zu Verletzungen oder Gesundheit werden zur Trainingsanpassung an den KI-Coach übermittelt und ersetzen keine ärztliche Beratung.",
       },
     },
   },
@@ -257,6 +260,8 @@ export const de: MessageSchema = {
     regeneratedDesc: "Dein Trainingszyklus wurde neu erstellt.",
     copiedJsonDesc: "Plan-JSON in die Zwischenablage kopiert.",
     copyJsonFailedDesc: "Plan-JSON konnte nicht kopiert werden.",
+    disclaimer:
+      "Trainingspläne sind KI-generiert und ersetzen keine ärztliche Beratung. Prüfe Übungen und Gewichte vor dem Training eigenverantwortlich.",
   },
   coach: {
     loading: "Coach wird vorbereitet...",
@@ -281,6 +286,8 @@ export const de: MessageSchema = {
     genericErrorDesc: "Antwort vom Coach fehlgeschlagen. Bitte versuche es erneut.",
     copiedPayloadDesc: "Debug-Payload in die Zwischenablage kopiert.",
     copyPayloadFailedDesc: "Payload konnte nicht kopiert werden.",
+    disclaimer:
+      "KI-generierte Empfehlungen können Fehler enthalten und ersetzen keine ärztliche Beratung. Trainiere eigenverantwortlich.",
     card: {
       superset: "Supersatz",
       exerciseGuide: "Übungsanleitung",
@@ -478,6 +485,8 @@ export const de: MessageSchema = {
     addAria: "Auszeit hinzufügen",
     intro:
       "Halte Ruhetage, Krankheit, Verletzungen und andere Auszeiten fest, damit der KI-Coach sie berücksichtigt.",
+    medicalDisclaimer:
+      "Hinweis: Hole bei Verletzungen, Schmerzen oder Krankheit ärztlichen Rat ein. Gainz AI bietet keine medizinische Beratung.",
     emptyTitle: "Keine Auszeiten eingetragen.",
     emptyDesc: "Tippe auf +, um einen Ruhetag, Krankheit oder Verletzung festzuhalten.",
     sheetTitle: "Auszeit eintragen",
@@ -536,8 +545,27 @@ export const de: MessageSchema = {
   },
   legal: {
     privacyTitle: "Datenschutzerklärung",
+    termsTitle: "Nutzungsbedingungen",
     impressumTitle: "Impressum",
     impressumEnNotice:
       "Hinweis: Gemäß § 5 DDG / § 18 Abs. 2 MStV stehen die gesetzlichen Pflichtangaben im Impressum auf Deutsch.",
+    consent: {
+      checkboxStart: "Ich akzeptiere die ",
+      termsLink: "Nutzungsbedingungen",
+      and: " (keine medizinische Beratung, ab 16 Jahren) und habe die ",
+      privacyLink: "Datenschutzerklärung",
+      checkboxEnd: " gelesen.",
+      consentDetail:
+        "Ich willige ausdrücklich ein (Art. 6 Abs. 1 lit. a & Art. 9 Abs. 2 lit. a DSGVO), dass meine Trainingsdaten in meinem Google Drive gespeichert und mein Profil, Trainingsprotokolle sowie freiwillige Gesundheits-/Verletzungsangaben an Google Generative AI (Gemini, USA) übermittelt werden.",
+      gateTitle: "Aktualisierte Nutzungs- & Datenschutzhinweise",
+      gateSubtitle:
+        "Bitte bestätige vor der weiteren Nutzung unsere Nutzungsbedingungen (kein Medizinprodukt, ab 16 Jahren) sowie deine ausdrückliche Einwilligung zur KI- und Gesundheitsdatenverarbeitung.",
+      acceptAndContinue: "Zustimmen & Fortfahren",
+      signOut: "Abmelden",
+      withdrawButton: "Einwilligung widerrufen & Abmelden",
+      withdrawnToastTitle: "Einwilligung widerrufen",
+      withdrawnToastDesc: "Deine Einwilligung wurde widerrufen und du wurdest abgemeldet.",
+      acceptedAt: "Einwilligung erteilt am {date}",
+    },
   },
 };

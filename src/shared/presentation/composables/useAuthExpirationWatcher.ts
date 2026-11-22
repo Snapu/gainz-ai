@@ -2,7 +2,7 @@
 
 import { App as CapacitorApp } from "@capacitor/app";
 import * as Sentry from "@sentry/vue";
-import { onUnmounted, ref, watch } from "vue";
+import { onScopeDispose, ref, watch } from "vue";
 import { AUTH_PROACTIVE_REFRESH_THRESHOLD_MS, useAuthStore } from "@/modules/auth/presentation";
 import { useToast } from "@/shared/presentation/composables/useToast";
 import { t } from "@/shared/presentation/i18n";
@@ -10,14 +10,16 @@ import { t } from "@/shared/presentation/i18n";
 const WARNING_THRESHOLD = AUTH_PROACTIVE_REFRESH_THRESHOLD_MS;
 const CHECK_INTERVAL = 30 * 1000; // 30 seconds
 
-export function useAuthExpirationWatcher() {
+export function useAuthExpirationWatcher(): void {
   const authStore = useAuthStore();
   const { toast, dismiss } = useToast();
   const warningActive = ref(false);
   let intervalId: ReturnType<typeof setInterval> | null = null;
   let currentToastId: string | undefined;
+  let disposed = false;
 
   async function checkExpiration() {
+    if (disposed) return;
     if (!authStore.refreshToken && (!authStore.expiresAt || !authStore.accessToken)) return;
 
     let timeRemaining =
@@ -127,13 +129,18 @@ export function useAuthExpirationWatcher() {
 
   // Start checking once auth storage hydration completes, then every 30 seconds.
   // Naturally no-ops when logged out due to the early return in checkExpiration.
-  void authStore.init().then(() => checkExpiration());
+  void authStore.init().then(() => {
+    if (!disposed) {
+      void checkExpiration();
+    }
+  });
   intervalId = setInterval(() => {
     void checkExpiration();
   }, CHECK_INTERVAL);
 
-  // Cleanup on unmount
-  onUnmounted(() => {
+  // Cleanup on scope disposal or unmount
+  onScopeDispose(() => {
+    disposed = true;
     document.removeEventListener("visibilitychange", handleVisibilityChange);
     void appStateListenerPromise.then((handle) => handle.remove());
     if (intervalId) {

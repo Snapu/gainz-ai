@@ -265,6 +265,9 @@ function skipWizard() {
             :placeholder="t('wizard.steps.extra.placeholder')"
             class="min-h-[160px] overflow-hidden"
           />
+          <p class="text-xs font-medium text-muted-foreground mt-3 leading-relaxed">
+            {{ t("wizard.steps.extra.healthPrivacyNote") }}
+          </p>
         </template>
 
       </div>

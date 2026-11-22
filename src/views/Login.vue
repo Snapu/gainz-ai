@@ -2,7 +2,9 @@
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/modules/auth/presentation";
+import LegalConsentCheckbox from "@/shared/presentation/components/LegalConsentCheckbox.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
+import { useLegalConsent } from "@/shared/presentation/composables/useLegalConsent";
 import { useToast } from "@/shared/presentation/composables/useToast";
 import { t } from "@/shared/presentation/i18n";
 import { useLocale } from "@/shared/presentation/i18n/useLocale";
@@ -11,15 +13,20 @@ const router = useRouter();
 const authStore = useAuthStore();
 const { toast } = useToast();
 const { locale, setLocale } = useLocale();
+const { acceptLegalConsent } = useLegalConsent();
 const isLoggingIn = ref(false);
+const hasAcceptedLegal = ref(false);
 
 async function handleLogin() {
+  if (!hasAcceptedLegal.value) return;
+
   isLoggingIn.value = true;
   try {
     const result = await authStore.login();
     result.match(
       () => {
-        router.push("/loading");
+        acceptLegalConsent();
+        void router.push("/loading");
       },
       (error) => {
         if (error === "missing-scopes") {
@@ -37,7 +44,7 @@ async function handleLogin() {
         }
       },
     );
-  } catch (err) {
+  } catch {
     toast({
       title: t("common.error"),
       description: t("auth.unexpectedErrorDesc"),
@@ -78,23 +85,28 @@ async function handleLogin() {
       </div>
     </div>
 
-    <div class="flex-1 flex flex-col items-center justify-center w-full max-w-md gap-12">
+    <div class="flex-1 flex flex-col items-center justify-center w-full max-w-md gap-8 py-6">
       <div class="text-center space-y-4">
         <h1 class="text-6xl font-black tracking-tighter text-foreground">Gainz<span class="text-primary">AI</span></h1>
         <p class="text-lg text-muted-foreground font-medium">{{ t("auth.tagline") }}</p>
       </div>
-      
-      <UiButton 
-        class="w-full text-lg h-16 rounded-xl" 
-        @click="handleLogin" 
-        :disabled="isLoggingIn"
-      >
-        {{ t("auth.signInGoogle") }}
-      </UiButton>
+
+      <div class="w-full space-y-4">
+        <LegalConsentCheckbox id="login-legal-consent" v-model="hasAcceptedLegal" />
+
+        <UiButton
+          class="w-full text-lg h-16 rounded-xl"
+          @click="handleLogin"
+          :disabled="!hasAcceptedLegal || isLoggingIn"
+        >
+          {{ t("auth.signInGoogle") }}
+        </UiButton>
+      </div>
     </div>
-    
-    <div class="pb-8 pt-4 flex gap-6 text-sm text-muted-foreground/60 font-medium">
+
+    <div class="pb-8 pt-4 flex flex-wrap justify-center gap-6 text-sm text-muted-foreground/60 font-medium">
       <RouterLink to="/privacy" class="hover:text-primary transition-colors">{{ t("nav.privacyPolicy") }}</RouterLink>
+      <RouterLink to="/terms" class="hover:text-primary transition-colors">{{ t("nav.termsOfUse") }}</RouterLink>
       <RouterLink to="/impressum" class="hover:text-primary transition-colors">{{ t("nav.impressum") }}</RouterLink>
     </div>
   </div>

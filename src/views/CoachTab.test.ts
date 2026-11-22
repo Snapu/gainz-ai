@@ -103,4 +103,16 @@ describe("CoachTab.vue", () => {
       mounted.unmount();
     }
   });
+
+  it("displays the AI & medical disclaimer when keyboard is hidden", () => {
+    mockViewModel.isKeyboardVisible.value = false;
+    const mounted = mountCoachTab();
+    try {
+      expect(mounted.text).toContain(
+        "AI-generated advice may contain errors and does not replace medical guidance. Train at your own risk.",
+      );
+    } finally {
+      mounted.unmount();
+    }
+  });
 });

@@ -9,6 +9,7 @@ import App from "@/App.vue";
 import router from "@/router";
 
 /* Theme variables */
+import "@fontsource-variable/outfit";
 import "@/theme/variables.css";
 import { CLIENT_ID } from "@/modules/auth/presentation";
 import { purgeLegacyApiKeys } from "@/modules/profile/presentation";

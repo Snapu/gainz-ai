@@ -97,6 +97,11 @@ function remove(id: string) {
     </AppHeader>
 
     <p class="w-full max-w-2xl mx-auto px-4 pt-4 text-xs font-medium text-muted-foreground shrink-0">{{ t("recovery.intro") }}</p>
+    <div class="w-full max-w-2xl mx-auto px-4 pt-3 shrink-0">
+      <p class="text-xs font-medium text-muted-foreground/80 bg-white/5 border border-white/5 rounded-xl p-3">
+        {{ t("recovery.medicalDisclaimer") }}
+      </p>
+    </div>
 
     <!-- Event List -->
     <main class="flex-1 min-h-0 w-full max-w-2xl mx-auto px-4 pt-4 pb-28 overflow-y-auto overscroll-y-contain no-scrollbar flex flex-col gap-4">

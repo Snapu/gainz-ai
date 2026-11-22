@@ -2,13 +2,15 @@
 import { useRegisterSW } from "virtual:pwa-register/vue";
 import { App as CapacitorApp } from "@capacitor/app";
 import { ConfigProvider } from "reka-ui";
-import { onMounted, onUnmounted, watch } from "vue";
+import { type EffectScope, effectScope, onMounted, onUnmounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useAiOrchestratorStore } from "@/modules/aiCoach/presentation";
 import { useAuthErrorHandler, useAuthStore } from "@/modules/auth/presentation";
 import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
+import { isPublicRoute } from "@/router/routePolicy";
 import UiToaster from "@/shared/presentation/components/ui/UiToaster.vue";
 import { useAuthExpirationWatcher } from "@/shared/presentation/composables/useAuthExpirationWatcher";
+import { useLegalConsent } from "@/shared/presentation/composables/useLegalConsent";
 import { useSheetCacheSync } from "@/shared/presentation/composables/useSheetCacheSync";
 import { useToast } from "@/shared/presentation/composables/useToast";
 import { t } from "@/shared/presentation/i18n";
@@ -19,10 +21,35 @@ const { bcp47Locale } = useLocale();
 const router = useRouter();
 const authStore = useAuthStore();
 const { handleAuthError } = useAuthErrorHandler();
+const { hasLegalConsent } = useLegalConsent();
 
-// Start watching for auth expiration and sheet switches
-useAuthExpirationWatcher();
-useSheetCacheSync();
+let consentedServicesScope: EffectScope | null = null;
+
+function startConsentedServices(): void {
+  if (consentedServicesScope) return;
+  consentedServicesScope = effectScope();
+  consentedServicesScope.run(() => {
+    useAuthExpirationWatcher();
+    useSheetCacheSync();
+  });
+}
+
+function stopConsentedServices(): void {
+  consentedServicesScope?.stop();
+  consentedServicesScope = null;
+}
+
+watch(
+  () => authStore.isLoggedIn && hasLegalConsent.value,
+  (canRunServices) => {
+    if (canRunServices) {
+      startConsentedServices();
+    } else {
+      stopConsentedServices();
+    }
+  },
+  { immediate: true },
+);
 
 let swUpdateInterval: ReturnType<typeof setInterval> | undefined;
 
@@ -66,6 +93,8 @@ function postToServiceWorker(message: Record<string, unknown>): void {
 }
 
 function handleServiceWorkerMessage(event: MessageEvent) {
+  if (!authStore.isLoggedIn || !hasLegalConsent.value) return;
+
   const type = (event.data as { type?: string } | null)?.type;
   if (type === "BACKGROUND_SYNC_SUCCESS") {
     void useExerciseLogsStore().refresh();
@@ -80,6 +109,7 @@ function handleServiceWorkerMessage(event: MessageEvent) {
 }
 
 onUnmounted(() => {
+  stopConsentedServices();
   clearInterval(swUpdateInterval);
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.removeEventListener("message", handleServiceWorkerMessage);
@@ -114,9 +144,9 @@ onMounted(() => {
 });
 
 watch(
-  () => authStore.accessToken,
-  (token) => {
-    if (token) {
+  () => [authStore.accessToken, hasLegalConsent.value] as const,
+  ([token, consented]) => {
+    if (token && consented) {
       postToServiceWorker({ type: "AUTH_TOKEN_UPDATED", accessToken: token });
     }
   },
@@ -133,8 +163,7 @@ watch(
     useAiOrchestratorStore().clearPendingRequest();
     postToServiceWorker({ type: "CLEAR_SYNC_QUEUE" });
     const currentPath = router.currentRoute.value.path;
-    const isPublicRoute = currentPath === "/privacy" || currentPath === "/impressum";
-    if (isPublicRoute || currentPath === "/") return;
+    if (isPublicRoute(currentPath) || currentPath === "/") return;
 
     void router.push("/").catch(() => {});
   },

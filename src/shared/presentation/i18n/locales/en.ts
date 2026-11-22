@@ -42,6 +42,7 @@ export const en = {
     openSpreadsheet: "Open Spreadsheet",
     switchSpreadsheet: "Switch Spreadsheet",
     privacyPolicy: "Privacy Policy",
+    termsOfUse: "Terms of Use",
     impressum: "Imprint (Impressum)",
     syncing: "Syncing...",
     pendingSync: "{count} Pending",
@@ -165,6 +166,8 @@ export const en = {
         heading: "Additional Context",
         subtitle: "Any injuries, specific focus areas, or limitations?",
         placeholder: "e.g. Bad left knee, want to focus on explosive strength...",
+        healthPrivacyNote:
+          "Optional injury or health details are shared with the AI coach to adapt workouts and do not replace medical advice.",
       },
     },
   },
@@ -251,6 +254,8 @@ export const en = {
     regeneratedDesc: "Your training cycle has been updated.",
     copiedJsonDesc: "Plan JSON copied to clipboard.",
     copyJsonFailedDesc: "Failed to copy plan JSON.",
+    disclaimer:
+      "Training plans are AI-generated and do not replace medical advice. Verify exercises and loads before training.",
   },
   coach: {
     loading: "Preparing your coach...",
@@ -275,6 +280,8 @@ export const en = {
     genericErrorDesc: "Failed to get AI response. Please try again.",
     copiedPayloadDesc: "Debug prompt payload copied to clipboard.",
     copyPayloadFailedDesc: "Failed to copy payload.",
+    disclaimer:
+      "AI-generated advice may contain errors and does not replace medical guidance. Train at your own risk.",
     card: {
       superset: "Superset",
       exerciseGuide: "Exercise guide",
@@ -473,6 +480,8 @@ export const en = {
     addAria: "Add Rest Event",
     intro:
       "Track rest days, illness, injuries, and other off days so your AI coach can account for them.",
+    medicalDisclaimer:
+      "Note: Consult a physician for injuries, pain, or illness. Gainz AI does not provide medical advice.",
     emptyTitle: "No off days logged.",
     emptyDesc: "Tap + to record a rest day, sickness, or injury.",
     sheetTitle: "Log Recovery",
@@ -531,9 +540,28 @@ export const en = {
   },
   legal: {
     privacyTitle: "Privacy Policy",
+    termsTitle: "Terms of Use",
     impressumTitle: "Legal Notice (Impressum)",
     impressumEnNotice:
       "Note: Under German law (§ 5 DDG / § 18 Abs. 2 MStV), the statutory legal notice below is provided in German.",
+    consent: {
+      checkboxStart: "I accept the ",
+      termsLink: "Terms of Use",
+      and: " (no medical advice, age 16+) and have read the ",
+      privacyLink: "Privacy Policy",
+      checkboxEnd: ".",
+      consentDetail:
+        "I explicitly consent (Art. 6(1)(a) & Art. 9(2)(a) GDPR) to storing my workout data in my Google Drive and transmitting my training profile, logs, and optional health/injury details to Google Generative AI (Gemini, USA) for coaching.",
+      gateTitle: "Updated Legal & Privacy Notice",
+      gateSubtitle:
+        "Before continuing, please review our Terms of Use (no medical advice, age 16+) and explicitly confirm your consent to AI coaching and optional health data processing.",
+      acceptAndContinue: "Accept & Continue",
+      signOut: "Sign Out",
+      withdrawButton: "Withdraw Consent & Sign Out",
+      withdrawnToastTitle: "Consent Withdrawn",
+      withdrawnToastDesc: "Your consent has been revoked and you have been signed out.",
+      acceptedAt: "Consent granted on {date}",
+    },
   },
 };
 

@@ -2,7 +2,8 @@ import { createRouter, createWebHashHistory } from "vue-router";
 import { useAuthStore } from "@/modules/auth/presentation";
 import { useSpreadsheetStore } from "@/modules/platform/presentation";
 import { useUserProfileStore } from "@/modules/profile/presentation";
-import { resolveRouteTarget } from "./routePolicy";
+import { useLegalConsent } from "@/shared/presentation/composables/useLegalConsent";
+import { isPublicRoute, resolveRouteTarget } from "./routePolicy";
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -16,6 +17,11 @@ const router = createRouter({
       path: "/loading",
       name: "loading",
       component: () => import("../views/Loading.vue"),
+    },
+    {
+      path: "/consent",
+      name: "consent",
+      component: () => import("../views/ConsentView.vue"),
     },
     {
       path: "/wizard/:step?",
@@ -65,6 +71,11 @@ const router = createRouter({
       component: () => import("../views/PrivacyPolicy.vue"),
     },
     {
+      path: "/terms",
+      name: "terms",
+      component: () => import("../views/TermsOfUse.vue"),
+    },
+    {
       path: "/impressum",
       name: "impressum",
       component: () => import("../views/Impressum.vue"),
@@ -85,17 +96,30 @@ const router = createRouter({
 });
 
 router.beforeEach(async (to) => {
-  if (to.path === "/privacy" || to.path === "/impressum") {
+  if (isPublicRoute(to.path)) {
     return true;
   }
 
   const authStore = useAuthStore();
   await authStore.init();
+  const hasConsent = useLegalConsent().hasLegalConsent.value;
+
+  if (!authStore.isLoggedIn || !hasConsent) {
+    return resolveRouteTarget(to.path, to.query, {
+      isLoggedIn: authStore.isLoggedIn,
+      hasConsent,
+      hasDoc: false,
+      isLoading: false,
+      setupCompleted: false,
+    });
+  }
+
   const userProfileStore = useUserProfileStore();
   const spreadsheetStore = useSpreadsheetStore();
 
   return resolveRouteTarget(to.path, to.query, {
     isLoggedIn: authStore.isLoggedIn,
+    hasConsent,
     hasDoc: !!spreadsheetStore.doc,
     isLoading: userProfileStore.isLoading,
     setupCompleted: userProfileStore.setupCompleted,

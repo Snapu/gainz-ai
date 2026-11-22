@@ -99,6 +99,10 @@ const {
               {{ t("plan.copyPlan") }}
             </UiButton>
           </div>
+
+          <p class="text-xs font-medium text-muted-foreground/70 text-center leading-snug px-2">
+            {{ t("plan.disclaimer") }}
+          </p>
         </div>
       </template>
       

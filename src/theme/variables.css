@@ -1,8 +1,7 @@
-@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@300..900&display=swap");
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Outfit", system-ui, sans-serif;
+  --font-sans: "Outfit Variable", "Outfit", system-ui, sans-serif;
 
   /* Sleek Athletic Dark Mode Theme */
   --color-background: oklch(14% 0.01 264);

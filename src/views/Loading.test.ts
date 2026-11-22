@@ -1,6 +1,10 @@
 import { errAsync, okAsync } from "neverthrow";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp, nextTick, reactive, ref } from "vue";
+import {
+  syncLegalConsent,
+  useLegalConsent,
+} from "@/shared/presentation/composables/useLegalConsent";
 
 const pushMock = vi.fn();
 const replaceMock = vi.fn();
@@ -71,6 +75,9 @@ function mountLoading() {
 describe("Loading.vue", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
+    syncLegalConsent();
+    useLegalConsent().acceptLegalConsent("2026-11-22T20:00:00.000Z");
     isOnlineRef.value = true;
     authState.isLoggedIn = true;
     spreadsheetState.doc = { spreadsheetId: "doc-1" };
@@ -84,6 +91,17 @@ describe("Loading.vue", () => {
     linkExistingSpreadsheetMock.mockReturnValue(okAsync(undefined));
     profileState.isLoading = false;
     profileState.setupCompleted = true;
+  });
+
+  it("redirects to /consent when legal consent is missing", async () => {
+    useLegalConsent().revokeLegalConsent();
+    spreadsheetState.doc = null;
+
+    const { unmount } = mountLoading();
+    await nextTick();
+
+    expect(pushMock).toHaveBeenCalledWith("/consent");
+    unmount();
   });
 
   it("immediately navigates away if loading state is already settled on mount", async () => {

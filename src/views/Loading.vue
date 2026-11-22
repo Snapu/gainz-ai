@@ -10,6 +10,7 @@ import { resolveRouteTarget } from "@/router/routePolicy";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 import UiTelemetryLoader from "@/shared/presentation/components/ui/UiTelemetryLoader.vue";
+import { useLegalConsent } from "@/shared/presentation/composables/useLegalConsent";
 import { useToast } from "@/shared/presentation/composables/useToast";
 import { t } from "@/shared/presentation/i18n";
 
@@ -55,6 +56,7 @@ function resolveChoiceErrorToast(
 
 const router = useRouter();
 const authStore = useAuthStore();
+const { hasLegalConsent } = useLegalConsent();
 const profileStore = useUserProfileStore();
 const spreadsheetStore = useSpreadsheetStore();
 const isOnline = useOnline();
@@ -106,6 +108,7 @@ function handleCreateNew(): void {
 watch(
   () => ({
     isLoggedIn: authStore.isLoggedIn,
+    hasConsent: hasLegalConsent.value,
     hasDoc: !!spreadsheetStore.doc,
     isLoading: profileStore.isLoading,
     setupCompleted: profileStore.setupCompleted,
