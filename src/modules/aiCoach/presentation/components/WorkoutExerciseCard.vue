@@ -8,6 +8,7 @@ import UiProgressionLine, {
   type ProgressionSessionItem,
 } from "@/shared/presentation/components/ui/UiProgressionLine.vue";
 import UiRadialProgress from "@/shared/presentation/components/ui/UiRadialProgress.vue";
+import { t } from "@/shared/presentation/i18n";
 import type { DisplayExercise } from "../helpers/aiCoachPageHelpers";
 import {
   formatDurationMinutes,
@@ -37,21 +38,52 @@ const isSupersetExercise = computed(() => {
 
 const displayTarget = computed(() => {
   if (props.exercise.targetDistanceMeters != null) {
-    return { label: "Sets × Distance", value: props.exercise.targetDistanceMeters, unit: "m" };
+    return {
+      label: t("coach.card.setsDistance"),
+      value: props.exercise.targetDistanceMeters,
+      unit: t("common.m"),
+    };
   }
   if (props.exercise.targetDurationSeconds != null) {
     const formatted = formatDurationSeconds(props.exercise.targetDurationSeconds);
-    return { label: "Sets × Time", value: formatted.value, unit: formatted.unit };
+    return {
+      label: t("coach.card.setsTime"),
+      value: formatted.value,
+      unit: formatted.unit === "min" ? t("common.min") : t("common.s"),
+    };
   }
 
   const repsInfo = splitReps(props.exercise.targetReps);
-  return { label: "Sets × Reps", value: repsInfo.value, unit: repsInfo.unit };
+  return { label: t("coach.card.setsReps"), value: repsInfo.value, unit: repsInfo.unit };
 });
+
+function formatLoggedDuration(minutes: number): { value: string; unit: string } {
+  const formatted = formatDurationMinutes(minutes);
+  return {
+    value: formatted.value,
+    unit: formatted.unit === "min" ? t("common.min") : t("common.s"),
+  };
+}
 
 const displayWeight = computed(() => {
   if (!props.exercise.targetWeight) return null;
   return splitWeight(props.exercise.targetWeight);
 });
+
+const formattedWeightValue = computed(() => {
+  if (!displayWeight.value) return "";
+  if (displayWeight.value.value.startsWith("BW + ")) {
+    return `${t("common.bw")}${displayWeight.value.value.slice(2)}`;
+  }
+  return displayWeight.value.value;
+});
+
+const formattedLoggedSets = computed(() =>
+  (props.loggedSets ?? []).map((log) => ({
+    log,
+    formattedDuration: log.duration != null ? formatLoggedDuration(log.duration) : null,
+  })),
+);
 </script>
 
 <template>
@@ -78,34 +110,31 @@ const displayWeight = computed(() => {
             variant="info"
             class="px-1.5 py-0.5"
           >
-            Superset
+            {{ t("coach.card.superset") }}
           </UiBadge>
         </div>
         
         <button
           @click.stop="emit('search', exercise.exerciseName)"
           class="p-2 -mr-2 -mt-2 text-muted-foreground/50 hover:text-primary transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-full shrink-0"
-          aria-label="Exercise guide"
-          title="Exercise guide"
+          :aria-label="t('coach.card.exerciseGuide')"
+          :title="t('coach.card.exerciseGuide')"
         >
           <Info class="w-4 h-4" />
         </button>
       </div>
 
-      <!-- 2. Progression (Sub Header) -->
+      <!-- 2. History -->
       <div v-if="progressionData && progressionData.length > 0" class="flex flex-col gap-2 w-full">
         <div class="flex items-center justify-between">
-          <h4 class="text-micro text-muted-foreground tracking-widest">Progression</h4>
-          <span class="text-micro text-muted-foreground/60">
-            History
-          </span>
+          <h4 class="text-micro text-muted-foreground tracking-widest">{{ t("coach.card.history") }}</h4>
         </div>
         <UiProgressionLine :sessions="progressionData" class="w-full" />
       </div>
 
       <!-- 3. Target Today (Unified Telemetry Strip) -->
       <div class="flex flex-col gap-2 w-full">
-        <h4 class="text-micro text-muted-foreground tracking-widest">Target Today</h4>
+        <h4 class="text-micro text-muted-foreground tracking-widest">{{ t("coach.card.targetToday") }}</h4>
         
         <div class="rounded-xl bg-white/5 border border-white/5 divide-x divide-white/5 grid grid-cols-3 w-full overflow-hidden">
           <!-- Column 1: Sets × Reps/Time -->
@@ -122,14 +151,14 @@ const displayWeight = computed(() => {
           <!-- Column 2: Weight -->
           <div class="flex flex-col justify-between p-2.5 sm:p-3 min-w-0">
             <span class="text-micro text-muted-foreground/60 truncate">
-              Weight
+              {{ t("coach.card.weight") }}
             </span>
             <div v-if="displayWeight" class="flex items-baseline mt-1.5 min-w-0 h-7">
-              <span v-if="displayWeight.value === 'BW'" class="text-lg font-black tracking-tight text-foreground">
-                BW
+              <span v-if="displayWeight.value === 'BW'" class="text-lg font-black tracking-tight text-foreground truncate">
+                {{ t("common.bw") }}
               </span>
               <template v-else>
-                <span class="text-lg font-black tabular-nums tracking-tight text-primary truncate">{{ displayWeight.value }}</span>
+                <span class="text-lg font-black tabular-nums tracking-tight text-primary truncate">{{ formattedWeightValue }}</span>
                 <span class="text-xs font-semibold text-muted-foreground/70 ml-1 shrink-0">{{ displayWeight.unit }}</span>
               </template>
             </div>
@@ -139,7 +168,7 @@ const displayWeight = computed(() => {
           <!-- Column 3: RPE -->
           <div class="flex flex-col justify-between p-2.5 sm:p-3 min-w-0">
             <span class="text-micro text-muted-foreground/60 truncate">
-              RPE
+              {{ t("coach.card.rpe") }}
             </span>
             <div v-if="exercise.targetRpe" class="flex items-baseline gap-1.5 mt-1.5 min-w-0 h-7">
               <UiRadialProgress 
@@ -168,14 +197,14 @@ const displayWeight = computed(() => {
         </p>
       </div>
 
-      <!-- 5. Progress (Sub Header) -->
+      <!-- 5. Today's Sets -->
       <div v-if="loggedSets?.length" class="flex flex-col gap-2 w-full animate-in fade-in duration-300">
-        <h4 class="text-micro text-muted-foreground tracking-widest">Progress</h4>
+        <h4 class="text-micro text-muted-foreground tracking-widest">{{ t("coach.card.todaySets") }}</h4>
         
         <div class="flex flex-col divide-y divide-white/5 w-full">
           <!-- Render existing logs -->
           <div
-            v-for="(log, idx) in loggedSets" 
+            v-for="({ log, formattedDuration }, idx) in formattedLoggedSets"
             :key="log.id"
             class="px-2.5 py-2 hover:bg-white/5 active:bg-white/15 transition-colors"
             @click.stop="emit('editLog', log)"
@@ -188,15 +217,15 @@ const displayWeight = computed(() => {
                 <span class="text-micro text-muted-foreground/50 tabular-nums shrink-0">#{{ idx + 1 }}</span>
                 <div v-if="log.reps != null" class="flex items-baseline min-w-0">
                    <span class="text-sm font-bold tabular-nums text-foreground">{{ log.reps }}</span>
-                   <span class="text-xs font-semibold text-muted-foreground/70 ml-1">reps</span>
+                   <span class="text-xs font-semibold text-muted-foreground/70 ml-1">{{ t("common.reps") }}</span>
                 </div>
-                <div v-else-if="log.duration != null" class="flex items-baseline min-w-0">
-                   <span class="text-sm font-bold tabular-nums text-foreground">{{ formatDurationMinutes(log.duration).value }}</span>
-                   <span class="text-xs font-semibold text-muted-foreground/70 ml-1">{{ formatDurationMinutes(log.duration).unit }}</span>
+                <div v-else-if="formattedDuration != null" class="flex items-baseline min-w-0">
+                   <span class="text-sm font-bold tabular-nums text-foreground">{{ formattedDuration.value }}</span>
+                   <span class="text-xs font-semibold text-muted-foreground/70 ml-1">{{ formattedDuration.unit }}</span>
                 </div>
                 <div v-else-if="log.distance != null" class="flex items-baseline min-w-0">
                    <span class="text-sm font-bold tabular-nums text-foreground">{{ log.distance }}</span>
-                   <span class="text-xs font-semibold text-muted-foreground/70 ml-1">m</span>
+                   <span class="text-xs font-semibold text-muted-foreground/70 ml-1">{{ t("common.m") }}</span>
                 </div>
                 <div v-else class="flex items-baseline">
                    <span class="text-sm font-bold text-muted-foreground/40">-</span>
@@ -207,7 +236,7 @@ const displayWeight = computed(() => {
               <div class="flex items-baseline pl-1 min-w-0">
                 <template v-if="log.weight != null">
                    <span class="text-sm font-bold tabular-nums text-primary">{{ log.weight }}</span>
-                   <span class="text-xs font-semibold text-muted-foreground/70 ml-1">kg</span>
+                   <span class="text-xs font-semibold text-muted-foreground/70 ml-1">{{ t("common.kg") }}</span>
                 </template>
                 <template v-else>
                    <span class="text-sm font-bold text-muted-foreground/40">-</span>
@@ -217,7 +246,7 @@ const displayWeight = computed(() => {
               <!-- Column 3: RPE & Chevron -->
               <div class="flex items-center justify-between pl-1 w-full min-w-0">
                 <span v-if="log.rpe" class="text-xs font-semibold tabular-nums text-orange-400 whitespace-nowrap">
-                  RPE {{ log.rpe }}
+                  {{ t("coach.card.rpe") }} {{ log.rpe }}
                 </span>
                 <span v-else class="text-xs font-semibold text-muted-foreground/40 whitespace-nowrap">-</span>
                 

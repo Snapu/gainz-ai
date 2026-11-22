@@ -20,6 +20,8 @@ import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiNumberField from "@/shared/presentation/components/ui/UiNumberField.vue";
 import UiProgressionLine from "@/shared/presentation/components/ui/UiProgressionLine.vue";
 import { useToast } from "@/shared/presentation/composables/useToast";
+import { t } from "@/shared/presentation/i18n";
+import { formatRelativeDays } from "@/shared/presentation/i18n/formatters";
 
 const props = defineProps<{
   open: boolean;
@@ -260,33 +262,6 @@ function formatMetric(value: number | undefined, suffix: string): string | null 
   return `${value}${suffix}`;
 }
 
-function formatLastUsed(loggedAt: Date): string {
-  const today = new Date();
-  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const startOfLoggedDay = new Date(
-    loggedAt.getFullYear(),
-    loggedAt.getMonth(),
-    loggedAt.getDate(),
-  );
-  const dayDiff = Math.round(
-    (startOfToday.getTime() - startOfLoggedDay.getTime()) / (1000 * 60 * 60 * 24),
-  );
-
-  if (dayDiff <= 0) return "Today";
-  if (dayDiff === 1) return "Yesterday";
-  if (dayDiff < 7) return `${dayDiff}d ago`;
-
-  const weekDiff = Math.round(dayDiff / 7);
-  if (weekDiff < 5) return `${weekDiff}w ago`;
-
-  const monthDiff =
-    (today.getFullYear() - loggedAt.getFullYear()) * 12 + today.getMonth() - loggedAt.getMonth();
-  if (monthDiff < 12) return `${monthDiff}mo ago`;
-
-  const yearDiff = today.getFullYear() - loggedAt.getFullYear();
-  return `${yearDiff}y ago`;
-}
-
 const exerciseOptionDetails = computed<Record<string, ExerciseSelectorOptionDetails>>(() => {
   return Object.fromEntries(
     exerciseOptions.value.map((exerciseName) => {
@@ -295,11 +270,13 @@ const exerciseOptionDetails = computed<Record<string, ExerciseSelectorOptionDeta
         typeof lastLog?.duration === "number" && lastLog.duration > 0
           ? formatDurationMinutes(lastLog.duration)
           : null;
-      const durationMeta = formattedDur ? `${formattedDur.value} ${formattedDur.unit}` : null;
+      const durationMeta = formattedDur
+        ? `${formattedDur.value} ${formattedDur.unit === "min" ? t("common.min") : t("common.s")}`
+        : null;
       const meta = [
-        formatMetric(lastLog?.weight, " kg"),
-        formatMetric(lastLog?.reps, " reps"),
-        formatMetric(lastLog?.distance, " m"),
+        formatMetric(lastLog?.weight, ` ${t("common.kg")}`),
+        formatMetric(lastLog?.reps, ` ${t("common.reps")}`),
+        formatMetric(lastLog?.distance, ` ${t("common.m")}`),
         durationMeta,
       ]
         .filter((label): label is string => Boolean(label))
@@ -311,7 +288,7 @@ const exerciseOptionDetails = computed<Record<string, ExerciseSelectorOptionDeta
       return [
         exerciseName,
         {
-          description: lastLog ? formatLastUsed(lastLog.loggedAt) : undefined,
+          description: lastLog ? formatRelativeDays(lastLog.loggedAt) : undefined,
           meta,
         },
       ];
@@ -334,19 +311,19 @@ const exercisePrSummary = computed(() => {
 });
 
 const rpeLabel = computed(() => {
-  if (formRpe.value === 10) return "10 - Absolute Max (0 RIR)";
-  if (formRpe.value === 9.5) return "9.5 - Maybe 1 more (0-1 RIR)";
-  if (formRpe.value === 9) return "9 - 1 Rep Left (1 RIR)";
-  if (formRpe.value === 8.5) return "8.5 - Definitely 1, maybe 2";
-  if (formRpe.value === 8) return "8 - 2 Reps Left (2 RIR)";
-  if (formRpe.value === 7.5) return "7.5 - Definitely 2, maybe 3";
-  if (formRpe.value === 7) return "7 - 3 Reps Left (3 RIR)";
-  return `${formRpe.value} - Lower Intensity`;
+  if (formRpe.value === 10) return t("logSheet.rpeLabels.10");
+  if (formRpe.value === 9.5) return t("logSheet.rpeLabels.9.5");
+  if (formRpe.value === 9) return t("logSheet.rpeLabels.9");
+  if (formRpe.value === 8.5) return t("logSheet.rpeLabels.8.5");
+  if (formRpe.value === 8) return t("logSheet.rpeLabels.8");
+  if (formRpe.value === 7.5) return t("logSheet.rpeLabels.7.5");
+  if (formRpe.value === 7) return t("logSheet.rpeLabels.7");
+  return t("logSheet.rpeLabels.lower", { rpe: formRpe.value });
 });
 
 async function saveLog() {
   if (!formExerciseName.value) {
-    toast({ title: "Exercise Name Required", variant: "destructive" });
+    toast({ title: t("logSheet.nameRequired"), variant: "destructive" });
     return;
   }
 
@@ -388,8 +365,8 @@ async function saveLog() {
       }
       if (status === "queued-offline") {
         toast({
-          title: "Saved Offline",
-          description: "Set kept locally and queued to sync when back online.",
+          title: t("logSheet.savedOfflineTitle"),
+          description: t("logSheet.savedOfflineDesc"),
         });
       }
       internalOpen.value = false;
@@ -408,8 +385,8 @@ async function deleteLog() {
     (status) => {
       if (status === "queued-offline") {
         toast({
-          title: "Deleted Offline",
-          description: "Set removed locally and queued to sync when back online.",
+          title: t("logSheet.deletedOfflineTitle"),
+          description: t("logSheet.deletedOfflineDesc"),
         });
       }
       internalOpen.value = false;
@@ -425,7 +402,7 @@ async function deleteLog() {
 <template>
   <UiBottomSheet 
     v-model:open="internalOpen" 
-    :title="props.logToEdit ? 'Edit Exercise' : 'Log Exercise'"
+    :title="props.logToEdit ? t('logSheet.editSetTitle') : t('logSheet.logSetTitle')"
     title-class="text-xl font-black"
   >
     <!-- Scrollable Form Content -->
@@ -435,7 +412,7 @@ async function deleteLog() {
         v-model="formExerciseName"
         :options="exerciseOptions"
         :option-details="exerciseOptionDetails"
-        placeholder="Select or Search Exercise..."
+        :placeholder="t('logSheet.selectPlaceholder')"
         class="bg-card shrink-0"
       />
 
@@ -453,7 +430,7 @@ async function deleteLog() {
         >
           <div class="flex items-center gap-2.5 min-w-0">
             <span class="text-micro tracking-widest text-muted-foreground">
-              Progression
+              {{ t("logSheet.progression") }}
             </span>
             <UiBadge
               v-if="exercisePrSummary"
@@ -466,7 +443,7 @@ async function deleteLog() {
 
           <div class="flex items-center gap-1.5 shrink-0 ml-2">
             <span class="text-micro text-muted-foreground/60">
-              History
+              {{ t("logSheet.history") }}
             </span>
             <ChevronDown
               class="w-4 h-4 text-muted-foreground/60 transition-transform duration-200"
@@ -487,20 +464,20 @@ async function deleteLog() {
       <!-- Metrics -->
       <div class="flex flex-col gap-3 shrink-0">
         <div class="grid grid-cols-2 gap-4">
-          <UiNumberField v-model="formReps" label="Reps" :min="0" :step="1" />
+          <UiNumberField v-model="formReps" :label="t('logSheet.reps')" :min="0" :step="1" />
           <UiNumberField
             v-model="formWeight"
-            label="Weight (kg)"
+            :label="t('logSheet.weightKg')"
             :min="0"
             :step="weightStep"
-            :description="isDumbbellExercise ? 'Total (both hands)' : undefined"
+            :description="isDumbbellExercise ? t('logSheet.dumbbellHint') : undefined"
           >
             <template #label-trailing>
               <UiButton
                 variant="tonal"
                 size="micro"
                 data-testid="weight-step-toggle"
-                aria-label="Cycle weight step size"
+                :aria-label="t('logSheet.cycleWeightStepAria')"
                 @click="cycleWeightStep"
               >
                 ±{{ weightStep }}
@@ -512,7 +489,7 @@ async function deleteLog() {
         <div v-if="showExtraMetrics" class="grid grid-cols-2 gap-4 animate-in fade-in duration-200">
           <UiNumberField
             v-model="formDistance"
-            label="Distance"
+            :label="t('logSheet.distance')"
             :min="0"
             :step="distanceStep"
           >
@@ -521,17 +498,17 @@ async function deleteLog() {
                 variant="tonal"
                 size="micro"
                 data-testid="distance-unit-toggle"
-                aria-label="Toggle distance unit and step size"
+                :aria-label="t('logSheet.toggleDistanceUnitAria')"
                 @click="toggleDistanceUnit"
               >
-                {{ distanceUnit === 'm' ? 'm · ±50' : 'km · ±0.5' }}
+                {{ distanceUnit === 'm' ? `${t('common.m')} · ±50` : `${t('common.km')} · ±0.5` }}
               </UiButton>
             </template>
           </UiNumberField>
 
           <UiNumberField
             v-model="formDuration"
-            label="Duration"
+            :label="t('logSheet.duration')"
             :min="0"
             :step="durationStep"
           >
@@ -540,10 +517,10 @@ async function deleteLog() {
                 variant="tonal"
                 size="micro"
                 data-testid="duration-unit-toggle"
-                aria-label="Toggle duration unit and step size"
+                :aria-label="t('logSheet.toggleDurationUnitAria')"
                 @click="toggleDurationUnit"
               >
-                {{ durationUnit === 'min' ? 'min · ±1' : 'sec · ±5' }}
+                {{ durationUnit === 'min' ? `${t('common.min')} · ±1` : `${t('common.sec')} · ±5` }}
               </UiButton>
             </template>
           </UiNumberField>
@@ -558,19 +535,19 @@ async function deleteLog() {
           @click="showExtraMetrics = true"
         >
           <Plus class="w-3.5 h-3.5 text-primary shrink-0" />
-          <span>Distance &amp; Duration</span>
+          <span>{{ t("logSheet.extraMetricsChip") }}</span>
         </UiButton>
       </div>
 
       <!-- RPE Slider -->
       <div class="space-y-3 px-1 mt-1 shrink-0">
         <div class="flex items-center justify-between">
-          <span class="text-micro text-muted-foreground/60">Effort (RPE)</span>
+          <span class="text-micro text-muted-foreground/60">{{ t("logSheet.effortRpe") }}</span>
           <span
             class="text-xs font-bold tabular-nums transition-colors duration-200"
             :class="isRpeEnabled ? 'text-primary' : 'text-muted-foreground/50'"
           >
-            {{ isRpeEnabled ? rpeLabel : 'Optional' }}
+            {{ isRpeEnabled ? rpeLabel : t("common.optional") }}
           </span>
         </div>
         
@@ -579,7 +556,7 @@ async function deleteLog() {
             <input
               type="checkbox"
               v-model="isRpeEnabled"
-              aria-label="Enable RPE tracking"
+              :aria-label="t('logSheet.enableRpeAria')"
               class="sr-only peer"
             />
             <div class="w-full h-full bg-white/10 rounded-full peer peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-primary peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background peer-checked:bg-primary transition-colors duration-200 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-transform after:duration-200 peer-checked:after:translate-x-4 shadow-sm"></div>
@@ -591,7 +568,7 @@ async function deleteLog() {
             max="10" 
             step="0.5" 
             v-model.number="formRpe"
-            aria-label="Effort (RPE)"
+            :aria-label="t('logSheet.effortRpe')"
             @input="isRpeEnabled = true"
             @change="isRpeEnabled = true"
             @click="isRpeEnabled = true"
@@ -613,12 +590,12 @@ async function deleteLog() {
           variant="outline" 
           class="h-14 rounded-xl px-5 border-destructive/20 text-destructive hover:bg-destructive/10 active:scale-95 transition-transform" 
           @click="deleteLog"
-          aria-label="Delete Set"
+          :aria-label="t('logSheet.deleteSetAria')"
         >
           <Trash class="w-5 h-5" />
         </UiButton>
         <UiButton haptic class="flex-1 h-14 rounded-xl text-base font-bold shadow-lg shadow-primary/10 active:scale-95 transition-transform" @click="saveLog">
-          {{ props.logToEdit ? "Save Changes" : "Save Set" }}
+          {{ props.logToEdit ? t("logSheet.saveChanges") : t("logSheet.saveSet") }}
         </UiButton>
       </div>
     </template>

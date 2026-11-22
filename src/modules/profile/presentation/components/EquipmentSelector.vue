@@ -18,24 +18,41 @@ import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiInput from "@/shared/presentation/components/ui/UiInput.vue";
 import UiToggleGroup from "@/shared/presentation/components/ui/UiToggleGroup.vue";
 import UiToggleGroupItem from "@/shared/presentation/components/ui/UiToggleGroupItem.vue";
+import { t } from "@/shared/presentation/i18n";
 
-const ADD_ERROR_MESSAGES: Record<Exclude<AddEquipmentError, "empty">, string> = {
-  "too-short": `Enter at least ${MIN_EQUIPMENT_NAME_LENGTH} characters.`,
-  "too-long": `Keep equipment names under ${MAX_EQUIPMENT_NAME_LENGTH} characters.`,
-  "invalid-characters": "Commas and line breaks are not allowed.",
-  duplicate: "This equipment is already added.",
-  "max-reached": `You can select up to ${MAX_EQUIPMENT_ITEMS} equipment items.`,
-};
+function formatAddError(error: Exclude<AddEquipmentError, "empty">): string {
+  switch (error) {
+    case "too-short":
+      return t("equipment.errors.too-short", { min: MIN_EQUIPMENT_NAME_LENGTH });
+    case "too-long":
+      return t("equipment.errors.too-long", { max: MAX_EQUIPMENT_NAME_LENGTH });
+    case "invalid-characters":
+      return t("equipment.errors.invalid-characters");
+    case "duplicate":
+      return t("equipment.errors.duplicate");
+    case "max-reached":
+      return t("equipment.errors.max-reached", { max: MAX_EQUIPMENT_ITEMS });
+  }
+}
 
 const equipmentAccess = defineModel<EquipmentOption[] | undefined>();
 
 const customInput = ref("");
-const customError = ref("");
-const presetMatchNotice = ref("");
+const customErrorKey = ref<Exclude<AddEquipmentError, "empty"> | null>(null);
+const matchedPresetId = ref<(typeof EQUIPMENT_PRESETS)[number]["id"] | null>(null);
+
+const customError = computed(() =>
+  customErrorKey.value ? formatAddError(customErrorKey.value) : "",
+);
+const presetMatchNotice = computed(() =>
+  matchedPresetId.value
+    ? t("equipment.presetSelected", { label: t(`equipment.presets.${matchedPresetId.value}`) })
+    : "",
+);
 
 watch(customInput, (nextVal) => {
-  if (customError.value) customError.value = "";
-  if (nextVal.length > 0 && presetMatchNotice.value) presetMatchNotice.value = "";
+  if (customErrorKey.value) customErrorKey.value = null;
+  if (nextVal.length > 0 && matchedPresetId.value) matchedPresetId.value = null;
 });
 
 const selectedPresets = computed<string[]>({
@@ -59,20 +76,20 @@ function handleAddCustom(): void {
       const matchedPreset = EQUIPMENT_PRESETS.find((preset) => preset.id === addedItem);
       equipmentAccess.value = nextEquipment;
       customInput.value = "";
-      customError.value = "";
-      presetMatchNotice.value = matchedPreset ? `Selected preset: ${matchedPreset.label}` : "";
+      customErrorKey.value = null;
+      matchedPresetId.value = matchedPreset?.id ?? null;
     },
     (error) => {
-      presetMatchNotice.value = "";
-      customError.value = error === "empty" ? "" : ADD_ERROR_MESSAGES[error];
+      matchedPresetId.value = null;
+      customErrorKey.value = error === "empty" ? null : error;
     },
   );
 }
 
 function handleRemoveCustom(item: string): void {
   equipmentAccess.value = removeEquipmentItem(equipmentAccess.value, item);
-  customError.value = "";
-  presetMatchNotice.value = "";
+  customErrorKey.value = null;
+  matchedPresetId.value = null;
 }
 
 onBeforeUnmount(() => {
@@ -86,7 +103,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="flex flex-col gap-6">
     <div>
-      <h3 class="text-sm font-bold text-foreground mb-3">Custom equipment</h3>
+      <h3 class="text-sm font-bold text-foreground mb-3">{{ t("equipment.customHeading") }}</h3>
 
       <form class="flex items-start gap-2" @submit.prevent="handleAddCustom">
         <UiInput
@@ -96,15 +113,15 @@ onBeforeUnmount(() => {
           :maxlength="MAX_EQUIPMENT_NAME_LENGTH"
           :disabled="isAtLimit"
           :error="customError"
-          placeholder="e.g. Smith machine"
-          aria-label="Custom equipment"
+          :placeholder="t('equipment.placeholder')"
+          :aria-label="t('equipment.customHeading')"
         />
         <UiButton
           type="submit"
           :variant="canSubmit ? 'tonal' : 'secondary'"
           class="h-14 shrink-0 px-4"
           :disabled="!canSubmit"
-          aria-label="Add custom equipment"
+          :aria-label="t('equipment.addAria')"
         >
           <Plus class="w-5 h-5" />
         </UiButton>
@@ -119,7 +136,7 @@ onBeforeUnmount(() => {
       </p>
 
       <p v-if="isAtLimit && !customError" class="mt-2 text-xs font-medium text-muted-foreground">
-        Maximum of {{ MAX_EQUIPMENT_ITEMS }} equipment items selected.
+        {{ t("equipment.maxSelected", { max: MAX_EQUIPMENT_ITEMS }) }}
       </p>
 
       <ul v-if="customItems.length > 0" class="flex flex-col gap-2 mt-3">
@@ -133,7 +150,7 @@ onBeforeUnmount(() => {
             variant="ghost"
             size="icon"
             class="shrink-0 text-muted-foreground hover:text-foreground"
-            :aria-label="`Remove ${item}`"
+            :aria-label="t('equipment.removeAria', { item })"
             @click="handleRemoveCustom(item)"
           >
             <X class="w-4 h-4" />
@@ -143,7 +160,7 @@ onBeforeUnmount(() => {
     </div>
 
     <div>
-      <h3 class="text-sm font-bold text-foreground mb-3">Standard equipment</h3>
+      <h3 class="text-sm font-bold text-foreground mb-3">{{ t("equipment.standardHeading") }}</h3>
       <UiToggleGroup type="multiple" v-model="selectedPresets">
         <UiToggleGroupItem
           v-for="preset in EQUIPMENT_PRESETS"
@@ -152,7 +169,7 @@ onBeforeUnmount(() => {
           :disabled="isAtLimit && !selectedPresets.includes(preset.id)"
           class="py-3"
         >
-          {{ preset.label }}
+          {{ t(`equipment.presets.${preset.id}`) }}
         </UiToggleGroupItem>
       </UiToggleGroup>
     </div>

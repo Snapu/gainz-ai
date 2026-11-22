@@ -16,6 +16,7 @@ import UiNumberField from "@/shared/presentation/components/ui/UiNumberField.vue
 import UiTextarea from "@/shared/presentation/components/ui/UiTextarea.vue";
 import UiToggleGroup from "@/shared/presentation/components/ui/UiToggleGroup.vue";
 import UiToggleGroupItem from "@/shared/presentation/components/ui/UiToggleGroupItem.vue";
+import { t } from "@/shared/presentation/i18n";
 
 const router = useRouter();
 const route = useRoute();
@@ -24,19 +25,15 @@ const { userProfile } = storeToRefs(profileStore);
 
 const isEditMode = computed(() => route.query.mode === "edit");
 
-const fitnessGoalLabels: [string, FitnessGoal][] = [
-  ["Build muscle", "build_muscle"],
-  ["Lose fat", "lose_fat"],
-  ["Improve endurance", "improve_endurance"],
-  ["Increase mobility", "increase_mobility"],
-  ["General fitness", "general_fitness"],
+const fitnessGoalOptions: FitnessGoal[] = [
+  "build_muscle",
+  "lose_fat",
+  "improve_endurance",
+  "increase_mobility",
+  "general_fitness",
 ];
 
-const fitnessLevelLabels: [string, FitnessLevel][] = [
-  ["Beginner", "beginner"],
-  ["Intermediate", "intermediate"],
-  ["Advanced", "advanced"],
-];
+const fitnessLevelOptions: FitnessLevel[] = ["beginner", "intermediate", "advanced"];
 
 const workoutDaysPerWeekLabels: [string, number][] = [
   ["2", 2],
@@ -45,11 +42,7 @@ const workoutDaysPerWeekLabels: [string, number][] = [
   ["5+", 5],
 ];
 
-const workoutLocationLabels: [string, WorkoutLocation][] = [
-  ["Gym", "gym"],
-  ["Home", "home"],
-  ["Both", "both"],
-];
+const workoutLocationOptions: WorkoutLocation[] = ["gym", "home", "both"];
 
 const workoutDaysString = computed<string | undefined>({
   get: () =>
@@ -59,12 +52,7 @@ const workoutDaysString = computed<string | undefined>({
   },
 });
 
-const workoutDurationLabels: [string, number][] = [
-  ["30 min", 30],
-  ["45 min", 45],
-  ["60 min", 60],
-  ["90 min", 90],
-];
+const workoutDurationValues = [30, 45, 60, 90] as const;
 
 const workoutDurationString = computed<string | undefined>({
   get: () =>
@@ -79,10 +67,10 @@ const workoutDurationString = computed<string | undefined>({
 const stepper = useStepper(
   WIZARD_STEPS.reduce(
     (acc, step) => {
-      acc[step.id] = { title: step.title };
+      acc[step.id] = { id: step.id };
       return acc;
     },
-    {} as Record<string, { title: string }>,
+    {} as Record<string, { id: (typeof WIZARD_STEPS)[number]["id"] }>,
   ),
 );
 
@@ -122,7 +110,10 @@ function handleNext() {
   }
 }
 
-const currentStepTitle = computed(() => stepper.current.value?.title ?? "Edit Profile");
+const currentStepTitle = computed(() => {
+  const stepId = stepper.current.value?.id;
+  return stepId ? t(`wizard.steps.${stepId}.title`) : t("wizard.editProfile");
+});
 
 function handleBack() {
   if (stepper.isFirst.value) {
@@ -155,7 +146,7 @@ function skipWizard() {
         variant="ghost"
         size="icon"
         class="-ml-1 shrink-0"
-        aria-label="Back"
+        :aria-label="t('common.back')"
         @click="handleBack"
       >
         <ArrowLeft class="w-5 h-5" />
@@ -183,7 +174,7 @@ function skipWizard() {
           class="text-primary font-semibold tracking-wide"
           @click="skipWizard"
         >
-          Skip
+          {{ t("common.skip") }}
         </UiButton>
       </template>
     </AppHeader>
@@ -193,30 +184,30 @@ function skipWizard() {
       <div class="flex-1 animate-in fade-in slide-in-from-right-4 duration-300" :key="currentStepIndex">
         <!-- Goal -->
         <template v-if="stepper.isCurrent('goal')">
-          <h2 class="text-3xl font-bold mb-2 tracking-tight">What's your primary goal?</h2>
-          <p class="text-muted-foreground mb-10 text-lg">Select all that apply.</p>
+          <h2 class="text-3xl font-bold mb-2 tracking-tight">{{ t("wizard.steps.goal.heading") }}</h2>
+          <p class="text-muted-foreground mb-10 text-lg">{{ t("wizard.steps.goal.subtitle") }}</p>
           <UiToggleGroup type="multiple" v-model="userProfile.fitnessGoal">
-            <UiToggleGroupItem v-for="[label, value] in fitnessGoalLabels" :key="value" :value="value">
-              {{ label }}
+            <UiToggleGroupItem v-for="goal in fitnessGoalOptions" :key="goal" :value="goal">
+              {{ t(`wizard.fitnessGoal.${goal}`) }}
             </UiToggleGroupItem>
           </UiToggleGroup>
         </template>
 
         <!-- Level -->
         <template v-else-if="stepper.isCurrent('level')">
-          <h2 class="text-3xl font-bold mb-2 tracking-tight">Experience level</h2>
-          <p class="text-muted-foreground mb-10 text-lg">How long have you been training?</p>
+          <h2 class="text-3xl font-bold mb-2 tracking-tight">{{ t("wizard.steps.level.heading") }}</h2>
+          <p class="text-muted-foreground mb-10 text-lg">{{ t("wizard.steps.level.subtitle") }}</p>
           <UiToggleGroup type="single" v-model="userProfile.fitnessLevel">
-            <UiToggleGroupItem v-for="[label, value] in fitnessLevelLabels" :key="value" :value="value">
-              {{ label }}
+            <UiToggleGroupItem v-for="level in fitnessLevelOptions" :key="level" :value="level">
+              {{ t(`wizard.fitnessLevel.${level}`) }}
             </UiToggleGroupItem>
           </UiToggleGroup>
         </template>
 
         <!-- Days -->
         <template v-else-if="stepper.isCurrent('days')">
-          <h2 class="text-3xl font-bold mb-2 tracking-tight">Training frequency</h2>
-          <p class="text-muted-foreground mb-10 text-lg">Workouts per week</p>
+          <h2 class="text-3xl font-bold mb-2 tracking-tight">{{ t("wizard.steps.days.heading") }}</h2>
+          <p class="text-muted-foreground mb-10 text-lg">{{ t("wizard.steps.days.subtitle") }}</p>
           <UiToggleGroup type="single" v-model="workoutDaysString" class="grid grid-cols-2">
             <UiToggleGroupItem v-for="[label, value] in workoutDaysPerWeekLabels" :key="value" :value="String(value)" class="justify-center h-20 text-xl font-bold">
               {{ label }}
@@ -226,52 +217,52 @@ function skipWizard() {
 
         <!-- Duration -->
         <template v-else-if="stepper.isCurrent('duration')">
-          <h2 class="text-3xl font-bold mb-2 tracking-tight">Session length</h2>
-          <p class="text-muted-foreground mb-10 text-lg">How long do you usually train?</p>
+          <h2 class="text-3xl font-bold mb-2 tracking-tight">{{ t("wizard.steps.duration.heading") }}</h2>
+          <p class="text-muted-foreground mb-10 text-lg">{{ t("wizard.steps.duration.subtitle") }}</p>
           <UiToggleGroup type="single" v-model="workoutDurationString" class="grid grid-cols-2">
-            <UiToggleGroupItem v-for="[label, value] in workoutDurationLabels" :key="value" :value="String(value)" class="justify-center h-20 text-xl font-bold">
-              {{ label }}
+            <UiToggleGroupItem v-for="mins in workoutDurationValues" :key="mins" :value="String(mins)" class="justify-center h-20 text-xl font-bold">
+              {{ t("wizard.durationOption", { minutes: mins }) }}
             </UiToggleGroupItem>
           </UiToggleGroup>
         </template>
 
         <!-- Location -->
         <template v-else-if="stepper.isCurrent('location')">
-          <h2 class="text-3xl font-bold mb-2 tracking-tight">Where do you train?</h2>
-          <p class="text-muted-foreground mb-10 text-lg">Sets your equipment baseline.</p>
+          <h2 class="text-3xl font-bold mb-2 tracking-tight">{{ t("wizard.steps.location.heading") }}</h2>
+          <p class="text-muted-foreground mb-10 text-lg">{{ t("wizard.steps.location.subtitle") }}</p>
           <UiToggleGroup type="single" v-model="userProfile.workoutLocation">
-            <UiToggleGroupItem v-for="[label, value] in workoutLocationLabels" :key="value" :value="value">
-              {{ label }}
+            <UiToggleGroupItem v-for="loc in workoutLocationOptions" :key="loc" :value="loc">
+              {{ t(`wizard.workoutLocation.${loc}`) }}
             </UiToggleGroupItem>
           </UiToggleGroup>
         </template>
 
         <!-- Equipment -->
         <template v-else-if="stepper.isCurrent('equipment')">
-          <h2 class="text-3xl font-bold mb-2 tracking-tight">Equipment access</h2>
-          <p class="text-muted-foreground mb-10 text-lg">Select presets or add your own.</p>
+          <h2 class="text-3xl font-bold mb-2 tracking-tight">{{ t("wizard.steps.equipment.heading") }}</h2>
+          <p class="text-muted-foreground mb-10 text-lg">{{ t("wizard.steps.equipment.subtitle") }}</p>
           <EquipmentSelector v-model="userProfile.equipmentAccess" />
         </template>
 
         <!-- Body Stats -->
         <template v-else-if="stepper.isCurrent('stats')">
-          <h2 class="text-3xl font-bold mb-2 tracking-tight">Body Stats</h2>
-          <p class="text-muted-foreground mb-10 text-lg">Optional, helps the AI format plans.</p>
+          <h2 class="text-3xl font-bold mb-2 tracking-tight">{{ t("wizard.steps.stats.heading") }}</h2>
+          <p class="text-muted-foreground mb-10 text-lg">{{ t("wizard.steps.stats.subtitle") }}</p>
           <div class="space-y-6">
-            <UiNumberField v-model="userProfile.age" label="Age" :min="10" :max="120" />
-            <UiNumberField v-model="userProfile.heightCm" label="Height (cm)" :min="50" :max="300" />
-            <UiNumberField v-model="userProfile.weightKg" label="Weight (kg)" :min="20" :max="300" :step="0.5" />
+            <UiNumberField v-model="userProfile.age" :label="t('wizard.steps.stats.age')" :min="10" :max="120" />
+            <UiNumberField v-model="userProfile.heightCm" :label="t('wizard.steps.stats.heightCm')" :min="50" :max="300" />
+            <UiNumberField v-model="userProfile.weightKg" :label="t('wizard.steps.stats.weightKg')" :min="20" :max="300" :step="0.5" />
           </div>
         </template>
 
         <!-- Free Input -->
         <template v-else-if="stepper.isCurrent('extra')">
-          <h2 class="text-3xl font-bold mb-2 tracking-tight">Additional Context</h2>
-          <p class="text-muted-foreground mb-10 text-lg">Any injuries, specific focus areas, or limitations?</p>
+          <h2 class="text-3xl font-bold mb-2 tracking-tight">{{ t("wizard.steps.extra.heading") }}</h2>
+          <p class="text-muted-foreground mb-10 text-lg">{{ t("wizard.steps.extra.subtitle") }}</p>
           <UiTextarea
             v-model="userProfile.freeUserInput"
             auto-resize
-            placeholder="e.g. Bad left knee, want to focus on explosive strength..."
+            :placeholder="t('wizard.steps.extra.placeholder')"
             class="min-h-[160px] overflow-hidden"
           />
         </template>
@@ -286,9 +277,9 @@ function skipWizard() {
         :data-state="stepper.isLast.value ? 'save' : 'next'"
         @click="handleNext"
       >
-        <span v-if="!stepper.isLast.value">Continue</span>
+        <span v-if="!stepper.isLast.value">{{ t("common.continue") }}</span>
         <div v-else class="flex items-center gap-2">
-          Finish Setup <Check class="w-5 h-5" />
+          {{ t("wizard.finishSetup") }} <Check class="w-5 h-5" />
         </div>
       </UiButton>
     </div>

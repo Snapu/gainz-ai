@@ -269,12 +269,17 @@ describe("splitWeight", () => {
   it("handles pure bodyweight string gracefully", () => {
     expect(splitWeight("bodyweight")).toEqual({ value: "BW", unit: "" });
     expect(splitWeight("BW")).toEqual({ value: "BW", unit: "" });
+    expect(splitWeight("Körpergewicht")).toEqual({ value: "BW", unit: "" });
+    expect(splitWeight("Eigengewicht")).toEqual({ value: "BW", unit: "" });
+    expect(splitWeight("Eigengew.")).toEqual({ value: "BW", unit: "" });
   });
 
   it("handles bodyweight plus additional weight gracefully", () => {
     expect(splitWeight("bodyweight + 10kg")).toEqual({ value: "BW + 10", unit: "kg" });
     expect(splitWeight("BW + 20")).toEqual({ value: "BW + 20", unit: "kg" });
     expect(splitWeight("bw+5.5 lbs")).toEqual({ value: "BW + 5.5", unit: "lbs" });
+    expect(splitWeight("Körpergewicht + 10 kg")).toEqual({ value: "BW + 10", unit: "kg" });
+    expect(splitWeight("Eigengewicht + 12.5")).toEqual({ value: "BW + 12.5", unit: "kg" });
   });
 
   it("returns empty strings for undefined", () => {

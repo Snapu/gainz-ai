@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/vue";
 import { errAsync, ResultAsync } from "neverthrow";
 import { z } from "zod";
+import { getStoredLocale, toBcp47Locale } from "@/lib/locale";
 import { createExerciseMuscleMapRepository } from "@/modules/platform/infrastructure";
 import { normalizeEquipmentList } from "@/modules/profile/domain";
 import {
@@ -285,10 +286,7 @@ function sanitizePreviousMessage(msg: CoachingMessage): {
 }
 
 function resolveLocale(): string {
-  if (typeof navigator !== "undefined" && typeof navigator.language === "string") {
-    return navigator.language.trim() || "en-US";
-  }
-  return "en-US";
+  return toBcp47Locale(getStoredLocale());
 }
 
 function inRange(value: number | undefined, min: number, max: number): number | undefined {

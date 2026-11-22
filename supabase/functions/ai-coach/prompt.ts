@@ -70,7 +70,7 @@ When constraints clash, strictly follow this priority order:
   2. PLAN: Rationale for exercises/swaps.
 
 4. STRICT OUTPUT RULES:
-- Keep 'coachMessage' to 2-3 short, punchy paragraphs in the user's locale.
+- Match the user's locale ('locale' in '# session') for ALL user-facing text fields: 'coachMessage' (2-3 short, punchy paragraphs), 'scratchpad', 'suggestedFollowUps' ('label' & 'prompt'), 'sessionLabel', 'focusDescription', and exercise 'notes'.
 - MANDATORY CONSTRAINTS: Follow '# goals' explicitly.
 - Use EXACT exerciseName from the '# exercises' section or '# logs'. DO NOT invent new variations of existing exercises. Exception: you may introduce well-known cardio, mobility, or conditioning movements (e.g., Jogging, Incline Walk, Cycling, Jump Rope, Sled Push, Kettlebell Swings, Battle Ropes, Hip 90/90 Stretch) that are not yet in the user's history.
 - Do NOT give ranges for targetWeight, give a single number (e.g. '82.5kg'). For dumbbell exercises, ALWAYS output the TOTAL combined weight (e.g., for two 20kg dumbbells, output '40kg').

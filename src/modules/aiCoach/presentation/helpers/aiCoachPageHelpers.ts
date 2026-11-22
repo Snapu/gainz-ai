@@ -6,6 +6,8 @@ import {
   formatDurationSeconds,
   isoDateString,
 } from "@/modules/sharedKernel/domain";
+import { t } from "@/shared/presentation/i18n";
+import { formatNextUtcMidnightLocalTime } from "@/shared/presentation/i18n/formatters";
 import {
   type CoachingAdvice,
   type CoachingAdviceError,
@@ -79,12 +81,12 @@ export function tryParseCoachingAdvice(content: string): CoachingAdvice | null {
 
 export function getAiErrorDescription(error: CoachingAdviceError | string): string {
   if (error === "rate-limit-exceeded") {
-    return "Daily AI coaching limit reached. Quota resets at 00:00 UTC.";
+    return t("coach.rateLimitDesc", { time: formatNextUtcMidnightLocalTime() });
   }
   if (error === "unauthorized") {
-    return "Your session expired. Please sign in again.";
+    return t("auth.sessionExpiredDesc");
   }
-  return "Failed to get AI response. Please try again.";
+  return t("coach.genericErrorDesc");
 }
 
 function isStaleAutomatedWorkout(
@@ -225,17 +227,21 @@ export function parseWeight(targetWeight?: string): number | undefined {
   return match?.[1] ? parseFloat(match[1].replace(",", ".")) : undefined;
 }
 
-/** Splits a weight string like "80.5kg" into `{ value: "80.5", unit: "kg" }`. Also handles "bodyweight" elegantly. */
+const BODYWEIGHT_EXACT_RE = /^(?:bodyweight|bw|körpergewicht|eigengewicht|eigengew\.?)$/;
+const BODYWEIGHT_PLUS_RE =
+  /^(?:bodyweight|bw|körpergewicht|eigengewicht|eigengew\.?)\s*\+\s*(\d+[.,]?\d*)\s*(.*)$/;
+
+/** Splits a weight string like "80.5kg" into `{ value: "80.5", unit: "kg" }`. Also handles English/German bodyweight terms. */
 export function splitWeight(weightStr?: string): { value: string; unit: string } {
   if (!weightStr) return { value: "", unit: "" };
 
   const lower = weightStr.toLowerCase().trim();
 
-  if (lower === "bodyweight" || lower === "bw") {
+  if (BODYWEIGHT_EXACT_RE.test(lower)) {
     return { value: "BW", unit: "" };
   }
 
-  const bwPlusMatch = lower.match(/^(?:bodyweight|bw)\s*\+\s*(\d+[.,]?\d*)\s*(.*)$/);
+  const bwPlusMatch = lower.match(BODYWEIGHT_PLUS_RE);
   if (bwPlusMatch) {
     return { value: `BW + ${bwPlusMatch[1]}`, unit: bwPlusMatch[2] || "kg" };
   }

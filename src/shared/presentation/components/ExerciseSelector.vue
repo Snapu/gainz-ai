@@ -2,6 +2,7 @@
 import { Plus, Search } from "@lucide/vue";
 import { computed, type HTMLAttributes, ref, watch } from "vue";
 import { uiFieldClass, uiPressClass } from "@/shared/presentation/components/ui/styles";
+import { t } from "@/shared/presentation/i18n";
 import { cn } from "@/shared/presentation/lib/utils";
 import UiBadge from "./ui/UiBadge.vue";
 import UiBottomSheet from "./ui/UiBottomSheet.vue";
@@ -25,9 +26,9 @@ interface Props {
   class?: HTMLAttributes["class"];
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  placeholder: "Select exercise...",
-});
+const props = defineProps<Props>();
+
+const resolvedPlaceholder = computed(() => props.placeholder ?? t("logSheet.selectPlaceholder"));
 
 const modelValue = defineModel<string>();
 const emit = defineEmits<(e: "select-option", value: string) => void>();
@@ -69,7 +70,7 @@ watch(isOpen, (val) => {
 </script>
 
 <template>
-  <UiBottomSheet v-model:open="isOpen" title="Choose Exercise">
+  <UiBottomSheet v-model:open="isOpen" :title="t('logSheet.chooseExercise')">
     <!-- Trigger -->
     <template #trigger>
       <button
@@ -83,7 +84,7 @@ watch(isOpen, (val) => {
           props.class
         )"
       >
-        <span class="truncate">{{ modelValue || props.placeholder }}</span>
+        <span class="truncate">{{ modelValue || resolvedPlaceholder }}</span>
         <Search class="w-5 h-5 text-muted-foreground/50" />
       </button>
     </template>
@@ -95,7 +96,7 @@ watch(isOpen, (val) => {
         <input
           ref="searchInputRef"
           v-model="searchQuery"
-          placeholder="Search or add new..."
+          :placeholder="t('logSheet.searchPlaceholder')"
           :class="cn(
             uiFieldClass,
             uiPressClass,
@@ -121,15 +122,15 @@ watch(isOpen, (val) => {
           <Plus class="w-6 h-6" />
         </div>
         <div class="flex-1 text-left">
-          <span class="block text-micro text-primary/70 mb-0.5">Create New</span>
+          <span class="block text-micro text-primary/70 mb-0.5">{{ t("logSheet.createNew") }}</span>
           <span class="block text-lg font-bold leading-tight">{{ searchQuery }}</span>
         </div>
       </button>
 
       <!-- Empty State -->
       <div v-if="filteredOptions.length === 0 && !showCreateOption" class="py-12 text-center text-muted-foreground">
-        <p class="text-sm font-bold text-foreground">No exercises found</p>
-        <p class="text-xs font-medium text-muted-foreground mt-1">Type to create a new one</p>
+        <p class="text-sm font-bold text-foreground">{{ t("logSheet.noExercisesFound") }}</p>
+        <p class="text-xs font-medium text-muted-foreground mt-1">{{ t("logSheet.typeToCreate") }}</p>
       </div>
 
       <!-- List Items -->

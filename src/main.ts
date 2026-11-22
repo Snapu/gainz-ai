@@ -13,6 +13,7 @@ import "@/theme/variables.css";
 import { CLIENT_ID } from "@/modules/auth/presentation";
 import { purgeLegacyApiKeys } from "@/modules/profile/presentation";
 import { scrubSentryEvent } from "@/sentryScrubber";
+import { i18n } from "@/shared/presentation/i18n";
 
 const PRELOAD_RELOAD_KEY = "gainz-preload-reload";
 window.addEventListener("vite:preloadError", (event) => {
@@ -29,7 +30,7 @@ window.addEventListener("vite:preloadError", (event) => {
 
 purgeLegacyApiKeys();
 
-const app = createApp(App).use(createPinia()).use(router).use(vue3GoogleLogin, {
+const app = createApp(App).use(createPinia()).use(router).use(i18n).use(vue3GoogleLogin, {
   clientId: CLIENT_ID,
 });
 

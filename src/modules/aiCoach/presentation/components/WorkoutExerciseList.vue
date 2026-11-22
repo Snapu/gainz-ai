@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
+import { t } from "@/shared/presentation/i18n";
 import {
   type DisplayExercise,
   formatDurationSeconds,
@@ -18,13 +19,16 @@ defineProps<{
 }>();
 
 function formatPrescription(ex: WorkoutExerciseListItem): string {
-  if (ex.targetDistanceMeters != null) return `${ex.targetSets} × ${ex.targetDistanceMeters} m`;
+  if (ex.targetDistanceMeters != null) {
+    return `${ex.targetSets} × ${ex.targetDistanceMeters} ${t("common.m")}`;
+  }
   if (ex.targetDurationSeconds != null) {
     const d = formatDurationSeconds(ex.targetDurationSeconds);
-    return `${ex.targetSets} × ${d.value} ${d.unit}`;
+    const unit = d.unit === "min" ? t("common.min") : t("common.s");
+    return `${ex.targetSets} × ${d.value} ${unit}`;
   }
   if (ex.targetReps) return `${ex.targetSets} × ${ex.targetReps}`;
-  return `${ex.targetSets} sets`;
+  return t("coach.card.setsCount", { count: ex.targetSets }, ex.targetSets);
 }
 </script>
 
@@ -52,7 +56,7 @@ function formatPrescription(ex: WorkoutExerciseListItem): string {
           variant="info"
           class="px-1.5 py-0"
         >
-          Superset
+          {{ t("coach.card.superset") }}
         </UiBadge>
       </div>
 
@@ -65,7 +69,7 @@ function formatPrescription(ex: WorkoutExerciseListItem): string {
           {{ ex.targetWeight }}
         </span>
         <span v-if="showRest && ex.restSeconds" class="font-semibold text-muted-foreground/60">
-          · {{ ex.restSeconds }} s
+          · {{ ex.restSeconds }} {{ t("common.s") }}
         </span>
       </div>
     </div>

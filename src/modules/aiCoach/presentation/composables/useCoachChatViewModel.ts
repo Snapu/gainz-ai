@@ -16,6 +16,8 @@ import {
 } from "@/modules/aiCoach/presentation";
 import { useKeyboard } from "@/shared/presentation/composables/useKeyboard";
 import { useToast } from "@/shared/presentation/composables/useToast";
+import { t } from "@/shared/presentation/i18n";
+import { formatTime } from "@/shared/presentation/i18n/formatters";
 import { extractUserQuestion } from "../helpers/aiCoachPageHelpers";
 
 export { extractUserQuestion };
@@ -120,11 +122,6 @@ export function useCoachChatViewModel(options: { isDev?: boolean } = {}) {
   const isLoading = computed<boolean>(() => chatStore.isLoading);
   const streamingCoachMessage = computed<string>(() => chatStore.streamingCoachMessage);
 
-  function formatTime(d: Date | string): string {
-    const date = typeof d === "string" ? new Date(d) : d;
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  }
-
   // Conversation stream containing user questions and coach responses
   const chatMessages = computed<ChatBubbleMessage[]>(() => {
     const allMessages = chatStore.messages;
@@ -161,7 +158,7 @@ export function useCoachChatViewModel(options: { isDev?: boolean } = {}) {
           userQuestion.value = question;
         }
         toast({
-          title: "Error",
+          title: t("common.error"),
           description: getAiErrorDescription(error),
           variant: "destructive",
         });
@@ -196,14 +193,14 @@ export function useCoachChatViewModel(options: { isDev?: boolean } = {}) {
       .writeText(text)
       .then(() => {
         toast({
-          title: "Copied!",
-          description: "Debug prompt payload copied to clipboard.",
+          title: t("common.copied"),
+          description: t("coach.copiedPayloadDesc"),
         });
       })
       .catch(() => {
         toast({
-          title: "Error",
-          description: "Failed to copy payload.",
+          title: t("common.error"),
+          description: t("coach.copyPayloadFailedDesc"),
           variant: "destructive",
         });
       });
@@ -232,7 +229,7 @@ export function useCoachChatViewModel(options: { isDev?: boolean } = {}) {
       })
       .orTee((error) => {
         toast({
-          title: "AI Coaching Error",
+          title: t("coach.errorTitle"),
           description: getAiErrorDescription(error),
           variant: "destructive",
         });

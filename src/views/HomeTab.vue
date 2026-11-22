@@ -12,6 +12,7 @@ import TrainInteractionDeck from "@/shared/presentation/components/TrainInteract
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiTelemetryLoader from "@/shared/presentation/components/ui/UiTelemetryLoader.vue";
+import { t } from "@/shared/presentation/i18n";
 import { useHomeWorkoutViewModel } from "@/views/composables/useHomeWorkoutViewModel";
 
 const {
@@ -270,7 +271,7 @@ onActivated(() => {
       <section>
         <template v-if="chatStore.isLoading && !allWorkoutGroups?.length">
           <div class="pt-4">
-            <UiTelemetryLoader text="Calibrating training session..." />
+            <UiTelemetryLoader :text="t('home.loading')" />
           </div>
         </template>
 
@@ -283,7 +284,7 @@ onActivated(() => {
             >
               <div class="mb-2 flex items-center justify-between gap-4">
                 <div class="flex items-center gap-2">
-                  <h3 class="text-sm font-bold text-foreground">Today's Workout</h3>
+                  <h3 class="text-sm font-bold text-foreground">{{ t("home.todaysWorkout") }}</h3>
                 </div>
                 <div class="flex items-center gap-2">
                   <template v-if="restTimerStore.isResting">
@@ -312,7 +313,7 @@ onActivated(() => {
                   :key="group.id"
                   type="button"
                   @click="scrollToGroup(gIdx, true)"
-                  :aria-label="group.isSuperset ? `Superset ${gIdx + 1}` : group.exercises[0]?.exerciseName"
+                  :aria-label="group.isSuperset ? t('home.supersetAria', { index: gIdx + 1 }) : group.exercises[0]?.exerciseName"
                   :aria-current="gIdx === visibleGroupIndex ? 'step' : undefined"
                   class="flex-1 flex flex-col justify-center gap-1 h-full min-h-[44px] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-95 transition-all group cursor-pointer"
                 >
@@ -368,16 +369,16 @@ onActivated(() => {
           <EmptyState 
             v-else-if="isRestDay"
             :icon="Coffee"
-            title="Rest Day"
-            description="No training scheduled for today."
+            :title="t('home.restDayTitle')"
+            :description="t('home.restDayDesc')"
             class="opacity-100 mt-4"
           >
             <div class="flex items-center gap-2">
               <UiButton variant="default" size="sm" class="text-xs" @click="requestOffDayWorkout">
-                Train Anyway
+                {{ t("home.trainAnyway") }}
               </UiButton>
               <UiButton variant="outline" size="sm" class="text-xs" @click="handleLogArbitrary">
-                Log Exercise
+                {{ t("home.logExercise") }}
               </UiButton>
             </div>
           </EmptyState>
@@ -386,15 +387,16 @@ onActivated(() => {
           <EmptyState 
             v-else
             :icon="Sparkles"
-            title="No active workout"
+            :title="t('home.noWorkoutTitle')"
+            :description="t('home.noWorkoutDesc')"
             class="opacity-100 mt-4"
           >
             <div class="flex items-center gap-2 mt-4">
               <UiButton variant="outline" size="sm" @click="router.push({ name: 'plan' })">
-                View Plan
+                {{ t("home.viewPlan") }}
               </UiButton>
               <UiButton variant="default" size="sm" class="text-xs" @click="handleLogArbitrary">
-                Log Exercise
+                {{ t("home.logExercise") }}
               </UiButton>
             </div>
           </EmptyState>

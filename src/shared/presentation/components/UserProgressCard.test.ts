@@ -11,8 +11,9 @@ function makeMockProgress(overrides: Partial<UserProgress> = {}): UserProgress {
     xpForNextLevel: 1000,
     progressPercent: 25,
     readiness: 1.2,
-    title: "Champion of Will",
-    description: "Battle-tested athlete.",
+    rankId: "methodical",
+    title: "Pro II",
+    description: "Measured overload and sharp execution block after block.",
     avatar: "/assets/ranks/rank-8.png",
     totalWorkoutDays: 48,
     totalVolumeKg: 52400,
@@ -42,7 +43,7 @@ describe("UserProgressCard", () => {
     const { container, unmount } = mountComponent(makeMockProgress());
     await nextTick();
 
-    expect(container.textContent).toContain("Champion of Will");
+    expect(container.textContent).toContain("Pro II");
     expect(container.textContent).toContain("42");
     expect(container.textContent).toContain("52.4 t");
     expect(container.textContent).toContain("3 mos");

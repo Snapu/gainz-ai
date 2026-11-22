@@ -21,6 +21,7 @@ import {
   VOLUME_LANDMARKS,
   type VolumeLandmark,
 } from "@/modules/trainingInsights/presentation";
+import { t } from "@/shared/presentation/i18n";
 import UiBadge from "./ui/UiBadge.vue";
 import UiBottomSheet from "./ui/UiBottomSheet.vue";
 import UiSegmentedControl from "./ui/UiSegmentedControl.vue";
@@ -76,23 +77,8 @@ function getLineColor(landmark?: VolumeLandmark): string {
   }
 }
 
-function getJargon(landmark?: VolumeLandmark): string {
-  switch (landmark) {
-    case "detraining":
-      return "Under-Stimulated";
-    case "below_MEV":
-      return "Maintenance";
-    case "at_MEV":
-      return "Minimum Effective";
-    case "at_MAV":
-      return "Optimal Hypertrophy";
-    case "approaching_MRV":
-      return "Near Max Recovery";
-    case "above_MRV":
-      return "Overreaching";
-    default:
-      return "Under-Stimulated";
-  }
+function getLandmarkLabel(landmark?: VolumeLandmark): string {
+  return t(`muscles.landmarks.${landmark ?? "detraining"}`);
 }
 
 interface MuscleNode {
@@ -150,10 +136,10 @@ const views = computed(() => {
 });
 
 const currentViewIndex = ref(0);
-const viewOptions = [
-  { id: 0, label: "Anterior" },
-  { id: 1, label: "Posterior" },
-] as const;
+const viewOptions = computed(() => [
+  { id: 0, label: t("muscles.front") },
+  { id: 1, label: t("muscles.back") },
+]);
 
 const currentView = computed(() => views.value[currentViewIndex.value] ?? views.value[0]);
 const isMapImageLoaded = ref(false);
@@ -396,14 +382,14 @@ useSwipe(mapContainerRef, {
                   class="text-xs sm:text-sm font-bold uppercase tracking-widest leading-none transition-colors duration-200"
                   :class="selectedMuscle === muscle.name ? 'text-white' : 'text-foreground/90'"
                 >
-                  {{ muscle.name }}
+                  {{ t(`muscles.${muscle.name}`) }}
                 </span>
                 <Hourglass v-if="muscle.status && !muscle.status.recoveryReady" class="w-3 h-3 text-orange-400 drop-shadow-md" />
               </div>
 
               <div class="flex items-center gap-1 mt-[2px]" :style="{ color: getLineColor(muscle.status?.landmark) }">
                 <span class="text-xs sm:text-sm tabular-nums font-bold whitespace-nowrap opacity-90">
-                  {{ muscle.status?.isoWeekSets != null ? muscle.status.isoWeekSets.toFixed(0) : '0' }}<span class="text-xs font-semibold opacity-60 ml-1">sets/wk</span>
+                  {{ muscle.status?.isoWeekSets != null ? muscle.status.isoWeekSets.toFixed(0) : '0' }}<span class="text-xs font-semibold opacity-60 ml-1">{{ t("common.setsPerWeek") }}</span>
                 </span>
                 <TrendingUp v-if="muscle.status?.volumeTrend === 'up'" class="w-3.5 h-3.5 opacity-80" />
                 <TrendingDown v-else-if="muscle.status?.volumeTrend === 'down'" class="w-3.5 h-3.5 opacity-80" />
@@ -422,18 +408,16 @@ useSwipe(mapContainerRef, {
         v-model:open="isDetailOpen"
         :hide-overlay="true"
         :modal="false"
-        :title="selectedDetail?.name.toLowerCase()"
-        title-class="capitalize"
+        :title="selectedDetail ? t(`muscles.${selectedDetail.name}`) : undefined"
         header-border
         :contentStyle="sheetStyle"
       >
         <template #header-actions>
           <UiBadge 
             v-if="selectedDetail"
-            class="capitalize" 
             :variant="selectedDetail.landmark === 'at_MAV' ? 'info' : selectedDetail.landmark === 'approaching_MRV' ? 'warning' : selectedDetail.landmark === 'above_MRV' ? 'danger' : 'surface'"
           >
-            {{ getJargon(selectedDetail.landmark) }}
+            {{ getLandmarkLabel(selectedDetail.landmark) }}
           </UiBadge>
         </template>
 
@@ -443,10 +427,10 @@ useSwipe(mapContainerRef, {
             <div class="flex items-center justify-between mb-1">
               <div class="flex items-center gap-2 text-sm font-bold text-foreground">
                 <BarChart2 class="w-4 h-4 text-muted-foreground/70" />
-                <span>Volume</span>
+                <span>{{ t("muscles.volume") }}</span>
               </div>
               <span class="text-xs font-bold tabular-nums" :style="{ color: getLineColor(selectedDetail.landmark) }">
-                {{ selectedDetail.isoWeekSets.toFixed(0) }} sets/wk
+                {{ selectedDetail.isoWeekSets.toFixed(0) }} {{ t("common.setsPerWeek") }}
               </span>
             </div>
 
@@ -485,9 +469,9 @@ useSwipe(mapContainerRef, {
 
             <!-- Bar axis labels -->
             <div class="relative h-4 text-micro tabular-nums select-none mt-2">
-              <span class="absolute -translate-x-1/2 text-emerald-400/60" :style="{ left: selectedDetail.bar.mevPct + '%' }">MEV {{ selectedDetail.targets.mev }}</span>
-              <span class="absolute -translate-x-1/2 text-cyan-400/60" :style="{ left: ((selectedDetail.bar.mavLowPct + selectedDetail.bar.mavHighPct) / 2) + '%' }">MAV {{ selectedDetail.targets.mavLow }}–{{ selectedDetail.targets.mavHigh }}</span>
-              <span class="absolute -translate-x-1/2 text-red-400/60" :style="{ left: selectedDetail.bar.mrvPct + '%' }">MRV {{ selectedDetail.targets.mrv }}</span>
+              <span class="absolute -translate-x-1/2 text-emerald-400/60 whitespace-nowrap" :style="{ left: selectedDetail.bar.mevPct + '%' }">{{ t("muscles.mev", { value: selectedDetail.targets.mev }) }}</span>
+              <span class="absolute -translate-x-1/2 text-cyan-400/60 whitespace-nowrap" :style="{ left: ((selectedDetail.bar.mavLowPct + selectedDetail.bar.mavHighPct) / 2) + '%' }">{{ t("muscles.mav", { low: selectedDetail.targets.mavLow, high: selectedDetail.targets.mavHigh }) }}</span>
+              <span class="absolute -translate-x-1/2 text-red-400/60 whitespace-nowrap" :style="{ left: selectedDetail.bar.mrvPct + '%' }">{{ t("muscles.mrv", { value: selectedDetail.targets.mrv }) }}</span>
             </div>
           </div>
 
@@ -496,12 +480,12 @@ useSwipe(mapContainerRef, {
             <div class="flex items-center justify-between mb-1">
               <div class="flex items-center gap-2 text-sm font-bold text-foreground">
                 <Timer class="w-4 h-4 text-muted-foreground/70" />
-                <span>Recovery</span>
+                <span>{{ t("muscles.recovery") }}</span>
               </div>
               <div class="flex items-center gap-1 text-xs font-bold" :class="selectedDetail.recoveryReady ? 'text-emerald-400' : 'text-orange-400'">
                 <CheckCircle2 v-if="selectedDetail.recoveryReady" class="w-3.5 h-3.5" />
                 <Hourglass v-else class="w-3.5 h-3.5" />
-                <span>{{ selectedDetail.recoveryReady ? 'Ready to train' : 'Still recovering' }}</span>
+                <span>{{ selectedDetail.recoveryReady ? t("muscles.readyToTrain") : t("muscles.stillRecovering") }}</span>
               </div>
             </div>
             <template v-if="selectedDetail.hoursSinceLastTrained !== null">
@@ -514,26 +498,26 @@ useSwipe(mapContainerRef, {
               </div>
               <div class="flex justify-between text-xs text-muted-foreground/60 tabular-nums mt-1">
                 <template v-if="!selectedDetail.recoveryReady">
-                  <span class="text-orange-400/80">{{ Math.max(0, Math.round(selectedDetail.recoveryHours - selectedDetail.hoursSinceLastTrained)) }}h remaining</span>
-                  <span>{{ Math.round(selectedDetail.recoveryHours) }}h target</span>
+                  <span class="text-orange-400/80">{{ t("muscles.hoursRemaining", { hours: Math.max(0, Math.round(selectedDetail.recoveryHours - selectedDetail.hoursSinceLastTrained)) }) }}</span>
+                  <span>{{ t("muscles.hoursTarget", { hours: Math.round(selectedDetail.recoveryHours) }) }}</span>
                 </template>
                 <template v-else>
-                  <span class="text-emerald-400/80">Recovered</span>
-                  <span>{{ Math.round(selectedDetail.hoursSinceLastTrained) }}h elapsed</span>
+                  <span class="text-emerald-400/80">{{ t("muscles.recovered") }}</span>
+                  <span>{{ t("muscles.hoursElapsed", { hours: Math.round(selectedDetail.hoursSinceLastTrained) }) }}</span>
                 </template>
               </div>
             </template>
-            <p v-else class="text-xs text-muted-foreground/40 italic">Not trained recently</p>
+            <p v-else class="text-xs text-muted-foreground/40 italic">{{ t("muscles.notTrainedRecently") }}</p>
           </div>
 
           <!-- Frequency Row -->
           <div class="flex items-center justify-between px-6 py-5 pb-8">
             <div class="flex items-center gap-2 text-sm font-bold text-foreground">
               <CalendarDays class="w-4 h-4 text-muted-foreground/70" />
-              <span>Frequency</span>
+              <span>{{ t("muscles.frequency") }}</span>
             </div>
             <span class="text-xs font-bold tabular-nums text-foreground/80">
-              {{ selectedDetail.frequencyPerWeek > 0 ? selectedDetail.frequencyPerWeek + 'x / week' : 'Not yet trained' }}
+              {{ selectedDetail.frequencyPerWeek > 0 ? t("muscles.timesPerWeek", { count: selectedDetail.frequencyPerWeek }) : t("muscles.notYetTrained") }}
             </span>
           </div>
 

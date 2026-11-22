@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, vi } from "vitest";
+import { setLocale } from "@/shared/presentation/i18n";
 
 // Mock Ionic components globally for all tests
 vi.mock("@ionic/vue", () => ({
@@ -44,6 +45,7 @@ vi.stubGlobal("localStorage", mockLocalStorage);
 
 beforeEach(() => {
   mockLocalStorage.clear();
+  setLocale("en");
   vi.restoreAllMocks();
 });
 

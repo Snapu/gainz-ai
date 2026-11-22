@@ -72,6 +72,15 @@ describe("equipment domain", () => {
         "duplicate",
       );
       expect(addEquipmentItem(["dumbbells"], "Dumbbells")._unsafeUnwrapErr()).toBe("duplicate");
+      expect(addEquipmentItem(["dumbbells"], "Kurzhanteln")._unsafeUnwrapErr()).toBe("duplicate");
+    });
+
+    it("resolves German preset labels to canonical preset IDs", () => {
+      expect(addEquipmentItem(undefined, "Kurzhanteln")._unsafeUnwrap()).toEqual(["dumbbells"]);
+      expect(addEquipmentItem(["dumbbells"], "Hantelbank")._unsafeUnwrap()).toEqual([
+        "dumbbells",
+        "bench",
+      ]);
     });
 
     it("rejects additions once MAX_EQUIPMENT_ITEMS is reached", () => {

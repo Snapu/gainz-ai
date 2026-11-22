@@ -16,6 +16,7 @@ import { type CSSProperties, computed, type HTMLAttributes, nextTick, watch } fr
 import { uiIconButtonClass } from "@/shared/presentation/components/ui/styles";
 import { useKeyboard } from "@/shared/presentation/composables/useKeyboard";
 import { useKeyboardHeight } from "@/shared/presentation/composables/useKeyboardHeight";
+import { t } from "@/shared/presentation/i18n";
 import { cn } from "@/shared/presentation/lib/utils";
 
 const props = defineProps<
@@ -113,7 +114,7 @@ watch(
         @close-auto-focus="(e: Event) => e.preventDefault()"
       >
         
-        <DialogDescription class="sr-only">{{ title ?? 'Dialog' }}</DialogDescription>
+        <DialogDescription class="sr-only">{{ title ?? t('common.dialog') }}</DialogDescription>
 
         <slot name="header">
           <div
@@ -133,7 +134,7 @@ watch(
                     : 'sr-only'
                 "
               >
-                <slot name="title">{{ title ?? "Dialog" }}</slot>
+                <slot name="title">{{ title ?? t("common.dialog") }}</slot>
               </DialogTitle>
               <p v-if="subtitle" class="text-xs text-muted-foreground mt-0.5">
                 {{ subtitle }}
@@ -142,7 +143,7 @@ watch(
             <slot name="header-actions" />
             <DialogClose :class="uiIconButtonClass">
               <X class="w-5 h-5 text-muted-foreground" />
-              <span class="sr-only">Close</span>
+              <span class="sr-only">{{ t("common.close") }}</span>
             </DialogClose>
           </div>
         </slot>

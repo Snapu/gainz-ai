@@ -9,6 +9,7 @@ import {
 } from "reka-ui";
 import type { HTMLAttributes } from "vue";
 import { uiPressClass } from "@/shared/presentation/components/ui/styles";
+import { useLocale } from "@/shared/presentation/i18n/useLocale";
 import { cn } from "@/shared/presentation/lib/utils";
 
 interface Props extends NumberFieldRootProps {
@@ -20,7 +21,7 @@ interface Props extends NumberFieldRootProps {
 const props = defineProps<Props>();
 const modelValue = defineModel<number | null>();
 
-const defaultLocale = typeof navigator !== "undefined" ? navigator.language : "en-US";
+const { bcp47Locale } = useLocale();
 </script>
 
 <template>
@@ -28,7 +29,7 @@ const defaultLocale = typeof navigator !== "undefined" ? navigator.language : "e
     v-bind="props"
     v-model="modelValue"
     :step-snapping="props.stepSnapping ?? false"
-    :locale="props.locale || defaultLocale"
+    :locale="props.locale || bcp47Locale"
     :class="cn('flex flex-col gap-2 w-full', props.class)"
   >
     <div

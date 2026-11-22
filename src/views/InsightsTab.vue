@@ -9,6 +9,8 @@ import UiBottomSheet from "@/shared/presentation/components/ui/UiBottomSheet.vue
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 import UiSparkline from "@/shared/presentation/components/ui/UiSparkline.vue";
+import { t } from "@/shared/presentation/i18n";
+import { formatMediumDate, formatNumber } from "@/shared/presentation/i18n/formatters";
 
 const {
   userProgress,
@@ -50,14 +52,14 @@ const isAllExercisesOpen = ref(false);
           <!-- Header -->
           <div class="flex items-start justify-between gap-2">
             <div>
-              <h3 class="text-sm font-bold text-foreground">Readiness & Workload</h3>
-              <p class="text-xs text-muted-foreground mt-0.5">Fatigue, volume & recovery telemetry</p>
+              <h3 class="text-sm font-bold text-foreground">{{ t("insights.readinessTitle") }}</h3>
+              <p class="text-xs text-muted-foreground mt-0.5">{{ t("insights.readinessSubtitle") }}</p>
             </div>
             <UiBadge
               class="uppercase tracking-wider"
               :variant="insights.phase === 'Deload' ? 'warning' : insights.phase === 'Build' ? 'info' : insights.phase === 'Maintain' ? 'success' : 'neutral'"
             >
-              {{ insights.phase }}
+              {{ t(`insights.phases.${insights.phase.toLowerCase()}`) }}
             </UiBadge>
           </div>
 
@@ -65,8 +67,17 @@ const isAllExercisesOpen = ref(false);
           <div v-if="insights.deloadStatus === 'active'" class="rounded-xl border border-orange-500/20 bg-orange-500/10 p-3">
             <div class="flex justify-between items-center mb-2">
               <div>
-                <p class="text-micro text-orange-400 font-bold uppercase tracking-wider">Active Deload</p>
-                <p class="text-xs text-foreground/80 mt-0.5">{{ deloadStore.daysRemaining ?? 0 }}d remaining (Ends {{ insights.deloadEndsAt ? new Date(insights.deloadEndsAt).toLocaleDateString() : 'N/A' }})</p>
+                <p class="text-micro text-orange-400 font-bold uppercase tracking-wider">{{ t("insights.activeDeload") }}</p>
+                <p class="text-xs text-foreground/80 mt-0.5">
+                  {{
+                    t("insights.deloadRemaining", {
+                      days: deloadStore.daysRemaining ?? 0,
+                      date: insights.deloadEndsAt
+                        ? formatMediumDate(new Date(insights.deloadEndsAt))
+                        : t("common.notAvailable"),
+                    })
+                  }}
+                </p>
               </div>
               <UiButton
                 variant="ghost"
@@ -74,7 +85,7 @@ const isAllExercisesOpen = ref(false);
                 class="text-xs text-orange-400/80 border border-orange-500/20 hover:text-red-400 hover:border-red-400/30 h-7 px-2.5 active:scale-95"
                 @click="deloadStore.cancelDeload()"
               >
-                Stop
+                {{ t("common.stop") }}
               </UiButton>
             </div>
             <div class="h-1.5 rounded-full bg-orange-900/30 overflow-hidden">
@@ -85,11 +96,11 @@ const isAllExercisesOpen = ref(false);
           <!-- Deload Advised Alert (when shouldDeload and not yet active) -->
           <div v-else-if="insights.fatigue.shouldDeload" class="rounded-xl border border-orange-500/20 bg-orange-500/10 p-3 flex items-center justify-between gap-3">
             <div class="flex flex-col">
-              <span class="text-micro text-orange-400 font-bold uppercase tracking-wider">Deload Advised</span>
-              <span class="text-xs text-foreground/80 mt-0.5">High systemic fatigue detected across multiple muscle groups.</span>
+              <span class="text-micro text-orange-400 font-bold uppercase tracking-wider">{{ t("insights.deloadAdvised") }}</span>
+              <span class="text-xs text-foreground/80 mt-0.5">{{ t("insights.deloadAdvisedDesc") }}</span>
             </div>
             <UiBadge variant="warning" class="uppercase tracking-wider shrink-0">
-              High Load
+              {{ t("insights.highLoad") }}
             </UiBadge>
           </div>
 
@@ -98,14 +109,18 @@ const isAllExercisesOpen = ref(false);
             <!-- Tile 1: Fatigue & ACWR -->
             <div class="flex flex-col justify-between p-2.5 sm:p-3 rounded-xl bg-white/5 border border-white/5 min-w-0">
               <span class="text-micro text-muted-foreground/60 truncate">
-                Fatigue Risk
+                {{ t("insights.fatigueRisk") }}
               </span>
               <div class="flex flex-col mt-1.5 min-w-0">
                 <span class="text-lg font-black tabular-nums tracking-tight truncate leading-tight" :class="fatigueRiskToneClass">
                   {{ fatigueRiskLabel }} <span class="text-xs font-bold text-muted-foreground/50">({{ fatigueRiskPercent }}%)</span>
                 </span>
                 <span class="text-xs font-semibold tabular-nums text-muted-foreground/60 mt-0.5 truncate">
-                  {{ insights.acwr !== null ? `ACWR ${acwrValueLabel} · ${acwrZone.label}` : 'No baseline' }}
+                  {{
+                    insights.acwr !== null
+                      ? t("insights.acwrLabel", { value: acwrValueLabel, zone: acwrZone.label })
+                      : t("insights.buildingBaseline")
+                  }}
                 </span>
               </div>
             </div>
@@ -113,11 +128,11 @@ const isAllExercisesOpen = ref(false);
             <!-- Tile 2: Weekly Sets -->
             <div class="flex flex-col justify-between p-2.5 sm:p-3 rounded-xl bg-white/5 border border-white/5 min-w-0">
               <span class="text-micro text-muted-foreground/60 truncate">
-                Sets / Wk
+                {{ t("insights.setsPerWeek") }}
               </span>
               <div class="flex flex-col mt-1.5 min-w-0">
                 <span class="text-lg font-black tabular-nums tracking-tight text-foreground truncate leading-tight">
-                  {{ Math.round(insights.fatigue.loadWindow.sets.current) }}
+                  {{ formatNumber(Math.round(insights.fatigue.loadWindow.sets.current)) }}
                 </span>
                 <span class="text-xs font-semibold tabular-nums mt-0.5 flex items-center gap-0.5 truncate" :class="setsDeltaPct === null ? 'text-muted-foreground/60' : setsDeltaPct >= 30 ? 'text-orange-400' : setsDeltaPct <= -20 ? 'text-muted-foreground/50' : 'text-emerald-400'">
                   <TrendingUp v-if="setsDeltaPct !== null && setsDeltaPct > 0" class="w-3 h-3 shrink-0" />
@@ -130,14 +145,14 @@ const isAllExercisesOpen = ref(false);
             <!-- Tile 3: Weekly Tonnage -->
             <div class="flex flex-col justify-between p-2.5 sm:p-3 rounded-xl bg-white/5 border border-white/5 min-w-0">
               <span class="text-micro text-muted-foreground/60 truncate">
-                Tonnage
+                {{ t("insights.tonnage") }}
               </span>
               <div class="flex flex-col mt-1.5 min-w-0">
                 <div class="flex items-baseline truncate leading-tight">
                   <span class="text-lg font-black tabular-nums tracking-tight text-foreground truncate">
-                    {{ Math.round(insights.fatigue.loadWindow.tonnage.current) }}
+                    {{ formatNumber(Math.round(insights.fatigue.loadWindow.tonnage.current)) }}
                   </span>
-                  <span class="text-xs font-semibold text-muted-foreground/70 ml-1 shrink-0">kg</span>
+                  <span class="text-xs font-semibold text-muted-foreground/70 ml-1 shrink-0">{{ t("common.kg") }}</span>
                 </div>
                 <span class="text-xs font-semibold tabular-nums mt-0.5 flex items-center gap-0.5 truncate" :class="tonnageDeltaPct === null ? 'text-muted-foreground/60' : tonnageDeltaPct >= 30 ? 'text-orange-400' : tonnageDeltaPct <= -20 ? 'text-muted-foreground/50' : 'text-emerald-400'">
                   <TrendingUp v-if="tonnageDeltaPct !== null && tonnageDeltaPct > 0" class="w-3 h-3 shrink-0" />
@@ -154,14 +169,14 @@ const isAllExercisesOpen = ref(false);
               <div class="flex items-center gap-3">
                 <div class="flex items-center gap-2">
                   <div class="w-1.5 h-1.5 rounded-full bg-primary"></div>
-                  <span>Sets Trend</span>
+                  <span>{{ t("insights.setsTrend") }}</span>
                 </div>
                 <div class="flex items-center gap-2">
                   <div class="w-1.5 h-1.5 rounded-full bg-white/40"></div>
-                  <span>Tonnage Trend</span>
+                  <span>{{ t("insights.tonnageTrend") }}</span>
                 </div>
               </div>
-              <span class="text-muted-foreground/40">Last 4 Weeks</span>
+              <span class="text-muted-foreground/40">{{ t("insights.last4Weeks") }}</span>
             </div>
 
             <div class="relative w-full h-[56px] group">
@@ -191,21 +206,21 @@ const isAllExercisesOpen = ref(false);
               <span v-for="(row, i) in fatigueWeekRows" :key="row.key" 
                     class="text-micro text-muted-foreground/50 truncate flex-1"
                     :class="i === 0 ? 'text-left' : i === fatigueWeekRows.length - 1 ? 'text-right' : 'text-center'">
-                {{ row.label.replace('Week ', 'W') }}
+                {{ row.label }}
               </span>
             </div>
           </div>
         </UiCard>
       </section>
 
-      <!-- ── Section: Local Activation ── -->
+      <!-- ── Section: Muscle Workload ── -->
       <section>
         <UiCard class="p-4 overflow-visible">
           <div>
             <div class="flex items-center justify-between gap-2 mb-3">
               <div>
-                <h3 class="text-sm font-bold text-foreground">Local Activation</h3>
-                <p class="text-xs text-muted-foreground mt-0.5 line-clamp-1">Muscle group fatigue distribution</p>
+                <h3 class="text-sm font-bold text-foreground">{{ t("insights.muscleWorkloadTitle") }}</h3>
+                <p class="text-xs text-muted-foreground mt-0.5 line-clamp-1">{{ t("insights.muscleWorkloadSubtitle") }}</p>
               </div>
             </div>
             <div class="overflow-hidden rounded-xl">
@@ -220,25 +235,25 @@ const isAllExercisesOpen = ref(false);
         <UiCard class="p-4 overflow-visible">
           <div class="flex items-center justify-between mb-3">
             <div>
-              <h3 class="text-sm font-bold text-foreground">Moving the Needle</h3>
-              <p class="text-xs text-muted-foreground mt-0.5 line-clamp-1">Top progress & plateaus</p>
+              <h3 class="text-sm font-bold text-foreground">{{ t("insights.strengthTrendsTitle") }}</h3>
+              <p class="text-xs text-muted-foreground mt-0.5 line-clamp-1">{{ t("insights.strengthTrendsSubtitle") }}</p>
             </div>
             <UiButton variant="secondary" size="xs" @click="isAllExercisesOpen = true">
-              View All ({{ allExerciseMetrics.length }})
+              {{ t("insights.viewAll", { count: allExerciseMetrics.length }) }}
             </UiButton>
           </div>
 
           <!-- Highlight Lists -->
           <div class="flex flex-col gap-4">
             <div v-if="topImprovingExercises.length > 0" class="flex flex-col gap-2">
-              <h4 class="text-micro text-muted-foreground tracking-widest px-1">Top Progress</h4>
+              <h4 class="text-micro text-muted-foreground tracking-widest px-1">{{ t("insights.topProgress") }}</h4>
               <div class="flex flex-col divide-y divide-white/5">
                 <div v-for="metric in topImprovingExercises" :key="metric.name" class="flex items-center justify-between py-2.5 px-1 hover:bg-white/5 transition-colors">
                   <div class="flex flex-col min-w-0 mr-3">
                     <p class="text-sm font-semibold text-foreground/90 truncate">{{ metric.name }}</p>
                     <div class="flex items-center gap-2 mt-0.5">
-                      <span class="text-micro text-muted-foreground/60">{{ metric.unit === 'reps' ? 'eMax' : 'e1RM' }}</span>
-                      <span class="text-xs font-bold text-foreground tabular-nums">{{ metric.unit === 'reps' ? Math.round(metric.e1rm) : metric.e1rm.toFixed(1) }}</span>
+                      <span class="text-micro text-muted-foreground/60">{{ metric.unit === 'reps' ? t('insights.estMaxReps') : t('insights.est1RM') }}</span>
+                      <span class="text-xs font-bold text-foreground tabular-nums">{{ metric.unit === 'reps' ? Math.round(metric.e1rm) : formatNumber(metric.e1rm, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }}</span>
                     </div>
                   </div>
                   <UiBadge variant="success" class="flex items-center gap-1 tabular-nums font-bold">
@@ -250,27 +265,27 @@ const isAllExercisesOpen = ref(false);
             </div>
 
             <div v-if="attentionRequiredExercises.length > 0" class="flex flex-col gap-2">
-              <h4 class="text-micro text-muted-foreground tracking-widest px-1">Needs Attention</h4>
+              <h4 class="text-micro text-muted-foreground tracking-widest px-1">{{ t("insights.needsAttention") }}</h4>
               <div class="flex flex-col divide-y divide-white/5">
                 <div v-for="metric in attentionRequiredExercises" :key="metric.name" class="flex items-center justify-between py-2.5 px-1 hover:bg-white/5 transition-colors">
                   <div class="flex flex-col min-w-0 mr-3">
                     <p class="text-sm font-semibold text-foreground/90 truncate">{{ metric.name }}</p>
                     <div class="flex items-center gap-2 mt-0.5">
-                      <span class="text-micro text-muted-foreground/60">{{ metric.unit === 'reps' ? 'eMax' : 'e1RM' }}</span>
-                      <span class="text-xs font-bold text-foreground tabular-nums">{{ metric.unit === 'reps' ? Math.round(metric.e1rm) : metric.e1rm.toFixed(1) }}</span>
+                      <span class="text-micro text-muted-foreground/60">{{ metric.unit === 'reps' ? t('insights.estMaxReps') : t('insights.est1RM') }}</span>
+                      <span class="text-xs font-bold text-foreground tabular-nums">{{ metric.unit === 'reps' ? Math.round(metric.e1rm) : formatNumber(metric.e1rm, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }}</span>
                     </div>
                   </div>
                   <UiBadge :variant="metric.status === 'plateau' ? 'warning' : 'danger'" class="flex items-center gap-1 tabular-nums font-bold">
                     <ArrowRight v-if="metric.status === 'plateau'" class="w-3 h-3" />
                     <TrendingDown v-else class="w-3 h-3" />
-                    {{ metric.status === 'plateau' ? 'Plateau' : metric.deltaPct + '%' }}
+                    {{ metric.status === 'plateau' ? t('insights.plateau') : metric.deltaPct + '%' }}
                   </UiBadge>
                 </div>
               </div>
             </div>
 
             <div v-if="topImprovingExercises.length === 0 && attentionRequiredExercises.length === 0" class="text-xs text-muted-foreground py-6 text-center bg-white/5 rounded-xl border border-white/5">
-              No significant trends detected yet. Keep logging!
+              {{ t("insights.noTrendsYet") }}
             </div>
           </div>
         </UiCard>
@@ -280,7 +295,7 @@ const isAllExercisesOpen = ref(false);
 
     <UiBottomSheet
       v-model:open="isAllExercisesOpen"
-      title="All Exercises"
+      :title="t('insights.allExercises')"
       :subtitle="exerciseStatusNote"
       header-border
       content-class="h-[85vh]"
@@ -292,7 +307,7 @@ const isAllExercisesOpen = ref(false);
               v-if="metric.isStale && (index === 0 || !allExerciseMetrics[index - 1].isStale)"
               class="px-6 py-2 bg-white/5 border-y border-white/5 text-micro text-muted-foreground/60 tracking-widest sticky top-0 z-10 backdrop-blur-md"
             >
-              Inactive (> 4 Weeks)
+              {{ t("insights.inactiveDivider") }}
             </div>
             <div
               class="px-6 py-3 border-b border-white/5 last:border-0 transition-colors hover:bg-white/5"
@@ -314,7 +329,11 @@ const isAllExercisesOpen = ref(false);
                   </div>
                   <div class="mt-1 flex items-center gap-2 text-xs font-medium text-foreground/50 truncate">
                     <span class="truncate max-w-[140px] sm:max-w-[200px]">
-                      {{ metric.learnedMuscleGroups.length > 0 ? metric.learnedMuscleGroups.join(', ') : 'No muscle tags' }}
+                      {{
+                        metric.learnedMuscleGroups.length > 0
+                          ? metric.learnedMuscleGroups.map((mg) => t(`muscles.${mg}`)).join(", ")
+                          : t("insights.noMuscleTags")
+                      }}
                     </span>
                     <span class="w-1 h-1 rounded-full bg-white/20 shrink-0"></span>
                     <span class="shrink-0 text-foreground/70">{{ metric.lastTrainedLabel }}</span>
@@ -324,10 +343,10 @@ const isAllExercisesOpen = ref(false);
                 <div class="shrink-0 flex items-center gap-3">
                   <div class="text-right flex flex-col items-end">
                     <p class="text-micro text-muted-foreground/60 mb-0.5">
-                      {{ metric.unit === 'reps' ? 'eMax' : 'e1RM' }}
+                      {{ metric.unit === 'reps' ? t('insights.estMaxReps') : t('insights.est1RM') }}
                     </p>
                     <p class="text-sm font-bold tabular-nums text-foreground leading-none">
-                      {{ metric.unit === 'reps' ? Math.round(metric.e1rm) : metric.e1rm.toFixed(1) }}
+                      {{ metric.unit === 'reps' ? Math.round(metric.e1rm) : formatNumber(metric.e1rm, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }}
                     </p>
                   </div>
                   <!-- Delta Pill -->
@@ -346,7 +365,7 @@ const isAllExercisesOpen = ref(false);
           v-else
           class="px-6 py-8 text-center text-xs text-foreground/55"
         >
-          No exercise stats yet. Add more logs.
+          {{ t("insights.noExerciseStats") }}
         </div>
       </div>
     </UiBottomSheet>

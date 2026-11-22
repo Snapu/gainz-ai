@@ -6,6 +6,7 @@ export {
 } from "@/modules/sharedKernel/application";
 export type {
   FatigueTriggerId,
+  RankTierId,
   UserProgress,
 } from "@/modules/sharedKernel/domain";
 export {

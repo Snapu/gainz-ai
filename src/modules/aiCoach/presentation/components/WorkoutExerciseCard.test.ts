@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createApp, defineComponent, h, nextTick } from "vue";
+import { setLocale } from "@/shared/presentation/i18n";
 import WorkoutExerciseCard from "./WorkoutExerciseCard.vue";
 
 describe("WorkoutExerciseCard", () => {
@@ -65,7 +66,7 @@ describe("WorkoutExerciseCard", () => {
 
     expect(container.textContent).toContain("Target Today");
     expect(container.textContent).toContain("56");
-    expect(container.textContent).toContain("Progression");
+    expect(container.textContent).toContain("History");
     expect(container.textContent).toContain("24. Okt");
 
     const guideBtn = container.querySelector("button[aria-label='Exercise guide']");
@@ -95,6 +96,32 @@ describe("WorkoutExerciseCard", () => {
     await nextTick();
 
     expect(container.textContent).toContain("BW");
+    app.unmount();
+  });
+
+  it("localizes pure and weighted German/English bodyweight targets", async () => {
+    setLocale("de");
+    const Host = defineComponent({
+      setup() {
+        return () =>
+          h(WorkoutExerciseCard, {
+            exercise: {
+              exerciseName: "Klimmzüge",
+              targetSets: 3,
+              targetReps: "8",
+              targetWeight: "Körpergewicht + 10 kg",
+            },
+          });
+      },
+    });
+
+    const container = document.createElement("div");
+    const app = createApp(Host);
+    app.mount(container);
+    await nextTick();
+
+    expect(container.textContent).toContain("Eigengew. + 10");
+    expect(container.textContent).toContain("kg");
     app.unmount();
   });
 

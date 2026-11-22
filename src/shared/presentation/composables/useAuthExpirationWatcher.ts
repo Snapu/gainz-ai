@@ -5,6 +5,7 @@ import * as Sentry from "@sentry/vue";
 import { onUnmounted, ref, watch } from "vue";
 import { AUTH_PROACTIVE_REFRESH_THRESHOLD_MS, useAuthStore } from "@/modules/auth/presentation";
 import { useToast } from "@/shared/presentation/composables/useToast";
+import { t } from "@/shared/presentation/i18n";
 
 const WARNING_THRESHOLD = AUTH_PROACTIVE_REFRESH_THRESHOLD_MS;
 const CHECK_INTERVAL = 30 * 1000; // 30 seconds
@@ -72,12 +73,12 @@ export function useAuthExpirationWatcher() {
     const seconds = Math.floor(timeRemaining / 1000);
 
     currentToastId = toast({
-      title: "Session Expiring Soon",
-      description: "Please log in again",
+      title: t("auth.sessionExpiringTitle"),
+      description: t("auth.sessionExpiringDesc"),
       variant: "default",
       persistent: true,
       action: {
-        label: "Log in now",
+        label: t("auth.logInNow"),
         onClick: handleLogout,
       },
       countdown: {

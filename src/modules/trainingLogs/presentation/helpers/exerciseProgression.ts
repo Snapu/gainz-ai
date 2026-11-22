@@ -4,6 +4,8 @@ import type {
   ProgressionSessionItem,
   ProgressionSetItem,
 } from "@/shared/presentation/components/ui/UiProgressionLine.vue";
+import { t } from "@/shared/presentation/i18n";
+import { formatShortDate } from "@/shared/presentation/i18n/formatters";
 
 function toDate(val: Date | string | number): Date {
   return val instanceof Date ? val : new Date(val);
@@ -18,7 +20,6 @@ export function buildExerciseProgression(
   const sortedLogs = [...logs].sort(
     (a, b) => toDate(a.loggedAt).getTime() - toDate(b.loggedAt).getTime(),
   );
-  const formatter = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
   const sessionsMap = new Map<string, { date: Date; sets: ProgressionSetItem[] }>();
 
   for (const log of sortedLogs) {
@@ -40,7 +41,7 @@ export function buildExerciseProgression(
   for (const [key, val] of sessionsMap.entries()) {
     sessions.push({
       key,
-      dateLabel: formatter.format(val.date),
+      dateLabel: formatShortDate(val.date),
       sets: val.sets,
     });
   }
@@ -50,6 +51,7 @@ export function buildExerciseProgression(
 
 export function computeExercisePr(logs: ExerciseLog[]): string | null {
   if (!logs.length) return null;
+  const prPrefix = t("logSheet.prPrefix");
 
   // 1. Weight-based
   const withWeight = logs.filter((l) => typeof l.weight === "number" && l.weight > 0);
@@ -65,9 +67,9 @@ export function computeExercisePr(logs: ExerciseLog[]): string | null {
       }
     }
     if (best.reps != null && best.reps > 0) {
-      return `PR: ${best.weight} kg × ${best.reps}`;
+      return `${prPrefix}: ${best.weight} ${t("common.kg")} × ${best.reps}`;
     }
-    return `PR: ${best.weight} kg`;
+    return `${prPrefix}: ${best.weight} ${t("common.kg")}`;
   }
 
   // 2. Distance-based (evaluated before duration so cardio runs with distance & duration pick distance)
@@ -88,7 +90,7 @@ export function computeExercisePr(logs: ExerciseLog[]): string | null {
         }
       }
     }
-    return `PR: ${best.distance} m`;
+    return `${prPrefix}: ${best.distance} ${t("common.m")}`;
   }
 
   // 3. Duration-based (pure isometric / endurance exercises like plank)
@@ -96,14 +98,15 @@ export function computeExercisePr(logs: ExerciseLog[]): string | null {
   if (withDuration.length > 0) {
     const maxDuration = withDuration.reduce((max, l) => Math.max(max, l.duration ?? 0), 0);
     const formatted = formatDurationMinutes(maxDuration);
-    return `PR: ${formatted.value} ${formatted.unit}`;
+    const unit = formatted.unit === "min" ? t("common.min") : t("common.s");
+    return `${prPrefix}: ${formatted.value} ${unit}`;
   }
 
   // 4. Reps-based (bodyweight exercises without weight)
   const withReps = logs.filter((l) => typeof l.reps === "number" && l.reps > 0);
   if (withReps.length > 0) {
     const maxReps = withReps.reduce((max, l) => Math.max(max, l.reps ?? 0), 0);
-    return `PR: ${maxReps} reps`;
+    return `${prPrefix}: ${maxReps} ${t("common.reps")}`;
   }
 
   return null;

@@ -7,6 +7,8 @@ import { LocalStorageMessageRepository } from "@/modules/aiCoach/infrastructure"
 import { isoDateString } from "@/modules/sharedKernel/domain";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 import { useToast } from "@/shared/presentation/composables/useToast";
+import { t } from "@/shared/presentation/i18n";
+import { formatNextUtcMidnightLocalTime } from "@/shared/presentation/i18n/formatters";
 
 const mockExerciseLogs = ref<ExerciseLog[]>([]);
 const mockIsLogsLoading = ref(false);
@@ -307,7 +309,7 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
 
     expect(toasts.value.length).toBeGreaterThan(0);
     expect(toasts.value[toasts.value.length - 1]?.description).toBe(
-      "Daily AI coaching limit reached. Quota resets at 00:00 UTC.",
+      t("coach.rateLimitDesc", { time: formatNextUtcMidnightLocalTime() }),
     );
     expect(vm.userQuestion.value).toBe("How many sets?");
   });

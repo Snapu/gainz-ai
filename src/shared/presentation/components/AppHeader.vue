@@ -2,6 +2,7 @@
 import { ArrowLeft } from "@lucide/vue";
 import type { HTMLAttributes } from "vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
+import { t } from "@/shared/presentation/i18n";
 import { cn } from "@/shared/presentation/lib/utils";
 
 const props = defineProps<{
@@ -26,7 +27,7 @@ const emit = defineEmits<(e: "back") => void>();
         v-if="showBack"
         variant="ghost"
         size="icon"
-        aria-label="Go Back"
+        :aria-label="t('common.goBack')"
         class="-ml-1 shrink-0"
         @click="emit('back')"
       >

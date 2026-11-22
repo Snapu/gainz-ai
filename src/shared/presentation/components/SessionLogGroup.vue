@@ -7,6 +7,8 @@ import {
   uiChevronCircleHoverClass,
 } from "@/shared/presentation/components/ui/styles";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
+import { t } from "@/shared/presentation/i18n";
+import { formatNumber } from "@/shared/presentation/i18n/formatters";
 
 defineProps<{
   date: string;
@@ -42,7 +44,7 @@ defineEmits<{
           <!-- Duration -->
           <div v-if="stats.durationMinutes > 0" class="flex items-baseline min-w-[2.5rem] shrink-0">
             <span class="text-2xl font-black tabular-nums tracking-tight text-foreground group-hover:text-primary transition-colors">{{ stats.durationMinutes }}</span>
-            <span class="text-xs font-semibold text-muted-foreground/70 ml-1">min</span>
+            <span class="text-xs font-semibold text-muted-foreground/70 ml-1">{{ t("common.min") }}</span>
           </div>
           
           <div v-if="stats.durationMinutes > 0" class="h-5 w-px bg-white/10 mx-0.5 shrink-0"></div>
@@ -53,17 +55,17 @@ defineEmits<{
             :class="stats.durationMinutes > 0 ? 'justify-end' : 'justify-start'"
           >
             <div class="flex min-w-0 flex-col items-start gap-0.5">
-              <span class="text-micro text-muted-foreground/60">Volume</span>
+              <span class="text-micro text-muted-foreground/60">{{ t("pastSessions.volumeSets") }}</span>
               <span class="text-sm font-bold tabular-nums text-foreground flex items-baseline min-w-0">
                 <span class="truncate">{{ stats.sets }}</span>
-                <span class="text-xs font-semibold text-muted-foreground/70 ml-1">sets</span>
+                <span class="text-xs font-semibold text-muted-foreground/70 ml-1">{{ t("common.sets") }}</span>
               </span>
             </div>
             <div class="flex min-w-0 flex-col items-start gap-0.5">
-              <span class="text-micro text-muted-foreground/60">Tonnage</span>
+              <span class="text-micro text-muted-foreground/60">{{ t("pastSessions.tonnage") }}</span>
               <span class="text-sm font-bold tabular-nums text-foreground flex items-baseline min-w-0">
-                <span class="truncate">{{ stats.volume.toLocaleString("en-US") }}</span>
-                <span class="text-xs font-semibold text-muted-foreground/70 ml-1">kg</span>
+                <span class="truncate">{{ formatNumber(stats.volume) }}</span>
+                <span class="text-xs font-semibold text-muted-foreground/70 ml-1">{{ t("common.kg") }}</span>
               </span>
             </div>
           </div>

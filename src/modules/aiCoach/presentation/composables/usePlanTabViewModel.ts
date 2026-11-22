@@ -7,6 +7,7 @@ import {
   useTrainingPlanStore,
 } from "@/modules/aiCoach/presentation";
 import { useToast } from "@/shared/presentation/composables/useToast";
+import { t } from "@/shared/presentation/i18n";
 
 export function usePlanTabViewModel() {
   const orchestratorStore = useAiOrchestratorStore();
@@ -41,14 +42,14 @@ export function usePlanTabViewModel() {
       result.match(
         () => {
           toast({
-            title: "Plan Regenerated",
-            description: "Your training cycle has been updated.",
+            title: t("plan.regeneratedTitle"),
+            description: t("plan.regeneratedDesc"),
             variant: "default",
           });
         },
         (error) => {
           toast({
-            title: "AI Coaching Error",
+            title: t("coach.errorTitle"),
             description: getAiErrorDescription(error),
             variant: "destructive",
           });
@@ -65,14 +66,14 @@ export function usePlanTabViewModel() {
       .writeText(JSON.stringify(planStore.activePlan, null, 2))
       .then(() => {
         toast({
-          title: "Copied!",
-          description: "Plan JSON copied to clipboard for debugging.",
+          title: t("common.copied"),
+          description: t("plan.copiedJsonDesc"),
         });
       })
       .catch((_err) => {
         toast({
-          title: "Error",
-          description: "Failed to copy plan JSON.",
+          title: t("common.error"),
+          description: t("plan.copyJsonFailedDesc"),
           variant: "destructive",
         });
       });

@@ -15,11 +15,18 @@ import UiInput from "@/shared/presentation/components/ui/UiInput.vue";
 import UiRangeCalendar from "@/shared/presentation/components/ui/UiRangeCalendar.vue";
 import UiToggleGroup from "@/shared/presentation/components/ui/UiToggleGroup.vue";
 import UiToggleGroupItem from "@/shared/presentation/components/ui/UiToggleGroupItem.vue";
+import { t } from "@/shared/presentation/i18n";
 
 const router = useRouter();
 const eventsStore = useEventsStore();
 
-const PRESET_TYPES = ["Rest Day", "Sickness", "Injury", "Fasting", "Other"];
+const PRESET_TYPE_OPTIONS = [
+  { value: "Rest Day", key: "recovery.types.restDay" },
+  { value: "Sickness", key: "recovery.types.sickness" },
+  { value: "Injury", key: "recovery.types.injury" },
+  { value: "Fasting", key: "recovery.types.fasting" },
+  { value: "Other", key: "recovery.types.other" },
+] as const;
 
 const isAddOpen = ref(false);
 const formType = ref<string>("Rest Day");
@@ -35,8 +42,15 @@ const dateRange = ref<any>({
   end: now,
 });
 
+const isSaveDisabled = computed(
+  () =>
+    (formType.value === "Other" && !formCustomType.value.trim()) ||
+    !dateRange.value?.start ||
+    !dateRange.value?.end,
+);
+
 function saveEvent() {
-  const finalType = formType.value === "Other" ? formCustomType.value : formType.value;
+  const finalType = formType.value === "Other" ? formCustomType.value.trim() : formType.value;
   if (!finalType || !dateRange.value.start || !dateRange.value.end) return;
 
   // Generate all dates in the range for storage consistency
@@ -74,23 +88,23 @@ function remove(id: string) {
 <template>
   <div class="h-full bg-background flex flex-col overflow-hidden pt-safe">
     <!-- Header -->
-    <AppHeader show-back title="Rest & Recovery" class="shrink-0" @back="router.back()">
+    <AppHeader show-back :title="t('recovery.title')" class="shrink-0" @back="router.back()">
       <template #actions>
-        <UiButton variant="ghost" size="icon" @click="isAddOpen = true" aria-label="Add Rest Event">
+        <UiButton variant="ghost" size="icon" @click="isAddOpen = true" :aria-label="t('recovery.addAria')">
           <Plus class="w-5 h-5" />
         </UiButton>
       </template>
     </AppHeader>
 
-    <p class="w-full max-w-2xl mx-auto px-4 pt-4 text-xs font-medium text-muted-foreground shrink-0">Track rest days, illness, injuries, and other off days so your AI coach can account for them.</p>
+    <p class="w-full max-w-2xl mx-auto px-4 pt-4 text-xs font-medium text-muted-foreground shrink-0">{{ t("recovery.intro") }}</p>
 
     <!-- Event List -->
     <main class="flex-1 min-h-0 w-full max-w-2xl mx-auto px-4 pt-4 pb-28 overflow-y-auto overscroll-y-contain no-scrollbar flex flex-col gap-4">
       <EmptyState 
         v-if="sortedEvents.length === 0"
         :icon="Bed"
-        title="No off days logged."
-        description="Tap + to record a rest day, sickness, or injury."
+        :title="t('recovery.emptyTitle')"
+        :description="t('recovery.emptyDesc')"
       />
 
       <UiCard
@@ -107,32 +121,37 @@ function remove(id: string) {
     </main>
 
     <!-- Log Recovery Bottom Sheet -->
-    <UiBottomSheet v-model:open="isAddOpen" title="Log Recovery">
+    <UiBottomSheet v-model:open="isAddOpen" :title="t('recovery.sheetTitle')">
       <!-- Scrollable Content -->
       <div class="flex flex-col gap-6 overflow-y-auto px-6 py-4 no-scrollbar">
         <div>
-          <label class="text-micro text-muted-foreground/60 mb-2 block ml-1">Type</label>
+          <label class="text-micro text-muted-foreground/60 mb-2 block ml-1">{{ t("recovery.typeLabel") }}</label>
           <UiToggleGroup type="single" v-model="formType" class="grid grid-cols-2 gap-3">
-            <UiToggleGroupItem v-for="t in PRESET_TYPES" :key="t" :value="t">
-              {{ t }}
+            <UiToggleGroupItem v-for="option in PRESET_TYPE_OPTIONS" :key="option.value" :value="option.value">
+              {{ t(option.key) }}
             </UiToggleGroupItem>
           </UiToggleGroup>
         </div>
 
         <div v-if="formType === 'Other'" class="animate-in slide-in-from-top-2 fade-in">
-          <label class="text-micro text-muted-foreground/60 mb-2 block ml-1">Custom Type</label>
-          <UiInput v-model="formCustomType" placeholder="e.g. Travel" class="h-12" />
+          <label class="text-micro text-muted-foreground/60 mb-2 block ml-1">{{ t("recovery.customTypeLabel") }}</label>
+          <UiInput v-model="formCustomType" :placeholder="t('recovery.customPlaceholder')" class="h-12" />
         </div>
 
         <div>
-          <label class="text-micro text-muted-foreground/60 mb-2 block ml-1">Dates</label>
+          <label class="text-micro text-muted-foreground/60 mb-2 block ml-1">{{ t("recovery.datesLabel") }}</label>
           <UiRangeCalendar v-model="dateRange" />
         </div>
       </div>
 
       <template #footer>
-        <UiButton haptic class="w-full h-14 rounded-xl text-base font-bold shadow-lg shadow-lg/20 transition-all active:scale-95" @click="saveEvent">
-          Save Entry
+        <UiButton
+          haptic
+          :disabled="isSaveDisabled"
+          class="w-full h-14 rounded-xl text-base font-bold shadow-lg shadow-lg/20 transition-all active:scale-95"
+          @click="saveEvent"
+        >
+          {{ t("recovery.saveEntry") }}
         </UiButton>
       </template>
     </UiBottomSheet>

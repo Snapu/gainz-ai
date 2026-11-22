@@ -6,6 +6,7 @@ import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 import UiTelemetryLoader from "@/shared/presentation/components/ui/UiTelemetryLoader.vue";
 import UiTextarea from "@/shared/presentation/components/ui/UiTextarea.vue";
+import { t } from "@/shared/presentation/i18n";
 
 const {
   isDev,
@@ -41,7 +42,7 @@ void scrollContainerRef;
       <!-- Telemetry Loader -->
       <UiTelemetryLoader
         v-if="isLoading && !streamingCoachMessage && chatMessages.length === 0"
-        text="Analyzing training history..."
+        :text="t('coach.loading')"
       />
 
       <!-- Empty State -->
@@ -53,9 +54,9 @@ void scrollContainerRef;
           <Sparkles class="w-8 h-8" />
         </div>
         <div class="flex flex-col gap-1 max-w-sm">
-          <h2 class="text-lg font-bold text-foreground">Your AI Strength Coach</h2>
+          <h2 class="text-lg font-bold text-foreground">{{ t("coach.emptyTitle") }}</h2>
           <p class="text-xs font-medium text-muted-foreground leading-relaxed">
-            Ask questions about your lifts, request exercise substitutions, adjust workout volume, or ask about recovery.
+            {{ t("coach.emptyDesc") }}
           </p>
         </div>
         <div class="flex flex-wrap justify-center gap-2 w-full max-w-lg mt-2">
@@ -85,7 +86,7 @@ void scrollContainerRef;
         >
           <div class="flex items-center gap-2 pr-1">
             <span class="text-xs font-medium text-muted-foreground/60 tabular-nums">{{ message.formattedTime }}</span>
-            <span class="text-xs font-bold text-muted-foreground">You</span>
+            <span class="text-xs font-bold text-muted-foreground">{{ t("coach.you") }}</span>
           </div>
           <div class="p-3 rounded-xl rounded-tr-none bg-primary/10 border border-primary/20 text-foreground text-sm font-medium leading-relaxed shadow-sm whitespace-pre-wrap break-words">
             {{ message.content }}
@@ -111,10 +112,10 @@ void scrollContainerRef;
             <div class="flex items-center justify-between pb-2 border-b border-white/5">
               <div class="flex items-center gap-2">
                 <Dumbbell class="w-3.5 h-3.5 text-primary" />
-                <span class="text-sm font-bold text-foreground">Prescribed Workout</span>
+                <span class="text-sm font-bold text-foreground">{{ t("coach.prescribedWorkout") }}</span>
               </div>
               <UiBadge variant="surface">
-                {{ message.recommendedWorkout.length }} Exercises
+                {{ t("coach.exerciseCount", { count: message.recommendedWorkout.length }, message.recommendedWorkout.length) }}
               </UiBadge>
             </div>
 
@@ -127,7 +128,7 @@ void scrollContainerRef;
               @click="navigateToTrainTab"
               class="text-xs font-bold text-primary hover:underline flex items-center gap-1.5 self-start pt-1 cursor-pointer active:scale-95 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-lg"
             >
-              <span>Open in Train Tab</span>
+              <span>{{ t("coach.openInTrainTab") }}</span>
               <ArrowRight class="w-3.5 h-3.5" />
             </button>
           </UiCard>
@@ -148,7 +149,7 @@ void scrollContainerRef;
                   class="w-3.5 h-3.5 transition-transform duration-200"
                   :class="openScratchpads.includes(message.id) ? 'rotate-180 text-primary' : ''"
                 />
-                <span>Coach's Rationale</span>
+                <span>{{ t("coach.rationaleTrigger") }}</span>
               </button>
 
               <!-- Debug Data Button -->
@@ -164,7 +165,7 @@ void scrollContainerRef;
                   class="w-3.5 h-3.5 transition-transform duration-200"
                   :class="openRequestPayloads.includes(message.id) ? 'rotate-180 text-primary' : ''"
                 />
-                <span>Debug Data</span>
+                <span>{{ t("coach.debugData") }}</span>
               </button>
             </div>
 
@@ -174,7 +175,7 @@ void scrollContainerRef;
               :id="'scratchpad-' + message.id"
               class="p-3.5 rounded-xl bg-white/5 border border-white/5 text-xs font-medium text-foreground/80 leading-relaxed animate-in fade-in duration-200"
             >
-              <div class="text-micro text-muted-foreground/60 mb-1">Reasoning & Scratchpad</div>
+              <div class="text-micro text-muted-foreground/60 mb-1">{{ t("coach.rationaleHeading") }}</div>
               <p class="whitespace-pre-wrap">{{ message.scratchpad }}</p>
             </div>
 
@@ -185,14 +186,14 @@ void scrollContainerRef;
               class="p-3.5 rounded-xl bg-muted/20 border border-white/5 text-xs font-mono text-muted-foreground/80 leading-relaxed animate-in fade-in duration-200 flex flex-col gap-2"
             >
               <div class="flex items-center justify-between">
-                <span class="text-micro text-muted-foreground/60">Sent Prompt Payload</span>
+                <span class="text-micro text-muted-foreground/60">{{ t("coach.sentPromptPayload") }}</span>
                 <button
                   type="button"
                   @click="copyPayload(message.requestPayload)"
                   class="text-xs font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-lg"
                 >
                   <Copy class="w-3 h-3" />
-                  <span>Copy</span>
+                  <span>{{ t("common.copy") }}</span>
                 </button>
               </div>
               <pre class="overflow-x-auto whitespace-pre-wrap break-all text-xs max-h-48 rounded-xl bg-black/30 p-3 font-mono text-muted-foreground/70">{{ message.requestPayload }}</pre>
@@ -216,7 +217,7 @@ void scrollContainerRef;
           class="flex items-center gap-2 text-xs text-muted-foreground/70 font-medium"
         >
           <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
-          <span>Finalizing coaching response...</span>
+          <span>{{ t("coach.finalizing") }}</span>
         </div>
       </div>
 
@@ -227,12 +228,12 @@ void scrollContainerRef;
         aria-live="polite"
         class="w-full flex items-center gap-2 text-xs text-muted-foreground animate-in fade-in duration-200 py-1"
       >
-        <span class="sr-only">AI Coach is analyzing workout</span>
+        <span class="sr-only">{{ t("coach.analyzingSr") }}</span>
         <div class="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/5">
           <span class="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]"></span>
           <span class="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]"></span>
           <span class="w-1.5 h-1.5 rounded-full bg-primary animate-bounce"></span>
-          <span class="text-xs text-muted-foreground/80 font-medium ml-1.5">Coach is thinking...</span>
+          <span class="text-xs text-muted-foreground/80 font-medium ml-1.5">{{ t("coach.thinking") }}</span>
         </div>
       </div>
     </main>
@@ -267,7 +268,7 @@ void scrollContainerRef;
             rows="1"
             enterkeyhint="send"
             :disabled="isLoading"
-            placeholder="Ask Coach anything..."
+            :placeholder="t('coach.inputPlaceholder')"
             class="min-h-[52px] max-h-36 py-3.5 pl-4 pr-14 text-base placeholder:text-muted-foreground/60 placeholder:truncate leading-normal"
             @keydown.enter.exact.prevent="handleAskQuestion"
           />
@@ -279,7 +280,7 @@ void scrollContainerRef;
             :class="!userQuestion.trim() ? 'opacity-40' : 'shadow-sm'"
             :disabled="!userQuestion.trim() || isLoading"
             @click="handleAskQuestion"
-            aria-label="Send Question"
+            :aria-label="t('coach.sendAria')"
           >
             <ArrowUp class="w-5 h-5" />
           </UiButton>

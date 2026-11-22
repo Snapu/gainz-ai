@@ -15,6 +15,8 @@ import EmptyState from "@/shared/presentation/components/EmptyState.vue";
 import SessionLogGroup from "@/shared/presentation/components/SessionLogGroup.vue";
 import { useLogSheet } from "@/shared/presentation/composables/useLogSheet";
 import { useToast } from "@/shared/presentation/composables/useToast";
+import { t } from "@/shared/presentation/i18n";
+import { formatSessionDate } from "@/shared/presentation/i18n/formatters";
 
 interface GroupedSession {
   id: string;
@@ -52,7 +54,7 @@ const groupedLogs = computed(() => {
 
     return {
       id: `${session.sessionId}-${session.startTime.getTime()}`,
-      date: session.sessionDate,
+      date: formatSessionDate(session.startTime),
       logs,
       stats: {
         sets: logs.length,
@@ -91,8 +93,8 @@ async function deleteLog(log: ExerciseLog) {
     (status) => {
       if (status === "queued-offline") {
         toast({
-          title: "Deleted Offline",
-          description: "Set removed locally and queued to sync when back online.",
+          title: t("logSheet.deletedOfflineTitle"),
+          description: t("logSheet.deletedOfflineDesc"),
         });
       }
     },
@@ -105,7 +107,7 @@ async function deleteLog(log: ExerciseLog) {
 
 <template>
   <div class="h-full bg-background flex flex-col overflow-hidden pt-safe">
-    <AppHeader show-back title="Past Sessions" class="shrink-0" @back="router.back()" />
+    <AppHeader show-back :title="t('pastSessions.title')" class="shrink-0" @back="router.back()" />
 
     <main
       class="flex-1 min-h-0 w-full max-w-2xl mx-auto px-4 pt-4 pb-28 overflow-y-auto overscroll-y-contain no-scrollbar flex flex-col gap-4"
@@ -125,8 +127,8 @@ async function deleteLog(log: ExerciseLog) {
       <EmptyState
         v-if="groupedLogs.length === 0"
         :icon="History"
-        title="No exercises yet."
-        description="Log your first set in the Train tab to see your session history here."
+        :title="t('pastSessions.emptyTitle')"
+        :description="t('pastSessions.emptyDesc')"
       />
     </main>
 

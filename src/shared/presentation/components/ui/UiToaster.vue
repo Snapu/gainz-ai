@@ -10,6 +10,7 @@ import {
   ToastViewport,
 } from "reka-ui";
 import { useToast } from "@/shared/presentation/composables/useToast";
+import { t } from "@/shared/presentation/i18n";
 
 const { toasts, dismiss } = useToast();
 </script>
@@ -20,46 +21,49 @@ const { toasts, dismiss } = useToast();
     <ToastViewport class="fixed bottom-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 sm:bottom-0 sm:right-0 sm:top-auto sm:flex-col md:max-w-[420px]" />
     
     <ToastRoot
-      v-for="t in toasts"
-      :key="t.id"
-      :duration="t.persistent ? Number.POSITIVE_INFINITY : (t.duration ?? 5000)"
-      :type="t.persistent ? 'foreground' : 'foreground'"
-      @update:open="!$event && dismiss(t.id!)"
+      v-for="toastItem in toasts"
+      :key="toastItem.id"
+      :duration="toastItem.persistent ? Number.POSITIVE_INFINITY : (toastItem.duration ?? 5000)"
+      :type="toastItem.persistent ? 'foreground' : 'foreground'"
+      @update:open="!$event && dismiss(toastItem.id!)"
       :class="[
         'group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-xl border p-5 shadow-2xl transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--reka-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--reka-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full mt-4 backdrop-blur-xl',
-        t.variant === 'destructive' 
+        toastItem.variant === 'destructive' 
           ? 'destructive border-destructive bg-destructive/90 text-destructive-foreground'
           : 'border-white/10 bg-card/95 text-foreground/90'
       ]"
     >
       <div class="grid gap-1">
-        <div v-if="t.title" class="flex items-center justify-between gap-2">
+        <div v-if="toastItem.title" class="flex items-center justify-between gap-2">
           <ToastTitle class="text-base font-bold text-foreground">
-            {{ t.title }}
+            {{ toastItem.title }}
           </ToastTitle>
-          <span v-if="t.countdown" class="text-xs font-mono text-foreground/60">
-            {{ t.countdown.seconds }}s
+          <span v-if="toastItem.countdown" class="text-xs font-mono text-foreground/60">
+            {{ toastItem.countdown.seconds }}s
           </span>
         </div>
-        <ToastDescription v-if="t.description" class="text-sm opacity-90">
-          {{ t.description }}
+        <ToastDescription v-if="toastItem.description" class="text-sm opacity-90">
+          {{ toastItem.description }}
         </ToastDescription>
       </div>
       
       <ToastAction
-        v-if="t.action"
-        :alt-text="t.action.label"
+        v-if="toastItem.action"
+        :alt-text="toastItem.action.label"
         as-child
       >
         <button type="button"
-          @click="t.action.onClick"
+          @click="toastItem.action.onClick"
           class="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-semibold text-foreground transition-colors hover:bg-white/10 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50"
         >
-          {{ t.action.label }}
+          {{ toastItem.action.label }}
         </button>
       </ToastAction>
       
-      <ToastClose class="absolute right-4 top-4 rounded-lg p-1.5 text-foreground/50 opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 group-hover:opacity-100 bg-white/5">
+      <ToastClose
+        :aria-label="t('common.close')"
+        class="absolute right-4 top-4 rounded-lg p-1.5 text-foreground/50 opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 group-hover:opacity-100 bg-white/5"
+      >
         <X class="h-4 w-4" />
       </ToastClose>
     </ToastRoot>

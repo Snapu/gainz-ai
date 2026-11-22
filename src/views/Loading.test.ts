@@ -103,7 +103,7 @@ describe("Loading.vue", () => {
     await nextTick();
 
     expect(container.querySelector('[role="status"]')).not.toBeNull();
-    expect(container.textContent).not.toContain("Link Existing Spreadsheet");
+    expect(container.textContent).not.toContain("Connect Existing Sheet");
     unmount();
   });
 
@@ -116,8 +116,8 @@ describe("Loading.vue", () => {
     await nextTick();
 
     const buttons = Array.from(container.querySelectorAll("button"));
-    const linkBtn = buttons.find((btn) => btn.textContent?.includes("Link Existing Spreadsheet"));
-    const createBtn = buttons.find((btn) => btn.textContent?.includes("Create New Spreadsheet"));
+    const linkBtn = buttons.find((btn) => btn.textContent?.includes("Connect Existing Sheet"));
+    const createBtn = buttons.find((btn) => btn.textContent?.includes("Start Fresh (Create New)"));
     const switchAccountBtn = buttons.find((btn) =>
       btn.textContent?.includes("Switch Google Account"),
     );
@@ -125,7 +125,7 @@ describe("Loading.vue", () => {
 
     expect(main?.className).toContain("overflow-y-auto");
     expect(main?.className).toContain("pt-safe");
-    expect(container.textContent).toContain("Gainz AI App Database");
+    expect(container.textContent).toContain("saved privately in your Google Drive");
     expect(linkBtn).toBeDefined();
     expect(linkBtn?.getAttribute("aria-busy")).toBeNull();
     expect(createBtn).toBeDefined();
@@ -170,7 +170,7 @@ describe("Loading.vue", () => {
       btn.textContent?.includes("Opening Google Drive..."),
     );
     const createBtnWhileBusy = buttons.find((btn) =>
-      btn.textContent?.includes("Create New Spreadsheet"),
+      btn.textContent?.includes("Start Fresh (Create New)"),
     );
     const switchAccountBtnWhileBusy = buttons.find((btn) =>
       btn.textContent?.includes("Switch Google Account"),
@@ -183,7 +183,7 @@ describe("Loading.vue", () => {
     spreadsheetState.isPickerOpen = false;
     await nextTick();
 
-    const linkBtn = buttons.find((btn) => btn.textContent?.includes("Link Existing Spreadsheet"));
+    const linkBtn = buttons.find((btn) => btn.textContent?.includes("Connect Existing Sheet"));
 
     // Picker cancelled stays quiet
     linkBtn?.click();

@@ -21,7 +21,7 @@ describe("leveling system", () => {
       expect(result.level).toBe(1);
       expect(result.totalXP).toBe(0);
       expect(result.readiness).toBe(0.5); // READINESS_MIN
-      expect(result.title).toBe("Novice Challenger");
+      expect(result.title).toBe("Rookie I");
       expect(result.avatar).toBe("/assets/ranks/rank-1.png");
     });
 
@@ -144,12 +144,12 @@ describe("leveling system", () => {
 
   describe("getTitleForLevel", () => {
     it("should return correct title for milestones", () => {
-      expect(getTitleForLevel(1)).toBe("Novice Challenger");
-      expect(getTitleForLevel(5)).toBe("Iron Warrior");
-      expect(getTitleForLevel(10)).toBe("Flame Bearer");
-      expect(getTitleForLevel(50)).toBe("Legendary Slayer");
-      expect(getTitleForLevel(100)).toBe("Diamond Ascendant");
-      expect(getTitleForLevel(300)).toBe("Celestial Transcendent");
+      expect(getTitleForLevel(1)).toBe("Rookie I");
+      expect(getTitleForLevel(5)).toBe("Rookie II");
+      expect(getTitleForLevel(10)).toBe("Rookie III");
+      expect(getTitleForLevel(50)).toBe("Pro III");
+      expect(getTitleForLevel(100)).toBe("Elite III");
+      expect(getTitleForLevel(300)).toBe("G.O.A.T.");
     });
   });
 });

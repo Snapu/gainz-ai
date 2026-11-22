@@ -12,6 +12,7 @@ import { useWakeLock } from "@vueuse/core";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiRadialProgress from "@/shared/presentation/components/ui/UiRadialProgress.vue";
+import { t } from "@/shared/presentation/i18n";
 
 interface DeckExercise {
   exerciseName: string;
@@ -245,9 +246,9 @@ const deckContainerClasses = computed(() => {
 });
 
 const holdEyebrowLabel = computed(() => {
-  if (isHoldComplete.value) return "Hold Complete";
-  if (isTimerRunning.value) return "Holding";
-  return "Hold";
+  if (isHoldComplete.value) return t("home.deck.holdComplete");
+  if (isTimerRunning.value) return t("home.deck.holding");
+  return t("home.deck.hold");
 });
 
 const holdEyebrowClass = computed(() => {
@@ -263,7 +264,7 @@ const holdRingProgressClass = computed(() => {
 });
 
 const emptyDeckLabel = computed(() => {
-  return props.isRestDay ? "Rest Day" : "No Active Workout";
+  return props.isRestDay ? t("home.restDayTitle") : t("home.deck.noActiveWorkout");
 });
 </script>
 
@@ -299,7 +300,7 @@ const emptyDeckLabel = computed(() => {
           @click="emit('logCustom')"
         >
           <Plus class="w-3.5 h-3.5 text-primary shrink-0" />
-          <span>Log Custom Exercise</span>
+          <span>{{ t("home.deck.logCustomExercise") }}</span>
         </UiButton>
       </div>
 
@@ -318,10 +319,10 @@ const emptyDeckLabel = computed(() => {
               class="text-micro leading-tight"
               :class="isOvertime ? 'text-red-400' : 'text-emerald-400'"
             >
-              {{ isOvertime ? "Rest Overtime" : "Rest" }}
+              {{ isOvertime ? t("home.deck.restOvertime") : t("home.deck.rest") }}
             </span>
             <span class="text-sm font-bold text-foreground truncate min-w-0 leading-tight">
-              {{ isWorkoutComplete ? 'Workout Complete' : (currentExercise?.exerciseName ?? 'Rest Timer') }}
+              {{ isWorkoutComplete ? t("home.deck.workoutComplete") : (currentExercise?.exerciseName ?? t("home.deck.restTimer")) }}
             </span>
           </div>
 
@@ -348,7 +349,7 @@ const emptyDeckLabel = computed(() => {
               variant="secondary"
               size="icon"
               data-testid="deck-skip-rest"
-              aria-label="Skip Rest"
+              :aria-label="t('home.deck.skipRest')"
               @click="handleSkipRest"
             >
               <SkipForward class="w-4 h-4" />
@@ -360,7 +361,7 @@ const emptyDeckLabel = computed(() => {
               size="icon"
               variant="default"
               class="h-10 w-10 rounded-full active:scale-95 transition-all shadow-sm shrink-0"
-              :aria-label="isWorkoutComplete ? 'Finish Rest' : `Log Set ${currentSetNumber}`"
+              :aria-label="isWorkoutComplete ? t('home.deck.finishRest') : t('home.deck.logSetN', { number: currentSetNumber })"
               @click="isWorkoutComplete ? handleSkipRest() : emit('logCurrent')"
             >
               <SkipForward v-if="isWorkoutComplete" class="w-5 h-5" />
@@ -381,10 +382,10 @@ const emptyDeckLabel = computed(() => {
                 data-testid="deck-mode-eyebrow"
                 class="text-micro leading-tight text-emerald-400"
               >
-                All Sets Logged
+                {{ t("home.deck.allSetsLogged") }}
               </span>
               <span class="text-sm font-bold text-foreground truncate min-w-0 leading-tight">
-                Workout Complete
+                {{ t("home.deck.workoutComplete") }}
               </span>
             </div>
           </div>
@@ -395,7 +396,7 @@ const emptyDeckLabel = computed(() => {
             size="icon"
             variant="secondary"
             class="shrink-0"
-            aria-label="Log Exercise"
+            :aria-label="t('home.logExercise')"
             @click="emit('logCustom')"
           >
             <Plus class="w-5 h-5" />
@@ -414,7 +415,7 @@ const emptyDeckLabel = computed(() => {
             size="icon"
             variant="default"
             class="h-10 w-10 rounded-full active:scale-95 transition-all shadow-sm shrink-0"
-            aria-label="Log Exercise"
+            :aria-label="t('home.logExercise')"
             @click="emit('logCustom')"
           >
             <Plus class="w-5 h-5" />
@@ -428,7 +429,7 @@ const emptyDeckLabel = computed(() => {
               data-testid="deck-mode-eyebrow"
               class="text-micro leading-tight text-muted-foreground"
             >
-              Log Extra
+              {{ t("home.deck.logExtra") }}
             </span>
             <span class="text-sm font-bold text-foreground truncate min-w-0 leading-tight">
               {{ currentExercise.exerciseName }}
@@ -441,7 +442,7 @@ const emptyDeckLabel = computed(() => {
             size="icon"
             variant="default"
             class="h-10 w-10 rounded-full active:scale-95 transition-all shadow-sm shrink-0"
-            aria-label="Add Extra Set"
+            :aria-label="t('home.deck.addExtraSet')"
             @click="emit('logCurrent')"
           >
             <Plus class="w-5 h-5" />
@@ -487,7 +488,7 @@ const emptyDeckLabel = computed(() => {
               :variant="isTimerActiveOrDirty ? 'secondary' : 'tonal'"
               size="icon"
               data-testid="deck-timer-toggle"
-              :aria-label="isTimerActiveOrDirty ? 'Reset Timer' : 'Start Timer'"
+              :aria-label="isTimerActiveOrDirty ? t('home.deck.resetTimer') : t('home.deck.startTimer')"
               @click="toggleTimer"
             >
               <Play v-if="!isTimerActiveOrDirty" class="w-4 h-4 ml-0.5" fill="currentColor" />
@@ -500,7 +501,7 @@ const emptyDeckLabel = computed(() => {
               size="icon"
               variant="default"
               class="h-10 w-10 rounded-full active:scale-95 transition-all shadow-sm shrink-0"
-              :aria-label="`Log Set ${currentSetNumber}`"
+              :aria-label="t('home.deck.logSetN', { number: currentSetNumber })"
               @click="emit('logCurrent')"
             >
               <Plus class="w-5 h-5" />
@@ -515,7 +516,7 @@ const emptyDeckLabel = computed(() => {
               data-testid="deck-mode-eyebrow"
               class="text-micro leading-tight text-muted-foreground"
             >
-              Log
+              {{ t("home.deck.log") }}
             </span>
             <span class="text-sm font-bold text-foreground truncate min-w-0 leading-tight">
               {{ currentExercise.exerciseName }}
@@ -528,7 +529,7 @@ const emptyDeckLabel = computed(() => {
             size="icon"
             variant="default"
             class="h-10 w-10 rounded-full active:scale-95 transition-all shadow-sm shrink-0"
-            :aria-label="`Log Set ${currentSetNumber}`"
+            :aria-label="t('home.deck.logSetN', { number: currentSetNumber })"
             @click="emit('logCurrent')"
           >
             <Plus class="w-5 h-5" />

@@ -10,6 +10,7 @@ import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 import UiTelemetryLoader from "@/shared/presentation/components/ui/UiTelemetryLoader.vue";
+import { t } from "@/shared/presentation/i18n";
 
 const {
   isLoading,
@@ -27,14 +28,14 @@ const {
   <div class="h-full bg-background flex flex-col relative overflow-hidden">
     <main class="flex-1 w-full max-w-2xl mx-auto px-4 pt-4 pb-28 overflow-y-auto overscroll-y-contain no-scrollbar flex flex-col gap-5">
       <template v-if="(isLoading && !activePlan) || isRegenerating">
-        <UiTelemetryLoader text="Structuring training plan..." />
+        <UiTelemetryLoader :text="t('plan.loading')" />
       </template>
       <template v-else-if="activePlan">
         <div class="flex flex-col gap-4">
           <div class="flex items-center justify-between gap-4">
             <div class="flex items-center gap-2">
-              <h3 class="text-sm font-bold text-foreground">Current Training Cycle</h3>
-              <UiBadge variant="surface">{{ activePlan.cycleWeeks }} Week(s)</UiBadge>
+              <h3 class="text-sm font-bold text-foreground">{{ t("plan.currentCycle") }}</h3>
+              <UiBadge variant="surface">{{ t("plan.cycleWeeks", { count: activePlan.cycleWeeks }, activePlan.cycleWeeks) }}</UiBadge>
             </div>
             <UiButton
               variant="secondary"
@@ -44,7 +45,7 @@ const {
               @click="regeneratePlan"
             >
               <RotateCw class="w-3.5 h-3.5 mr-1.5" :class="{ 'animate-spin': isRegenerating }" />
-              New Plan
+              {{ t("plan.newPlan") }}
             </UiButton>
           </div>
           
@@ -66,15 +67,15 @@ const {
                       v-if="shouldShowWeekBadge(session.sessionLabel)"
                       class="text-micro text-muted-foreground/60 shrink-0"
                     >
-                      Week {{ session.weekNumber }}
+                      {{ t("plan.weekLabel", { week: session.weekNumber }) }}
                     </span>
                   </div>
                   
                   <UiBadge v-if="isPlanSessionCompleted(session.weekNumber, session.dayOfWeek)" variant="success">
-                    <CheckCircle2 class="w-3 h-3 mr-1" /> Done
+                    <CheckCircle2 class="w-3 h-3 mr-1" /> {{ t("plan.done") }}
                   </UiBadge>
                   <UiBadge v-else-if="sIdx === activeSessionIndex" variant="info">
-                    Up Next
+                    {{ t("plan.upNext") }}
                   </UiBadge>
                 </div>
                 <p v-if="session.focusDescription" class="text-xs font-medium text-muted-foreground mt-0.5 mb-3 pb-3 border-b border-white/5">
@@ -87,7 +88,6 @@ const {
             </UiCard>
           </div>
 
-          <!-- Debug Buttons -->
           <div class="flex gap-2 mt-2">
             <UiButton
               variant="ghost"
@@ -96,7 +96,7 @@ const {
               @click="copyPlanJson"
             >
               <Copy class="w-3.5 h-3.5 mr-2 opacity-70" />
-              Copy Plan
+              {{ t("plan.copyPlan") }}
             </UiButton>
           </div>
         </div>
@@ -105,8 +105,8 @@ const {
       <template v-else>
         <EmptyState
           :icon="CalendarIcon"
-          title="No Active Plan"
-          description="Generate a new training plan tailored to your goals and schedule."
+          :title="t('plan.emptyTitle')"
+          :description="t('plan.emptyDesc')"
         >
           <UiButton 
             @click="regeneratePlan"
@@ -114,7 +114,7 @@ const {
             :disabled="isLoading"
           >
             <RotateCw class="w-4 h-4 mr-2" :class="{ 'animate-spin': isLoading }" />
-            Generate New Plan
+            {{ t("plan.generateNewPlan") }}
           </UiButton>
         </EmptyState>
       </template>

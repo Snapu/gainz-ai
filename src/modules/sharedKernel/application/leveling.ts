@@ -41,7 +41,7 @@
  * CONFIGURATION CONSTANTS
  * ====================================================== */
 
-import type { UserProgress } from "@/modules/sharedKernel/domain";
+import type { RankTierId, UserProgress } from "@/modules/sharedKernel/domain";
 import {
   calculateE1RM,
   calculateMuscleGroupInsights,
@@ -77,129 +77,147 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const resolveAsset = (path: string) => `${BASE}${path}`;
 
 /**
- * Anime-inspired rank titles that escalate with level milestones.
+ * Grounded athletic rank tiers that scale with long-term training consistency.
  *
- * Spaced for psychological impact:
- * - Early titles come quickly to hook new users
- * - Mid-tier titles celebrate sustained commitment
- * - Elite titles are legendary achievements
- *
- * Each title is more epic than the previous, creating clear progression.
+ * Spaced for long-term progression:
+ * - Early tiers come quickly to recognize initial consistency
+ * - Mid-tier ranks reflect sustained multi-month habits
+ * - Senior tiers represent years of disciplined strength training
  */
-const TITLES = [
+const TITLES: ReadonlyArray<{
+  id: RankTierId;
+  level: number;
+  title: string;
+  avatar: string;
+  description: string;
+}> = [
   {
+    id: "foundation",
     level: 1,
-    title: "Novice Challenger",
+    title: "Rookie I",
     avatar: resolveAsset("/assets/ranks/rank-1.png"),
-    description: "Every legend starts with a single rep. Your journey has just begun.",
+    description: "Every strength journey starts with the very first logged set.",
   },
   {
+    id: "consistent",
     level: 5,
-    title: "Iron Warrior",
+    title: "Rookie II",
     avatar: resolveAsset("/assets/ranks/rank-2.png"),
-    description: "Forged in the fires of consistency. Your resolve is hardening like iron.",
+    description: "First momentum built through steady weekly sessions.",
   },
   {
+    id: "committed",
     level: 10,
-    title: "Flame Bearer",
+    title: "Rookie III",
     avatar: resolveAsset("/assets/ranks/rank-3.png"),
-    description: "The spark has become a flame. Keep the fire burning through every session.",
+    description: "Training has become an established weekly routine.",
   },
   {
+    id: "disciplined",
     level: 15,
-    title: "Thunder Fist",
+    title: "Athlete I",
     avatar: resolveAsset("/assets/ranks/rank-4.png"),
-    description:
-      "Your strikes carry the weight of discipline. Speed and power are now your allies.",
+    description: "Showing up and executing the plan, even on demanding days.",
   },
   {
+    id: "structured",
     level: 20,
-    title: "Steel Conqueror",
+    title: "Athlete II",
     avatar: resolveAsset("/assets/ranks/rank-5.png"),
-    description: "You've conquered the initial hurdles. Your body is a temple of steel.",
+    description: "Volume, recovery, and progression clicking into place.",
   },
   {
+    id: "resilient",
     level: 25,
-    title: "Rising Phoenix",
+    title: "Athlete III",
     avatar: resolveAsset("/assets/ranks/rank-6.png"),
-    description: "From the ashes of your old self, a stronger athlete rises. Soar higher.",
+    description: "Adapting through fatigue cycles without losing momentum.",
   },
   {
+    id: "dedicated",
     level: 30,
-    title: "Immortal Guardian",
+    title: "Pro I",
     avatar: resolveAsset("/assets/ranks/rank-7.png"),
-    description: "Consistency is your shield. You protect your gains with unwavering discipline.",
+    description: "Months of deliberate effort showing across core lifts.",
   },
   {
+    id: "methodical",
     level: 40,
-    title: "Champion of Will",
+    title: "Pro II",
     avatar: resolveAsset("/assets/ranks/rank-8.png"),
-    description: "Mind over matter. Your will is stronger than any resistance you face.",
+    description: "Measured overload and sharp execution block after block.",
   },
   {
+    id: "seasoned",
     level: 50,
-    title: "Legendary Slayer",
+    title: "Pro III",
     avatar: resolveAsset("/assets/ranks/rank-9.png"),
-    description: "You slay doubt and fatigue daily. Your progress is the stuff of legends.",
+    description: "A full year of structured strength work behind your baseline.",
   },
   {
+    id: "proficient",
     level: 60,
-    title: "Master of Discipline",
+    title: "Elite I",
     avatar: resolveAsset("/assets/ranks/rank-10.png"),
-    description: "The gym is your dojo. You have mastered the art of showing up.",
+    description: "High work capacity paired with technical precision under load.",
   },
   {
+    id: "advanced",
     level: 75,
-    title: "Storm Emperor",
+    title: "Elite II",
     avatar: resolveAsset("/assets/ranks/rank-11.png"),
-    description: "You command the storm of your life. Your power is a force of nature.",
+    description: "Sustained progression across years of training cycles.",
   },
   {
+    id: "veteran",
     level: 100,
-    title: "Diamond Ascendant",
+    title: "Elite III",
     avatar: resolveAsset("/assets/ranks/rank-12.png"),
-    description: "Pressure has turned your effort into something unbreakable. Pure and strong.",
+    description: "Triple-digit benchmark forged by patience and smart pacing.",
   },
   {
+    id: "specialist",
     level: 125,
-    title: "Dragon Sovereign",
+    title: "World Class I",
     avatar: resolveAsset("/assets/ranks/rank-13.png"),
-    description: "The dragon within has awakened. You rule your fitness with absolute power.",
+    description: "Years of deliberate work reflected in exceptional resilience.",
   },
   {
+    id: "performance",
     level: 150,
-    title: "Thunder God",
+    title: "World Class II",
     avatar: resolveAsset("/assets/ranks/rank-14.png"),
-    description: "A deity of the weights. Every rep echoes like thunder across the heavens.",
+    description: "High-level strength sustained across competitive seasons.",
   },
   {
+    id: "highCapacity",
     level: 187,
-    title: "Inferno Overlord",
+    title: "World Class III",
     avatar: resolveAsset("/assets/ranks/rank-15.png"),
-    description:
-      "You've mastered the heat. Even the toughest workouts are but a breeze to your fire.",
+    description: "Rare training maturity built through years of relentless output.",
   },
   {
+    id: "master",
     level: 200,
-    title: "Cosmic Titan",
+    title: "Icon",
     avatar: resolveAsset("/assets/ranks/rank-16.png"),
-    description: "Your strength spans the stars. You've transcended mortal limits.",
+    description: "A benchmark of long-term dedication others look up to.",
   },
   {
+    id: "elite",
     level: 250,
-    title: "Demon King",
+    title: "Living Legend",
     avatar: resolveAsset("/assets/ranks/rank-17.png"),
-    description:
-      "The ultimate peak. You have conquered every challenge and stand alone at the top.",
+    description: "Ironclad consistency over more than a decade under the bar.",
   },
   {
+    id: "pinnacle",
     level: 300,
-    title: "Celestial Transcendent",
+    title: "G.O.A.T.",
     avatar: resolveAsset("/assets/ranks/rank-18.png"),
-    description:
-      "Beyond levels, beyond limits. You have become one with the flow of infinite energy.",
+    description: "The pinnacle: lifetime mastery of strength, longevity, and grit.",
   },
-] as const;
+];
 
 type RankInfo = (typeof TITLES)[number];
 
@@ -316,6 +334,7 @@ export function calculateUserProgress(
       xpForNextLevel: xpForLevel(1),
       progressPercent: 0,
       readiness: READINESS_MIN,
+      rankId: TITLES[0].id,
       title: getTitleForLevel(1),
       description: TITLES[0].description,
       avatar: getAvatarForLevel(1),
@@ -511,6 +530,7 @@ export function calculateUserProgress(
     xpForNextLevel: xpForNext,
     progressPercent,
     readiness,
+    rankId: rankInfo.id,
     title: rankInfo.title,
     description: rankInfo.description,
     avatar: rankInfo.avatar,

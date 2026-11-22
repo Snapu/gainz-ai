@@ -47,7 +47,7 @@ describe("useAuthErrorHandler", () => {
     expect(mockToast).toHaveBeenCalledWith({
       id: "auth-session-expired",
       title: "Session Expired",
-      description: "Your session expired. Please log in again.",
+      description: "Your session expired. Please sign in again.",
       variant: "destructive",
     });
   });

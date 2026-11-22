@@ -11,6 +11,10 @@ import UiToaster from "@/shared/presentation/components/ui/UiToaster.vue";
 import { useAuthExpirationWatcher } from "@/shared/presentation/composables/useAuthExpirationWatcher";
 import { useSheetCacheSync } from "@/shared/presentation/composables/useSheetCacheSync";
 import { useToast } from "@/shared/presentation/composables/useToast";
+import { t } from "@/shared/presentation/i18n";
+import { useLocale } from "@/shared/presentation/i18n/useLocale";
+
+const { bcp47Locale } = useLocale();
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -89,11 +93,11 @@ watch(
   (isNeeded) => {
     if (isNeeded) {
       toast({
-        title: "Update Available",
-        description: "A new version of GainzAI is ready.",
+        title: t("pwa.updateTitle"),
+        description: t("pwa.updateDescription"),
         duration: 100000,
         action: {
-          label: "Reload",
+          label: t("pwa.reload"),
           onClick: () => updateServiceWorker(true),
         },
       });
@@ -139,7 +143,7 @@ watch(
 </script>
 
 <template>
-  <ConfigProvider locale="en" :scroll-body="false">
+  <ConfigProvider :locale="bcp47Locale" :scroll-body="false">
     <RouterView />
     <UiToaster />
   </ConfigProvider>

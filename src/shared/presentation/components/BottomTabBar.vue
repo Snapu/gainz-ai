@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { Calendar, Dumbbell, LineChart, MessageSquare } from "@lucide/vue";
+import { computed } from "vue";
 import { useRoute } from "vue-router";
+import { t } from "@/shared/presentation/i18n";
 
 const route = useRoute();
 
-const tabs = [
-  { name: "home", label: "Train", icon: Dumbbell },
-  { name: "insights", label: "Insights", icon: LineChart },
-  { name: "plan", label: "Plan", icon: Calendar },
-  { name: "coach", label: "Coach", icon: MessageSquare },
-];
+const tabs = computed(() => [
+  { name: "home", label: t("nav.train"), icon: Dumbbell },
+  { name: "insights", label: t("nav.insights"), icon: LineChart },
+  { name: "plan", label: t("nav.plan"), icon: Calendar },
+  { name: "coach", label: t("nav.coach"), icon: MessageSquare },
+]);
 </script>
 
 <template>

@@ -11,35 +11,47 @@ import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 import UiTelemetryLoader from "@/shared/presentation/components/ui/UiTelemetryLoader.vue";
 import { useToast } from "@/shared/presentation/composables/useToast";
+import { t } from "@/shared/presentation/i18n";
 
-const DEFAULT_CHOICE_ERROR_TOAST = {
-  title: "Could Not Connect Sheet",
-  description: "Something went wrong connecting your spreadsheet. Please try again.",
-};
+function resolveChoiceErrorToast(
+  error: Exclude<SpreadsheetChoiceError, "picker-cancelled">,
+  isOnlineNow: boolean,
+): { title: string; description: string } {
+  if (error === "auth-failed" && !isOnlineNow) {
+    return {
+      title: t("loading.errors.connectionUnavailableTitle"),
+      description: t("loading.errors.connectionUnavailableDesc"),
+    };
+  }
 
-const CHOICE_ERROR_TOASTS: Partial<
-  Record<
-    Exclude<SpreadsheetChoiceError, "picker-cancelled">,
-    { title: string; description: string }
-  >
-> = {
-  "auth-failed": {
-    title: "Permission Expired",
-    description: "Google Drive authorization expired. Please sign in again.",
-  },
-  forbidden: {
-    title: "Permission Denied",
-    description: "You do not have permission to access the selected spreadsheet.",
-  },
-  "picker-unavailable": {
-    title: "Google Picker Unavailable",
-    description: "Could not open Google Picker. Try again or create a new spreadsheet instead.",
-  },
-  "not-found": {
-    title: "Spreadsheet Not Found",
-    description: "The selected spreadsheet is no longer available in Google Drive.",
-  },
-};
+  switch (error) {
+    case "auth-failed":
+      return {
+        title: t("loading.errors.permissionExpiredTitle"),
+        description: t("loading.errors.permissionExpiredDesc"),
+      };
+    case "forbidden":
+      return {
+        title: t("loading.errors.permissionDeniedTitle"),
+        description: t("loading.errors.permissionDeniedDesc"),
+      };
+    case "picker-unavailable":
+      return {
+        title: t("loading.errors.pickerUnavailableTitle"),
+        description: t("loading.errors.pickerUnavailableDesc"),
+      };
+    case "not-found":
+      return {
+        title: t("loading.errors.sheetNotFoundTitle"),
+        description: t("loading.errors.sheetNotFoundDesc"),
+      };
+    default:
+      return {
+        title: t("loading.errors.connectFailedTitle"),
+        description: t("loading.errors.connectFailedDesc"),
+      };
+  }
+}
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -56,23 +68,16 @@ const showChoiceScreen = computed(
 
 const loadingMessage = computed(() => {
   if (!isOnline.value && !spreadsheetStore.doc) {
-    return "Waiting for network connection...";
+    return t("loading.waitingNetwork");
   }
-  return profileStore.isLoading ? "Loading profile..." : "Loading spreadsheet...";
+  return profileStore.isLoading ? t("loading.loadingProfile") : t("loading.loadingSpreadsheet");
 });
 
 function notifyChoiceError(error: SpreadsheetChoiceError): void {
   if (error === "picker-cancelled") return;
   if (error === "auth-failed" && !authStore.isLoggedIn) return;
 
-  const message =
-    error === "auth-failed" && !isOnline.value
-      ? {
-          title: "Connection Unavailable",
-          description:
-            "Could not reach Google Drive while offline. Check your connection and try again.",
-        }
-      : (CHOICE_ERROR_TOASTS[error] ?? DEFAULT_CHOICE_ERROR_TOAST);
+  const message = resolveChoiceErrorToast(error, isOnline.value);
 
   toast({
     variant: "destructive",
@@ -129,10 +134,10 @@ watch(
             <FileSpreadsheet class="w-5 h-5" />
           </div>
           <h1 class="text-xl font-black tracking-tight text-foreground">
-            Connect Training Sheet
+            {{ t("loading.connectTitle") }}
           </h1>
           <p class="text-sm font-medium text-muted-foreground">
-            Select your existing Google Spreadsheet (such as "Gainz AI App Database") to keep your training history, or create a new one.
+            {{ t("loading.connectDescription") }}
           </p>
         </div>
 
@@ -146,7 +151,7 @@ watch(
           >
             <FolderOpen class="w-4 h-4 shrink-0" />
             {{
-              spreadsheetStore.isPickerOpen ? "Opening Google Drive..." : "Link Existing Spreadsheet"
+              spreadsheetStore.isPickerOpen ? t("loading.openingDrive") : t("loading.linkExisting")
             }}
           </UiButton>
 
@@ -157,13 +162,13 @@ watch(
             @click="handleCreateNew"
           >
             <Plus class="w-4 h-4 shrink-0" />
-            {{ confirmingCreate ? "Tap Again to Confirm New Sheet" : "Create New Spreadsheet" }}
+            {{ confirmingCreate ? t("loading.confirmCreateNew") : t("loading.createNew") }}
           </UiButton>
         </div>
 
         <div class="bg-white/5 border border-white/5 rounded-xl p-4">
           <p class="text-xs font-medium text-muted-foreground text-center">
-            GainzAI only reads and updates spreadsheets you create here or select via Google Picker.
+            {{ t("loading.privacyNote") }}
           </p>
         </div>
 
@@ -173,7 +178,7 @@ watch(
           class="self-center text-muted-foreground"
           @click="authStore.logout()"
         >
-          Switch Google Account
+          {{ t("loading.switchAccount") }}
         </UiButton>
       </UiCard>
     </div>
@@ -183,6 +188,6 @@ watch(
     v-else
     fullscreen
     :text="loadingMessage"
-    subtitle="Gainz AI Engine"
+    :subtitle="t('loading.subtitle')"
   />
 </template>

@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { formatDurationMinutes } from "@/modules/sharedKernel/presentation";
 import type { ExerciseLog } from "@/modules/trainingLogs/presentation";
 import UiSwipeableItem from "@/shared/presentation/components/ui/UiSwipeableItem.vue";
+import { t } from "@/shared/presentation/i18n";
 
 const props = defineProps<{
   log: ExerciseLog;
@@ -14,11 +15,14 @@ const emit = defineEmits<{
   (e: "edit", log: ExerciseLog): void;
 }>();
 
-const formattedDuration = computed(() =>
-  props.log.duration != null && props.log.duration > 0
-    ? formatDurationMinutes(props.log.duration)
-    : null,
-);
+const formattedDuration = computed(() => {
+  if (props.log.duration == null || props.log.duration <= 0) return null;
+  const formatted = formatDurationMinutes(props.log.duration);
+  return {
+    value: formatted.value,
+    unit: formatted.unit === "min" ? t("common.min") : t("common.s"),
+  };
+});
 </script>
 
 <template>
@@ -31,15 +35,15 @@ const formattedDuration = computed(() =>
       <div class="flex gap-4 items-center shrink-0">
         <div v-if="log.weight" class="flex items-baseline">
            <span class="text-sm font-bold tabular-nums text-primary">{{ log.weight }}</span>
-           <span class="text-xs font-semibold text-muted-foreground/70 ml-1">kg</span>
+           <span class="text-xs font-semibold text-muted-foreground/70 ml-1">{{ t("common.kg") }}</span>
         </div>
         <div v-if="log.reps" class="flex items-baseline">
            <span class="text-sm font-bold tabular-nums text-foreground">{{ log.reps }}</span>
-           <span class="text-xs font-semibold text-muted-foreground/70 ml-1">reps</span>
+           <span class="text-xs font-semibold text-muted-foreground/70 ml-1">{{ t("common.reps") }}</span>
         </div>
         <div v-if="log.distance" class="flex items-baseline">
            <span class="text-sm font-bold tabular-nums text-foreground">{{ log.distance }}</span>
-           <span class="text-xs font-semibold text-muted-foreground/70 ml-1">m</span>
+           <span class="text-xs font-semibold text-muted-foreground/70 ml-1">{{ t("common.m") }}</span>
         </div>
         <div v-if="formattedDuration" class="flex items-baseline">
            <span class="text-sm font-bold tabular-nums text-foreground">{{ formattedDuration.value }}</span>

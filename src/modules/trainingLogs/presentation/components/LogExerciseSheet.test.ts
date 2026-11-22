@@ -463,7 +463,7 @@ describe("LogExerciseSheet", () => {
     }
     await nextTick();
 
-    expect(container.textContent).toContain("9 - 1 Rep Left (1 RIR)");
+    expect(container.textContent).toContain("9 — 1 rep left");
 
     const saveButton = Array.from(container.querySelectorAll("button")).find((b) =>
       b.textContent?.includes("Save Set"),

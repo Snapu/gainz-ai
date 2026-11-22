@@ -199,9 +199,9 @@ describe("MuscleActivationMap.vue", () => {
     expect(mounted.container.querySelector(".opacity-40")).not.toBeNull();
 
     const anteriorBtn = Array.from(mounted.container.querySelectorAll("button")).find(
-      (btn) => btn.textContent?.trim() === "Anterior",
+      (btn) => btn.textContent?.trim() === "Front",
     );
-    if (!anteriorBtn) throw new Error("Anterior toggle button not found");
+    if (!anteriorBtn) throw new Error("Front toggle button not found");
     anteriorBtn.click();
     await nextTick();
 

@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/vue";
 import { useToast } from "@/shared/presentation/composables/useToast";
+import { t } from "@/shared/presentation/i18n";
 import { useAuthStore } from "../stores/authStore";
 
 /**
@@ -28,8 +29,8 @@ export function useAuthErrorHandler() {
 
     toast({
       id: "auth-session-expired",
-      title: "Session Expired",
-      description: "Your session expired. Please log in again.",
+      title: t("auth.sessionExpiredTitle"),
+      description: t("auth.sessionExpiredDesc"),
       variant: "destructive",
     });
   }

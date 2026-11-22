@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { Bed, ChevronRight, CloudOff, ExternalLink, FolderOpen, History, Menu } from "@lucide/vue";
+import {
+  Bed,
+  Check,
+  ChevronRight,
+  CloudOff,
+  ExternalLink,
+  FolderOpen,
+  History,
+  Menu,
+} from "@lucide/vue";
 import { useRouter } from "vue-router";
 import { useSpreadsheetStore } from "@/modules/platform/presentation";
 import { WIZARD_STEPS } from "@/modules/profile/presentation";
@@ -8,19 +17,22 @@ import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiDropdownMenu from "@/shared/presentation/components/ui/UiDropdownMenu.vue";
 import UiDropdownMenuItem from "@/shared/presentation/components/ui/UiDropdownMenuItem.vue";
 import { useToast } from "@/shared/presentation/composables/useToast";
+import { t } from "@/shared/presentation/i18n";
+import { useLocale } from "@/shared/presentation/i18n/useLocale";
 
 const router = useRouter();
 const spreadsheetStore = useSpreadsheetStore();
 const logsStore = useExerciseLogsStore();
 const { toast } = useToast();
+const { locale, setLocale } = useLocale();
 
 function handleSwitchSpreadsheet(): void {
   void spreadsheetStore.switchSpreadsheet().orTee((error) => {
     if (error === "picker-cancelled") return;
     toast({
       variant: "destructive",
-      title: "Could Not Switch Sheet",
-      description: "Google Picker could not be opened. Please try again.",
+      title: t("loading.errors.switchSheetFailedTitle"),
+      description: t("loading.errors.switchSheetFailedDesc"),
     });
   });
 }
@@ -33,7 +45,7 @@ function handleSwitchSpreadsheet(): void {
       variant="chip"
       size="micro"
       :disabled="!logsStore.isOnline || logsStore.isSyncingPending || logsStore.isRefreshing"
-      aria-label="Sync pending offline logs"
+      :aria-label="t('nav.syncAriaLabel')"
       class="rounded-full bg-orange-500/10 border-orange-500/20 text-orange-400 hover:bg-white/10"
       @click="void logsStore.refresh()"
     >
@@ -41,26 +53,26 @@ function handleSwitchSpreadsheet(): void {
       <span>
         {{
           logsStore.isSyncingPending || logsStore.isRefreshing
-            ? "Syncing..."
-            : `${logsStore.pendingSyncCount} Pending`
+            ? t("nav.syncing")
+            : t("nav.pendingSync", { count: logsStore.pendingSyncCount })
         }}
       </span>
     </UiButton>
-    <UiButton variant="ghost" size="icon" aria-label="Past Sessions" @click="router.push('/past-sessions')">
+    <UiButton variant="ghost" size="icon" :aria-label="t('nav.pastSessions')" @click="router.push('/past-sessions')">
       <History class="w-5 h-5 text-muted-foreground" />
     </UiButton>
-    <UiButton variant="ghost" size="icon" aria-label="Rest & Recovery" @click="router.push('/rest-recovery')">
+    <UiButton variant="ghost" size="icon" :aria-label="t('nav.restRecovery')" @click="router.push('/rest-recovery')">
       <Bed class="w-5 h-5 text-muted-foreground" />
     </UiButton>
     <UiDropdownMenu>
       <template #trigger>
-        <UiButton variant="ghost" size="icon" aria-label="Menu">
+        <UiButton variant="ghost" size="icon" :aria-label="t('nav.menu')">
           <Menu class="w-5 h-5 text-muted-foreground" />
         </UiButton>
       </template>
       
       <div class="px-3 py-2 text-micro tracking-widest text-muted-foreground/60">
-        Quick Edit
+        {{ t("nav.quickEdit") }}
       </div>
       
       <UiDropdownMenuItem 
@@ -69,21 +81,21 @@ function handleSwitchSpreadsheet(): void {
         @select="router.push(`/wizard/${step.id}?mode=edit`)"
         class="group"
       >
-        <span>{{ step.title }}</span>
+        <span>{{ t(`wizard.steps.${step.id}.title`) }}</span>
         <ChevronRight class="w-4 h-4 ml-auto opacity-0 group-focus:opacity-20 transition-opacity" />
       </UiDropdownMenuItem>
 
       <div class="h-px bg-white/5 my-1 mx-3"></div>
       
       <div class="px-3 py-2 text-micro tracking-widest text-muted-foreground/60">
-        Data
+        {{ t("nav.data") }}
       </div>
 
       <UiDropdownMenuItem 
         @select="spreadsheetStore.openInBrowser()"
         class="group"
       >
-        <span>Open Spreadsheet</span>
+        <span>{{ t("nav.openSpreadsheet") }}</span>
         <ExternalLink class="w-4 h-4 ml-auto opacity-40 group-hover:text-primary transition-colors" />
       </UiDropdownMenuItem>
 
@@ -91,21 +103,37 @@ function handleSwitchSpreadsheet(): void {
         @select="handleSwitchSpreadsheet"
         class="group"
       >
-        <span>Switch Spreadsheet</span>
+        <span>{{ t("nav.switchSpreadsheet") }}</span>
         <FolderOpen class="w-4 h-4 ml-auto opacity-40 group-hover:text-primary transition-colors" />
+      </UiDropdownMenuItem>
+
+      <div class="h-px bg-white/5 my-1 mx-3"></div>
+
+      <div class="px-3 py-2 text-micro tracking-widest text-muted-foreground/60">
+        {{ t("nav.language") }}
+      </div>
+
+      <UiDropdownMenuItem @select="setLocale('en')" class="group">
+        <span>English</span>
+        <Check v-if="locale === 'en'" class="w-4 h-4 ml-auto text-primary" />
+      </UiDropdownMenuItem>
+
+      <UiDropdownMenuItem @select="setLocale('de')" class="group">
+        <span>Deutsch</span>
+        <Check v-if="locale === 'de'" class="w-4 h-4 ml-auto text-primary" />
       </UiDropdownMenuItem>
 
       <div class="h-px bg-white/5 my-1 mx-3"></div>
       
       <div class="px-3 py-2 text-micro tracking-widest text-muted-foreground/60">
-        Legal
+        {{ t("nav.legal") }}
       </div>
 
       <UiDropdownMenuItem 
         @select="router.push('/privacy')"
         class="group"
       >
-        <span>Privacy Policy</span>
+        <span>{{ t("nav.privacyPolicy") }}</span>
         <ChevronRight class="w-4 h-4 ml-auto opacity-40 group-hover:text-primary transition-colors" />
       </UiDropdownMenuItem>
 
@@ -113,7 +141,7 @@ function handleSwitchSpreadsheet(): void {
         @select="router.push('/impressum')"
         class="group"
       >
-        <span>Impressum</span>
+        <span>{{ t("nav.impressum") }}</span>
         <ChevronRight class="w-4 h-4 ml-auto opacity-40 group-hover:text-primary transition-colors" />
       </UiDropdownMenuItem>
     </UiDropdownMenu>

@@ -27,6 +27,7 @@ import {
 } from "@/modules/trainingLogs/presentation";
 import type { ProgressionSessionItem } from "@/shared/presentation/components/ui/UiProgressionLine.vue";
 import { useLogSheet } from "@/shared/presentation/composables/useLogSheet";
+import { t } from "@/shared/presentation/i18n";
 
 function findNextExerciseIndexInGroup(
   group: DisplayWorkoutGroup,
@@ -263,19 +264,22 @@ export function useHomeWorkoutViewModel() {
     const durations = sessionLogs.map((l) => l.duration).filter((d): d is number => d != null);
 
     if (reps.length === 0 && durations.length > 0) {
-      return `${sessionLogs.length} sets, max ${Math.max(...durations)} min`;
+      return t("home.lastSessionSetsDuration", {
+        count: sessionLogs.length,
+        minutes: Math.max(...durations),
+      });
     }
 
     let text = "";
     if (reps.length > 0) {
       text += reps.join(", ");
     } else {
-      text += `${sessionLogs.length} sets`;
+      text += t("home.lastSessionSets", { count: sessionLogs.length });
     }
 
     if (weights.length > 0) {
       const maxWeight = Math.max(...weights);
-      text += ` @ ${maxWeight}kg`;
+      text += ` @ ${maxWeight}${t("common.kg")}`;
     }
 
     return text;
@@ -355,7 +359,7 @@ export function useHomeWorkoutViewModel() {
   function openGoogleSearch(exerciseName?: string) {
     if (!exerciseName) return;
     window.open(
-      `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${exerciseName} exercise`)}`,
+      `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${exerciseName} ${t("home.searchSuffix")}`)}`,
       "_blank",
       "noopener,noreferrer",
     );
@@ -363,9 +367,7 @@ export function useHomeWorkoutViewModel() {
 
   function requestOffDayWorkout() {
     router.push({ name: "coach" });
-    orchestratorStore.requestAdvice(
-      "I want to train today. Please recommend the next session from my plan.",
-    );
+    orchestratorStore.requestAdvice(t("home.offDayPrompt"));
   }
 
   const currentSessionElapsedText = computed<string | null>(() => {
@@ -378,7 +380,7 @@ export function useHomeWorkoutViewModel() {
     const diffMs = Math.max(0, currentReactiveTime.value.getTime() - session.startTime.getTime());
     const minutes = Math.floor(diffMs / 60000);
 
-    return `${minutes} Min`;
+    return `${minutes} ${t("common.min")}`;
   });
 
   const visibleGroupIndex = ref(0);

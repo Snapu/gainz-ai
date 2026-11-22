@@ -31,11 +31,32 @@ export type AddEquipmentError =
   | "duplicate"
   | "max-reached";
 
+const EQUIPMENT_DE_ALIASES: Record<(typeof EQUIPMENT_PRESETS)[number]["id"], readonly string[]> = {
+  bodyweight: ["nur körpergewicht", "körpergewicht"],
+  resistance_bands: ["widerstandsbänder"],
+  suspension_trainer: [
+    "schlingentrainer (z. b. trx)",
+    "schlingentrainer (z.b. trx)",
+    "schlingentrainer",
+  ],
+  gymnastic_rings: ["turnringe"],
+  pull_up_bar: ["klimmzugstange"],
+  dip_bar: ["dip-barren"],
+  dumbbells: ["kurzhanteln"],
+  kettlebells: ["kettlebells"],
+  barbell_rack: ["langhantel & rack"],
+  bench: ["hantelbank"],
+  cable_machine: ["kabelzug"],
+  cardio_machine: ["cardiogeräte"],
+  medicine_ball: ["medizinball"],
+};
+
 const PRESET_ID_SET = new Set<string>(EQUIPMENT_PRESETS.map((preset) => preset.id));
 const PRESET_ALIAS_TO_ID = new Map<string, string>(
   EQUIPMENT_PRESETS.flatMap((preset) => [
     [preset.id.toLowerCase(), preset.id],
     [preset.label.toLowerCase(), preset.id],
+    ...EQUIPMENT_DE_ALIASES[preset.id].map((alias) => [alias.toLowerCase(), preset.id] as const),
   ]),
 );
 

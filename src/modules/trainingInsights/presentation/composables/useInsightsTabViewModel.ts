@@ -10,6 +10,8 @@ import {
   normalizeExerciseName,
   useTrainingInsightsStore,
 } from "@/modules/trainingInsights/presentation";
+import { t } from "@/shared/presentation/i18n";
+import { formatNumber } from "@/shared/presentation/i18n/formatters";
 
 type AcwrZoneViewModel = {
   label: string;
@@ -68,16 +70,21 @@ export function useInsightsTabViewModel() {
   );
 
   const acwrValueLabel = computed(() =>
-    insights.value.acwr === null ? "No baseline" : insights.value.acwr.toFixed(2),
+    insights.value.acwr === null
+      ? t("insights.buildingBaseline")
+      : formatNumber(insights.value.acwr, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }),
   );
 
   const acwrZone = computed<AcwrZoneViewModel>(() => {
     const acwr = insights.value.acwr;
     if (acwr === null) {
       return {
-        label: "No baseline",
-        range: "Need 4-week history",
-        detail: "Log more sessions to unlock ACWR trend and workload zone.",
+        label: t("insights.acwrZones.noBaseline.label"),
+        range: t("insights.acwrZones.noBaseline.range"),
+        detail: t("insights.acwrZones.noBaseline.detail"),
         toneClass: "surface",
       };
     }
@@ -89,29 +96,28 @@ export function useInsightsTabViewModel() {
       );
 
       return {
-        label: "Low",
-        range: "< 0.60",
+        label: t("insights.acwrZones.low.label"),
+        range: t("insights.acwrZones.low.range"),
         detail: hasRecentLogs
-          ? "Low relative load — this is common when switching training phases or reducing volume."
-          : "Training load is low relative to your recent baseline. Normal during deload weeks or rest periods.",
+          ? t("insights.acwrZones.low.detailRecent")
+          : t("insights.acwrZones.low.detailRest"),
         toneClass: "neutral",
       };
     }
 
     if (acwr <= 1.3) {
       return {
-        label: "Optimal",
-        range: "0.60 - 1.30",
-        detail: "Workload is in the productive range for build/maintain progression.",
+        label: t("insights.acwrZones.optimal.label"),
+        range: t("insights.acwrZones.optimal.range"),
+        detail: t("insights.acwrZones.optimal.detail"),
         toneClass: "success",
       };
     }
 
     return {
-      label: "Elevated",
-      range: "> 1.30",
-      detail:
-        "Acute load is rising quickly vs your baseline. Normal during planned overreach — monitor recovery if unintentional.",
+      label: t("insights.acwrZones.elevated.label"),
+      range: t("insights.acwrZones.elevated.range"),
+      detail: t("insights.acwrZones.elevated.detail"),
       toneClass: "warning",
     };
   });
@@ -126,10 +132,10 @@ export function useInsightsTabViewModel() {
 
   const fatigueRiskLabel = computed(() => {
     const score = insights.value.fatigue.riskScore;
-    if (score >= 5) return "High";
-    if (score >= 3) return "Elevated";
-    if (score >= 1) return "Mild";
-    return "Low";
+    if (score >= 5) return t("insights.fatigueLevels.high");
+    if (score >= 3) return t("insights.fatigueLevels.elevated");
+    if (score >= 1) return t("insights.fatigueLevels.mild");
+    return t("insights.fatigueLevels.low");
   });
 
   const fatigueRiskPercent = computed(() => {
@@ -141,25 +147,25 @@ export function useInsightsTabViewModel() {
     return [
       {
         key: "weekMinus3",
-        label: "3 Wks Ago",
+        label: t("insights.weekRows.w3"),
         sets: loadWindow.sets.weekMinus3,
         tonnage: loadWindow.tonnage.weekMinus3,
       },
       {
         key: "weekMinus2",
-        label: "2 Wks Ago",
+        label: t("insights.weekRows.w2"),
         sets: loadWindow.sets.weekMinus2,
         tonnage: loadWindow.tonnage.weekMinus2,
       },
       {
         key: "weekMinus1",
-        label: "1 Wk Ago",
+        label: t("insights.weekRows.w1"),
         sets: loadWindow.sets.weekMinus1,
         tonnage: loadWindow.tonnage.weekMinus1,
       },
       {
         key: "current",
-        label: "Past 7 Days",
+        label: t("insights.weekRows.current"),
         sets: loadWindow.sets.current,
         tonnage: loadWindow.tonnage.current,
       },
@@ -224,10 +230,11 @@ export function useInsightsTabViewModel() {
             ? Math.max(0, todayDayIndex - getLocalDayIndex(new Date(lastLogTime)))
             : Number.POSITIVE_INFINITY;
         let lastTrainedLabel = "";
-        if (daysAgo === 0) lastTrainedLabel = "Today";
-        else if (daysAgo < 7) lastTrainedLabel = `${daysAgo}d ago`;
-        else if (daysAgo < 28) lastTrainedLabel = `${Math.floor(daysAgo / 7)}w ago`;
-        else lastTrainedLabel = "4w+ ago";
+        if (daysAgo === 0) lastTrainedLabel = t("relativeTime.today");
+        else if (daysAgo < 7) lastTrainedLabel = t("relativeTime.daysAgo", { count: daysAgo });
+        else if (daysAgo < 28)
+          lastTrainedLabel = t("relativeTime.weeksAgo", { count: Math.floor(daysAgo / 7) });
+        else lastTrainedLabel = t("relativeTime.fourWeeksPlus");
 
         return {
           name,
@@ -251,13 +258,14 @@ export function useInsightsTabViewModel() {
   const activeExerciseMetrics = computed(() => allExerciseMetrics.value.filter((m) => !m.isStale));
 
   const exerciseStatusNote = computed(() => {
-    if (insights.value.plateauPaused) return "Plateau & drop detection paused during deload.";
+    if (insights.value.plateauPaused) return t("insights.statusNote.deloadPaused");
     const plateaus = activeExerciseMetrics.value.filter((m) => m.status === "plateau").length;
     const improving = activeExerciseMetrics.value.filter((m) => m.status === "improving").length;
-    if (plateaus === 0 && improving === 0) return "No significant strength trends detected yet.";
+    if (plateaus === 0 && improving === 0) return t("insights.statusNote.none");
     const parts: string[] = [];
-    if (improving > 0) parts.push(`${improving} exercise${improving > 1 ? "s" : ""} improving`);
-    if (plateaus > 0) parts.push(`${plateaus} plateau${plateaus > 1 ? "s" : ""} detected`);
+    if (improving > 0)
+      parts.push(t("insights.statusNote.improving", { count: improving }, improving));
+    if (plateaus > 0) parts.push(t("insights.statusNote.plateaus", { count: plateaus }, plateaus));
     return `${parts.join(", ")}.`;
   });
 
