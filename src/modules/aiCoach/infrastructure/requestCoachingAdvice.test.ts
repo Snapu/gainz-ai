@@ -753,4 +753,31 @@ describe("requestCoachingAdvice", () => {
       consoleErrorSpy.mockRestore();
     }
   });
+
+  it("normalizes and caps userProfile.equipmentAccess in buildCoachActionRequestDto so custom equipment satisfies coachActionRequestDtoSchema", () => {
+    const dto = buildCoachActionRequestDto(
+      createBaseRequest({
+        userProfile: {
+          workoutDaysPerWeek: 4,
+          fitnessGoal: ["build_muscle"],
+          equipmentAccess: [
+            "  Dumbbells  ",
+            "  Smith   Machine ",
+            "a",
+            "smith machine",
+            "Hack\nSquat",
+            ...Array.from({ length: 35 }, (_, i) => `Custom ${i + 1}`),
+          ],
+        },
+      }),
+    );
+
+    expect(dto.userProfile.equipmentAccess).toHaveLength(30);
+    expect(dto.userProfile.equipmentAccess?.slice(0, 3)).toEqual([
+      "dumbbells",
+      "Smith Machine",
+      "HackSquat",
+    ]);
+    expect(() => coachActionRequestDtoSchema.parse(dto)).not.toThrow();
+  });
 });

@@ -136,4 +136,149 @@ describe("WizardFlow.vue", () => {
     expect(backMock).toHaveBeenCalledTimes(1);
     expect(pushMock).not.toHaveBeenCalled();
   });
+
+  describe("equipment step", () => {
+    function setInputValue(container: HTMLElement, value: string): HTMLInputElement {
+      const input = container.querySelector<HTMLInputElement>(
+        'input[aria-label="Custom equipment"]',
+      );
+      if (!input) throw new Error("Custom equipment input not found");
+      input.value = value;
+      input.dispatchEvent(new Event("input"));
+      return input;
+    }
+
+    function submitCustomForm(container: HTMLElement): void {
+      const button = container.querySelector<HTMLButtonElement>(
+        'button[aria-label="Add custom equipment"]',
+      );
+      if (!button) throw new Error("Add custom equipment button not found");
+      button.click();
+    }
+
+    it("toggles presets while preserving existing custom items", async () => {
+      route.params = { step: "equipment" };
+      userProfileRef.value = { equipmentAccess: ["Smith Machine"] };
+      const mounted = mountWizard();
+      unmountWizard = mounted.unmount;
+      await nextTick();
+
+      findButtonByText(mounted.container, "Dumbbells").click();
+      await nextTick();
+
+      expect(userProfileRef.value.equipmentAccess).toEqual(["dumbbells", "Smith Machine"]);
+      expect(mounted.container.textContent).toContain("Smith Machine");
+    });
+
+    it("adds custom equipment, clears input, and removes custom entry cleanly", async () => {
+      route.params = { step: "equipment" };
+      const mounted = mountWizard();
+      unmountWizard = mounted.unmount;
+      await nextTick();
+
+      const input = setInputValue(mounted.container, "Smith Machine");
+      await nextTick();
+      submitCustomForm(mounted.container);
+      await nextTick();
+
+      expect(userProfileRef.value.equipmentAccess).toEqual(["Smith Machine"]);
+      expect(input.value).toBe("");
+      expect(mounted.container.textContent).toContain("Smith Machine");
+
+      const removeBtn = mounted.container.querySelector<HTMLButtonElement>(
+        'button[aria-label="Remove Smith Machine"]',
+      );
+      expect(removeBtn).not.toBeNull();
+      removeBtn?.click();
+      await nextTick();
+
+      expect(userProfileRef.value.equipmentAccess).toBeUndefined();
+      expect(mounted.container.textContent).not.toContain("Smith Machine");
+    });
+
+    it("maps preset label input to canonical preset id and shows confirmation feedback", async () => {
+      route.params = { step: "equipment" };
+      const mounted = mountWizard();
+      unmountWizard = mounted.unmount;
+      await nextTick();
+
+      const input = setInputValue(mounted.container, "Dumbbells");
+      expect(input.placeholder).not.toContain(",");
+      await nextTick();
+      submitCustomForm(mounted.container);
+      await nextTick();
+
+      expect(userProfileRef.value.equipmentAccess).toEqual(["dumbbells"]);
+      expect(mounted.container.querySelector('button[aria-label="Remove dumbbells"]')).toBeNull();
+      expect(mounted.container.querySelector('[role="status"]')?.textContent?.trim()).toBe(
+        "Selected preset: Dumbbells",
+      );
+    });
+
+    it("shows inline error on invalid or duplicate custom equipment without mutating profile", async () => {
+      route.params = { step: "equipment" };
+      userProfileRef.value = { equipmentAccess: ["Smith Machine"] };
+      const mounted = mountWizard();
+      unmountWizard = mounted.unmount;
+      await nextTick();
+
+      setInputValue(mounted.container, "Rack, Bench");
+      await nextTick();
+      submitCustomForm(mounted.container);
+      await nextTick();
+
+      expect(mounted.container.textContent).toContain("Commas and line breaks are not allowed.");
+      expect(userProfileRef.value.equipmentAccess).toEqual(["Smith Machine"]);
+
+      setInputValue(mounted.container, "smith machine");
+      await nextTick();
+      submitCustomForm(mounted.container);
+      await nextTick();
+
+      expect(mounted.container.textContent).toContain("This equipment is already added.");
+      expect(userProfileRef.value.equipmentAccess).toEqual(["Smith Machine"]);
+    });
+
+    it("disables unselected presets at 30 items while keeping selected presets toggleable", async () => {
+      route.params = { step: "equipment" };
+      const selectedPresets = ["bodyweight", "dumbbells", "kettlebells", "bench", "pull_up_bar"];
+      const customItems = Array.from({ length: 25 }, (_, i) => `Custom ${i + 1}`);
+      userProfileRef.value = { equipmentAccess: [...selectedPresets, ...customItems] };
+      const mounted = mountWizard();
+      unmountWizard = mounted.unmount;
+      await nextTick();
+
+      const unselectedBtn = findButtonByText(mounted.container, "Cable machine");
+      const selectedBtn = findButtonByText(mounted.container, "Dumbbells");
+
+      expect(unselectedBtn.disabled).toBe(true);
+      expect(selectedBtn.disabled).toBe(false);
+
+      unselectedBtn.click();
+      await nextTick();
+      expect(userProfileRef.value.equipmentAccess).toHaveLength(30);
+      expect(userProfileRef.value.equipmentAccess).toContain("Custom 25");
+
+      selectedBtn.click();
+      await nextTick();
+      expect(userProfileRef.value.equipmentAccess).toHaveLength(29);
+      expect(userProfileRef.value.equipmentAccess).not.toContain("dumbbells");
+      expect(unselectedBtn.disabled).toBe(false);
+    });
+
+    it("auto-commits valid pending custom input when leaving the equipment step", async () => {
+      route.params = { step: "equipment" };
+      const mounted = mountWizard();
+      unmountWizard = mounted.unmount;
+      await nextTick();
+
+      setInputValue(mounted.container, "Leg press");
+      await nextTick();
+
+      findButtonByText(mounted.container, "Continue").click();
+      await nextTick();
+
+      expect(userProfileRef.value.equipmentAccess).toEqual(["Leg press"]);
+    });
+  });
 });

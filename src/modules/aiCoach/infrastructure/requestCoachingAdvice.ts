@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/vue";
 import { errAsync, ResultAsync } from "neverthrow";
 import { z } from "zod";
 import { createExerciseMuscleMapRepository } from "@/modules/platform/infrastructure";
+import { normalizeEquipmentList } from "@/modules/profile/domain";
 import {
   getLearnedMuscleMap,
   learnFromCoachingAdvice,
@@ -382,7 +383,7 @@ function mapUserProfileDto(
     workoutDaysPerWeek: inRange(p.workoutDaysPerWeek, 1, 7),
     workoutDurationMinutes: inRange(p.workoutDurationMinutes, 5, 300),
     workoutLocation: p.workoutLocation,
-    equipmentAccess: p.equipmentAccess?.length ? p.equipmentAccess : undefined,
+    equipmentAccess: normalizeEquipmentList(p.equipmentAccess),
     freeUserInput: p.freeUserInput ? p.freeUserInput.slice(0, 2000) : undefined,
   });
 }

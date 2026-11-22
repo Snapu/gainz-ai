@@ -4,13 +4,12 @@ import { useStepper } from "@vueuse/core";
 import { storeToRefs } from "pinia";
 import { computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import type {
-  EquipmentOption,
-  FitnessGoal,
-  FitnessLevel,
-  WorkoutLocation,
+import type { FitnessGoal, FitnessLevel, WorkoutLocation } from "@/modules/profile/presentation";
+import {
+  EquipmentSelector,
+  useUserProfileStore,
+  WIZARD_STEPS,
 } from "@/modules/profile/presentation";
-import { useUserProfileStore, WIZARD_STEPS } from "@/modules/profile/presentation";
 import AppHeader from "@/shared/presentation/components/AppHeader.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiNumberField from "@/shared/presentation/components/ui/UiNumberField.vue";
@@ -50,22 +49,6 @@ const workoutLocationLabels: [string, WorkoutLocation][] = [
   ["Gym", "gym"],
   ["Home", "home"],
   ["Both", "both"],
-];
-
-const equipmentOptionLabels: [string, EquipmentOption][] = [
-  ["Bodyweight only", "bodyweight"],
-  ["Resistance bands", "resistance_bands"],
-  ["Suspension trainer (e.g. TRX)", "suspension_trainer"],
-  ["Gymnastic rings", "gymnastic_rings"],
-  ["Pull-up bar", "pull_up_bar"],
-  ["Dip bar", "dip_bar"],
-  ["Dumbbells", "dumbbells"],
-  ["Kettlebells", "kettlebells"],
-  ["Barbell & rack", "barbell_rack"],
-  ["Bench", "bench"],
-  ["Cable machine", "cable_machine"],
-  ["Cardio machines", "cardio_machine"],
-  ["Medicine ball", "medicine_ball"],
 ];
 
 const workoutDaysString = computed<string | undefined>({
@@ -266,12 +249,8 @@ function skipWizard() {
         <!-- Equipment -->
         <template v-else-if="stepper.isCurrent('equipment')">
           <h2 class="text-3xl font-bold mb-2 tracking-tight">Equipment access</h2>
-          <p class="text-muted-foreground mb-10 text-lg">Select what you have available.</p>
-          <UiToggleGroup type="multiple" v-model="userProfile.equipmentAccess">
-            <UiToggleGroupItem v-for="[label, value] in equipmentOptionLabels" :key="value" :value="value" class="py-3">
-              {{ label }}
-            </UiToggleGroupItem>
-          </UiToggleGroup>
+          <p class="text-muted-foreground mb-10 text-lg">Select presets or add your own.</p>
+          <EquipmentSelector v-model="userProfile.equipmentAccess" />
         </template>
 
         <!-- Body Stats -->

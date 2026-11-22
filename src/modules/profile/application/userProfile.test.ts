@@ -108,6 +108,17 @@ describe("userProfile service", () => {
         expect(result.data.freeUserInput).toBeUndefined();
       }
     });
+
+    it("parses mixed preset and custom equipment CSV", () => {
+      const result = UserProfileSchema.safeParse({
+        equipmentAccess: "dumbbells,Smith Machine,Leg Press",
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.equipmentAccess).toEqual(["dumbbells", "Smith Machine", "Leg Press"]);
+      }
+    });
   });
 
   describe("loadUserProfile", () => {
@@ -357,6 +368,80 @@ describe("userProfile service", () => {
       expect(mockSheet.addRow).toHaveBeenCalledWith(
         expect.objectContaining({ workoutDurationMinutes: "" }),
       );
+    });
+
+    it("normalizes equipmentAccess before writing to sheet", async () => {
+      const mockSheet = createMockSheet([]);
+      await saveUserProfile(
+        { equipmentAccess: ["  Smith   Machine  ", "Dumbbells"] },
+        createUserProfileRepository(createMockDoc(mockSheet)),
+      );
+      expect(mockSheet.addRow).toHaveBeenCalledWith(
+        expect.objectContaining({ equipmentAccess: "Smith Machine,dumbbells" }),
+      );
+    });
+
+    it("round-trips custom equipment across save, reload, and removal", async () => {
+      const storedRows: {
+        toObject: () => Record<string, string | undefined>;
+        assign: (next: Record<string, string>) => void;
+        save: () => Promise<void>;
+      }[] = [];
+      const headers = [
+        "age",
+        "heightCm",
+        "weightKg",
+        "fitnessGoal",
+        "fitnessLevel",
+        "workoutDaysPerWeek",
+        "workoutDurationMinutes",
+        "workoutLocation",
+        "equipmentAccess",
+        "freeUserInput",
+      ];
+      const statefulSheet = {
+        headerValues: headers,
+        loadHeaderRow: vi.fn().mockResolvedValue(undefined),
+        setHeaderRow: vi.fn().mockResolvedValue(undefined),
+        getRows: vi.fn().mockImplementation(async () => storedRows),
+        addRow: vi.fn().mockImplementation(async (data: Record<string, string>) => {
+          const cellData: Record<string, string> = {};
+          const write = (incoming: Record<string, string>) => {
+            for (const header of statefulSheet.headerValues) {
+              if (header in incoming) cellData[header] = incoming[header] ?? "";
+            }
+          };
+          write(data);
+          const row = {
+            toObject: () =>
+              Object.fromEntries(statefulSheet.headerValues.map((h) => [h, cellData[h]])),
+            assign: vi.fn((next: Record<string, string>) => write(next)),
+            save: vi.fn().mockResolvedValue(undefined),
+          };
+          storedRows.push(row);
+          return row;
+        }),
+      };
+      const repository = createUserProfileRepository(createMockDoc(statefulSheet));
+
+      await saveUserProfile(
+        { equipmentAccess: ["dumbbells", "Smith Machine", "Leg Press"] },
+        repository,
+      );
+
+      const loaded = await loadUserProfile(repository);
+      expect(loaded.isOk()).toBe(true);
+      if (loaded.isOk()) {
+        expect(loaded.value?.equipmentAccess).toEqual(["dumbbells", "Smith Machine", "Leg Press"]);
+      }
+
+      await saveUserProfile({ equipmentAccess: ["dumbbells", "Leg Press"] }, repository);
+
+      const reloaded = await loadUserProfile(repository);
+      expect(reloaded.isOk()).toBe(true);
+      if (reloaded.isOk()) {
+        expect(reloaded.value?.equipmentAccess).toEqual(["dumbbells", "Leg Press"]);
+      }
     });
   });
 

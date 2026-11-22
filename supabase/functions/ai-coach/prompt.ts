@@ -651,7 +651,12 @@ function buildSessionSection(
   if (profileParts.length) parts.push(`profile: {${profileParts.join(", ")}}`);
 
   if (p.equipmentAccess?.length) {
-    parts.push(`equipment: [${p.equipmentAccess.join(", ")}]`);
+    const safeEquipment = p.equipmentAccess
+      .map((item) => sanitizePromptText(item).replace(/\s+/g, " ").replace(/[[\]]/g, "").trim())
+      .filter((item) => item.length > 0);
+    if (safeEquipment.length > 0) {
+      parts.push(`equipment: [${safeEquipment.join(", ")}]`);
+    }
   }
 
   parts.push(`locale: ${sanitizePromptText(dto.locale)}`);

@@ -5,7 +5,7 @@ import type { HTMLAttributes } from "vue";
 import { cn } from "@/shared/presentation/lib/utils";
 
 const toggleGroupItemVariants = cva(
-  "flex items-center w-full transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-95",
+  "flex items-center w-full transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-95 disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed",
   {
     variants: {
       variant: {

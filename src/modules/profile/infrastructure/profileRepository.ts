@@ -8,6 +8,7 @@ import {
 } from "@/modules/platform/infrastructure";
 import type { UserProfileRepository } from "@/modules/profile/application";
 import {
+  normalizeEquipmentList,
   parsePositiveOptionalNumber,
   type UserProfile,
   UserProfileSchema,
@@ -39,7 +40,7 @@ function serializeForSheet(profile: UserProfile): Record<string, string> {
     workoutDurationMinutes:
       parsePositiveOptionalNumber(profile.workoutDurationMinutes)?.toString() ?? "",
     workoutLocation: profile.workoutLocation ?? "",
-    equipmentAccess: (profile.equipmentAccess ?? []).join(","),
+    equipmentAccess: (normalizeEquipmentList(profile.equipmentAccess) ?? []).join(","),
     freeUserInput: profile.freeUserInput ?? "",
   };
 }

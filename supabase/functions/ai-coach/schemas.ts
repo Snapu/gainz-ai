@@ -67,21 +67,20 @@ const fitnessGoalSchema = z.enum([
   "general_fitness",
 ]);
 
-const equipmentOptionSchema = z.enum([
-  "bodyweight",
-  "dumbbells",
-  "barbell_rack",
-  "resistance_bands",
-  "kettlebells",
-  "pull_up_bar",
-  "dip_bar",
-  "gymnastic_rings",
-  "cable_machine",
-  "cardio_machine",
-  "suspension_trainer",
-  "medicine_ball",
-  "bench",
-]);
+function hasForbiddenEquipmentChars(value: string): boolean {
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (value[i] === "," || code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
+
+const equipmentOptionSchema = z
+  .string()
+  .trim()
+  .min(2)
+  .max(50)
+  .refine((val) => !hasForbiddenEquipmentChars(val), "Invalid equipment characters");
 
 const loadWindowSeriesSchema = z.object({
   weekMinus3: z.number().finite(),
@@ -177,7 +176,7 @@ export const coachActionRequestDtoSchema = z.object({
     workoutDaysPerWeek: z.number().finite().min(1).max(7).optional(),
     workoutDurationMinutes: z.number().finite().min(5).max(300).optional(),
     workoutLocation: z.enum(["gym", "home", "both"]).optional(),
-    equipmentAccess: z.array(equipmentOptionSchema).max(20).optional(),
+    equipmentAccess: z.array(equipmentOptionSchema).max(30).optional(),
     freeUserInput: z.string().max(2000).optional(),
   }),
   insights: z.object({

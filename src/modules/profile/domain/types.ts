@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { parseOptionalNumber } from "@/modules/sharedKernel/domain";
+import { EquipmentAccessSchema } from "./equipment";
 
 const FitnessGoalSchema = z.enum([
   "build_muscle",
@@ -16,23 +17,6 @@ export type FitnessLevel = z.infer<typeof FitnessLevelSchema>;
 
 const WorkoutLocationSchema = z.enum(["gym", "home", "both"]);
 export type WorkoutLocation = z.infer<typeof WorkoutLocationSchema>;
-
-const EquipmentOptionSchema = z.enum([
-  "bodyweight",
-  "dumbbells",
-  "barbell_rack",
-  "resistance_bands",
-  "kettlebells",
-  "pull_up_bar",
-  "dip_bar",
-  "gymnastic_rings",
-  "cable_machine",
-  "cardio_machine",
-  "suspension_trainer",
-  "medicine_ball",
-  "bench",
-]);
-export type EquipmentOption = z.infer<typeof EquipmentOptionSchema>;
 
 const optionalNumberSchema = z.preprocess((val) => parseOptionalNumber(val), z.number().optional());
 
@@ -81,7 +65,7 @@ export const UserProfileSchema = z.object({
   workoutDaysPerWeek: optionalNumberSchema,
   workoutDurationMinutes: optionalPositiveNumberSchema,
   workoutLocation: optionalEnumSchema(WorkoutLocationSchema),
-  equipmentAccess: commaSeparatedArraySchema(EquipmentOptionSchema),
+  equipmentAccess: EquipmentAccessSchema,
   freeUserInput: z.preprocess((val) => (val === "" ? undefined : val), z.string().optional()),
 });
 

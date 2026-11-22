@@ -159,6 +159,42 @@ describe("aiCoachRequestDtoSchema", () => {
     };
     expect(aiCoachRequestDtoSchema.safeParse(tooManyExercises).success).toBe(false);
   });
+
+  it("accepts preset and custom equipmentAccess entries up to 30 items and rejects invalid entries", () => {
+    const valid = {
+      ...createMinimalCoachDto(),
+      userProfile: {
+        ...createMinimalCoachDto().userProfile,
+        equipmentAccess: [
+          "dumbbells",
+          "Beinpresse (45°)",
+          "EZ-Bar",
+          ...Array.from({ length: 27 }, (_, i) => `Custom Machine ${i + 1}`),
+        ],
+      },
+    };
+    expect(aiCoachRequestDtoSchema.safeParse(valid).success).toBe(true);
+
+    const invalidCases = [
+      ["a"],
+      ["x".repeat(51)],
+      ["Rack, Bench"],
+      ["Smith\nMachine"],
+      ["Smith\tMachine"],
+      Array.from({ length: 31 }, (_, i) => `Machine ${i + 1}`),
+    ];
+
+    for (const equipmentAccess of invalidCases) {
+      const invalid = {
+        ...createMinimalCoachDto(),
+        userProfile: {
+          ...createMinimalCoachDto().userProfile,
+          equipmentAccess,
+        },
+      };
+      expect(aiCoachRequestDtoSchema.safeParse(invalid).success).toBe(false);
+    }
+  });
 });
 
 describe("createCoachingAdviceJsonSchema", () => {

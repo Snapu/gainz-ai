@@ -9,7 +9,6 @@ import {
   saveUserProfile,
 } from "@/modules/profile/application";
 import {
-  type EquipmentOption,
   type FitnessGoal,
   type FitnessLevel,
   parsePositiveOptionalNumber,
@@ -18,7 +17,7 @@ import {
 } from "@/modules/profile/domain";
 import { createUserProfileRepository, purgeLegacyApiKeys } from "@/modules/profile/infrastructure";
 
-export type { EquipmentOption, FitnessGoal, FitnessLevel, UserProfile, WorkoutLocation };
+export type { FitnessGoal, FitnessLevel, UserProfile, WorkoutLocation };
 export { purgeLegacyApiKeys };
 
 export const useUserProfileStore = defineStore("userProfile", () => {
