@@ -311,13 +311,13 @@ const exercisePrSummary = computed(() => {
 });
 
 const rpeLabel = computed(() => {
-  if (formRpe.value === 10) return t("logSheet.rpeLabels.10");
-  if (formRpe.value === 9.5) return t("logSheet.rpeLabels.9.5");
-  if (formRpe.value === 9) return t("logSheet.rpeLabels.9");
-  if (formRpe.value === 8.5) return t("logSheet.rpeLabels.8.5");
-  if (formRpe.value === 8) return t("logSheet.rpeLabels.8");
-  if (formRpe.value === 7.5) return t("logSheet.rpeLabels.7.5");
-  if (formRpe.value === 7) return t("logSheet.rpeLabels.7");
+  if (formRpe.value === 10) return t("logSheet.rpeLabels.rpe10");
+  if (formRpe.value === 9.5) return t("logSheet.rpeLabels.rpe9_5");
+  if (formRpe.value === 9) return t("logSheet.rpeLabels.rpe9");
+  if (formRpe.value === 8.5) return t("logSheet.rpeLabels.rpe8_5");
+  if (formRpe.value === 8) return t("logSheet.rpeLabels.rpe8");
+  if (formRpe.value === 7.5) return t("logSheet.rpeLabels.rpe7_5");
+  if (formRpe.value === 7) return t("logSheet.rpeLabels.rpe7");
   return t("logSheet.rpeLabels.lower", { rpe: formRpe.value });
 });
 
