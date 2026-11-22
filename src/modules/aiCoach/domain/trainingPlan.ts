@@ -95,6 +95,16 @@ export class TrainingPlan {
   }
 
   /**
+   * Determines whether the plan has aged past its cycle window plus a 7-day grace period.
+   * Expired plans stay usable offline as a fallback and trigger regeneration once online.
+   */
+  public isExpired(currentDate: Date = new Date()): boolean {
+    const diffDays = this.getDiffDays(currentDate);
+    if (diffDays < 0) return false;
+    return diffDays > this.cycleWeeks * 7 + 7;
+  }
+
+  /**
    * Determines if this plan represents a structural replacement
    * (different cycle weeks, session count, or session schedule) rather
    * than an in-place exercise adjustment of the current cycle.

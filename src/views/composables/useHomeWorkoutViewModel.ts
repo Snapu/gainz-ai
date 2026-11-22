@@ -139,7 +139,12 @@ export function useHomeWorkoutViewModel() {
   });
 
   const planDerivedWorkout = computed<DisplayExercise[] | null>(() => {
-    return (todayTargetSession.value?.exercises as DisplayExercise[]) ?? null;
+    const session =
+      todayTargetSession.value ??
+      (planStore.activePlan?.isFullyCompleted(planStore.completedSessions)
+        ? planStore.activePlan.sessions[0]
+        : undefined);
+    return (session?.exercises as DisplayExercise[]) ?? null;
   });
 
   /**
@@ -345,7 +350,7 @@ export function useHomeWorkoutViewModel() {
     const planned = chatStore.currentWorkoutPlan?.find(
       (ex) => exerciseNameKey(ex.exerciseName) === exerciseNameKey(exercise.exerciseName),
     );
-    const restSeconds = planned?.restSeconds ?? null;
+    const restSeconds = exercise.restSeconds ?? planned?.restSeconds ?? null;
 
     logSheet.openPrefilledLog(
       {

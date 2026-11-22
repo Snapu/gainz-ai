@@ -34,29 +34,17 @@ describe("LocalStoragePlanRepository", () => {
     expect(result.isErr()).toBe(true);
   });
 
-  it("should clear the plan and return null if older than its expiry (e.g., 21 days for 2-week plan)", () => {
-    const staleDate = new Date();
-    staleDate.setDate(staleDate.getDate() - 22);
+  it("should retain and return a plan even when older than cycleWeeks * 7 + 7 days", () => {
+    const olderDate = new Date();
+    olderDate.setDate(olderDate.getDate() - 22);
 
-    const plan = TrainingPlan.create(staleDate.toISOString(), 2, []);
-    repository.savePlan(plan);
-
-    const result = repository.loadPlan();
-    expect(result.isOk()).toBe(true);
-    expect(result._unsafeUnwrap()).toBeNull();
-    expect(localStorage.getItem("training-plan-v1")).toBeNull();
-  });
-
-  it("should keep the plan if within expiry (e.g., exactly 20 days old)", () => {
-    const freshDate = new Date();
-    freshDate.setDate(freshDate.getDate() - 20);
-
-    const plan = TrainingPlan.create(freshDate.toISOString(), 2, []);
+    const plan = TrainingPlan.create(olderDate.toISOString(), 2, []);
     repository.savePlan(plan);
 
     const result = repository.loadPlan();
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toEqual(plan);
+    expect(localStorage.getItem("training-plan-v1")).not.toBeNull();
   });
 
   it("clearPlan should remove the item from localStorage", () => {

@@ -689,12 +689,33 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
     try {
       vi.setSystemTime(new Date("2026-11-06T00:15:00"));
       mockAccessToken.value = "test-key";
-      mockAsk.mockReturnValue(
-        okAsync({
-          advice: { coachMessage: "New cycle plan." },
-          requestPayload: "test payload",
-        }),
-      );
+      mockAsk
+        .mockReturnValueOnce(
+          okAsync({
+            advice: { coachMessage: "New cycle plan without payload." },
+            requestPayload: "test payload",
+          }),
+        )
+        .mockReturnValueOnce(
+          okAsync({
+            advice: {
+              coachMessage: "New cycle plan.",
+              trainingPlan: {
+                cycleWeeks: 2,
+                sessions: [
+                  {
+                    weekNumber: 1,
+                    dayOfWeek: 1,
+                    sessionLabel: "Upper",
+                    focusDescription: "Push & Pull",
+                    exercises: [{ exerciseName: "Bench Press", targetSets: 3 }],
+                  },
+                ],
+              },
+            },
+            requestPayload: "test payload",
+          }),
+        );
 
       const planStore = useTrainingPlanStore();
       const plan = TrainingPlan.create("2026-11-01T00:00:00.000Z", 1, [
@@ -738,13 +759,25 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
 
       // Trigger ensureSessionAdvice after workout ended
       await orchestrator.ensureSessionAdvice();
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 40; i++) {
         await Promise.resolve();
       }
 
-      // Plan should be cleared and generateNewPlan called!
-      expect(planStore.activePlan).toBeNull();
+      // generateNewPlan was called in planning mode, and existing plan stays intact when no replacement trainingPlan was returned
       expect(mockAsk).toHaveBeenCalledTimes(1);
+      expect(mockAsk.mock.calls[0]?.[0]).toMatchObject({ mode: "planning" });
+      expect(planStore.activePlan?.createdAt).toBe("2026-11-01T00:00:00.000Z");
+      expect(useCoachChatStore().isLoading).toBe(false);
+
+      // Only once a new trainingPlan is returned does it replace the active plan and reset completedSessions
+      await orchestrator.generateNewPlan();
+      for (let i = 0; i < 40; i++) {
+        await Promise.resolve();
+      }
+
+      expect(mockAsk).toHaveBeenCalledTimes(2);
+      expect(planStore.activePlan?.sessions[0]?.sessionLabel).toBe("Upper");
+      expect(planStore.completedSessions.size).toBe(0);
     } finally {
       vi.useRealTimers();
     }
@@ -1889,5 +1922,242 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
 
     emitPreview?.("Leaked chunk after sheet switch");
     expect(chatStore.streamingCoachMessage).toBe("");
+  });
+
+  it("keeps completed 2-week plan and completedSessions intact when regeneration fails and avoids re-triggering on reactive updates", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-11-10T12:00:00"));
+      mockAccessToken.value = "test-key";
+      mockAsk.mockReturnValue(errAsync("coaching-request-failed" as const));
+
+      const planStore = useTrainingPlanStore();
+      const plan = TrainingPlan.create("2026-11-01T00:00:00.000Z", 2, [
+        {
+          weekNumber: 1,
+          dayOfWeek: 1,
+          sessionLabel: "Push",
+          focusDescription: "Chest",
+          exercises: [{ exerciseName: "Bench Press", targetSets: 2 }],
+        },
+      ]);
+      planStore.setPlan(plan);
+
+      mockExerciseLogs.value = [
+        {
+          id: "log-1",
+          exerciseName: "Bench Press",
+          reps: 8,
+          weight: 80,
+          loggedAt: new Date("2026-11-02T10:00:00"),
+        },
+        {
+          id: "log-2",
+          exerciseName: "Bench Press",
+          reps: 8,
+          weight: 80,
+          loggedAt: new Date("2026-11-02T10:05:00"),
+        },
+      ];
+
+      const orchestrator = useAiOrchestratorStore();
+      await orchestrator.ensureSessionAdvice();
+      for (let i = 0; i < 80 && useCoachChatStore().isLoading; i++) {
+        await Promise.resolve();
+      }
+
+      expect(mockAsk).toHaveBeenCalledTimes(1);
+      expect(planStore.activePlan?.createdAt).toBe("2026-11-01T00:00:00.000Z");
+      expect(planStore.completedSessions.has(TrainingPlan.sessionKey(1, 1))).toBe(true);
+      expect(useCoachChatStore().isLoading).toBe(false);
+
+      // Subsequent reactive update (e.g. learnedMap or logs update) must not spam regeneration
+      mockLearnedMap.value = { "bench press": { primaryMuscle: "chest", secondaryMuscles: [] } };
+      await nextTick();
+      for (let i = 0; i < 80; i++) await Promise.resolve();
+
+      expect(mockAsk).toHaveBeenCalledTimes(1);
+      expect(planStore.activePlan?.createdAt).toBe("2026-11-01T00:00:00.000Z");
+
+      // Calling ensureSessionAdvice() again must NOT fall through to execution mode
+      await orchestrator.ensureSessionAdvice();
+      for (let i = 0; i < 80; i++) await Promise.resolve();
+      expect(mockAsk).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not clear attemptedRegenerationPlanKey or re-trigger planning on in-place plan adjustment", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-11-10T12:00:00"));
+      mockAccessToken.value = "test-key";
+      mockAsk.mockReturnValueOnce(errAsync("coaching-request-failed" as const)).mockReturnValueOnce(
+        okAsync({
+          advice: {
+            coachMessage: "Adjusted weights in-place.",
+            trainingPlan: {
+              cycleWeeks: 2,
+              sessions: [
+                {
+                  weekNumber: 1,
+                  dayOfWeek: 1,
+                  sessionLabel: "Push",
+                  focusDescription: "Chest & Triceps",
+                  exercises: [{ exerciseName: "Bench Press", targetSets: 2, targetWeight: "85kg" }],
+                },
+              ],
+            },
+          },
+        }),
+      );
+
+      const planStore = useTrainingPlanStore();
+      planStore.setPlan(
+        TrainingPlan.create("2026-11-01T00:00:00.000Z", 2, [
+          {
+            weekNumber: 1,
+            dayOfWeek: 1,
+            sessionLabel: "Push",
+            focusDescription: "Chest",
+            exercises: [{ exerciseName: "Bench Press", targetSets: 2 }],
+          },
+        ]),
+      );
+
+      mockExerciseLogs.value = [
+        {
+          id: "log-1",
+          exerciseName: "Bench Press",
+          reps: 8,
+          weight: 80,
+          loggedAt: new Date("2026-11-02T10:00:00"),
+        },
+        {
+          id: "log-2",
+          exerciseName: "Bench Press",
+          reps: 8,
+          weight: 80,
+          loggedAt: new Date("2026-11-02T10:05:00"),
+        },
+      ];
+
+      const orchestrator = useAiOrchestratorStore();
+      await orchestrator.ensureSessionAdvice();
+      for (let i = 0; i < 80 && useCoachChatStore().isLoading; i++) {
+        await Promise.resolve();
+      }
+      expect(mockAsk).toHaveBeenCalledTimes(1);
+
+      // In-place plan update via user question (execution mode) preserves createdAt & completedSessions
+      await orchestrator.requestAdvice("Increase bench weight to 85kg", "execution");
+      for (let i = 0; i < 80 && useCoachChatStore().isLoading; i++) {
+        await Promise.resolve();
+      }
+      await nextTick();
+      for (let i = 0; i < 80; i++) await Promise.resolve();
+
+      expect(mockAsk).toHaveBeenCalledTimes(2);
+      expect(planStore.activePlan?.sessions[0]?.exercises[0]?.targetWeight).toBe("85kg");
+      expect(planStore.activePlan?.createdAt).toBe("2026-11-01T00:00:00.000Z");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("defers offline ensureSessionAdvice and flushes automatically when back online", async () => {
+    const hadOwnOnLine = Object.getOwnPropertyDescriptor(navigator, "onLine");
+    let isOnline = false;
+    Object.defineProperty(navigator, "onLine", { get: () => isOnline, configurable: true });
+    try {
+      const planStore = useTrainingPlanStore();
+      const plan = TrainingPlan.create(new Date().toISOString(), 2, [
+        {
+          weekNumber: 1,
+          dayOfWeek: new Date().getDay(),
+          sessionLabel: "Full Body",
+          focusDescription: "Compound lifts",
+          exercises: [{ exerciseName: "Mystery Cable Pull", targetSets: 3 }],
+        },
+      ]);
+      planStore.setPlan(plan);
+
+      mockExerciseLogs.value = [
+        {
+          id: "offline-log-1",
+          exerciseName: "Mystery Cable Pull",
+          reps: 10,
+          weight: 40,
+          loggedAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+        },
+      ];
+
+      const orchestrator = useAiOrchestratorStore();
+      const sessionRes = await orchestrator.ensureSessionAdvice();
+      const classifyRes = await orchestrator.classifyExercisesIfNeeded();
+
+      expect(sessionRes.isOk()).toBe(true);
+      expect(classifyRes.isOk()).toBe(true);
+      expect(mockAsk).not.toHaveBeenCalled();
+      expect(mockClassifyExercises).not.toHaveBeenCalled();
+      expect(planStore.activePlan).toEqual(plan);
+
+      // Reconnecting triggers the deferred ensureSessionAdvice automatically
+      isOnline = true;
+      mockAsk.mockReturnValueOnce(
+        okAsync({ advice: { coachMessage: "Back online coach advice!" } }),
+      );
+      window.dispatchEvent(new Event("online"));
+      for (let i = 0; i < 80; i++) await Promise.resolve();
+
+      expect(mockAsk).toHaveBeenCalledTimes(1);
+      expect(
+        useCoachChatStore().messages.some(
+          (m) => m.role === "coach" && m.content.includes("Back online coach advice!"),
+        ),
+      ).toBe(true);
+    } finally {
+      if (hadOwnOnLine) Object.defineProperty(navigator, "onLine", hadOwnOnLine);
+      else delete (navigator as unknown as Record<string, unknown>).onLine;
+    }
+  });
+
+  it("regenerates an expired 2-week plan online while keeping it intact if regeneration fails", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-11-30T12:00:00"));
+      mockAccessToken.value = "test-key";
+      mockAsk.mockReturnValue(errAsync("coaching-request-failed" as const));
+
+      const planStore = useTrainingPlanStore();
+      const expiredPlan = TrainingPlan.create("2026-11-01T00:00:00.000Z", 2, [
+        {
+          weekNumber: 1,
+          dayOfWeek: 1,
+          sessionLabel: "Old Push",
+          focusDescription: "Chest",
+          exercises: [{ exerciseName: "Bench Press", targetSets: 3 }],
+        },
+      ]);
+      planStore.setPlan(expiredPlan);
+
+      const orchestrator = useAiOrchestratorStore();
+      await orchestrator.ensureSessionAdvice();
+      for (let i = 0; i < 80 && useCoachChatStore().isLoading; i++) {
+        await Promise.resolve();
+      }
+
+      expect(mockAsk).toHaveBeenCalledTimes(1);
+      expect(mockAsk.mock.calls[0]?.[0]).toMatchObject({ mode: "planning" });
+      expect(planStore.activePlan?.createdAt).toBe("2026-11-01T00:00:00.000Z");
+
+      // Subsequent ensureSessionAdvice does not fall back to execution mode on expired plan
+      await orchestrator.ensureSessionAdvice();
+      for (let i = 0; i < 80; i++) await Promise.resolve();
+      expect(mockAsk).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

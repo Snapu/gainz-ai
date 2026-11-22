@@ -43,6 +43,7 @@ export interface DisplayExercise {
   targetDistanceMeters?: number;
   targetWeight?: string;
   targetRpe?: number;
+  restSeconds?: number;
   notes?: string;
   supersetId?: string;
 }

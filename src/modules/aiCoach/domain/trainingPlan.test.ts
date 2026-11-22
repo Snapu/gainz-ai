@@ -282,4 +282,51 @@ describe("TrainingPlan", () => {
       ).toBeUndefined();
     });
   });
+
+  describe("getTodayTargetSession", () => {
+    it("returns undefined when all sessions are completed and todaysLogs is empty, while keeping todaysLogs match precedence", () => {
+      const sessionW1: PlannedSession = {
+        ...dummySession,
+        exercises: [{ exerciseName: "Bench Press", targetSets: 3 }],
+      };
+      const sessionW2: PlannedSession = {
+        ...dummySessionW2,
+        exercises: [{ exerciseName: "Incline Bench", targetSets: 4 }],
+      };
+      const plan = TrainingPlan.create("2026-01-01T00:00:00Z", 2, [sessionW1, sessionW2]);
+      const allCompleted = new Set([
+        TrainingPlan.sessionKey(sessionW1.weekNumber, sessionW1.dayOfWeek),
+        TrainingPlan.sessionKey(sessionW2.weekNumber, sessionW2.dayOfWeek),
+      ]);
+
+      expect(plan.getTodayTargetSession(allCompleted, [])).toBeUndefined();
+
+      const todaysW2Logs = [
+        { exerciseName: "Incline Bench" },
+        { exerciseName: "Incline Bench" },
+        { exerciseName: "Incline Bench" },
+        { exerciseName: "Incline Bench" },
+      ];
+      expect(plan.getTodayTargetSession(allCompleted, todaysW2Logs)).toBe(sessionW2);
+    });
+  });
+
+  describe("isExpired", () => {
+    it("returns false within cycleWeeks * 7 + 7 days and true afterwards", () => {
+      const plan = TrainingPlan.create(new Date(2026, 0, 1, 12, 0, 0).toISOString(), 2, [
+        dummySession,
+      ]);
+
+      expect(plan.isExpired(new Date(2026, 0, 22, 12, 0, 0))).toBe(false); // 21 days
+      expect(plan.isExpired(new Date(2026, 0, 23, 12, 0, 0))).toBe(true); // 22 days
+    });
+
+    it("returns false for future or empty createdAt", () => {
+      const futurePlan = TrainingPlan.create("2026-02-01T00:00:00.000Z", 2, [dummySession]);
+      expect(futurePlan.isExpired(new Date("2026-01-15T00:00:00.000Z"))).toBe(false);
+
+      const emptyCreatedPlan = TrainingPlan.create("", 2, [dummySession]);
+      expect(emptyCreatedPlan.isExpired(new Date("2026-01-15T00:00:00.000Z"))).toBe(false);
+    });
+  });
 });

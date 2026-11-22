@@ -19,16 +19,6 @@ export class LocalStoragePlanRepository {
           return null;
         }
 
-        const createdAt = new Date(plan.createdAt);
-        const cutoffDate = new Date();
-        const maxPlanAgeDays = plan.cycleWeeks * 7 + 7;
-        cutoffDate.setDate(cutoffDate.getDate() - maxPlanAgeDays);
-
-        if (createdAt < cutoffDate) {
-          localStorage.removeItem(PLAN_STORAGE_KEY);
-          return null;
-        }
-
         return plan;
       },
       () => "storage-error" as const,

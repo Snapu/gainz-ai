@@ -801,4 +801,168 @@ describe("useHomeWorkoutViewModel", () => {
 
     expect(vm.allWorkoutGroups.value?.map((g) => g.id)).toEqual(initialIds);
   });
+
+  it("passes restSeconds from active 2-week plan when no coach message exists today", () => {
+    const planStore = useTrainingPlanStore();
+    planStore.setPlan(
+      TrainingPlan.create(new Date().toISOString(), 2, [
+        {
+          weekNumber: 1,
+          dayOfWeek: new Date().getDay(),
+          sessionLabel: "Lower Body",
+          focusDescription: "Squat focus",
+          exercises: [
+            {
+              exerciseName: "Squat",
+              targetSets: 3,
+              targetReps: "5",
+              restSeconds: 180,
+            },
+          ],
+        },
+      ]),
+    );
+
+    const vm = useHomeWorkoutViewModel();
+    const exercise = vm.allWorkoutGroups.value?.[0]?.exercises[0];
+    expect(exercise).toBeDefined();
+
+    vm.handleLogExercise(exercise!);
+
+    expect(mockOpenPrefilledLog).toHaveBeenCalledWith(
+      {
+        exerciseName: "Squat",
+        reps: 5,
+        duration: undefined,
+        distance: undefined,
+        weight: undefined,
+        rpe: undefined,
+      },
+      180,
+    );
+  });
+
+  it("falls back to sessions[0] for workout display when all sessions are completed without flagging automated coach workouts for sessions[1+] as stale", () => {
+    const planStore = useTrainingPlanStore();
+    const chatStore = useCoachChatStore();
+    const today = new Date();
+
+    planStore.setPlan(
+      TrainingPlan.create(today.toISOString(), 2, [
+        {
+          weekNumber: 1,
+          dayOfWeek: 1,
+          sessionLabel: "Upper A",
+          focusDescription: "Push",
+          exercises: [{ exerciseName: "Bench Press", targetSets: 3, targetReps: "8" }],
+        },
+        {
+          weekNumber: 1,
+          dayOfWeek: 3,
+          sessionLabel: "Lower A",
+          focusDescription: "Squat",
+          exercises: [{ exerciseName: "Squat", targetSets: 3, targetReps: "5" }],
+        },
+      ]),
+    );
+    planStore.setCompletedSessions(
+      new Set([TrainingPlan.sessionKey(1, 1), TrainingPlan.sessionKey(1, 3)]),
+    );
+
+    const vm = useHomeWorkoutViewModel();
+    expect(vm.isRestDay.value).toBe(false);
+    expect(vm.allWorkoutGroups.value?.[0]?.exercises[0]?.exerciseName).toBe("Bench Press");
+
+    // Automated coach workout matching sessions[1] must not be flagged as stale
+    chatStore.addMessage({
+      id: "auto-user",
+      role: "user",
+      content: "AI request",
+      timestamp: today.toISOString(),
+      sessionId: chatStore.currentSessionId,
+      logsCount: 0,
+    });
+    chatStore.addMessage({
+      id: "auto-coach",
+      role: "coach",
+      content: JSON.stringify({
+        coachMessage: "Extra lower session",
+        recommendedWorkout: [{ exerciseName: "Squat", targetSets: 3, targetReps: "5" }],
+      }),
+      timestamp: today.toISOString(),
+      sessionId: chatStore.currentSessionId,
+      logsCount: 0,
+    });
+
+    expect(vm.allWorkoutGroups.value?.[0]?.exercises[0]?.exerciseName).toBe("Squat");
+  });
+
+  it("prefers exercise.restSeconds from the displayed 2-week plan over a stale chatStore.currentWorkoutPlan entry", () => {
+    const planStore = useTrainingPlanStore();
+    const chatStore = useCoachChatStore();
+    const today = new Date();
+
+    planStore.setPlan(
+      TrainingPlan.create(today.toISOString(), 2, [
+        {
+          weekNumber: 1,
+          dayOfWeek: 1,
+          sessionLabel: "Full A",
+          focusDescription: "Legs & Bench",
+          exercises: [
+            { exerciseName: "Squat", targetSets: 3, targetReps: "5", restSeconds: 180 },
+            { exerciseName: "Leg Curl", targetSets: 3, targetReps: "10", restSeconds: 90 },
+            { exerciseName: "Bench Press", targetSets: 3, targetReps: "8", restSeconds: 60 },
+          ],
+        },
+        {
+          weekNumber: 1,
+          dayOfWeek: 3,
+          sessionLabel: "Upper B",
+          focusDescription: "Chest & Back",
+          exercises: [
+            { exerciseName: "Bench Press", targetSets: 3, targetReps: "8", restSeconds: 150 },
+            { exerciseName: "Barbell Row", targetSets: 3, targetReps: "8", restSeconds: 120 },
+            { exerciseName: "Pull Up", targetSets: 3, targetReps: "8", restSeconds: 120 },
+          ],
+        },
+      ]),
+    );
+    // Session 1 already completed; target session is session 2 (Bench Press restSeconds: 150)
+    planStore.setCompletedSessions(new Set([TrainingPlan.sessionKey(1, 1)]));
+
+    // Stale automated coach workout from session 1 (1/3 overlap < 0.5 with session 2) is skipped
+    // by resolveTodaysCoachWorkout, while chatStore.currentWorkoutPlan still reads the raw message
+    chatStore.addMessage({
+      id: "stale-user",
+      role: "user",
+      content: "AI request",
+      timestamp: today.toISOString(),
+      sessionId: chatStore.currentSessionId,
+      logsCount: 0,
+    });
+    chatStore.addMessage({
+      id: "stale-coach",
+      role: "coach",
+      content: JSON.stringify({
+        coachMessage: "Old session 1",
+        recommendedWorkout: [
+          { exerciseName: "Squat", targetSets: 3, restSeconds: 180 },
+          { exerciseName: "Leg Curl", targetSets: 3, restSeconds: 90 },
+          { exerciseName: "Bench Press", targetSets: 3, restSeconds: 60 },
+        ],
+      }),
+      timestamp: today.toISOString(),
+      sessionId: chatStore.currentSessionId,
+      logsCount: 0,
+    });
+
+    const vm = useHomeWorkoutViewModel();
+    const exercise = vm.allWorkoutGroups.value?.[0]?.exercises[0];
+    expect(exercise?.exerciseName).toBe("Bench Press");
+    expect(exercise?.restSeconds).toBe(150);
+
+    vm.handleLogExercise(exercise!);
+    expect(mockOpenPrefilledLog).toHaveBeenCalledWith(expect.anything(), 150);
+  });
 });

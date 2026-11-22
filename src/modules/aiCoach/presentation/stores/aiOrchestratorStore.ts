@@ -140,6 +140,7 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
   let pendingRequest: { question?: string; mode: CoachingMode } | null = null;
   let pendingEnsureSessionAdvice = false;
   let hasObservedLoadedLogs = false;
+  let attemptedRegenerationPlanKey: string | null = null;
 
   watch(
     () => chatStore.isLoading,
@@ -165,6 +166,7 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
 
   function clearPendingRequest(): void {
     pendingEnsureSessionAdvice = false;
+    attemptedRegenerationPlanKey = null;
     pendingRequest = null;
     activeAttemptRequestId = null;
     chatStore.streamingCoachMessage = "";
@@ -295,6 +297,7 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
 
     const unclassified = getUnclassifiedExercises();
     if (unclassified.length === 0) return okAsync(undefined);
+    if (isDeviceOffline()) return okAsync(undefined);
 
     const attempt = Symbol();
     const tokenResult = explicitAccessToken ? okAsync(explicitAccessToken) : resolveAccessToken();
@@ -363,6 +366,7 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
       );
       if (isFullPlanReset) {
         planStore.clearCompletedSessions();
+        attemptedRegenerationPlanKey = null;
       }
       planStore.setPlan(newPlan);
       if (isFullPlanReset) {
@@ -919,17 +923,21 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     void ensureSessionAdvice();
   }
 
-  function checkAndRegenerateIfPlanCompleted(plan: TrainingPlan): boolean {
+  function checkAndRegeneratePlanIfNeeded(plan: TrainingPlan): boolean {
     const activeSession = resolveCurrentSession(exerciseLogsStore.exerciseLogs);
-    if (activeSession || !plan.isFullyCompleted(planStore.completedSessions)) {
+    const needsRegeneration =
+      plan.isFullyCompleted(planStore.completedSessions) || plan.isExpired();
+    if (activeSession || !needsRegeneration || isDeviceOffline()) {
       return false;
     }
 
+    if (attemptedRegenerationPlanKey === plan.createdAt) {
+      return false;
+    }
+
+    attemptedRegenerationPlanKey = plan.createdAt;
     pendingEnsureSessionAdvice = false;
-    chatStore.clearMessages();
-    planStore.clearPlan();
-    planStore.clearCompletedSessions();
-    generateNewPlan();
+    void generateNewPlan();
     return true;
   }
 
@@ -957,7 +965,7 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
       planStore.setCompletedSessions(newCompletedSessions);
     }
 
-    if (checkAndRegenerateIfPlanCompleted(plan)) {
+    if (checkAndRegeneratePlanIfNeeded(plan)) {
       return true;
     }
 
@@ -995,8 +1003,20 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
       return okAsync(undefined);
     }
 
+    if (isDeviceOffline()) {
+      pendingEnsureSessionAdvice = true;
+      return okAsync(undefined);
+    }
+
     if (!planStore.activePlan || planStore.activePlan.sessions.length === 0) {
       return generateNewPlan();
+    }
+
+    if (
+      planStore.activePlan.isFullyCompleted(planStore.completedSessions) ||
+      planStore.activePlan.isExpired()
+    ) {
+      return okAsync(undefined);
     }
 
     pruneStaleTodayCoachMessages();
@@ -1046,6 +1066,8 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
   const onDeviceOnline = () => {
     if (pendingCoachRequest.value && !inFlightMode && !activeAttemptToken) {
       void recoverPendingRequest();
+    } else if (!inFlightMode && !activeAttemptToken) {
+      flushPendingSessionAdvice();
     }
   };
   if (typeof window !== "undefined") {
