@@ -46,6 +46,9 @@ export const de: MessageSchema = {
     privacyPolicy: "Datenschutz",
     termsOfUse: "Nutzungsbedingungen",
     impressum: "Impressum",
+    account: "Konto",
+    signOut: "Abmelden",
+    deleteAccount: "Konto & Daten löschen",
     syncing: "Synchronisiere...",
     pendingSync: "{count} ausstehend",
     syncAriaLabel: "Ausstehende Offline-Einträge synchronisieren",
@@ -567,5 +570,39 @@ export const de: MessageSchema = {
       withdrawnToastDesc: "Deine Einwilligung wurde widerrufen und du wurdest abgemeldet.",
       acceptedAt: "Einwilligung erteilt am {date}",
     },
+  },
+  account: {
+    signedOutToastTitle: "Abgemeldet",
+    signedOutToastDesc: "Du wurdest auf diesem Gerät abgemeldet.",
+    deleteButton: "Konto & Daten löschen",
+    deleteTitle: "Konto & Daten löschen",
+    deleteSubtitle: "Dauerhafte Löschung von App-Daten & Berechtigungen",
+    deleteWarning:
+      "Dieser Vorgang löscht dauerhaft deine serverseitigen Nutzungsdaten, widerruft den Google-Zugriff von Gainz AI und entfernt alle lokalen App-Daten auf diesem Gerät. Dies kann nicht rückgängig gemacht werden.",
+    deleteItemsTitle: "Was gelöscht bzw. widerrufen wird",
+    deleteItemServer: "Serverseitige Nutzungszähler und temporäre KI-Recovery-Einträge (Supabase)",
+    deleteItemGoogle: "Die für Gainz AI erteilten Google-OAuth-Berechtigungen",
+    deleteItemLocal: "Alle lokalen Tokens, Einwilligungsstatus, Pläne, Chats und Auszeiten",
+    deleteDriveNoteKeep:
+      "Deine persönliche Trainingstabelle in deinem Google Drive bleibt erhalten, sofern du sie nicht selbst in Google Drive löschst.",
+    deleteDriveCheckboxLabel:
+      "Verknüpfte Google-Drive-Tabelle zusätzlich in den Papierkorb verschieben",
+    deleteDriveCheckboxHint:
+      "Wenn aktiviert, wird deine verknüpfte Gainz-AI-Tabelle vor dem Trennen der Verbindung in den Google-Drive-Papierkorb verschoben.",
+    deleteConfirmButton: "Konto & Daten endgültig löschen",
+    deletingButton: "Lösche Konto & Daten...",
+    deletedToastTitle: "Konto & Daten gelöscht",
+    deletedToastDesc:
+      "Deine Serverdaten, die Google-Verbindung und alle lokalen App-Daten wurden gelöscht.",
+    deletedPartialRevokeToastDesc:
+      "Deine Serverdaten und lokalen App-Daten wurden gelöscht. Prüfe bei Bedarf zusätzlich die Berechtigungen in deinem Google-Konto.",
+    deleteFailedTitle: "Löschung fehlgeschlagen",
+    deleteFailedDesc:
+      "Die Serverdaten konnten derzeit nicht gelöscht werden. Bitte prüfe deine Internetverbindung und versuche es erneut.",
+    trashSheetFailedTitle: "Tabelle nicht verschiebbar",
+    trashSheetForbiddenDesc:
+      "Gainz AI hat keine Berechtigung mehr, diese Tabelle in Google Drive zu ändern. Deaktiviere die Option, um das Konto ohne Änderung an der Datei zu löschen.",
+    trashSheetFailedDesc:
+      "Die Google-Drive-Tabelle konnte nicht in den Papierkorb verschoben werden. Prüfe deine Verbindung oder deaktiviere die Option und versuche es erneut.",
   },
 };

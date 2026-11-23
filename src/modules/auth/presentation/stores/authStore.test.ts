@@ -362,4 +362,144 @@ describe("useAuthStore", () => {
       expect(saveSpy).not.toHaveBeenCalled();
     });
   });
+
+  describe("deleteAccount", () => {
+    function createJwtWithExp(expSecondsFromNow: number): string {
+      const header = btoa(JSON.stringify({ alg: "RS256" }));
+      const payload = btoa(
+        JSON.stringify({ exp: Math.floor(Date.now() / 1000) + expSecondsFromNow }),
+      );
+      return `${header}.${payload}.signature`;
+    }
+
+    it("sends valid idToken and refreshToken to deleteAccount service", async () => {
+      const deleteSpy = vi.fn().mockReturnValue(okAsync({ deleted: true, googleRevoked: true }));
+      vi.spyOn(authInfra, "createAccountDeletionService").mockReturnValue({
+        deleteAccount: deleteSpy,
+      });
+
+      const store = useAuthStore();
+      const validIdToken = createJwtWithExp(3600);
+      store.accessToken = "access-123";
+      store.idToken = validIdToken;
+      store.refreshToken = "refresh-456";
+      store.expiresAt = Date.now() + 3_600_000;
+
+      const result = await store.deleteAccount();
+
+      expect(deleteSpy).toHaveBeenCalledWith({
+        authToken: validIdToken,
+        revokeToken: "refresh-456",
+      });
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value).toEqual({ deleted: true, googleRevoked: true });
+      }
+    });
+
+    it("retries once after refreshing session on 401 unauthorized", async () => {
+      const freshIdToken = createJwtWithExp(3600);
+      vi.spyOn(authInfra, "createGoogleAccessTokenService").mockReturnValue({
+        requestAuthCode: vi.fn(),
+        exchangeAuthorizationCode: vi.fn(),
+        refreshAccessToken: vi.fn().mockReturnValue(
+          okAsync({
+            access_token: "fresh-access",
+            id_token: freshIdToken,
+            expires_in: 3600,
+          }),
+        ),
+      });
+
+      const deleteSpy = vi
+        .fn()
+        .mockReturnValueOnce(errAsync("unauthorized" as const))
+        .mockReturnValueOnce(okAsync({ deleted: true, googleRevoked: true }));
+      vi.spyOn(authInfra, "createAccountDeletionService").mockReturnValue({
+        deleteAccount: deleteSpy,
+      });
+
+      const store = useAuthStore();
+      store.accessToken = "old-access";
+      store.idToken = createJwtWithExp(3600);
+      store.refreshToken = "refresh-456";
+      store.expiresAt = Date.now() + 3_600_000;
+
+      const result = await store.deleteAccount();
+
+      expect(deleteSpy).toHaveBeenCalledTimes(2);
+      expect(deleteSpy).toHaveBeenNthCalledWith(2, {
+        authToken: freshIdToken,
+        revokeToken: "refresh-456",
+      });
+      expect(result.isOk()).toBe(true);
+    });
+
+    it("returns missing-auth-token when user has no valid token", async () => {
+      const deleteSpy = vi.fn();
+      vi.spyOn(authInfra, "createAccountDeletionService").mockReturnValue({
+        deleteAccount: deleteSpy,
+      });
+
+      const store = useAuthStore();
+      const result = await store.deleteAccount();
+
+      expect(deleteSpy).not.toHaveBeenCalled();
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBe("missing-auth-token");
+      }
+    });
+
+    it("falls back to valid accessToken on 401 when idToken fails verification and refreshToken is null", async () => {
+      const deleteSpy = vi
+        .fn()
+        .mockReturnValueOnce(errAsync("unauthorized" as const))
+        .mockReturnValueOnce(okAsync({ deleted: true, googleRevoked: true }));
+      vi.spyOn(authInfra, "createAccountDeletionService").mockReturnValue({
+        deleteAccount: deleteSpy,
+      });
+
+      const store = useAuthStore();
+      const staleIdToken = createJwtWithExp(3600);
+      store.accessToken = "valid-access-token";
+      store.idToken = staleIdToken;
+      store.refreshToken = null;
+      store.expiresAt = Date.now() + 3_600_000;
+
+      const result = await store.deleteAccount();
+
+      expect(deleteSpy).toHaveBeenCalledTimes(2);
+      expect(deleteSpy).toHaveBeenNthCalledWith(1, {
+        authToken: staleIdToken,
+        revokeToken: "valid-access-token",
+      });
+      expect(deleteSpy).toHaveBeenNthCalledWith(2, {
+        authToken: "valid-access-token",
+        revokeToken: "valid-access-token",
+      });
+      expect(result.isOk()).toBe(true);
+    });
+
+    it("does not retry a second time when the failed token was already accessToken and refreshToken is null", async () => {
+      const deleteSpy = vi.fn().mockReturnValue(errAsync("unauthorized" as const));
+      vi.spyOn(authInfra, "createAccountDeletionService").mockReturnValue({
+        deleteAccount: deleteSpy,
+      });
+
+      const store = useAuthStore();
+      store.accessToken = "rejected-access-token";
+      store.idToken = null;
+      store.refreshToken = null;
+      store.expiresAt = Date.now() + 3_600_000;
+
+      const result = await store.deleteAccount();
+
+      expect(deleteSpy).toHaveBeenCalledTimes(1);
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBe("unauthorized");
+      }
+    });
+  });
 });

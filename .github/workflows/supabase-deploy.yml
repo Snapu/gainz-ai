@@ -40,6 +40,7 @@ jobs:
         run: |
           deno check --no-config --no-lock supabase/functions/auth-token/index.ts
           deno check --config supabase/functions/ai-coach/deno.json --no-lock supabase/functions/ai-coach/index.ts
+          deno check --no-config --no-lock supabase/functions/delete-account/index.ts
 
       - name: Run Edge security tests with Deno
         run: deno test --no-config --no-lock --allow-env supabase/functions/*/*.deno.test.ts
@@ -132,3 +133,4 @@ jobs:
         run: |
           supabase functions deploy auth-token --no-verify-jwt --yes
           supabase functions deploy ai-coach --no-verify-jwt --yes
+          supabase functions deploy delete-account --no-verify-jwt --yes

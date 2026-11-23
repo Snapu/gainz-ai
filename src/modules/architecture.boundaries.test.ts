@@ -533,7 +533,11 @@ describe("Supabase Edge Function Boundaries", () => {
     for (const filePath of sharedFiles) {
       const source = await readFile(filePath, "utf-8");
       for (const importPath of extractImports(source)) {
-        if (importPath.includes("../ai-coach/") || importPath.includes("../auth-token/")) {
+        if (
+          importPath.includes("../ai-coach/") ||
+          importPath.includes("../auth-token/") ||
+          importPath.includes("../delete-account/")
+        ) {
           violations.push(`${path.relative(SUPABASE_FUNCTIONS_ROOT, filePath)} -> ${importPath}`);
         }
       }

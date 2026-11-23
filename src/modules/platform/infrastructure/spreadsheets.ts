@@ -11,6 +11,7 @@ export const SPREADSHEET_NAME = "Gainz AI App Database";
 type GetSpreadsheetIdError = "get-spreadsheet-id-failed" | "parse-data-failed" | "auth-failed";
 type SpreadsheetLoadError = "load-spreadsheet-failed" | "not-found" | "forbidden" | "auth-failed";
 type SpreadsheetCreateError = "create-spreadsheet-failed" | "auth-failed";
+export type SpreadsheetTrashError = "trash-spreadsheet-failed" | "forbidden" | "auth-failed";
 
 function createSpreadsheetQuery(name: string): string {
   return `name='${name}' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false and 'me' in owners`;
@@ -193,4 +194,44 @@ export async function ensureSheetHeaders(
   if (missingHeaders.length === 0) return;
   await sheet.setHeaderRow([...currentHeaders, ...missingHeaders]);
   await sheet.loadHeaderRow();
+}
+
+export function trashSpreadsheet(
+  id: string,
+  accessToken: string,
+): ResultAsync<void, SpreadsheetTrashError> {
+  return ResultAsync.fromPromise(
+    fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ trashed: true }),
+    }),
+    (error): SpreadsheetTrashError => {
+      console.error(`Failed to trash spreadsheet with id ${id}. Error:`, error);
+      Sentry.captureException(error, {
+        tags: { scope: "spreadsheets-service", feature: "trash" },
+        extra: { spreadsheetId: id },
+      });
+      return "trash-spreadsheet-failed";
+    },
+  ).andThen((response): ResultAsync<void, SpreadsheetTrashError> => {
+    if (response.ok || response.status === 404) {
+      return okAsync(undefined);
+    }
+    if (response.status === 401) {
+      return errAsync("auth-failed");
+    }
+    if (response.status === 403) {
+      return errAsync("forbidden");
+    }
+    Sentry.captureMessage("Failed to trash spreadsheet", {
+      level: "warning",
+      tags: { scope: "spreadsheets-service", feature: "trash" },
+      extra: { spreadsheetId: id, status: response.status },
+    });
+    return errAsync("trash-spreadsheet-failed");
+  });
 }

@@ -1,7 +1,16 @@
+import * as Sentry from "@sentry/vue";
 import { errAsync, okAsync } from "neverthrow";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@sentry/vue", () => ({
+  captureException: vi.fn(),
+  captureMessage: vi.fn(),
+}));
+
 import {
+  type AccountDeletionService,
   CLIENT_ID,
+  deleteAccountOnServer,
   type GoogleAccessTokenService,
   refreshAccessToken,
   requestAccessToken,
@@ -37,6 +46,10 @@ function createMockAuthService(
 }
 
 describe("auth application useCases", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   describe("requestAccessToken", () => {
     it("requests an authorization code and exchanges it for access and refresh tokens", async () => {
       const service = createMockAuthService();
@@ -166,6 +179,61 @@ describe("auth application useCases", () => {
       if (result.isErr()) {
         expect(result.error).toBe("token-refresh-failed");
       }
+    });
+  });
+
+  describe("deleteAccountOnServer", () => {
+    it("delegates deletion and returns server response on success", async () => {
+      const service: AccountDeletionService = {
+        deleteAccount: vi.fn().mockReturnValue(okAsync({ deleted: true, googleRevoked: true })),
+      };
+
+      const result = await deleteAccountOnServer(service, {
+        authToken: "id-token-123",
+        revokeToken: "refresh-token-456",
+      });
+
+      expect(service.deleteAccount).toHaveBeenCalledWith({
+        authToken: "id-token-123",
+        revokeToken: "refresh-token-456",
+      });
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value).toEqual({ deleted: true, googleRevoked: true });
+      }
+    });
+
+    it("captures server error in Sentry for non-unauthorized failures", async () => {
+      const service: AccountDeletionService = {
+        deleteAccount: vi.fn().mockReturnValue(errAsync("account-deletion-failed" as const)),
+      };
+
+      const result = await deleteAccountOnServer(service, {
+        authToken: "id-token-123",
+        revokeToken: "refresh-token-456",
+      });
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBe("account-deletion-failed");
+      }
+      expect(Sentry.captureMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not capture Sentry error for unauthorized so caller can retry cleanly", async () => {
+      const service: AccountDeletionService = {
+        deleteAccount: vi.fn().mockReturnValue(errAsync("unauthorized" as const)),
+      };
+
+      const result = await deleteAccountOnServer(service, {
+        authToken: "stale-token",
+      });
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBe("unauthorized");
+      }
+      expect(Sentry.captureMessage).not.toHaveBeenCalled();
     });
   });
 });

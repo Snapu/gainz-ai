@@ -44,6 +44,9 @@ export const en = {
     privacyPolicy: "Privacy Policy",
     termsOfUse: "Terms of Use",
     impressum: "Imprint (Impressum)",
+    account: "Account",
+    signOut: "Sign Out",
+    deleteAccount: "Delete Account & Data",
     syncing: "Syncing...",
     pendingSync: "{count} Pending",
     syncAriaLabel: "Sync pending offline logs",
@@ -562,6 +565,39 @@ export const en = {
       withdrawnToastDesc: "Your consent has been revoked and you have been signed out.",
       acceptedAt: "Consent granted on {date}",
     },
+  },
+  account: {
+    signedOutToastTitle: "Signed Out",
+    signedOutToastDesc: "You have been signed out on this device.",
+    deleteButton: "Delete Account & Data",
+    deleteTitle: "Delete Account & Data",
+    deleteSubtitle: "Permanent removal of app data and permissions",
+    deleteWarning:
+      "This action permanently deletes your server-side usage data, revokes Gainz AI's Google access, and clears all local app data on this device. This cannot be undone.",
+    deleteItemsTitle: "What will be deleted or revoked",
+    deleteItemServer: "Server usage counters and temporary AI recovery entries (Supabase)",
+    deleteItemGoogle: "Google OAuth access permissions granted to Gainz AI",
+    deleteItemLocal: "All local tokens, consent status, cached plans, chats, and recovery events",
+    deleteDriveNoteKeep:
+      "Your workout spreadsheet stored in your personal Google Drive remains untouched unless you delete it yourself in Google Drive.",
+    deleteDriveCheckboxLabel: "Also move linked Google Drive spreadsheet to Trash",
+    deleteDriveCheckboxHint:
+      "If checked, your linked Gainz AI spreadsheet will be moved to your Google Drive trash before disconnecting.",
+    deleteConfirmButton: "Permanently Delete Account & Data",
+    deletingButton: "Deleting account & data...",
+    deletedToastTitle: "Account & Data Deleted",
+    deletedToastDesc:
+      "Your server records, Google connection, and local app data have been deleted.",
+    deletedPartialRevokeToastDesc:
+      "Your server records and local app data have been deleted. You can also verify Google permissions in your Google Account settings.",
+    deleteFailedTitle: "Deletion Failed",
+    deleteFailedDesc:
+      "Could not delete server data right now. Please check your internet connection and try again.",
+    trashSheetFailedTitle: "Could Not Trash Spreadsheet",
+    trashSheetForbiddenDesc:
+      "Gainz AI no longer has permission to modify that spreadsheet in Google Drive. Uncheck the option to delete your account without touching the file.",
+    trashSheetFailedDesc:
+      "Failed to move your Google Drive spreadsheet to trash. Check your connection or uncheck that option and try again.",
   },
 };
 

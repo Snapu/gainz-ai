@@ -172,8 +172,8 @@ function handleBack(): void {
           <h2 class="text-xl font-semibold text-foreground">8. Datenschutz &amp; Widerruf</h2>
           <p>
             Informationen zur Verarbeitung Ihrer personenbezogenen und freiwilligen
-            gesundheitsbezogenen Daten sowie zur Möglichkeit, Ihre Einwilligung jederzeit zu
-            widerrufen, finden Sie in unserer
+            gesundheitsbezogenen Daten, zur jederzeit möglichen Löschung Ihres Kontos bzw. Ihrer
+            App-Daten sowie zum Widerruf Ihrer Einwilligung finden Sie in unserer
             <RouterLink to="/privacy" class="text-primary hover:underline font-semibold"
               >Datenschutzerklärung</RouterLink
             >.
@@ -334,11 +334,11 @@ function handleBack(): void {
 
         <section class="space-y-4">
           <h2 class="text-xl font-semibold text-foreground">
-            8. Privacy &amp; Consent Withdrawal
+            8. Privacy, Erasure &amp; Consent Withdrawal
           </h2>
           <p>
-            Details on how personal and optional health-related data are processed, as well as how
-            to withdraw consent at any time, are set out in our
+            Details on how personal and optional health-related data are processed, how to delete
+            your account and app data at any time, and how to withdraw consent are set out in our
             <RouterLink to="/privacy" class="text-primary hover:underline font-semibold"
               >Privacy Policy</RouterLink
             >.

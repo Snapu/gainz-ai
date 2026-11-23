@@ -1,6 +1,7 @@
+import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { effectScope, reactive } from "vue";
-import { useSheetCacheSync } from "./useSheetCacheSync";
+import { clearDerivedSheetCaches, useSheetCacheSync } from "./useSheetCacheSync";
 
 const CACHE_OWNER_KEY = "gainz:cacheSpreadsheetId";
 
@@ -148,5 +149,27 @@ describe("useSheetCacheSync", () => {
     expect(clearPendingLogsMock).toHaveBeenCalledTimes(1);
     expect(userProfileState.hasCompletedSetup).toBe(false);
     expect(localStorage.getItem(CACHE_OWNER_KEY)).toBe("created-sheet-1");
+  });
+
+  it("clearDerivedSheetCaches({ onlyInstantiated: true }) skips stores absent from active Pinia", () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    pinia._s.set("coachChat", {} as never);
+    pinia._s.set("userProfile", {} as never);
+
+    try {
+      clearDerivedSheetCaches({ onlyInstantiated: true });
+
+      expect(resetAllSessionsMock).toHaveBeenCalledTimes(1);
+      expect(userProfileState.hasCompletedSetup).toBe(false);
+      expect(clearPlanMock).not.toHaveBeenCalled();
+      expect(clearCompletedSessionsMock).not.toHaveBeenCalled();
+      expect(clearPendingRequestMock).not.toHaveBeenCalled();
+      expect(clearEventsMock).not.toHaveBeenCalled();
+      expect(clearMapMock).not.toHaveBeenCalled();
+      expect(clearPendingLogsMock).not.toHaveBeenCalled();
+    } finally {
+      setActivePinia(undefined);
+    }
   });
 });

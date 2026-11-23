@@ -17,6 +17,8 @@ import {
   loadSpreadsheet,
   pickSpreadsheetId,
   SPREADSHEET_NAME,
+  type SpreadsheetTrashError,
+  trashSpreadsheet,
 } from "@/modules/platform/infrastructure";
 
 const TRANSIENT_RETRY_DELAYS_MS = [5_000, 15_000, 30_000] as const;
@@ -360,6 +362,48 @@ export const useSpreadsheetStore = defineStore("spreadsheet", () => {
     return `https://docs.google.com/spreadsheets/d/${doc.value.spreadsheetId}/edit`;
   });
 
+  const activeSpreadsheetId = computed<string | null>(
+    () => doc.value?.spreadsheetId ?? (linkedSpreadsheetId.value?.trim() || null),
+  );
+
+  function clearLinkedSpreadsheet(): void {
+    linkedSpreadsheetId.value = null;
+    clearSpreadsheetSessionState();
+  }
+
+  function trashActiveSpreadsheet(): ResultAsync<
+    void,
+    SpreadsheetTrashError | "missing-access-token"
+  > {
+    if (!activeSpreadsheetId.value) {
+      clearLinkedSpreadsheet();
+      return okAsync(undefined);
+    }
+
+    return new ResultAsync(
+      mutex.runExclusive(
+        async (): Promise<Result<void, SpreadsheetTrashError | "missing-access-token">> => {
+          const targetId = activeSpreadsheetId.value;
+          if (!targetId) {
+            clearLinkedSpreadsheet();
+            return ok(undefined);
+          }
+
+          const token = authStore.isLoggedIn ? await resolveValidToken() : null;
+          if (!token) {
+            return err("missing-access-token");
+          }
+
+          return runWithAuthRetry("spreadsheet-trash", token, (validToken) =>
+            trashSpreadsheet(targetId, validToken),
+          ).andTee(() => {
+            clearLinkedSpreadsheet();
+          });
+        },
+      ),
+    );
+  }
+
   function openInBrowser() {
     if (spreadsheetUrl.value) {
       window.open(spreadsheetUrl.value, "_blank");
@@ -372,11 +416,14 @@ export const useSpreadsheetStore = defineStore("spreadsheet", () => {
     needsSpreadsheetChoice,
     createdSpreadsheetId,
     doc,
+    activeSpreadsheetId,
     spreadsheetUrl,
     openInBrowser,
     init,
     createNewSpreadsheet,
     linkExistingSpreadsheet,
     switchSpreadsheet,
+    clearLinkedSpreadsheet,
+    trashActiveSpreadsheet,
   };
 });

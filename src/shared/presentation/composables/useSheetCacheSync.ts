@@ -1,3 +1,4 @@
+import { getActivePinia } from "pinia";
 import { watch } from "vue";
 import {
   useAiOrchestratorStore,
@@ -11,16 +12,39 @@ import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
 
 const CACHE_OWNER_STORAGE_KEY = "gainz:cacheSpreadsheetId";
 
-function clearDerivedSheetCaches(): void {
-  const trainingPlanStore = useTrainingPlanStore();
-  trainingPlanStore.clearPlan();
-  trainingPlanStore.clearCompletedSessions();
-  useCoachChatStore().resetAllSessions();
-  useAiOrchestratorStore().clearPendingRequest();
-  useEventsStore().clearEvents();
-  useExerciseMuscleMapStore().clearMap();
-  useExerciseLogsStore().clearPendingMutations();
-  useUserProfileStore().hasCompletedSetup = false;
+function shouldResetStore(storeId: string, onlyInstantiated: boolean): boolean {
+  if (!onlyInstantiated) return true;
+  const pinia = getActivePinia();
+  if (!pinia) return true;
+  return pinia._s.has(storeId);
+}
+
+export function clearDerivedSheetCaches(options?: { onlyInstantiated?: boolean }): void {
+  const onlyInstantiated = options?.onlyInstantiated ?? false;
+
+  if (shouldResetStore("trainingPlan", onlyInstantiated)) {
+    const trainingPlanStore = useTrainingPlanStore();
+    trainingPlanStore.clearPlan();
+    trainingPlanStore.clearCompletedSessions();
+  }
+  if (shouldResetStore("coachChat", onlyInstantiated)) {
+    useCoachChatStore().resetAllSessions();
+  }
+  if (shouldResetStore("aiOrchestrator", onlyInstantiated)) {
+    useAiOrchestratorStore().clearPendingRequest();
+  }
+  if (shouldResetStore("events", onlyInstantiated)) {
+    useEventsStore().clearEvents();
+  }
+  if (shouldResetStore("exerciseMuscleMap", onlyInstantiated)) {
+    useExerciseMuscleMapStore().clearMap();
+  }
+  if (shouldResetStore("exerciseLogs", onlyInstantiated)) {
+    useExerciseLogsStore().clearPendingMutations();
+  }
+  if (shouldResetStore("userProfile", onlyInstantiated)) {
+    useUserProfileStore().hasCompletedSetup = false;
+  }
 }
 
 /**

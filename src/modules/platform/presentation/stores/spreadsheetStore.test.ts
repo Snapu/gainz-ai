@@ -23,6 +23,7 @@ vi.mock("@/modules/platform/infrastructure", () => ({
   loadSpreadsheet: vi.fn(),
   createSpreadsheet: vi.fn(),
   pickSpreadsheetId: vi.fn(),
+  trashSpreadsheet: vi.fn(),
 }));
 
 vi.mock("@sentry/vue", () => ({
@@ -524,6 +525,49 @@ describe("useSpreadsheetStore", () => {
     expect(platformInfra.pickSpreadsheetId).not.toHaveBeenCalled();
     expect(platformInfra.createSpreadsheet).not.toHaveBeenCalled();
     expect(store.doc).toBe(initialDoc);
+  });
+
+  it("trashActiveSpreadsheet trashes active spreadsheet via Drive API and clears linked state", async () => {
+    const initialDoc = {
+      spreadsheetId: "active-sheet-1",
+      loadInfo: vi.fn(),
+    } as unknown as GoogleSpreadsheet;
+    vi.mocked(platformInfra.getSpreadsheetId).mockReturnValueOnce(okAsync("active-sheet-1"));
+    vi.mocked(platformInfra.loadSpreadsheet).mockReturnValueOnce(okAsync(initialDoc));
+    vi.mocked(platformInfra.trashSpreadsheet).mockReturnValueOnce(okAsync(undefined));
+
+    const store = useSpreadsheetStore();
+    await vi.waitFor(() => expect(store.doc).toBe(initialDoc));
+    expect(store.activeSpreadsheetId).toBe("active-sheet-1");
+
+    const result = await store.trashActiveSpreadsheet();
+
+    expect(result.isOk()).toBe(true);
+    expect(platformInfra.trashSpreadsheet).toHaveBeenCalledWith("active-sheet-1", "test-token");
+    expect(store.doc).toBeNull();
+    expect(store.activeSpreadsheetId).toBeNull();
+    expect(localStorage.getItem(LINKED_SPREADSHEET_STORAGE_KEY)).toBeNull();
+  });
+
+  it("trashActiveSpreadsheet resolves cleanly when no spreadsheet is linked and preserves link on failure", async () => {
+    const store = useSpreadsheetStore();
+    const emptyResult = await store.trashActiveSpreadsheet();
+    expect(emptyResult.isOk()).toBe(true);
+    expect(platformInfra.trashSpreadsheet).not.toHaveBeenCalled();
+
+    localStorage.setItem(LINKED_SPREADSHEET_STORAGE_KEY, "persisted-sheet-9");
+    vi.mocked(platformInfra.trashSpreadsheet).mockReturnValueOnce(errAsync("forbidden"));
+
+    // Create fresh store reading linkedSpreadsheetId from localStorage
+    setActivePinia(createPinia());
+    const linkedStore = useSpreadsheetStore();
+    expect(linkedStore.activeSpreadsheetId).toBe("persisted-sheet-9");
+
+    const failResult = await linkedStore.trashActiveSpreadsheet();
+
+    expect(failResult.isErr()).toBe(true);
+    expect(failResult._unsafeUnwrapErr()).toBe("forbidden");
+    expect(localStorage.getItem(LINKED_SPREADSHEET_STORAGE_KEY)).toBe("persisted-sheet-9");
   });
 
   it("switchSpreadsheet saves chosen spreadsheet ID and reloads when switching to a different sheet", async () => {

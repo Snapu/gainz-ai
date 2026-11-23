@@ -1,10 +1,12 @@
 import { ResultAsync } from "neverthrow";
 import { type CallbackTypes, googleSdkLoaded } from "vue3-google-login";
 import { z } from "zod";
-import type { GoogleAccessTokenService } from "@/modules/auth/application";
+import type { AccountDeletionService, GoogleAccessTokenService } from "@/modules/auth/application";
 import type {
+  AccountDeletionError,
   AuthCodePopupResponse,
   AuthTokenRequestError,
+  DeleteAccountResult,
   OAuthTokenResponse,
 } from "@/modules/auth/domain";
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "@/modules/platform/infrastructure";
@@ -145,5 +147,50 @@ export function createGoogleAccessTokenService(): GoogleAccessTokenService {
     requestAuthCode: requestGoogleAuthCodeInfra,
     exchangeAuthorizationCode: exchangeAuthorizationCodeInfra,
     refreshAccessToken: refreshAccessTokenInfra,
+  };
+}
+
+const deleteAccountResponseSchema = z.object({
+  deleted: z.literal(true),
+  googleRevoked: z.boolean(),
+});
+
+const DELETE_ACCOUNT_TIMEOUT_MS = 15_000;
+
+export function createAccountDeletionService(): AccountDeletionService {
+  return {
+    deleteAccount(options): ResultAsync<DeleteAccountResult, AccountDeletionError> {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), DELETE_ACCOUNT_TIMEOUT_MS);
+
+      return ResultAsync.fromPromise(
+        fetch(`${SUPABASE_URL}/functions/v1/delete-account`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${options.authToken}`,
+          },
+          body: JSON.stringify(options.revokeToken ? { revokeToken: options.revokeToken } : {}),
+          signal: controller.signal,
+        })
+          .then(async (res) => {
+            if (!res.ok) {
+              throw new AuthEndpointHttpError(res.status);
+            }
+            const json: unknown = await res.json();
+            return deleteAccountResponseSchema.parse(json);
+          })
+          .finally(() => {
+            clearTimeout(timeoutId);
+          }),
+        (err): AccountDeletionError => {
+          if (err instanceof AuthEndpointHttpError && err.status === 401) {
+            return "unauthorized";
+          }
+          return "account-deletion-failed";
+        },
+      );
+    },
   };
 }

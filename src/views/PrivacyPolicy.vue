@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/modules/auth/presentation";
 import AppHeader from "@/shared/presentation/components/AppHeader.vue";
+import DeleteAccountSheet from "@/shared/presentation/components/DeleteAccountSheet.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import { useLegalConsent } from "@/shared/presentation/composables/useLegalConsent";
 import { useToast } from "@/shared/presentation/composables/useToast";
@@ -14,6 +15,7 @@ const authStore = useAuthStore();
 const { toast } = useToast();
 const { locale, bcp47Locale } = useLocale();
 const { consentRecord, hasLegalConsent, revokeLegalConsent } = useLegalConsent();
+const isDeleteDialogOpen = ref(false);
 
 const formattedConsentDate = computed(() => {
   if (!hasLegalConsent.value) return null;
@@ -614,8 +616,9 @@ async function handleWithdrawConsent(): Promise<void> {
                 Wiederherstellung bei Verbindungsabbruch (<code>ai_request_results</code>) nach
                 <strong>30 Minuten</strong> abgelaufen und nicht mehr abrufbar. Die tatsächliche
                 Datenbankbereinigung abgelaufener Einträge erfolgt jeweils im Zuge nachfolgender
-                Anfragen (request-gesteuerte Bereinigung); auf Anfrage löschen wir Einträge zudem
-                jederzeit manuell.
+                Anfragen (request-gesteuerte Bereinigung); über die App-Funktion
+                <strong>„Konto &amp; Daten löschen“</strong> (Menü oder Abschnitt 6.3 unten) sowie
+                auf Anfrage per E-Mail löschen wir Ihre Server-Einträge zudem jederzeit sofort.
               </p>
             </div>
           </section>
@@ -641,7 +644,7 @@ async function handleWithdrawConsent(): Promise<void> {
               </div>
             </div>
 
-            <div class="bg-white/5 p-4 rounded-xl border border-white/5 space-y-2">
+            <div class="bg-white/5 p-4 rounded-xl border border-white/5 space-y-3">
               <h3 class="font-medium text-foreground">6.3 Löschungsrecht (Art. 17 DSGVO)</h3>
               <p>
                 Sie haben das Recht auf Löschung Ihrer personenbezogenen Daten („Recht auf
@@ -650,26 +653,41 @@ async function handleWithdrawConsent(): Promise<void> {
               <p class="text-sm font-medium">So löschen Sie Ihre Daten:</p>
               <ul class="list-disc pl-5 space-y-1 text-sm">
                 <li>
-                  <strong>Lokale Daten:</strong> Löschen Sie den Browser-Cache und die
-                  LocalStorage-/App-Daten
+                  <strong>Direkt in der App („Konto &amp; Daten löschen“):</strong> Löscht sofort
+                  Ihre Supabase-Serverdaten, widerruft den Google-OAuth-Zugriff, entfernt alle
+                  lokalen App-Daten und verschiebt auf Wunsch auch Ihre verknüpfte
+                  Google-Drive-Tabelle in den Papierkorb
                 </li>
                 <li>
-                  <strong>Google Drive Daten:</strong> Löschen Sie die entsprechende Tabelle in Ihrem
-                  Google Drive
+                  <strong>Lokale Daten:</strong> Löschen Sie zusätzlich bei Bedarf Browser-Cache
+                  und App-Daten auf dem Gerät
+                </li>
+                <li>
+                  <strong>Google Drive Daten:</strong> Verbleiben unter Ihrer Kontrolle und können
+                  jederzeit direkt im Löschdialog oder in Google Drive gelöscht werden
                 </li>
                 <li>
                   <strong>Sentry:</strong> Fehlerdaten werden automatisch nach 90 Tagen gelöscht
                 </li>
                 <li>
                   <strong>Supabase:</strong> Kurzzeit-Cache verfällt nach 30 Minuten und
-                  Kontingentzähler nach 30 Tagen (Bereinigung im Zuge nachfolgender Anfragen oder auf
-                  Anfrage per E-Mail)
+                  Kontingentzähler nach 30 Tagen (sofortige Löschung über „Konto &amp; Daten
+                  löschen“ oder auf Anfrage per E-Mail)
                 </li>
                 <li>
                   <strong>Google Generative AI:</strong> Kontaktieren Sie Google gemäß deren
                   Datenschutzrichtlinien
                 </li>
               </ul>
+              <UiButton
+                v-if="authStore.isLoggedIn"
+                variant="destructive"
+                size="sm"
+                class="w-full"
+                @click="isDeleteDialogOpen = true"
+              >
+                {{ t("account.deleteButton") }}
+              </UiButton>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1352,8 +1370,10 @@ async function handleWithdrawConsent(): Promise<void> {
                 are limited to a retention window of <strong>30 days</strong>, and temporary AI
                 response recovery entries (<code>ai_request_results</code>) expire after
                 <strong>30 minutes</strong> and cannot be retrieved thereafter. Database rows past
-                their expiry window are purged during subsequent request-triggered cleanup; upon
-                request via email, we will also delete records manually at any time.
+                their expiry window are purged during subsequent request-triggered cleanup; you can
+                delete all server records immediately at any time via the in-app
+                <strong>“Delete Account &amp; Data”</strong> flow (menu or Section 6.3 below), or
+                upon email request.
               </p>
             </div>
           </section>
@@ -1381,7 +1401,7 @@ async function handleWithdrawConsent(): Promise<void> {
               </div>
             </div>
 
-            <div class="bg-white/5 p-4 rounded-xl border border-white/5 space-y-2">
+            <div class="bg-white/5 p-4 rounded-xl border border-white/5 space-y-3">
               <h3 class="font-medium text-foreground">6.3 Right to Erasure (Art. 17 GDPR)</h3>
               <p>
                 You have the right to request deletion of your personal data ("right to be forgotten").
@@ -1389,21 +1409,37 @@ async function handleWithdrawConsent(): Promise<void> {
               <p class="text-sm font-medium">How to delete your data:</p>
               <ul class="list-disc pl-5 space-y-1 text-sm">
                 <li>
-                  <strong>Local data:</strong> Clear browser cache and LocalStorage/app data
+                  <strong>Direct in-app (“Delete Account &amp; Data”):</strong> Immediately deletes
+                  your Supabase server data, revokes Google OAuth access, wipes all local app
+                  data, and optionally moves your linked Google Drive spreadsheet to Trash
                 </li>
                 <li>
-                  <strong>Google Drive data:</strong> Delete the spreadsheet in your Google Drive
+                  <strong>Local data:</strong> You may also clear browser cache and app data on your
+                  device
+                </li>
+                <li>
+                  <strong>Google Drive data:</strong> Remains under your control and can be trashed
+                  via the deletion flow or deleted directly in Google Drive
                 </li>
                 <li><strong>Sentry:</strong> Error records are automatically deleted after 90 days</li>
                 <li>
                   <strong>Supabase:</strong> Recovery cache expires after 30 minutes and usage
-                  counters after 30 days (purged during subsequent request-triggered cleanup or upon
+                  counters after 30 days (immediate deletion via “Delete Account &amp; Data” or upon
                   email request)
                 </li>
                 <li>
                   <strong>Google Generative AI:</strong> Contact Google under their privacy policy
                 </li>
               </ul>
+              <UiButton
+                v-if="authStore.isLoggedIn"
+                variant="destructive"
+                size="sm"
+                class="w-full"
+                @click="isDeleteDialogOpen = true"
+              >
+                {{ t("account.deleteButton") }}
+              </UiButton>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1553,5 +1589,7 @@ async function handleWithdrawConsent(): Promise<void> {
         </template>
       </div>
     </main>
+
+    <DeleteAccountSheet v-model:open="isDeleteDialogOpen" />
   </div>
 </template>

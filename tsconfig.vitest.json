@@ -7,7 +7,8 @@
     "supabase/functions/types.d.ts",
     "supabase/functions/_shared/**/*.ts",
     "supabase/functions/auth-token/**/*.ts",
-    "supabase/functions/ai-coach/**/*.ts"
+    "supabase/functions/ai-coach/**/*.ts",
+    "supabase/functions/delete-account/**/*.ts"
   ],
   "exclude": ["supabase/functions/**/*.deno.test.ts"],
   "compilerOptions": {

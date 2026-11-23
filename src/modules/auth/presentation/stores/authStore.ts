@@ -4,10 +4,21 @@ import { Mutex } from "async-mutex";
 import { err, errAsync, ok, okAsync, type Result, ResultAsync } from "neverthrow";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
-import { CLIENT_ID, refreshAccessToken, requestAccessToken } from "@/modules/auth/application";
-import type { AuthTokenRequestError, OAuthTokenResponse } from "@/modules/auth/domain";
+import {
+  CLIENT_ID,
+  deleteAccountOnServer,
+  refreshAccessToken,
+  requestAccessToken,
+} from "@/modules/auth/application";
+import type {
+  AccountDeletionError,
+  AuthTokenRequestError,
+  DeleteAccountResult,
+  OAuthTokenResponse,
+} from "@/modules/auth/domain";
 import {
   clearAuthTokens,
+  createAccountDeletionService,
   createGoogleAccessTokenService,
   loadAuthTokens,
   readSynchronousWebTokens,
@@ -207,16 +218,56 @@ export const useAuthStore = defineStore("auth", () => {
     return ensureValidAccessToken();
   }
 
-  function logout(): void {
+  function logout(): Promise<void> {
     authGeneration++;
     accessToken.value = null;
     refreshToken.value = null;
     idToken.value = null;
     expiresAt.value = null;
-    clearAuthTokens().catch((err) => {
+    return clearAuthTokens().catch((err) => {
       console.error("Failed to clear auth tokens from storage on logout", err);
       Sentry.captureException(err);
     });
+  }
+
+  function deleteAccount(): ResultAsync<DeleteAccountResult, AccountDeletionError> {
+    const deletionService = createAccountDeletionService();
+    let attemptedAuthToken: string | null = null;
+
+    return ensureValidIdToken()
+      .mapErr((): AccountDeletionError => "missing-auth-token")
+      .andThen((authToken) => {
+        attemptedAuthToken = authToken;
+        return deleteAccountOnServer(deletionService, {
+          authToken,
+          revokeToken: refreshToken.value ?? accessToken.value,
+        });
+      })
+      .orElse((error) => {
+        if (error !== "unauthorized") {
+          return errAsync(error);
+        }
+        if (refreshToken.value) {
+          return refreshSession(true)
+            .mapErr((): AccountDeletionError => "unauthorized")
+            .andThen((refreshedAccessToken) =>
+              deleteAccountOnServer(deletionService, {
+                authToken: idToken.value ?? refreshedAccessToken,
+                revokeToken: refreshToken.value ?? accessToken.value,
+              }),
+            );
+        }
+        return ensureValidAccessToken()
+          .mapErr((): AccountDeletionError => "unauthorized")
+          .andThen((fallbackAccessToken) =>
+            fallbackAccessToken === attemptedAuthToken
+              ? errAsync<DeleteAccountResult, AccountDeletionError>("unauthorized")
+              : deleteAccountOnServer(deletionService, {
+                  authToken: fallbackAccessToken,
+                  revokeToken: accessToken.value,
+                }),
+          );
+      });
   }
 
   return {
@@ -231,5 +282,6 @@ export const useAuthStore = defineStore("auth", () => {
     ensureValidAccessToken,
     ensureValidIdToken,
     logout,
+    deleteAccount,
   };
 });

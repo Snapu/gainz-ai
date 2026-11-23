@@ -19,3 +19,13 @@ export interface OAuthTokenResponse {
   scope?: string;
   token_type?: string;
 }
+
+export type AccountDeletionError =
+  | "missing-auth-token"
+  | "unauthorized"
+  | "account-deletion-failed";
+
+export interface DeleteAccountResult {
+  deleted: boolean;
+  googleRevoked: boolean;
+}

@@ -102,6 +102,11 @@ function handleCreateNew(): void {
   void spreadsheetStore.createNewSpreadsheet().orTee(notifyChoiceError);
 }
 
+async function handleSwitchAccount(): Promise<void> {
+  await authStore.logout();
+  await router.push("/");
+}
+
 // Re-evaluate routing when the loading-relevant state changes.
 // The beforeEach guard only fires on route transitions, so we need
 // an explicit watcher to push the user forward once loading finishes.
@@ -179,7 +184,7 @@ watch(
           variant="ghost"
           size="sm"
           class="self-center text-muted-foreground"
-          @click="authStore.logout()"
+          @click="void handleSwitchAccount()"
         >
           {{ t("loading.switchAccount") }}
         </UiButton>

@@ -1,11 +1,20 @@
 import * as Sentry from "@sentry/vue";
 import { errAsync, okAsync, type ResultAsync } from "neverthrow";
 import type {
+  AccountDeletionError,
   AuthCodePopupResponse,
   AuthError,
   AuthTokenRequestError,
+  DeleteAccountResult,
   OAuthTokenResponse,
 } from "@/modules/auth/domain";
+
+export interface AccountDeletionService {
+  deleteAccount(options: {
+    authToken: string;
+    revokeToken?: string | null;
+  }): ResultAsync<DeleteAccountResult, AccountDeletionError>;
+}
 
 export const CLIENT_ID: string =
   import.meta.env.VITE_GOOGLE_CLIENT_ID ||
@@ -68,5 +77,21 @@ export function refreshAccessToken(
   return requester.refreshAccessToken(refreshToken).orTee((refreshError) => {
     console.error("Token refresh failed", refreshError);
     Sentry.captureException(refreshError);
+  });
+}
+
+export function deleteAccountOnServer(
+  service: AccountDeletionService,
+  options: { authToken: string; revokeToken?: string | null },
+): ResultAsync<DeleteAccountResult, AccountDeletionError> {
+  return service.deleteAccount(options).orTee((error) => {
+    if (error !== "unauthorized") {
+      console.error("Account deletion failed on server", error);
+      Sentry.captureMessage("Account deletion failed on server", {
+        level: "error",
+        tags: { scope: "auth-service", feature: "delete-account" },
+        extra: { error },
+      });
+    }
   });
 }

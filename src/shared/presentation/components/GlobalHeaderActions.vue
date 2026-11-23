@@ -7,15 +7,20 @@ import {
   ExternalLink,
   FolderOpen,
   History,
+  LogOut,
   Menu,
+  Trash2,
 } from "@lucide/vue";
+import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { useSpreadsheetStore } from "@/modules/platform/presentation";
 import { WIZARD_STEPS } from "@/modules/profile/presentation";
 import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
+import DeleteAccountSheet from "@/shared/presentation/components/DeleteAccountSheet.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiDropdownMenu from "@/shared/presentation/components/ui/UiDropdownMenu.vue";
 import UiDropdownMenuItem from "@/shared/presentation/components/ui/UiDropdownMenuItem.vue";
+import { useAccountActions } from "@/shared/presentation/composables/useAccountActions";
 import { useToast } from "@/shared/presentation/composables/useToast";
 import { t } from "@/shared/presentation/i18n";
 import { useLocale } from "@/shared/presentation/i18n/useLocale";
@@ -25,6 +30,8 @@ const spreadsheetStore = useSpreadsheetStore();
 const logsStore = useExerciseLogsStore();
 const { toast } = useToast();
 const { locale, setLocale } = useLocale();
+const { signOut } = useAccountActions();
+const isDeleteDialogOpen = ref(false);
 
 function handleSwitchSpreadsheet(): void {
   void spreadsheetStore.switchSpreadsheet().orTee((error) => {
@@ -152,6 +159,27 @@ function handleSwitchSpreadsheet(): void {
         <span>{{ t("nav.impressum") }}</span>
         <ChevronRight class="w-4 h-4 ml-auto opacity-40 group-hover:text-primary transition-colors" />
       </UiDropdownMenuItem>
+
+      <div class="h-px bg-white/5 my-1 mx-3"></div>
+
+      <div class="px-3 py-2 text-micro tracking-widest text-muted-foreground/60">
+        {{ t("nav.account") }}
+      </div>
+
+      <UiDropdownMenuItem @select="void signOut()" class="group">
+        <span>{{ t("nav.signOut") }}</span>
+        <LogOut class="w-4 h-4 ml-auto opacity-40 group-hover:text-primary transition-colors" />
+      </UiDropdownMenuItem>
+
+      <UiDropdownMenuItem
+        @select="isDeleteDialogOpen = true"
+        class="group text-red-400 focus:text-red-300"
+      >
+        <span>{{ t("nav.deleteAccount") }}</span>
+        <Trash2 class="w-4 h-4 ml-auto opacity-70 group-hover:text-red-300 transition-colors" />
+      </UiDropdownMenuItem>
     </UiDropdownMenu>
+
+    <DeleteAccountSheet v-model:open="isDeleteDialogOpen" />
   </div>
 </template>

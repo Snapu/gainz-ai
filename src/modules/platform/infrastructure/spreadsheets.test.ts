@@ -7,6 +7,7 @@ import {
   getSpreadsheetId,
   loadSpreadsheet,
   SPREADSHEET_NAME,
+  trashSpreadsheet,
 } from "@/modules/platform/infrastructure/spreadsheets";
 
 describe("spreadsheets", () => {
@@ -283,6 +284,53 @@ describe("spreadsheets", () => {
       await ensureSheetHeaders(sheet, ["a", "b"]);
 
       expect(sheet.setHeaderRow).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("trashSpreadsheet", () => {
+    it("sends PATCH trashed=true and succeeds on 200 or 404", async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, status: 200 })
+        .mockResolvedValueOnce({ ok: false, status: 404 });
+      global.fetch = fetchMock;
+
+      const okRes = await trashSpreadsheet("sheet-123", "access-token");
+      const notFoundRes = await trashSpreadsheet("sheet-missing", "access-token");
+
+      expect(okRes.isOk()).toBe(true);
+      expect(notFoundRes.isOk()).toBe(true);
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        1,
+        "https://www.googleapis.com/drive/v3/files/sheet-123",
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: "Bearer access-token",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ trashed: true }),
+        },
+      );
+    });
+
+    it("maps 401 to auth-failed, 403 to forbidden, and other errors to trash-spreadsheet-failed", async () => {
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: false, status: 401 })
+        .mockResolvedValueOnce({ ok: false, status: 403 })
+        .mockResolvedValueOnce({ ok: false, status: 500 })
+        .mockRejectedValueOnce(new Error("offline"));
+
+      const unauth = await trashSpreadsheet("id", "token");
+      const forbidden = await trashSpreadsheet("id", "token");
+      const serverErr = await trashSpreadsheet("id", "token");
+      const networkErr = await trashSpreadsheet("id", "token");
+
+      expect(unauth._unsafeUnwrapErr()).toBe("auth-failed");
+      expect(forbidden._unsafeUnwrapErr()).toBe("forbidden");
+      expect(serverErr._unsafeUnwrapErr()).toBe("trash-spreadsheet-failed");
+      expect(networkErr._unsafeUnwrapErr()).toBe("trash-spreadsheet-failed");
     });
   });
 });

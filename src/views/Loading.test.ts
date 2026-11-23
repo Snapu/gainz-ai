@@ -162,8 +162,12 @@ describe("Loading.vue", () => {
     createBtn?.click();
     await vi.waitFor(() => expect(createNewSpreadsheetMock).toHaveBeenCalledTimes(1));
 
+    pushMock.mockClear();
     switchAccountBtn?.click();
-    expect(logoutMock).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(logoutMock).toHaveBeenCalledTimes(1);
+      expect(pushMock).toHaveBeenCalledWith("/");
+    });
 
     unmount();
   });

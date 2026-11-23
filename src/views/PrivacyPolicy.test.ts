@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createApp, defineComponent, nextTick, reactive } from "vue";
+import { createApp, defineComponent, h, nextTick, reactive } from "vue";
 import { hasValidLegalConsent, LEGAL_CONSENT_STORAGE_KEY } from "@/lib/legalConsent";
 import {
   syncLegalConsent,
@@ -36,6 +36,21 @@ vi.mock("@/shared/presentation/composables/useToast", () => ({
   useToast: () => ({ toast: toastMock }),
 }));
 
+vi.mock("@/shared/presentation/components/DeleteAccountSheet.vue", () => ({
+  default: defineComponent({
+    props: {
+      open: {
+        type: Boolean,
+        required: true,
+      },
+    },
+    emits: ["update:open"],
+    setup(props) {
+      return () => (props.open ? h("div", { "data-testid": "delete-account-sheet" }) : null);
+    },
+  }),
+}));
+
 import PrivacyPolicy from "./PrivacyPolicy.vue";
 
 const RouterLinkStub = defineComponent({
@@ -66,6 +81,12 @@ function mountPrivacyPolicy() {
 function findWithdrawButton(host: HTMLElement): HTMLButtonElement | undefined {
   return Array.from(host.querySelectorAll("button")).find((button) =>
     button.textContent?.includes("Withdraw Consent"),
+  );
+}
+
+function findDeleteAccountButton(host: HTMLElement): HTMLButtonElement | undefined {
+  return Array.from(host.querySelectorAll("button")).find((button) =>
+    button.textContent?.includes("Delete Account & Data"),
   );
 }
 
@@ -146,6 +167,35 @@ describe("PrivacyPolicy.vue", () => {
       expect(backMock).toHaveBeenCalledTimes(1);
     } finally {
       mounted.unmount();
+    }
+  });
+
+  it("shows Delete Account & Data button only when logged in and opens confirmation sheet", async () => {
+    authState.isLoggedIn = false;
+    const loggedOutMount = mountPrivacyPolicy();
+    try {
+      await nextTick();
+      expect(findDeleteAccountButton(loggedOutMount.host)).toBeUndefined();
+      expect(loggedOutMount.host.querySelector("[data-testid='delete-account-sheet']")).toBeNull();
+    } finally {
+      loggedOutMount.unmount();
+    }
+
+    authState.isLoggedIn = true;
+    const loggedInMount = mountPrivacyPolicy();
+    try {
+      await nextTick();
+      const deleteBtn = findDeleteAccountButton(loggedInMount.host);
+      expect(deleteBtn).toBeDefined();
+      expect(loggedInMount.host.querySelector("[data-testid='delete-account-sheet']")).toBeNull();
+
+      deleteBtn?.click();
+      await nextTick();
+      expect(
+        loggedInMount.host.querySelector("[data-testid='delete-account-sheet']"),
+      ).not.toBeNull();
+    } finally {
+      loggedInMount.unmount();
     }
   });
 });
