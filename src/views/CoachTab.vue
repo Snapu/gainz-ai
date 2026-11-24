@@ -78,7 +78,7 @@ void scrollContainerRef;
       </div>
 
       <!-- Messages Stream -->
-      <template v-for="message in chatMessages" :key="message.id">
+      <template v-for="(message, index) in chatMessages" :key="message.id">
         <!-- User Bubble -->
         <div
           v-if="message.role === 'user'"
@@ -199,6 +199,26 @@ void scrollContainerRef;
               <pre class="overflow-x-auto whitespace-pre-wrap break-all text-xs max-h-48 rounded-xl bg-black/30 p-3 font-mono text-muted-foreground/70">{{ message.requestPayload }}</pre>
             </div>
           </div>
+
+          <!-- Quick Prompts (part of the latest coach response so they scroll with it) -->
+          <div
+            v-if="index === chatMessages.length - 1 && quickPrompts.length > 0"
+            class="flex flex-wrap gap-2 pt-1 w-full"
+          >
+            <UiButton
+              v-for="qp in quickPrompts"
+              :key="qp.id"
+              variant="chip"
+              size="xs"
+              :disabled="isLoading"
+              :title="qp.prompt"
+              :aria-label="qp.prompt"
+              @click="applyQuickPrompt(qp.prompt)"
+            >
+              <Sparkles class="w-3 h-3 text-primary shrink-0" />
+              <span class="truncate max-w-[240px]">{{ qp.label }}</span>
+            </UiButton>
+          </div>
         </div>
       </template>
 
@@ -241,26 +261,6 @@ void scrollContainerRef;
     <!-- Bottom Docked Actions & Input -->
     <div class="shrink-0 border-t border-white/5 bg-background/95 backdrop-blur-xl px-4 py-3 z-20 transition-all duration-200">
       <div class="w-full max-w-2xl mx-auto flex flex-col gap-3">
-        <!-- Quick Prompts -->
-        <div
-          v-if="!isKeyboardVisible && !userQuestion.trim() && quickPrompts.length > 0"
-          class="flex flex-wrap gap-2 py-1 w-full transition-all duration-200"
-        >
-          <UiButton
-            v-for="qp in quickPrompts"
-            :key="qp.id"
-            variant="chip"
-            size="xs"
-            :disabled="isLoading"
-            :title="qp.prompt"
-            :aria-label="qp.prompt"
-            @click="applyQuickPrompt(qp.prompt)"
-          >
-            <Sparkles class="w-3 h-3 text-primary shrink-0" />
-            <span class="truncate max-w-[240px]">{{ qp.label }}</span>
-          </UiButton>
-        </div>
-
         <div class="relative w-full">
           <UiTextarea
             v-model="userQuestion"
