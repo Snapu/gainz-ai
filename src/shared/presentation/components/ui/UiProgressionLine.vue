@@ -73,13 +73,13 @@ const validSessions = computed(() => {
 });
 
 const isWeightBased = computed(() => {
-  return validSessions.value.some((s) => s.sets.some((set) => set.weight != null));
+  return validSessions.value.some((s) => s.sets.some((set) => (set.weight ?? 0) > 0));
 });
 
 const isDurationBased = computed(() => {
   return (
     !isWeightBased.value &&
-    validSessions.value.some((s) => s.sets.some((set) => set.duration != null))
+    validSessions.value.some((s) => s.sets.some((set) => (set.duration ?? 0) > 0))
   );
 });
 

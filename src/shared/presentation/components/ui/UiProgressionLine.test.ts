@@ -125,4 +125,74 @@ describe("UiProgressionLine", () => {
 
     app.unmount();
   });
+
+  it("falls back to reps progression when duration or weight values are only zero", async () => {
+    const sessions = [
+      {
+        key: "s-1",
+        dateLabel: "14. Juli",
+        sets: [
+          { reps: 8, duration: 0, weight: 0 },
+          { reps: 10, duration: 0 },
+        ],
+      },
+      {
+        key: "s-2",
+        dateLabel: "24. Juli",
+        sets: [{ reps: 11 }, { reps: 12 }],
+      },
+    ];
+
+    const Host = defineComponent({
+      setup() {
+        return () => h(UiProgressionLine, { sessions });
+      },
+    });
+
+    const container = document.createElement("div");
+    const app = createApp(Host);
+    app.mount(container);
+    await nextTick();
+
+    const labels = Array.from(container.querySelectorAll("text.fill-foreground")).map((el) =>
+      el.textContent?.trim(),
+    );
+    expect(labels).toEqual(["8", "10", "11", "12"]);
+    expect(container.textContent).not.toContain("0s");
+
+    app.unmount();
+  });
+
+  it("stays weight-based when a session mixes bodyweight (weight: 0) with weighted sets", async () => {
+    const sessions = [
+      {
+        key: "s-1",
+        dateLabel: "14. Juli",
+        sets: [{ weight: 0, reps: 10 }],
+      },
+      {
+        key: "s-2",
+        dateLabel: "24. Juli",
+        sets: [{ weight: 10, reps: 8 }],
+      },
+    ];
+
+    const Host = defineComponent({
+      setup() {
+        return () => h(UiProgressionLine, { sessions });
+      },
+    });
+
+    const container = document.createElement("div");
+    const app = createApp(Host);
+    app.mount(container);
+    await nextTick();
+
+    const labels = Array.from(container.querySelectorAll("text.fill-foreground")).map((el) =>
+      el.textContent?.trim(),
+    );
+    expect(labels).toEqual(["0", "10"]);
+
+    app.unmount();
+  });
 });
