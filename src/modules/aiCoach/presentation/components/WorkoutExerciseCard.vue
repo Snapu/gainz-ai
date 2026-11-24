@@ -198,7 +198,7 @@ const formattedLoggedSets = computed(() =>
         <div class="flex flex-col divide-y divide-white/5 w-full">
           <!-- Render existing logs -->
           <div
-            v-for="({ log, formattedDuration }, idx) in formattedLoggedSets"
+            v-for="({ log, formattedDuration }) in formattedLoggedSets"
             :key="log.id"
             class="px-2.5 py-2 hover:bg-white/5 active:bg-white/15 transition-colors"
             @click.stop="emit('editLog', log)"
@@ -207,8 +207,7 @@ const formattedLoggedSets = computed(() =>
               class="grid grid-cols-3 gap-2 items-center w-full cursor-pointer transition-opacity active:opacity-70 group"
             >
               <!-- Column 1: Reps / Duration / Distance -->
-              <div class="flex items-baseline gap-2 min-w-0">
-                <span class="text-micro text-muted-foreground/50 tabular-nums shrink-0">#{{ idx + 1 }}</span>
+              <div class="flex items-baseline min-w-0">
                 <div v-if="log.reps != null" class="flex items-baseline min-w-0">
                    <span class="text-sm font-bold tabular-nums text-foreground">{{ log.reps }}</span>
                    <span class="text-xs font-semibold text-muted-foreground/70 ml-1">{{ t("common.reps") }}</span>
