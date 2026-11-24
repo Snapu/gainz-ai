@@ -213,6 +213,8 @@ export const en = {
     loading: "Loading your workout...",
     todaysWorkout: "Today's Workout",
     supersetAria: "Superset {index}",
+    previousExercise: "Previous exercise",
+    nextExercise: "Next exercise",
     restDayTitle: "Rest Day",
     restDayDesc: "No training scheduled for today.",
     trainAnyway: "Train Anyway",
@@ -225,7 +227,6 @@ export const en = {
     lastSessionSets: "{count} sets",
     lastSessionSetsDuration: "{count} sets, max {minutes} min",
     deck: {
-      logCustomExercise: "Log Custom Exercise",
       restOvertime: "Rest Overtime",
       rest: "Rest",
       workoutComplete: "Workout Complete",

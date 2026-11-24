@@ -912,4 +912,30 @@ describe("LogExerciseSheet", () => {
 
     app.unmount();
   });
+
+  it("falls back to default 120s rest timer when switching away from a prefilled planned exercise", async () => {
+    const container = document.createElement("div");
+    const app = createApp(LogExerciseSheet, {
+      open: true,
+      prefillData: { exerciseName: "Squat", reps: 5, weight: 100 },
+      restSeconds: 180,
+    });
+    app.mount(container);
+    await nextTick();
+    await nextTick();
+
+    selectedExerciseUpdater?.("Bicep Curl");
+    await nextTick();
+
+    const saveButton = Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Save Set"),
+    );
+    saveButton?.click();
+    await vi.waitFor(() => {
+      expect(startRestTimerMock).toHaveBeenCalledOnce();
+    });
+
+    expect(startRestTimerMock).toHaveBeenCalledWith(120);
+    app.unmount();
+  });
 });

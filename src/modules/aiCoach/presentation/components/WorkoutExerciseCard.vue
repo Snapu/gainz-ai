@@ -2,7 +2,6 @@
 import { ChevronRight, Info, Sparkles } from "@lucide/vue";
 import { computed } from "vue";
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
-import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 import UiProgressionLine, {
   type ProgressionSessionItem,
@@ -21,7 +20,7 @@ const props = defineProps<{
   exercise: DisplayExercise;
   isHighlighted?: boolean;
   headingLevel?: "h3" | "h4";
-  isSuperset?: boolean;
+  supersetLabel?: string;
   lastSessionSummary?: string | null;
   progressionData?: ProgressionSessionItem[] | null;
   loggedSets?: ExerciseLog[];
@@ -31,10 +30,6 @@ const emit = defineEmits<{
   (e: "search", exerciseName: string): void;
   (e: "editLog", log: ExerciseLog): void;
 }>();
-
-const isSupersetExercise = computed(() => {
-  return Boolean(props.isSuperset || props.exercise.supersetId);
-});
 
 const displayTarget = computed(() => {
   if (props.exercise.targetDistanceMeters != null) {
@@ -100,18 +95,17 @@ const formattedLoggedSets = computed(() =>
         <div class="flex items-center gap-2 flex-wrap min-w-0">
           <component
             :is="headingLevel ?? 'h3'"
-            class="text-lg font-bold tracking-tight text-foreground leading-snug transition-colors duration-300 break-words"
+            class="text-lg font-bold tracking-tight text-foreground leading-snug transition-colors duration-300 flex items-baseline gap-2 min-w-0"
           >
-            {{ exercise.exerciseName }}
+            <span
+              v-if="supersetLabel"
+              data-testid="superset-label-prefix"
+              class="text-primary font-black shrink-0"
+            >
+              {{ supersetLabel }}
+            </span>
+            <span class="min-w-0 break-words">{{ exercise.exerciseName }}</span>
           </component>
-
-          <UiBadge
-            v-if="isSupersetExercise"
-            variant="info"
-            class="px-1.5 py-0.5"
-          >
-            {{ t("coach.card.superset") }}
-          </UiBadge>
         </div>
         
         <button

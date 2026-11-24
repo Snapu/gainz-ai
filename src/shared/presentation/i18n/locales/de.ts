@@ -218,6 +218,8 @@ export const de: MessageSchema = {
     loading: "Training wird geladen...",
     todaysWorkout: "Heutiges Training",
     supersetAria: "Supersatz {index}",
+    previousExercise: "Vorherige Übung",
+    nextExercise: "Nächste Übung",
     restDayTitle: "Ruhetag",
     restDayDesc: "Heute steht kein Training auf dem Plan.",
     trainAnyway: "Trotzdem trainieren",
@@ -231,7 +233,6 @@ export const de: MessageSchema = {
     lastSessionSets: "{count} Sätze",
     lastSessionSetsDuration: "{count} Sätze, max. {minutes} Min.",
     deck: {
-      logCustomExercise: "Freie Übung eintragen",
       restOvertime: "Pause überschritten",
       rest: "Pause",
       workoutComplete: "Training abgeschlossen",

@@ -419,14 +419,6 @@ export function useHomeWorkoutViewModel() {
     return getActiveExerciseInGroup(group);
   });
 
-  const supersetAlternatives = computed<DisplayExercise[]>(() => {
-    const group = activeGroupForDeck.value;
-    const current = activeExerciseForDeck.value;
-    if (!group?.isSuperset || !current) return [];
-    const currentKey = exerciseNameKey(current.exerciseName);
-    return group.exercises.filter((ex) => exerciseNameKey(ex.exerciseName) !== currentKey);
-  });
-
   function selectSupersetExercise(exerciseName: string) {
     selectedSupersetExerciseName.value = exerciseName;
   }
@@ -479,7 +471,6 @@ export function useHomeWorkoutViewModel() {
     visibleGroupIndex,
     activeExerciseForDeck,
     activeExerciseProgress,
-    supersetAlternatives,
     selectedSupersetExerciseName: readonly(selectedSupersetExerciseName),
     selectSupersetExercise,
     handleDeckLogCurrent,

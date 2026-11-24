@@ -1,13 +1,5 @@
 <script setup lang="ts">
-import {
-  ArrowLeftRight,
-  Check,
-  CheckCircle2,
-  Play,
-  Plus,
-  RotateCcw,
-  SkipForward,
-} from "@lucide/vue";
+import { Check, CheckCircle2, Play, Plus, RotateCcw, SkipForward } from "@lucide/vue";
 import { useWakeLock } from "@vueuse/core";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
@@ -32,7 +24,6 @@ interface DeckProgress {
 const props = defineProps<{
   currentExercise?: DeckExercise | null;
   currentProgress?: DeckProgress | null;
-  supersetAlternatives?: DeckExercise[];
   isResting: boolean;
   restFormattedTime: string;
   isOvertime?: boolean;
@@ -46,7 +37,6 @@ const emit = defineEmits<{
   (e: "logCurrent"): void;
   (e: "logCustom"): void;
   (e: "skipRest"): void;
-  (e: "selectSupersetExercise", exerciseName: string): void;
 }>();
 
 // --- Exercise Duration Timer Logic ---
@@ -271,40 +261,7 @@ const emptyDeckLabel = computed(() => {
 <template>
   <div class="shrink-0 border-t border-white/5 bg-background/95 backdrop-blur-xl px-4 py-3 z-20 transition-all duration-200">
     <div class="w-full max-w-2xl mx-auto flex flex-col gap-3">
-      
-      <!-- Tier 1: Action Chips / Modifiers (Sized identically to CoachTab Quick Prompts) -->
-      <div
-        v-if="!isWorkoutComplete && !isRestDay && Boolean(currentExercise)"
-        class="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 w-full transition-all duration-200"
-      >
-        <!-- Superset Alternative Exercise Selector Chips -->
-        <UiButton
-          v-for="alt in supersetAlternatives"
-          :key="alt.exerciseName"
-          variant="chip"
-          size="xs"
-          data-testid="deck-superset-chip"
-          class="shrink-0"
-          @click="emit('selectSupersetExercise', alt.exerciseName)"
-        >
-          <ArrowLeftRight class="w-3.5 h-3.5 text-primary shrink-0" />
-          <span>{{ alt.exerciseName }}</span>
-        </UiButton>
-
-        <!-- Arbitrary Exercise Button (Shown when not in a full-width completion/rest state) -->
-        <UiButton
-          variant="chip"
-          size="xs"
-          data-testid="deck-custom-exercise"
-          class="shrink-0"
-          @click="emit('logCustom')"
-        >
-          <Plus class="w-3.5 h-3.5 text-primary shrink-0" />
-          <span>{{ t("home.deck.logCustomExercise") }}</span>
-        </UiButton>
-      </div>
-
-      <!-- Tier 2: Main Container (Visually matched to CoachTab Input Container) -->
+      <!-- Main Container (Visually matched to CoachTab Input Container) -->
       <div
         data-testid="deck-main-container"
         class="flex items-center justify-between gap-3 w-full min-h-[52px] rounded-xl border pl-4 pr-1.5 py-1.5 shadow-sm backdrop-blur-md transition-all duration-200"

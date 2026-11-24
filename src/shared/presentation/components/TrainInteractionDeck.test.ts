@@ -59,9 +59,7 @@ describe("TrainInteractionDeck", () => {
     app.unmount();
   });
 
-  it("emits logCustom when Log Custom Exercise chip is clicked and matches CoachTab chip dimensions", async () => {
-    let emittedLogCustom = false;
-
+  it("does not render Tier 1 custom exercise or superset chips during an active workout", async () => {
     const Host = defineComponent({
       setup() {
         return () =>
@@ -71,9 +69,6 @@ describe("TrainInteractionDeck", () => {
             isResting: false,
             restFormattedTime: "00:00",
             isOvertime: false,
-            onLogCustom: () => {
-              emittedLogCustom = true;
-            },
           });
       },
     });
@@ -83,17 +78,8 @@ describe("TrainInteractionDeck", () => {
     app.mount(container);
     await nextTick();
 
-    const customBtn = container.querySelector(
-      "button[data-testid='deck-custom-exercise']",
-    ) as HTMLButtonElement | null;
-    expect(customBtn).not.toBeNull();
-    expect(customBtn?.textContent).toContain("Log Custom Exercise");
-    expect(customBtn?.className).toContain("h-8");
-    expect(customBtn?.className).toContain("px-3");
-    customBtn?.click();
-    await nextTick();
-
-    expect(emittedLogCustom).toBe(true);
+    expect(container.querySelector("button[data-testid='deck-custom-exercise']")).toBeNull();
+    expect(container.querySelector("button[data-testid='deck-superset-chip']")).toBeNull();
     app.unmount();
   });
 
@@ -730,52 +716,6 @@ describe("TrainInteractionDeck", () => {
     await nextTick();
 
     expect(emittedLogCustom).toBe(true);
-    app.unmount();
-  });
-
-  it("renders superset alternative chip and emits selectSupersetExercise when clicked", async () => {
-    let selectedName = "";
-    const partnerExercise = {
-      exerciseName: "Barbell Row",
-      targetSets: 3,
-      targetReps: "8",
-      targetWeight: "70 kg",
-    };
-
-    const Host = defineComponent({
-      setup() {
-        return () =>
-          h(TrainInteractionDeck, {
-            currentExercise: defaultExercise,
-            currentProgress: { done: 0, isCompleted: false },
-            supersetAlternatives: [partnerExercise],
-            isResting: false,
-            restFormattedTime: "0:00",
-            isOvertime: false,
-            onSelectSupersetExercise: (name: string) => {
-              selectedName = name;
-            },
-          });
-      },
-    });
-
-    const container = document.createElement("div");
-    const app = createApp(Host);
-    app.mount(container);
-    await nextTick();
-
-    const supersetChip = container.querySelector(
-      "button[data-testid='deck-superset-chip']",
-    ) as HTMLButtonElement | null;
-    expect(supersetChip).not.toBeNull();
-    expect(supersetChip?.textContent).toContain("Barbell Row");
-    expect(supersetChip?.className).toContain("h-8");
-    expect(supersetChip?.className).toContain("px-3");
-
-    supersetChip?.click();
-    await nextTick();
-    expect(selectedName).toBe("Barbell Row");
-
     app.unmount();
   });
 

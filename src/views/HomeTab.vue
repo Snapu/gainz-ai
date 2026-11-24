@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Coffee, Hourglass, Sparkles, Timer } from "@lucide/vue";
+import { ChevronLeft, ChevronRight, Coffee, Hourglass, Sparkles, Timer } from "@lucide/vue";
 import { useDebounceFn, useThrottleFn } from "@vueuse/core";
 import { computed, nextTick, onActivated, onMounted, onUnmounted, ref, watch } from "vue";
 import {
@@ -7,6 +7,7 @@ import {
   type DisplayWorkoutGroup,
   WorkoutExerciseCard,
 } from "@/modules/aiCoach/presentation";
+import { exerciseNameKey } from "@/modules/sharedKernel/presentation";
 import EmptyState from "@/shared/presentation/components/EmptyState.vue";
 import TrainInteractionDeck from "@/shared/presentation/components/TrainInteractionDeck.vue";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
@@ -33,7 +34,6 @@ const {
   visibleGroupIndex,
   activeExerciseForDeck,
   activeExerciseProgress,
-  supersetAlternatives,
   selectedSupersetExerciseName,
   selectSupersetExercise,
   handleDeckLogCurrent,
@@ -136,6 +136,26 @@ const activeGroupIndex = computed(() => {
   const idx = allWorkoutGroups.value.findIndex((g) => !isGroupCompleted(g));
   return idx === -1 ? allWorkoutGroups.value.length - 1 : idx;
 });
+
+const visibleGroup = computed(() => {
+  return allWorkoutGroups.value?.[visibleGroupIndex.value] ?? null;
+});
+
+const canGoPrevGroup = computed(() => visibleGroupIndex.value > 0);
+const canGoNextGroup = computed(() => {
+  const total = allWorkoutGroups.value?.length ?? 0;
+  return visibleGroupIndex.value < total - 1;
+});
+
+function supersetLetter(index: number): string {
+  return String.fromCharCode(65 + index);
+}
+
+function isActiveSupersetExercise(exerciseName: string): boolean {
+  const activeName = activeExerciseForDeck.value?.exerciseName;
+  if (!activeName) return false;
+  return exerciseNameKey(activeName) === exerciseNameKey(exerciseName);
+}
 
 function resetProgrammaticScroll() {
   if (programmaticScrollTimeout) {
@@ -307,7 +327,10 @@ onActivated(() => {
               </div>
 
               <!-- Segmented Stepper Bar -->
-              <div class="flex items-center gap-2 w-full px-1 -my-2">
+              <div
+                data-testid="workout-stepper"
+                class="flex items-center gap-2 w-full px-1 -my-2"
+              >
                 <button
                   v-for="(group, gIdx) in allWorkoutGroups"
                   :key="group.id"
@@ -331,6 +354,74 @@ onActivated(() => {
                   />
                 </button>
               </div>
+
+              <!-- Workout Navigation & Superset Switcher -->
+              <div
+                data-testid="workout-nav-row"
+                class="mt-2 pb-1 flex items-center justify-between gap-2"
+              >
+                <button
+                  type="button"
+                  data-testid="workout-nav-prev"
+                  :disabled="!canGoPrevGroup"
+                  :aria-label="t('home.previousExercise')"
+                  @click="scrollToGroup(visibleGroupIndex - 1, true)"
+                  class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 border border-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background cursor-pointer shrink-0"
+                >
+                  <ChevronLeft class="w-4 h-4" />
+                </button>
+
+                <div
+                  v-if="visibleGroup?.isSuperset"
+                  data-testid="superset-switcher"
+                  class="flex items-center gap-2 min-w-0"
+                >
+                  <span class="text-micro text-muted-foreground shrink-0">
+                    {{ t("coach.card.superset") }}
+                  </span>
+                  <div
+                    role="group"
+                    :aria-label="t('coach.card.superset')"
+                    class="inline-flex items-center rounded-lg bg-white/5 p-0.5 border border-white/5 shrink-0"
+                  >
+                    <button
+                      v-for="(ex, exIdx) in visibleGroup.exercises"
+                      :key="ex.exerciseName"
+                      type="button"
+                      data-testid="superset-pill"
+                      :aria-pressed="isActiveSupersetExercise(ex.exerciseName)"
+                      :aria-label="`${t('coach.card.superset')} ${supersetLetter(exIdx)}: ${ex.exerciseName}`"
+                      @click="selectSupersetExercise(ex.exerciseName)"
+                      class="cursor-pointer rounded-lg px-2.5 py-0.5 text-xs font-bold tabular-nums transition-all duration-200 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      :class="
+                        isActiveSupersetExercise(ex.exerciseName)
+                          ? 'bg-primary/10 text-primary border border-primary/20'
+                          : 'text-muted-foreground border border-transparent hover:bg-white/5 hover:text-foreground'
+                      "
+                    >
+                      {{ supersetLetter(exIdx) }}
+                    </button>
+                  </div>
+                </div>
+                <span
+                  v-else
+                  data-testid="workout-group-counter"
+                  class="text-xs font-bold tabular-nums text-muted-foreground"
+                >
+                  {{ visibleGroupIndex + 1 }} / {{ allWorkoutGroups.length }}
+                </span>
+
+                <button
+                  type="button"
+                  data-testid="workout-nav-next"
+                  :disabled="!canGoNextGroup"
+                  :aria-label="t('home.nextExercise')"
+                  @click="scrollToGroup(visibleGroupIndex + 1, true)"
+                  class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 border border-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background cursor-pointer shrink-0"
+                >
+                  <ChevronRight class="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <!-- Swipe Gallery -->
@@ -351,7 +442,7 @@ onActivated(() => {
                   :data-exercise-name="exercise.exerciseName"
                   :exercise="exercise"
                   :is-highlighted="isHighlighted(gIndex, exIndex)"
-                  :is-superset="group.isSuperset"
+                  :superset-label="group.isSuperset ? supersetLetter(exIndex) : undefined"
                   :last-session-summary="getLastSessionSummary(exercise.exerciseName)"
                   :progression-data="getExerciseProgression(exercise.exerciseName)"
                   :logged-sets="getTodaysLogsForExercise(exercise.exerciseName)"
@@ -408,7 +499,6 @@ onActivated(() => {
     <TrainInteractionDeck
       :current-exercise="activeExerciseForDeck"
       :current-progress="activeExerciseProgress"
-      :superset-alternatives="supersetAlternatives"
       :is-resting="restTimerStore.isResting"
       :rest-formatted-time="restTimerStore.formattedTime"
       :target-rest-seconds="restTimerStore.targetRestSeconds"
@@ -419,7 +509,6 @@ onActivated(() => {
       @log-current="handleDeckLogCurrent"
       @log-custom="handleLogArbitrary"
       @skip-rest="skipRest"
-      @select-superset-exercise="selectSupersetExercise"
     />
   </div>
 </template>

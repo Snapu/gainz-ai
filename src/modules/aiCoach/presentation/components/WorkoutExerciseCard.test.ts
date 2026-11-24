@@ -193,7 +193,7 @@ describe("WorkoutExerciseCard", () => {
     app.unmount();
   });
 
-  it("renders superset badge when isSuperset is true or exercise has supersetId", async () => {
+  it("renders superset letter prefix instead of a Superset badge when supersetLabel is provided", async () => {
     const Host = defineComponent({
       setup() {
         return () =>
@@ -205,7 +205,7 @@ describe("WorkoutExerciseCard", () => {
               supersetId: "ss-1",
             },
             isHighlighted: true,
-            isSuperset: true,
+            supersetLabel: "A",
           });
       },
     });
@@ -215,13 +215,11 @@ describe("WorkoutExerciseCard", () => {
     app.mount(container);
     await nextTick();
 
+    const prefix = container.querySelector("[data-testid='superset-label-prefix']");
+    expect(prefix?.textContent?.trim()).toBe("A");
+    expect(prefix?.className).toContain("text-primary");
     expect(container.textContent).toContain("Incline DB Press");
-    expect(container.textContent).toContain("Superset");
-
-    const badgeEl = Array.from(container.querySelectorAll("div")).find(
-      (el) => el.textContent?.trim() === "Superset",
-    );
-    expect(badgeEl?.className).toContain("text-primary");
+    expect(container.textContent).not.toContain("Superset");
     app.unmount();
   });
 

@@ -388,8 +388,16 @@ async function saveLog() {
     (status) => {
       if (!props.logToEdit) {
         const DEFAULT_REST_SECONDS = 120; // 2 minutes generic fallback
+        const matchesPrefilledExercise =
+          !props.prefillData?.exerciseName ||
+          exerciseNameKey(formExerciseName.value) ===
+            exerciseNameKey(props.prefillData.exerciseName);
         restTimerStore.reset();
-        restTimerStore.start(props.restSeconds ?? DEFAULT_REST_SECONDS);
+        restTimerStore.start(
+          matchesPrefilledExercise
+            ? (props.restSeconds ?? DEFAULT_REST_SECONDS)
+            : DEFAULT_REST_SECONDS,
+        );
       }
       if (status === "queued-offline") {
         toast({

@@ -10,22 +10,13 @@ import {
 vi.mock("@/shared/presentation/components/TrainInteractionDeck.vue", () => ({
   default: {
     name: "TrainInteractionDeck",
-    props: ["currentExercise", "currentProgress", "supersetAlternatives", "isWorkoutComplete"],
-    emits: ["selectSupersetExercise", "logCurrent", "logCustom", "skipRest"],
+    props: ["currentExercise", "currentProgress", "isWorkoutComplete"],
+    emits: ["logCurrent", "logCustom", "skipRest"],
     template: `
       <div
         data-testid="train-interaction-deck-stub"
         :data-workout-complete="String(Boolean(isWorkoutComplete))"
-      >
-        <button
-          v-for="alt in supersetAlternatives"
-          :key="alt.exerciseName"
-          class="deck-superset-chip"
-          @click="$emit('selectSupersetExercise', alt.exerciseName)"
-        >
-          {{ alt.exerciseName }}
-        </button>
-      </div>
+      />
     `,
   },
 }));
@@ -34,9 +25,9 @@ vi.mock("@/modules/aiCoach/presentation", async (importOriginal) => {
   return {
     ...actual,
     WorkoutExerciseCard: {
-      props: ["exercise", "loggedSets"],
+      props: ["exercise", "loggedSets", "supersetLabel"],
       template:
-        "<div class='exercise-card'>{{ exercise?.exerciseName }} ({{ loggedSets?.length ?? 0 }})</div>",
+        "<div class='exercise-card' :data-superset-label='supersetLabel'>{{ exercise?.exerciseName }} ({{ loggedSets?.length ?? 0 }})</div>",
     },
   };
 });
@@ -57,7 +48,6 @@ const mockAllWorkoutGroups = ref<DisplayWorkoutGroup[] | null>(null);
 const mockVisibleGroupIndex = ref(0);
 const mockCompletedMap = ref(new Map<string, boolean>());
 const mockLogsByExercise = ref(new Map<string, { id: string }[]>());
-const mockSupersetAlternatives = ref<DisplayExercise[]>([]);
 const mockActiveExerciseForDeck = ref<DisplayExercise | null>(null);
 const mockSelectedSupersetExerciseName = ref<string | null>(null);
 const mockIsWorkoutComplete = ref(false);
@@ -93,7 +83,6 @@ vi.mock("@/views/composables/useHomeWorkoutViewModel", () => ({
     visibleGroupIndex: mockVisibleGroupIndex,
     activeExerciseForDeck: mockActiveExerciseForDeck,
     activeExerciseProgress: null,
-    supersetAlternatives: mockSupersetAlternatives,
     selectedSupersetExerciseName: mockSelectedSupersetExerciseName,
     selectSupersetExercise: mockSelectSupersetExercise,
     handleDeckLogCurrent: vi.fn(),
@@ -143,7 +132,9 @@ describe("HomeTab Stepper Highlights", () => {
     mockVisibleGroupIndex.value = 1;
     await nextTick();
 
-    const stepButtons = container.querySelectorAll("button[aria-label]");
+    const stepButtons = container.querySelectorAll(
+      "[data-testid='workout-stepper'] button[aria-label]",
+    );
     expect(stepButtons.length).toBe(3);
 
     // Group 0 (incomplete, not visible) should NOT have primary color or activeGroupIndex primary tint
@@ -177,7 +168,9 @@ describe("HomeTab Stepper Highlights", () => {
     mockVisibleGroupIndex.value = 0;
     await nextTick();
 
-    const stepButtons = container.querySelectorAll("button[aria-label]");
+    const stepButtons = container.querySelectorAll(
+      "[data-testid='workout-stepper'] button[aria-label]",
+    );
 
     // Group 0 is completed AND visible: emerald with ring
     const bar0 = stepButtons[0].querySelector("div");
@@ -221,7 +214,9 @@ describe("HomeTab Stepper Highlights", () => {
 
     mockGalleryLayout(gallery);
 
-    const stepButtons = container.querySelectorAll("button[aria-label]");
+    const stepButtons = container.querySelectorAll(
+      "[data-testid='workout-stepper'] button[aria-label]",
+    );
     (stepButtons[2] as HTMLButtonElement).click();
     await nextTick();
 
@@ -270,7 +265,9 @@ describe("HomeTab Stepper Highlights", () => {
     mockGalleryLayout(gallery);
 
     // Click step 2: initiates programmatic scroll to index 2
-    const stepButtons = container.querySelectorAll("button[aria-label]");
+    const stepButtons = container.querySelectorAll(
+      "[data-testid='workout-stepper'] button[aria-label]",
+    );
     (stepButtons[2] as HTMLButtonElement).click();
     await nextTick();
 
@@ -293,9 +290,6 @@ describe("HomeTab Stepper Highlights", () => {
       mockVisibleGroupIndex.value = 0;
       mockSelectedSupersetExerciseName.value = null;
       mockSelectSupersetExercise.mockClear();
-      mockSupersetAlternatives.value = [
-        { exerciseName: "Barbell Row", targetSets: 3, targetReps: "8" },
-      ];
       mockAllWorkoutGroups.value = [
         {
           id: "g-0",
@@ -330,9 +324,9 @@ describe("HomeTab Stepper Highlights", () => {
       cards[1].getBoundingClientRect = () =>
         ({ top: 350, height: 200, bottom: 550, left: 0, right: 400, width: 400 }) as DOMRect;
 
-      const chip = container.querySelector(".deck-superset-chip") as HTMLButtonElement;
-      expect(chip).not.toBeNull();
-      chip.click();
+      const pills = container.querySelectorAll<HTMLButtonElement>("[data-testid='superset-pill']");
+      expect(pills.length).toBe(2);
+      pills[1].click();
       await nextTick();
 
       expect(mockSelectSupersetExercise).toHaveBeenCalledWith("Barbell Row");
@@ -358,9 +352,9 @@ describe("HomeTab Stepper Highlights", () => {
       const scrollIntoViewSpy = vi.fn();
       cards[1].scrollIntoView = scrollIntoViewSpy;
 
-      const chip = container.querySelector(".deck-superset-chip") as HTMLButtonElement;
-      expect(chip).not.toBeNull();
-      chip.click();
+      const pills = container.querySelectorAll<HTMLButtonElement>("[data-testid='superset-pill']");
+      expect(pills.length).toBe(2);
+      pills[1].click();
       await nextTick();
 
       expect(mockSelectSupersetExercise).toHaveBeenCalledWith("Barbell Row");
@@ -550,7 +544,9 @@ describe("HomeTab Stepper Highlights", () => {
     app.mount(container);
     await nextTick();
 
-    const initialStepButtons = Array.from(container.querySelectorAll("button[aria-label]"));
+    const initialStepButtons = Array.from(
+      container.querySelectorAll("[data-testid='workout-stepper'] button[aria-label]"),
+    );
     const gallery = container.querySelector(".overflow-x-auto") as HTMLElement;
     const initialSlides = Array.from(gallery.children);
     const initialCards = Array.from(
@@ -568,7 +564,9 @@ describe("HomeTab Stepper Highlights", () => {
     mockAllWorkoutGroups.value = groupWorkout(workout.map((ex) => ({ ...ex })));
     await nextTick();
 
-    const nextStepButtons = Array.from(container.querySelectorAll("button[aria-label]"));
+    const nextStepButtons = Array.from(
+      container.querySelectorAll("[data-testid='workout-stepper'] button[aria-label]"),
+    );
     const nextSlides = Array.from(gallery.children);
     const nextCards = Array.from(container.querySelectorAll<HTMLElement>("[data-exercise-name]"));
 
@@ -634,5 +632,93 @@ describe("HomeTab Stepper Highlights", () => {
     expect(container.querySelector("main")?.textContent).not.toContain("Workout Complete");
 
     app.unmount();
+  });
+
+  describe("Header Workout Navigation & Superset Switcher", () => {
+    it("navigates between workout groups with prev/next buttons and displays group counter for non-superset exercises", async () => {
+      const container = document.createElement("div");
+      const app = createApp(HomeTab);
+      app.mount(container);
+      await nextTick();
+
+      const gallery = container.querySelector(".overflow-x-auto") as HTMLElement;
+      const scrollToSpy = vi.fn();
+      gallery.scrollTo = scrollToSpy;
+      mockGalleryLayout(gallery);
+
+      const prevBtn = container.querySelector<HTMLButtonElement>(
+        "[data-testid='workout-nav-prev']",
+      );
+      const nextBtn = container.querySelector<HTMLButtonElement>(
+        "[data-testid='workout-nav-next']",
+      );
+      const counter = container.querySelector("[data-testid='workout-group-counter']");
+
+      expect(prevBtn?.disabled).toBe(true);
+      expect(nextBtn?.disabled).toBe(false);
+      expect(counter?.textContent?.trim()).toBe("1 / 3");
+      expect(container.querySelector("[data-testid='superset-switcher']")).toBeNull();
+
+      nextBtn?.click();
+      await nextTick();
+
+      expect(mockVisibleGroupIndex.value).toBe(1);
+      expect(scrollToSpy).toHaveBeenCalledWith({ left: 376, behavior: "smooth" });
+      expect(prevBtn?.disabled).toBe(false);
+      expect(counter?.textContent?.trim()).toBe("2 / 3");
+
+      nextBtn?.click();
+      await nextTick();
+
+      expect(mockVisibleGroupIndex.value).toBe(2);
+      expect(nextBtn?.disabled).toBe(true);
+      expect(counter?.textContent?.trim()).toBe("3 / 3");
+
+      prevBtn?.click();
+      await nextTick();
+
+      expect(mockVisibleGroupIndex.value).toBe(1);
+
+      app.unmount();
+    });
+
+    it("renders Superset A/B switcher pills in the nav row and passes A/B labels to WorkoutExerciseCard", async () => {
+      mockActiveExerciseForDeck.value = {
+        exerciseName: "Bench Press",
+        targetSets: 3,
+        targetReps: "8",
+      };
+      mockAllWorkoutGroups.value = [
+        {
+          id: "g-0",
+          isSuperset: true,
+          exercises: [
+            { exerciseName: "Bench Press", targetSets: 3, targetReps: "8" },
+            { exerciseName: "Barbell Row", targetSets: 3, targetReps: "8" },
+          ],
+        },
+      ];
+
+      const container = document.createElement("div");
+      const app = createApp(HomeTab);
+      app.mount(container);
+      await nextTick();
+
+      const switcher = container.querySelector("[data-testid='superset-switcher']");
+      expect(switcher).not.toBeNull();
+      expect(switcher?.textContent).toContain("Superset");
+      expect(container.querySelector("[data-testid='workout-group-counter']")).toBeNull();
+
+      const pills = container.querySelectorAll<HTMLButtonElement>("[data-testid='superset-pill']");
+      expect(Array.from(pills).map((p) => p.textContent?.trim())).toEqual(["A", "B"]);
+      expect(pills[0].getAttribute("aria-pressed")).toBe("true");
+      expect(pills[1].getAttribute("aria-pressed")).toBe("false");
+
+      const cards = container.querySelectorAll<HTMLElement>("[data-exercise-name]");
+      expect(cards[0].getAttribute("data-superset-label")).toBe("A");
+      expect(cards[1].getAttribute("data-superset-label")).toBe("B");
+
+      app.unmount();
+    });
   });
 });

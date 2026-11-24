@@ -467,7 +467,7 @@ describe("useHomeWorkoutViewModel", () => {
   });
 
   describe("deck & superset selection", () => {
-    it("resolves activeExerciseForDeck, supersetAlternatives, and isHighlighted in sync with selectSupersetExercise and resets on set log", async () => {
+    it("resolves activeExerciseForDeck and isHighlighted in sync with selectSupersetExercise and resets on set log", async () => {
       const { nextTick } = await import("vue");
       const planStore = useTrainingPlanStore();
       const logsStore = useExerciseLogsStore();
@@ -510,7 +510,6 @@ describe("useHomeWorkoutViewModel", () => {
       // Initially points to first exercise in the superset group (index 0)
       expect(vm.visibleGroupIndex.value).toBe(0);
       expect(vm.activeExerciseForDeck.value?.exerciseName).toBe("Bench Press");
-      expect(vm.supersetAlternatives.value.map((e) => e.exerciseName)).toEqual(["Barbell Row"]);
       expect(vm.isHighlighted(0, 0)).toBe(true);
       expect(vm.isHighlighted(0, 1)).toBe(false);
       expect(vm.isHighlighted(1, 0)).toBe(false);
@@ -518,7 +517,6 @@ describe("useHomeWorkoutViewModel", () => {
       // Selecting the superset partner updates both the deck target and the highlighted card
       vm.selectSupersetExercise("Barbell Row");
       expect(vm.activeExerciseForDeck.value?.exerciseName).toBe("Barbell Row");
-      expect(vm.supersetAlternatives.value.map((e) => e.exerciseName)).toEqual(["Bench Press"]);
       expect(vm.isHighlighted(0, 0)).toBe(false);
       expect(vm.isHighlighted(0, 1)).toBe(true);
 
@@ -548,7 +546,6 @@ describe("useHomeWorkoutViewModel", () => {
       vm.visibleGroupIndex.value = 1;
       await nextTick();
       expect(vm.activeExerciseForDeck.value?.exerciseName).toBe("Lateral Raise");
-      expect(vm.supersetAlternatives.value).toEqual([]);
       expect(vm.isHighlighted(0, 0)).toBe(false);
       expect(vm.isHighlighted(1, 0)).toBe(true);
     });
