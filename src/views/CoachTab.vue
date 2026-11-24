@@ -203,7 +203,7 @@ void scrollContainerRef;
           <!-- Quick Prompts (part of the latest coach response so they scroll with it) -->
           <div
             v-if="index === chatMessages.length - 1 && quickPrompts.length > 0"
-            class="flex flex-wrap gap-2 pt-1 w-full"
+            class="flex flex-wrap justify-end gap-2 pt-1 w-full"
           >
             <UiButton
               v-for="qp in quickPrompts"

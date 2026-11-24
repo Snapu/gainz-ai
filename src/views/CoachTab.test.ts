@@ -161,6 +161,7 @@ describe("CoachTab.vue", () => {
       expect(chipButtons).toHaveLength(1);
       expect(mainEl?.contains(chipButtons[0])).toBe(true);
       expect(bottomSheetEl?.contains(chipButtons[0])).toBe(false);
+      expect(chipButtons[0].parentElement?.className).toContain("justify-end");
 
       (chipButtons[0] as HTMLButtonElement).click();
       expect(mockViewModel.applyQuickPrompt).toHaveBeenCalledWith("Show warmup sets");
