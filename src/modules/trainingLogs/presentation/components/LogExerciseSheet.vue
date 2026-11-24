@@ -22,6 +22,7 @@ import UiProgressionLine from "@/shared/presentation/components/ui/UiProgression
 import { useToast } from "@/shared/presentation/composables/useToast";
 import { t } from "@/shared/presentation/i18n";
 import { formatRelativeDays } from "@/shared/presentation/i18n/formatters";
+import { useLocale } from "@/shared/presentation/i18n/useLocale";
 
 const props = defineProps<{
   open: boolean;
@@ -47,6 +48,7 @@ const deloadStore = useDeloadStore();
 const logsStore = useExerciseLogsStore();
 const restTimerStore = useRestTimerStore();
 const { toast } = useToast();
+const { bcp47Locale } = useLocale();
 
 const { exerciseLogs } = storeToRefs(logsStore);
 
@@ -55,7 +57,17 @@ const internalOpen = computed({
   set: (val) => emit("update:open", val),
 });
 
-const WEIGHT_STEPS = [2.5, 5, 0.5] as const;
+const WEIGHT_STEPS = [0.5, 1, 2.5] as const;
+const DEFAULT_WEIGHT_STEP = 1;
+const DISTANCE_UNITS = ["m", "km"] as const;
+const DISTANCE_STEPS = { m: [10, 50, 100], km: [0.1, 0.5, 1] } as const;
+const DEFAULT_DISTANCE_STEP = { m: 50, km: 0.5 } as const;
+const DURATION_UNITS = ["min", "sec"] as const;
+const DURATION_STEPS = { min: [1, 5, 10], sec: [5, 15, 30] } as const;
+const DEFAULT_DURATION_STEP = { min: 1, sec: 5 } as const;
+
+type DistanceUnit = (typeof DISTANCE_UNITS)[number];
+type DurationUnit = (typeof DURATION_UNITS)[number];
 
 const formExerciseName = ref("");
 const formReps = ref<number | null>(null);
@@ -67,14 +79,39 @@ const isRpeEnabled = ref(false);
 const isApplyingPrefill = ref(false);
 const isProgressionExpanded = ref(false);
 
-const weightStep = ref<number>(2.5);
-const distanceUnit = ref<"m" | "km">("m");
-const durationUnit = ref<"min" | "sec">("min");
+const weightStep = ref<number>(DEFAULT_WEIGHT_STEP);
+const distanceUnit = ref<DistanceUnit>("m");
+const distanceStep = ref<number>(DEFAULT_DISTANCE_STEP.m);
+const durationUnit = ref<DurationUnit>("min");
+const durationStep = ref<number>(DEFAULT_DURATION_STEP.min);
 const showExtraMetrics = ref(false);
 const lastConfiguredExerciseName = ref("");
 
-const distanceStep = computed(() => (distanceUnit.value === "m" ? 50 : 0.5));
-const durationStep = computed(() => (durationUnit.value === "min" ? 1 : 5));
+const stepFormatter = computed(
+  () =>
+    new Intl.NumberFormat(bcp47Locale.value, {
+      useGrouping: false,
+      maximumFractionDigits: 2,
+    }),
+);
+
+function formatStepOption(step: number): string {
+  return stepFormatter.value.format(step);
+}
+
+const pillGroupClass =
+  "inline-flex items-center rounded-lg bg-white/5 p-0.5 border border-white/5 shrink-0";
+
+function pillButtonClass(active: boolean): string {
+  const base =
+    "cursor-pointer rounded-lg px-2 py-0.5 text-micro font-bold tabular-nums transition-all duration-200 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+  return active
+    ? `${base} bg-primary/10 text-primary border border-primary/20`
+    : `${base} text-muted-foreground border border-transparent hover:bg-white/5 hover:text-foreground`;
+}
+
+const activeDistanceSteps = computed(() => DISTANCE_STEPS[distanceUnit.value]);
+const activeDurationSteps = computed(() => DURATION_STEPS[durationUnit.value]);
 
 const isDumbbellExercise = computed(() => /kurzhantel|dumbbell/i.test(formExerciseName.value));
 
@@ -96,6 +133,8 @@ function applyDistanceAndDuration(
     distanceUnit.value =
       rawDistance != null && rawDistance >= 1000 && rawDistance % 100 === 0 ? "km" : "m";
     durationUnit.value = rawDuration != null && rawDuration > 0 && rawDuration < 1 ? "sec" : "min";
+    distanceStep.value = DEFAULT_DISTANCE_STEP[distanceUnit.value];
+    durationStep.value = DEFAULT_DURATION_STEP[durationUnit.value];
   }
 
   formDistance.value =
@@ -115,37 +154,26 @@ function applyDistanceAndDuration(
   showExtraMetrics.value = rawDistance != null || rawDuration != null;
 }
 
-function cycleWeightStep() {
-  const currentIdx = WEIGHT_STEPS.indexOf(weightStep.value as (typeof WEIGHT_STEPS)[number]);
-  weightStep.value = WEIGHT_STEPS[(currentIdx + 1) % WEIGHT_STEPS.length] ?? 2.5;
+function selectDistanceUnit(nextUnit: DistanceUnit) {
+  if (distanceUnit.value === nextUnit) return;
+  distanceUnit.value = nextUnit;
+  distanceStep.value = DEFAULT_DISTANCE_STEP[nextUnit];
+  if (formDistance.value == null) return;
+  formDistance.value =
+    nextUnit === "km"
+      ? Math.round(formDistance.value) / 1000
+      : Math.round(formDistance.value * 1000);
 }
 
-function toggleDistanceUnit() {
-  if (distanceUnit.value === "m") {
-    distanceUnit.value = "km";
-    if (formDistance.value != null) {
-      formDistance.value = Math.round(formDistance.value) / 1000;
-    }
-  } else {
-    distanceUnit.value = "m";
-    if (formDistance.value != null) {
-      formDistance.value = Math.round(formDistance.value * 1000);
-    }
-  }
-}
-
-function toggleDurationUnit() {
-  if (durationUnit.value === "min") {
-    durationUnit.value = "sec";
-    if (formDuration.value != null) {
-      formDuration.value = Math.round(formDuration.value * 60);
-    }
-  } else {
-    durationUnit.value = "min";
-    if (formDuration.value != null) {
-      formDuration.value = Math.round((formDuration.value / 60) * 100) / 100;
-    }
-  }
+function selectDurationUnit(nextUnit: DurationUnit) {
+  if (durationUnit.value === nextUnit) return;
+  durationUnit.value = nextUnit;
+  durationStep.value = DEFAULT_DURATION_STEP[nextUnit];
+  if (formDuration.value == null) return;
+  formDuration.value =
+    nextUnit === "sec"
+      ? Math.round(formDuration.value * 60)
+      : Math.round((formDuration.value / 60) * 100) / 100;
 }
 
 function applyFormData(data: ExerciseFormData | null | undefined) {
@@ -158,8 +186,8 @@ function applyFormData(data: ExerciseFormData | null | undefined) {
     lastConfiguredExerciseName.value = normalizedName;
   }
 
-  if (!isSameExercise) {
-    weightStep.value = 2.5;
+  if (normalizedName && !isSameExercise) {
+    weightStep.value = DEFAULT_WEIGHT_STEP;
   }
 
   if (data) {
@@ -215,8 +243,8 @@ watch(formExerciseName, (name) => {
     lastConfiguredExerciseName.value = normalizedName;
   }
 
-  if (!isSameExercise) {
-    weightStep.value = 2.5;
+  if (normalizedName && !isSameExercise) {
+    weightStep.value = DEFAULT_WEIGHT_STEP;
   }
 
   const lastLog = logsStore.lastLogForExercise(name);
@@ -463,65 +491,142 @@ async function deleteLog() {
       
       <!-- Metrics -->
       <div class="flex flex-col gap-3 shrink-0">
-        <div class="grid grid-cols-2 gap-4">
-          <UiNumberField v-model="formReps" :label="t('logSheet.reps')" :min="0" :step="1" />
+        <div class="grid grid-cols-[1fr_2fr] gap-4">
+          <UiNumberField
+            v-model="formReps"
+            layout="cross"
+            :show-rounding="false"
+            :label="t('logSheet.reps')"
+            :min="0"
+            :step="1"
+          />
           <UiNumberField
             v-model="formWeight"
+            layout="cross"
             :label="t('logSheet.weightKg')"
             :min="0"
             :step="weightStep"
             :description="isDumbbellExercise ? t('logSheet.dumbbellHint') : undefined"
           >
             <template #label-trailing>
-              <UiButton
-                variant="tonal"
-                size="micro"
-                data-testid="weight-step-toggle"
-                :aria-label="t('logSheet.cycleWeightStepAria')"
-                @click="cycleWeightStep"
+              <div
+                role="group"
+                :aria-label="t('logSheet.weightStepGroupAria')"
+                :class="pillGroupClass"
               >
-                ±{{ weightStep }}
-              </UiButton>
+                <button
+                  v-for="step in WEIGHT_STEPS"
+                  :key="step"
+                  type="button"
+                  data-testid="weight-step-option"
+                  :data-step="step"
+                  :aria-pressed="weightStep === step"
+                  @click="weightStep = step"
+                  :class="pillButtonClass(weightStep === step)"
+                >
+                  {{ formatStepOption(step) }}
+                </button>
+              </div>
             </template>
           </UiNumberField>
         </div>
 
-        <div v-if="showExtraMetrics" class="grid grid-cols-2 gap-4 animate-in fade-in duration-200">
+        <div v-if="showExtraMetrics" class="flex flex-col gap-4 animate-in fade-in duration-200">
           <UiNumberField
             v-model="formDistance"
+            layout="cross"
             :label="t('logSheet.distance')"
             :min="0"
             :step="distanceStep"
           >
             <template #label-trailing>
-              <UiButton
-                variant="tonal"
-                size="micro"
-                data-testid="distance-unit-toggle"
-                :aria-label="t('logSheet.toggleDistanceUnitAria')"
-                @click="toggleDistanceUnit"
-              >
-                {{ distanceUnit === 'm' ? `${t('common.m')} · ±50` : `${t('common.km')} · ±0.5` }}
-              </UiButton>
+              <div class="flex items-center gap-2 shrink-0">
+                <div
+                  role="group"
+                  :aria-label="t('logSheet.distanceUnitGroupAria')"
+                  :class="pillGroupClass"
+                >
+                  <button
+                    v-for="unit in DISTANCE_UNITS"
+                    :key="unit"
+                    type="button"
+                    data-testid="distance-unit-option"
+                    :data-unit="unit"
+                    :aria-pressed="distanceUnit === unit"
+                    @click="selectDistanceUnit(unit)"
+                    :class="[pillButtonClass(distanceUnit === unit), 'normal-case']"
+                  >
+                    {{ t(`common.${unit}`) }}
+                  </button>
+                </div>
+                <div
+                  role="group"
+                  :aria-label="t('logSheet.distanceStepGroupAria')"
+                  :class="pillGroupClass"
+                >
+                  <button
+                    v-for="step in activeDistanceSteps"
+                    :key="step"
+                    type="button"
+                    data-testid="distance-step-option"
+                    :data-step="step"
+                    :aria-pressed="distanceStep === step"
+                    @click="distanceStep = step"
+                    :class="pillButtonClass(distanceStep === step)"
+                  >
+                    {{ formatStepOption(step) }}
+                  </button>
+                </div>
+              </div>
             </template>
           </UiNumberField>
 
           <UiNumberField
             v-model="formDuration"
+            layout="cross"
             :label="t('logSheet.duration')"
             :min="0"
             :step="durationStep"
           >
             <template #label-trailing>
-              <UiButton
-                variant="tonal"
-                size="micro"
-                data-testid="duration-unit-toggle"
-                :aria-label="t('logSheet.toggleDurationUnitAria')"
-                @click="toggleDurationUnit"
-              >
-                {{ durationUnit === 'min' ? `${t('common.min')} · ±1` : `${t('common.sec')} · ±5` }}
-              </UiButton>
+              <div class="flex items-center gap-2 shrink-0">
+                <div
+                  role="group"
+                  :aria-label="t('logSheet.durationUnitGroupAria')"
+                  :class="pillGroupClass"
+                >
+                  <button
+                    v-for="unit in DURATION_UNITS"
+                    :key="unit"
+                    type="button"
+                    data-testid="duration-unit-option"
+                    :data-unit="unit"
+                    :aria-pressed="durationUnit === unit"
+                    @click="selectDurationUnit(unit)"
+                    :class="[pillButtonClass(durationUnit === unit), 'normal-case']"
+                  >
+                    {{ t(`common.${unit}`) }}
+                  </button>
+                </div>
+                <div
+                  role="group"
+                  :aria-label="t('logSheet.durationStepGroupAria')"
+                  :class="pillGroupClass"
+                >
+                  <button
+                    v-for="step in activeDurationSteps"
+                    :key="step"
+                    type="button"
+                    data-testid="duration-step-option"
+                    :data-step="step"
+                    :aria-pressed="durationStep === step"
+                    @click="durationStep = step"
+                    :class="pillButtonClass(durationStep === step)"
+                  >
+                    {{ formatStepOption(step) }}
+                  </button>
+                </div>
+              </div>
             </template>
           </UiNumberField>
         </div>
