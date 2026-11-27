@@ -28,6 +28,10 @@ const mockViewModel = {
   ]),
   quickPrompts: ref<QuickPromptItem[]>([]),
   isKeyboardVisible: ref(false),
+  showStarterBadge: ref(false),
+  starterRemainingCount: ref(30),
+  starterLimitCount: ref(30),
+  isCoachLocked: ref(false),
   handleAskQuestion: vi.fn(),
   applyQuickPrompt: vi.fn(),
   toggleScratchpad: vi.fn(),
@@ -40,6 +44,13 @@ const mockViewModel = {
 vi.mock("@/modules/aiCoach/presentation", () => ({
   useCoachChatViewModel: () => mockViewModel,
   WorkoutExerciseList: defineComponent({ template: "<div />" }),
+}));
+
+vi.mock("@/modules/billing/presentation", () => ({
+  UpgradeCard: defineComponent({
+    name: "UpgradeCard",
+    template: '<div data-testid="upgrade-card">With GainzAI Pro / Always Free Without Pro</div>',
+  }),
 }));
 
 import CoachTab from "./CoachTab.vue";
@@ -170,6 +181,63 @@ describe("CoachTab.vue", () => {
       mockViewModel.quickPrompts.value = [];
       mockViewModel.isKeyboardVisible.value = false;
       mockViewModel.userQuestion.value = "";
+      mounted.unmount();
+    }
+  });
+
+  it("renders starter remaining badge during FreeAllowance and displays UpgradeCard while keeping messages readable when locked", () => {
+    mockViewModel.showStarterBadge.value = true;
+    mockViewModel.starterRemainingCount.value = 18;
+    mockViewModel.starterLimitCount.value = 30;
+    mockViewModel.isCoachLocked.value = false;
+
+    const badgeMount = mountCoachTab();
+    try {
+      expect(badgeMount.text).toContain("18 / 30");
+      expect(badgeMount.host.querySelector('[data-testid="upgrade-card"]')).toBeNull();
+    } finally {
+      badgeMount.unmount();
+    }
+
+    mockViewModel.showStarterBadge.value = false;
+    mockViewModel.isCoachLocked.value = true;
+    const lockedMount = mountCoachTab();
+    try {
+      expect(lockedMount.text).toContain("Train Bench Press 3x8 today.");
+      expect(lockedMount.host.querySelector('[data-testid="upgrade-card"]')).not.toBeNull();
+      const sendBtn = lockedMount.host.querySelector(
+        'button[aria-label="Send Question"]',
+      ) as HTMLButtonElement | null;
+      expect(sendBtn).not.toBeNull();
+      expect(sendBtn?.disabled).toBe(true);
+    } finally {
+      mockViewModel.showStarterBadge.value = false;
+      mockViewModel.isCoachLocked.value = false;
+      mountedRestore();
+      lockedMount.unmount();
+    }
+
+    function mountedRestore() {
+      mockViewModel.starterRemainingCount.value = 30;
+      mockViewModel.starterLimitCount.value = 30;
+    }
+  });
+
+  it("hides empty state and quick prompt chips when isCoachLocked is true even with empty chatMessages", () => {
+    const initialMessages = mockViewModel.chatMessages.value;
+    mockViewModel.chatMessages.value = [];
+    mockViewModel.quickPrompts.value = [{ id: "qp-1", label: "Quick Swap", prompt: "Swap squat" }];
+    mockViewModel.isCoachLocked.value = true;
+
+    const mounted = mountCoachTab();
+    try {
+      expect(mounted.host.querySelector('[data-testid="upgrade-card"]')).not.toBeNull();
+      expect(mounted.host.querySelector('button[aria-label="Swap squat"]')).toBeNull();
+      expect(mounted.text).not.toContain("Ask your AI Strength Coach");
+    } finally {
+      mockViewModel.chatMessages.value = initialMessages;
+      mockViewModel.quickPrompts.value = [];
+      mockViewModel.isCoachLocked.value = false;
       mounted.unmount();
     }
   });

@@ -1,4 +1,5 @@
 import { errAsync, ResultAsync } from "neverthrow";
+import type { Entitlement } from "@/modules/billing/domain";
 import type { WorkoutSession } from "@/modules/trainingLogs/application";
 
 /**
@@ -24,6 +25,7 @@ export interface AiCoachService {
   classifyExercises(
     exerciseNames: string[],
     accessToken: string | undefined,
+    onEntitlementUpdate?: (entitlement: Entitlement) => void,
   ): ResultAsync<ExerciseCleanupResult, CoachingAdviceError>;
   getTodayLogsCount(session: WorkoutSession | null): number;
 }
@@ -39,8 +41,11 @@ export function classifyExerciseNames(
   service: AiCoachService,
   exerciseNames: string[],
   accessToken: string | undefined,
+  onEntitlementUpdate?: (entitlement: Entitlement) => void,
 ): ResultAsync<ExerciseCleanupResult, CoachingAdviceError> {
-  return service.classifyExercises(exerciseNames, accessToken);
+  return onEntitlementUpdate
+    ? service.classifyExercises(exerciseNames, accessToken, onEntitlementUpdate)
+    : service.classifyExercises(exerciseNames, accessToken);
 }
 
 export function getTodayLogsCount(service: AiCoachService, session: WorkoutSession | null): number {

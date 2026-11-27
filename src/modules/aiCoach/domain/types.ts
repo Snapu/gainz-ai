@@ -1,3 +1,4 @@
+import type { Entitlement } from "@/modules/billing/domain";
 import type { Event } from "@/modules/events/domain";
 import type { UserProfile } from "@/modules/profile/domain";
 import type { TrainingInsights } from "@/modules/trainingInsights/domain";
@@ -26,6 +27,7 @@ export interface CoachingAdviceRequest {
   activePlan?: TrainingPlan | null;
   completedSessionKeys?: ReadonlySet<string>;
   onStreamPreview?: (textSoFar: string) => void;
+  onEntitlementUpdate?: (entitlement: Entitlement) => void;
 }
 
 export type CoachingMessage = {
@@ -41,6 +43,7 @@ export type CoachingMessage = {
 
 export type CoachingAdviceError =
   | "unauthorized"
+  | "payment-required"
   | "rate-limit-exceeded"
   | "generate-content-stream-failed"
   | "coaching-request-failed"
@@ -48,13 +51,14 @@ export type CoachingAdviceError =
 
 export interface CoachingAdviceResult {
   advice: CoachingAdvice;
+  entitlement?: Entitlement;
   requestPayload?: string;
 }
 
 export type RecoverCoachingAdviceError = CoachingAdviceError | "not-found" | "server-failed";
 
 export type RecoverCoachingAdviceResult =
-  | { status: "completed"; advice: CoachingAdvice }
+  | { status: "completed"; advice: CoachingAdvice; entitlement?: Entitlement }
   | { status: "processing" };
 
 export interface ExerciseCleanupResult {
@@ -64,6 +68,7 @@ export interface ExerciseCleanupResult {
     secondaryMuscles?: Array<{ muscleGroup: string; contribution?: number }>;
     confidence: number;
   }>;
+  entitlement?: Entitlement;
 }
 
 export interface SuggestedFollowUp {

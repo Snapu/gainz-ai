@@ -1,4 +1,4 @@
-import { computed, onMounted, ref } from "vue";
+import { computed, getCurrentInstance, onMounted, ref } from "vue";
 import { TrainingPlan } from "@/modules/aiCoach/domain";
 import {
   getAiErrorDescription,
@@ -6,6 +6,7 @@ import {
   useCoachChatStore,
   useTrainingPlanStore,
 } from "@/modules/aiCoach/presentation";
+import { useBillingStore } from "@/modules/billing/presentation";
 import { useToast } from "@/shared/presentation/composables/useToast";
 import { t } from "@/shared/presentation/i18n";
 
@@ -13,10 +14,17 @@ export function usePlanTabViewModel() {
   const orchestratorStore = useAiOrchestratorStore();
   const chatStore = useCoachChatStore();
   const planStore = useTrainingPlanStore();
+  const billingStore = useBillingStore();
   const { toast } = useToast();
 
   const activePlan = computed(() => planStore.activePlan);
   const isLoading = computed(() => chatStore.isLoading);
+  const showStarterBadge = computed<boolean>(
+    () => billingStore.isFreeAllowance && billingStore.canUseCoach,
+  );
+  const starterRemainingCount = computed<number>(() => billingStore.freeCoachRemaining);
+  const starterLimitCount = computed<number>(() => billingStore.freeCoachLimit);
+  const isCoachLocked = computed<boolean>(() => !billingStore.canUseCoach);
 
   const activeSessionIndex = computed<number>(() => {
     if (!planStore.activePlan) return -1;
@@ -36,6 +44,7 @@ export function usePlanTabViewModel() {
   const isRegenerating = ref(false);
 
   async function regeneratePlan() {
+    if (isCoachLocked.value) return;
     isRegenerating.value = true;
     try {
       const result = await orchestratorStore.generateNewPlan();
@@ -48,6 +57,7 @@ export function usePlanTabViewModel() {
           });
         },
         (error) => {
+          if (error === "payment-required") return;
           toast({
             title: t("coach.errorTitle"),
             description: getAiErrorDescription(error),
@@ -79,15 +89,21 @@ export function usePlanTabViewModel() {
       });
   }
 
-  onMounted(() => {
-    orchestratorStore.initialize();
-  });
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      orchestratorStore.initialize();
+    });
+  }
 
   return {
     planStore,
     isLoading,
     activePlan,
     activeSessionIndex,
+    showStarterBadge,
+    starterRemainingCount,
+    starterLimitCount,
+    isCoachLocked,
     isPlanSessionCompleted,
     isRegenerating,
     regeneratePlan,

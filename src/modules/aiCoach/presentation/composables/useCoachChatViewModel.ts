@@ -14,6 +14,7 @@ import {
   useAiOrchestratorStore,
   useCoachChatStore,
 } from "@/modules/aiCoach/presentation";
+import { useBillingStore } from "@/modules/billing/presentation";
 import { useKeyboard } from "@/shared/presentation/composables/useKeyboard";
 import { useToast } from "@/shared/presentation/composables/useToast";
 import { t } from "@/shared/presentation/i18n";
@@ -111,6 +112,7 @@ export function useCoachChatViewModel(options: { isDev?: boolean } = {}) {
   const router = useRouter();
   const orchestratorStore = useAiOrchestratorStore();
   const chatStore = useCoachChatStore();
+  const billingStore = useBillingStore();
   const { toast } = useToast();
   const { isKeyboardVisible } = useKeyboard();
 
@@ -121,6 +123,12 @@ export function useCoachChatViewModel(options: { isDev?: boolean } = {}) {
 
   const isLoading = computed<boolean>(() => chatStore.isLoading);
   const streamingCoachMessage = computed<string>(() => chatStore.streamingCoachMessage);
+  const showStarterBadge = computed<boolean>(
+    () => billingStore.isFreeAllowance && billingStore.canUseCoach,
+  );
+  const starterRemainingCount = computed<number>(() => billingStore.freeCoachRemaining);
+  const starterLimitCount = computed<number>(() => billingStore.freeCoachLimit);
+  const isCoachLocked = computed<boolean>(() => !billingStore.canUseCoach);
 
   // Conversation stream containing user questions and coach responses
   const chatMessages = computed<ChatBubbleMessage[]>(() => {
@@ -146,7 +154,7 @@ export function useCoachChatViewModel(options: { isDev?: boolean } = {}) {
 
   function handleAskQuestion(): void {
     const question = userQuestion.value.trim();
-    if (!question || isLoading.value) return;
+    if (!question || isLoading.value || isCoachLocked.value) return;
     userQuestion.value = "";
     scrollToBottom();
     void orchestratorStore.requestAdvice(question).match(
@@ -154,6 +162,7 @@ export function useCoachChatViewModel(options: { isDev?: boolean } = {}) {
         scrollToBottom();
       },
       (error) => {
+        if (error === "payment-required") return;
         if (!userQuestion.value.trim()) {
           userQuestion.value = question;
         }
@@ -167,7 +176,7 @@ export function useCoachChatViewModel(options: { isDev?: boolean } = {}) {
   }
 
   function applyQuickPrompt(promptText: string): void {
-    if (isLoading.value) return;
+    if (isLoading.value || isCoachLocked.value) return;
     userQuestion.value = promptText;
   }
 
@@ -228,6 +237,7 @@ export function useCoachChatViewModel(options: { isDev?: boolean } = {}) {
         scrollToBottom(false);
       })
       .orTee((error) => {
+        if (error === "payment-required") return;
         toast({
           title: t("coach.errorTitle"),
           description: getAiErrorDescription(error),
@@ -295,6 +305,10 @@ export function useCoachChatViewModel(options: { isDev?: boolean } = {}) {
     chatMessages,
     quickPrompts,
     isKeyboardVisible,
+    showStarterBadge,
+    starterRemainingCount,
+    starterLimitCount,
+    isCoachLocked,
     handleAskQuestion,
     applyQuickPrompt,
     toggleScratchpad,

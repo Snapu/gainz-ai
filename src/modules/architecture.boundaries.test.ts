@@ -536,6 +536,8 @@ describe("Supabase Edge Function Boundaries", () => {
         if (
           importPath.includes("../ai-coach/") ||
           importPath.includes("../auth-token/") ||
+          importPath.includes("../billing/") ||
+          importPath.includes("../billing-webhook/") ||
           importPath.includes("../delete-account/")
         ) {
           violations.push(`${path.relative(SUPABASE_FUNCTIONS_ROOT, filePath)} -> ${importPath}`);

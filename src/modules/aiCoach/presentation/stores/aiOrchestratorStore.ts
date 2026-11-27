@@ -28,6 +28,7 @@ import {
 } from "@/modules/aiCoach/domain";
 import { createAiCoachService } from "@/modules/aiCoach/infrastructure";
 import { useAuthStore } from "@/modules/auth/presentation";
+import { type Entitlement, useBillingStore } from "@/modules/billing/presentation";
 import { useDeloadStore } from "@/modules/deload/presentation";
 import { useEventsStore } from "@/modules/events/presentation";
 import { useExerciseMuscleMapStore } from "@/modules/platform/presentation";
@@ -114,6 +115,7 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
   const planStore = useTrainingPlanStore();
 
   const authStore = useAuthStore();
+  const billingStore = useBillingStore();
   const userProfileStore = useUserProfileStore();
   const exerciseLogsStore = useExerciseLogsStore();
   const trainingSummaryStore = useTrainingSummaryStore();
@@ -211,6 +213,7 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     const next = pendingRequest;
     if (!next) return null;
     pendingRequest = null;
+    if (!billingStore.canUseCoach) return null;
     return runCoachingRequest(next.question, next.mode);
   }
 
@@ -288,6 +291,10 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
   function classifyExercisesIfNeeded(
     explicitAccessToken?: string,
   ): ResultAsync<void, "unauthorized"> {
+    if (!billingStore.canUseClassify) {
+      return okAsync(undefined);
+    }
+
     if (
       inFlightClassification &&
       (explicitAccessToken === undefined || inFlightClassification.token === explicitAccessToken)
@@ -303,8 +310,13 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     const tokenResult = explicitAccessToken ? okAsync(explicitAccessToken) : resolveAccessToken();
     const request = tokenResult
       .andThen((accessToken) =>
-        classifyExerciseNames(aiCoachService, unclassified, accessToken)
+        classifyExerciseNames(aiCoachService, unclassified, accessToken, (entitlement) => {
+          billingStore.applyEntitlement(entitlement);
+        })
           .andTee((cleanupResult) => {
+            if (cleanupResult.entitlement) {
+              billingStore.applyEntitlement(cleanupResult.entitlement);
+            }
             exerciseMuscleMapStore.applyCleanupResults(cleanupResult);
           })
           .map(() => undefined),
@@ -312,6 +324,9 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
       .orElse((error) => {
         if (error === "unauthorized") {
           return errAsync("unauthorized" as const);
+        }
+        if (error === "payment-required") {
+          return okAsync(undefined);
         }
         Sentry.captureMessage("AI store exercise pre-classification failed", {
           level: "warning",
@@ -378,13 +393,16 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
   }
 
   function handleCoachingSuccess(
-    result: { advice: CoachingAdvice; requestPayload?: string },
+    result: { advice: CoachingAdvice; entitlement?: Entitlement; requestPayload?: string },
     userMessageId: string,
     currentId: string,
     todayLogsCount: number,
     todayLogsChecksum: string,
     isFullPlanReset: boolean,
   ): void {
+    if (result.entitlement) {
+      billingStore.applyEntitlement(result.entitlement);
+    }
     if (import.meta.env.DEV && result.requestPayload) {
       chatStore.updateMessageContent(userMessageId, result.requestPayload);
     }
@@ -411,7 +429,11 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     };
   }
 
-  function applyRecoveredAdvice(pending: PendingCoachRequest, advice: CoachingAdvice): void {
+  function applyRecoveredAdvice(
+    pending: PendingCoachRequest,
+    advice: CoachingAdvice,
+    entitlement?: Entitlement,
+  ): void {
     if (pendingCoachRequest.value?.clientRequestId !== pending.clientRequestId) return;
     lastRecoveredRequestId = pending.clientRequestId;
     pendingCoachRequest.value = null;
@@ -419,7 +441,7 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     const todayLogsCount = getTodayLogsCount(aiCoachService, currentSession);
     const todayLogsChecksum = getTodayLogsChecksum(currentSession);
     handleCoachingSuccess(
-      { advice },
+      { advice, entitlement },
       pending.userMessageId,
       pending.sessionId,
       todayLogsCount,
@@ -479,6 +501,7 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     "not-found",
     "server-failed",
     "unauthorized",
+    "payment-required",
     "rate-limit-exceeded",
     "coaching-request-server-error",
     "generate-content-stream-failed",
@@ -506,7 +529,7 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
     const recoverRes = await recoverOnceWithAuthRetry(pending.clientRequestId, tokenRes.value);
     if (recoverRes.isOk()) {
       if (recoverRes.value.status === "completed") {
-        applyRecoveredAdvice(pending, recoverRes.value.advice);
+        applyRecoveredAdvice(pending, recoverRes.value.advice, recoverRes.value.entitlement);
         return { kind: "done", result: ok(undefined) };
       }
       return { kind: "processing" };
@@ -518,7 +541,9 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
 
     clearPendingCoachRequest(true);
     const mappedError: CoachingAdviceError =
-      recoverRes.error === "unauthorized" || recoverRes.error === "rate-limit-exceeded"
+      recoverRes.error === "unauthorized" ||
+      recoverRes.error === "payment-required" ||
+      recoverRes.error === "rate-limit-exceeded"
         ? recoverRes.error
         : "coaching-request-failed";
     return { kind: "done", result: err(mappedError) };
@@ -697,6 +722,9 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
           if (activeAttemptRequestId !== attemptClientRequestId) return;
           chatStore.streamingCoachMessage = textSoFar;
         },
+        onEntitlementUpdate: (entitlement) => {
+          billingStore.applyEntitlement(entitlement);
+        },
       },
       undefined,
       (retryClientRequestId) => {
@@ -842,6 +870,10 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
   ): ResultAsync<void, CoachingAdviceError> {
     initialize();
 
+    if (!billingStore.canUseCoach) {
+      return errAsync("payment-required");
+    }
+
     if (chatStore.isLoading) {
       if (!question && mode === "execution") {
         return okAsync(undefined);
@@ -855,6 +887,10 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
 
   function generateNewPlan(): ResultAsync<void, CoachingAdviceError> {
     initialize();
+
+    if (!billingStore.canUseCoach) {
+      return errAsync("payment-required");
+    }
 
     if (chatStore.isLoading) {
       if (isPlanningQueuedOrInFlight()) {
@@ -924,6 +960,7 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
   }
 
   function checkAndRegeneratePlanIfNeeded(plan: TrainingPlan): boolean {
+    if (!billingStore.canUseCoach) return false;
     const activeSession = resolveCurrentSession(exerciseLogsStore.exerciseLogs);
     const needsRegeneration =
       plan.isFullyCompleted(planStore.completedSessions) || plan.isExpired();
@@ -992,6 +1029,10 @@ export const useAiOrchestratorStore = defineStore("aiOrchestrator", () => {
       return okAsync(undefined);
     }
     pendingEnsureSessionAdvice = false;
+
+    if (!billingStore.canUseCoach) {
+      return okAsync(undefined);
+    }
 
     const activeSession = resolveCurrentSession(exerciseLogsStore.exerciseLogs);
     if (activeSession) {

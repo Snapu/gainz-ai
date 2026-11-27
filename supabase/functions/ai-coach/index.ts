@@ -1,4 +1,5 @@
 import { extractBearerToken, verifyGoogleCaller } from "../_shared/auth.ts";
+import { formatEntitlementPayload } from "../_shared/entitlement.ts";
 import { COACHING_MODELS, generateWithFallback, streamWithFallback } from "../_shared/gemini.ts";
 import {
   corsHeaders,
@@ -12,12 +13,13 @@ import {
   readJsonBodyWithLimit,
 } from "../_shared/http.ts";
 import {
-  consumeQuota,
+  type AuthorizeAiRequestRow,
+  authorizeAiRequest,
   deriveUsageDateFromResetAt,
   formatQuotaPayload,
-  type QuotaRow,
   refundQuota,
 } from "../_shared/quota.ts";
+import { deriveSubjectDigests, loadAbusePreventionPeppers } from "../_shared/subjectDigest.ts";
 import { executeClassifyAction } from "./classify.ts";
 import { postProcessCoachingAdvice } from "./postProcess.ts";
 import {
@@ -43,6 +45,8 @@ import {
 
 const DEFAULT_DAILY_COACH_LIMIT = 15;
 const DEFAULT_DAILY_CLASSIFY_LIMIT = 50;
+const DEFAULT_FREE_DAILY_COACH_LIMIT = 5;
+const DEFAULT_FREE_DAILY_CLASSIFY_LIMIT = 20;
 
 const SSE_RESPONSE_HEADERS: Record<string, string> = {
   ...corsHeaders,
@@ -56,12 +60,14 @@ export interface AiCoachServerConfig {
   geminiApiKey: string;
   supabaseUrl: string;
   serviceRoleKey: string;
+  abusePreventionPepper: string;
+  abusePreventionPepperPrevious: string | null;
 }
 
 export interface AiCoachHandlerDeps {
   getConfig?: () => AiCoachServerConfig | null;
   verifyCaller?: typeof verifyGoogleCaller;
-  consumeQuota?: typeof consumeQuota;
+  authorizeAiRequest?: typeof authorizeAiRequest;
   refundQuota?: typeof refundQuota;
   generateWithFallback?: typeof generateWithFallback;
   streamWithFallback?: typeof streamWithFallback;
@@ -80,14 +86,22 @@ function loadServerConfig(): AiCoachServerConfig | null {
   const geminiApiKey = getEnv("GEMINI_API_KEY");
   const supabaseUrl = getEnv("SUPABASE_URL");
   const serviceRoleKey = getEnv("SUPABASE_SERVICE_ROLE_KEY");
-  if (!geminiApiKey || !supabaseUrl || !serviceRoleKey) return null;
-  return { clientId, geminiApiKey, supabaseUrl, serviceRoleKey };
+  const peppers = loadAbusePreventionPeppers(getEnv);
+  if (!geminiApiKey || !supabaseUrl || !serviceRoleKey || !peppers) return null;
+  return {
+    clientId,
+    geminiApiKey,
+    supabaseUrl,
+    serviceRoleKey,
+    abusePreventionPepper: peppers.current,
+    abusePreventionPepperPrevious: peppers.previous,
+  };
 }
 
 async function executeCoachAction(
   dto: CoachActionRequestDto,
   geminiApiKey: string,
-  quota: QuotaRow,
+  authRow: AuthorizeAiRequestRow,
   streamFn: typeof streamWithFallback,
   onAccumulatedText?: (accumulatedText: string) => boolean | undefined,
 ) {
@@ -126,7 +140,8 @@ async function executeCoachAction(
 
   return {
     advice,
-    quota: formatQuotaPayload(quota),
+    quota: formatQuotaPayload(authRow),
+    entitlement: formatEntitlementPayload(authRow),
   };
 }
 
@@ -196,70 +211,89 @@ async function persistCoachCompletion(params: {
 async function settleCoachFailure(params: {
   dto: CoachActionRequestDto;
   userId: string;
+  subjectDigest: string;
+  refundFreeAllowance: boolean;
   clientRequestId?: string;
   config: AiCoachServerConfig;
   quotaUsageDate: string | undefined;
   deps: Pick<Required<AiCoachHandlerDeps>, "refundQuota" | "requestResults">;
   skipMarkFailed: boolean;
 }): Promise<void> {
-  const { dto, userId, clientRequestId, config, quotaUsageDate, deps, skipMarkFailed } = params;
-  const refundTask = Promise.resolve()
-    .then(() =>
-      deps.refundQuota(
-        config.supabaseUrl,
-        config.serviceRoleKey,
+  const {
+    dto,
+    userId,
+    subjectDigest,
+    refundFreeAllowance,
+    clientRequestId,
+    config,
+    quotaUsageDate,
+    deps,
+    skipMarkFailed,
+  } = params;
+
+  // Gate refund on an atomic processing -> failed transition when clientRequestId exists so a request
+  // cannot be refunded more than once across races or retries.
+  let shouldRefund = true;
+  if (clientRequestId && !skipMarkFailed) {
+    try {
+      const failedResult = await deps.requestResults.markFailed(
         userId,
-        dto.action,
-        quotaUsageDate,
-      ),
-    )
-    .catch((err) => {
-      console.error("Quota refund failed unexpectedly:", {
-        action: dto.action,
+        clientRequestId,
+        "coaching-request-failed",
+      );
+      if (!failedResult.ok) {
+        logRequestResultWriteFailure(
+          "AI failure status persistence failed:",
+          dto.action,
+          failedResult,
+        );
+        if (failedResult.error === "not-found") {
+          shouldRefund = false;
+        }
+      }
+    } catch (err) {
+      logRequestResultWriteFailure("AI failure status persistence failed:", dto.action, {
+        ok: false,
+        error: "request-error",
         errorName: extractErrorName(err),
       });
+    }
+  }
+
+  if (!shouldRefund) return;
+
+  try {
+    await deps.refundQuota(config.supabaseUrl, config.serviceRoleKey, {
+      userId,
+      kind: dto.action,
+      usageDate: quotaUsageDate,
+      subjectDigest,
+      refundFreeAllowance,
     });
-
-  const markFailedTask =
-    clientRequestId && !skipMarkFailed
-      ? Promise.resolve()
-          .then(() =>
-            deps.requestResults.markFailed(userId, clientRequestId, "coaching-request-failed"),
-          )
-          .then((failedResult) => {
-            if (!failedResult.ok) {
-              logRequestResultWriteFailure(
-                "AI failure status persistence failed:",
-                dto.action,
-                failedResult,
-              );
-            }
-          })
-          .catch((err) => {
-            logRequestResultWriteFailure("AI failure status persistence failed:", dto.action, {
-              ok: false,
-              error: "request-error",
-              errorName: extractErrorName(err),
-            });
-          })
-      : Promise.resolve();
-
-  await Promise.allSettled([refundTask, markFailedTask]);
+  } catch (err) {
+    console.error("Quota refund failed unexpectedly:", {
+      action: dto.action,
+      errorName: extractErrorName(err),
+    });
+  }
 }
 
 function createCoachStreamResponse(params: {
   dto: CoachActionRequestDto;
   userId: string;
+  subjectDigest: string;
   clientRequestId?: string;
   config: AiCoachServerConfig;
-  quota: QuotaRow;
+  authRow: AuthorizeAiRequestRow;
   quotaUsageDate: string | undefined;
   deps: Pick<
     Required<AiCoachHandlerDeps>,
     "refundQuota" | "streamWithFallback" | "requestResults" | "waitUntil"
   >;
 }): Response {
-  const { dto, userId, clientRequestId, config, quota, quotaUsageDate, deps } = params;
+  const { dto, userId, subjectDigest, clientRequestId, config, authRow, quotaUsageDate, deps } =
+    params;
+  const refundFreeAllowance = authRow.admitted_source === "free_allowance";
   const encoder = new TextEncoder();
   let streamClosedOrCancelled = false;
 
@@ -290,6 +324,8 @@ function createCoachStreamResponse(params: {
         await settleCoachFailure({
           dto,
           userId,
+          subjectDigest,
+          refundFreeAllowance,
           clientRequestId,
           config,
           quotaUsageDate,
@@ -306,7 +342,7 @@ function createCoachStreamResponse(params: {
             payload = await executeCoachAction(
               dto,
               config.geminiApiKey,
-              quota,
+              authRow,
               deps.streamWithFallback,
               createPreviewEmitter(emit),
             );
@@ -404,23 +440,29 @@ async function handleRecoverAction(
 async function executeClassifyWithRefund(
   dto: Extract<AiCoachRequestDto, { action: "classify" }>,
   userId: string,
+  subjectDigest: string,
   config: AiCoachServerConfig,
-  quota: QuotaRow,
+  authRow: AuthorizeAiRequestRow,
   quotaUsageDate: string | undefined,
   deps: Pick<Required<AiCoachHandlerDeps>, "refundQuota" | "generateWithFallback">,
 ): Promise<Response> {
   try {
-    return await executeClassifyAction(dto, config.geminiApiKey, quota, deps.generateWithFallback);
+    return await executeClassifyAction(
+      dto,
+      config.geminiApiKey,
+      authRow,
+      deps.generateWithFallback,
+    );
   } catch (err) {
     const errorName = err instanceof Error ? err.name : "UnknownError";
     console.error("AI execution failed:", { action: dto.action, errorName });
-    await deps.refundQuota(
-      config.supabaseUrl,
-      config.serviceRoleKey,
+    await deps.refundQuota(config.supabaseUrl, config.serviceRoleKey, {
       userId,
-      dto.action,
-      quotaUsageDate,
-    );
+      kind: dto.action,
+      usageDate: quotaUsageDate,
+      subjectDigest,
+      refundFreeAllowance: authRow.admitted_source === "free_allowance",
+    });
     return jsonResponse({ error: "coaching-request-failed" }, 502);
   }
 }
@@ -444,52 +486,70 @@ async function tryAcquireProcessingLock(
   return jsonResponse({ error: "quota-check-failed" }, 500);
 }
 
-async function consumeQuotaOrErrorResponse(
+async function authorizeOrErrorResponse(
   dto: Exclude<AiCoachRequestDto, { action: "recover" }>,
   userId: string,
+  subjectDigests: { subjectDigest: string; previousSubjectDigest: string | null },
   clientRequestId: string | undefined,
   config: AiCoachServerConfig,
-  deps: Pick<Required<AiCoachHandlerDeps>, "consumeQuota" | "requestResults">,
-): Promise<{ quota: QuotaRow } | { response: Response }> {
-  const dailyLimit =
+  deps: Pick<Required<AiCoachHandlerDeps>, "authorizeAiRequest" | "requestResults">,
+): Promise<{ authRow: AuthorizeAiRequestRow } | { response: Response }> {
+  const paidDailyLimit =
     dto.action === "coach"
       ? parsePositiveIntEnv("AI_DAILY_COACH_LIMIT", DEFAULT_DAILY_COACH_LIMIT)
       : parsePositiveIntEnv("AI_DAILY_CLASSIFY_LIMIT", DEFAULT_DAILY_CLASSIFY_LIMIT);
+  const freeDailyLimit =
+    dto.action === "coach"
+      ? parsePositiveIntEnv("AI_FREE_DAILY_COACH_LIMIT", DEFAULT_FREE_DAILY_COACH_LIMIT)
+      : parsePositiveIntEnv("AI_FREE_DAILY_CLASSIFY_LIMIT", DEFAULT_FREE_DAILY_CLASSIFY_LIMIT);
 
-  const quota = await deps.consumeQuota(
-    config.supabaseUrl,
-    config.serviceRoleKey,
+  const authRow = await deps.authorizeAiRequest(config.supabaseUrl, config.serviceRoleKey, {
     userId,
-    dto.action,
-    dailyLimit,
-  );
+    subjectDigest: subjectDigests.subjectDigest,
+    previousSubjectDigest: subjectDigests.previousSubjectDigest,
+    kind: dto.action,
+    paidDailyLimit,
+    freeDailyLimit,
+  });
 
-  if (!quota) {
+  if (!authRow) {
     if (clientRequestId) {
       await deps.requestResults.deleteEntry(userId, clientRequestId);
     }
     return { response: jsonResponse({ error: "quota-check-failed" }, 500) };
   }
 
-  if (!quota.allowed) {
+  if (!authRow.allowed) {
     if (clientRequestId) {
       await deps.requestResults.deleteEntry(userId, clientRequestId);
     }
-    if (quota.global_capped) {
+    if (authRow.denial_reason === "payment-required") {
+      return {
+        response: jsonResponse(
+          {
+            error: "payment-required",
+            entitlement: formatEntitlementPayload(authRow),
+          },
+          402,
+        ),
+      };
+    }
+    if (authRow.global_capped) {
       console.warn(`Global daily AI quota ceiling reached for action: ${dto.action}`);
     }
     return {
       response: jsonResponse(
         {
           error: "rate-limit-exceeded",
-          quota: formatQuotaPayload(quota),
+          quota: formatQuotaPayload(authRow),
+          entitlement: formatEntitlementPayload(authRow),
         },
         429,
       ),
     };
   }
 
-  return { quota };
+  return { authRow };
 }
 
 async function handleVerifiedCoachRequest(
@@ -499,7 +559,7 @@ async function handleVerifiedCoachRequest(
   deps: Required<
     Pick<
       AiCoachHandlerDeps,
-      | "consumeQuota"
+      | "authorizeAiRequest"
       | "refundQuota"
       | "generateWithFallback"
       | "streamWithFallback"
@@ -508,6 +568,7 @@ async function handleVerifiedCoachRequest(
     >
   >,
 ): Promise<Response> {
+  // Always allow recover BEFORE payment gating so already-admitted in-flight completions deliver.
   if (dto.action === "recover") {
     return handleRecoverAction(userId, dto.clientRequestId, deps.requestResults);
   }
@@ -526,29 +587,44 @@ async function handleVerifiedCoachRequest(
     if (lockErrorResponse) return lockErrorResponse;
   }
 
-  const quotaOutcome = await consumeQuotaOrErrorResponse(
+  const subjectDigests = await deriveSubjectDigests(userId, {
+    current: config.abusePreventionPepper,
+    previous: config.abusePreventionPepperPrevious,
+  });
+
+  const authOutcome = await authorizeOrErrorResponse(
     dto,
     userId,
+    subjectDigests,
     clientRequestId,
     config,
     deps,
   );
-  if ("response" in quotaOutcome) {
-    return quotaOutcome.response;
+  if ("response" in authOutcome) {
+    return authOutcome.response;
   }
 
-  const quotaUsageDate = deriveUsageDateFromResetAt(quotaOutcome.quota.reset_at);
+  const quotaUsageDate = deriveUsageDateFromResetAt(authOutcome.authRow.reset_at);
 
   if (dto.action === "classify") {
-    return executeClassifyWithRefund(dto, userId, config, quotaOutcome.quota, quotaUsageDate, deps);
+    return executeClassifyWithRefund(
+      dto,
+      userId,
+      subjectDigests.subjectDigest,
+      config,
+      authOutcome.authRow,
+      quotaUsageDate,
+      deps,
+    );
   }
 
   return createCoachStreamResponse({
     dto,
     userId,
+    subjectDigest: subjectDigests.subjectDigest,
     clientRequestId,
     config,
-    quota: quotaOutcome.quota,
+    authRow: authOutcome.authRow,
     quotaUsageDate,
     deps,
   });
@@ -593,7 +669,7 @@ export async function handleAiCoachRequest(
   }
 
   return handleVerifiedCoachRequest(parsedDto.data, verifiedUser.userId, config, {
-    consumeQuota: deps.consumeQuota ?? consumeQuota,
+    authorizeAiRequest: deps.authorizeAiRequest ?? authorizeAiRequest,
     refundQuota: deps.refundQuota ?? refundQuota,
     generateWithFallback: deps.generateWithFallback ?? generateWithFallback,
     streamWithFallback: deps.streamWithFallback ?? streamWithFallback,

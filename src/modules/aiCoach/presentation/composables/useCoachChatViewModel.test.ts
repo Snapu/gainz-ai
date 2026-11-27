@@ -3,6 +3,8 @@ import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp, defineComponent, h, KeepAlive } from "vue";
 import { useAiOrchestratorStore, useCoachChatStore } from "@/modules/aiCoach/presentation";
+import { useAuthStore } from "@/modules/auth/presentation";
+import { useBillingStore } from "@/modules/billing/presentation";
 import { extractUserQuestion, useCoachChatViewModel } from "./useCoachChatViewModel";
 
 const mockPush = vi.fn();
@@ -623,5 +625,53 @@ describe("useCoachChatViewModel", () => {
     expect(vm.streamingCoachMessage.value).toBe("Live progressive overload preview...");
     store.streamingCoachMessage = "";
     expect(vm.streamingCoachMessage.value).toBe("");
+  });
+
+  it("exposes starter counter while FreeAllowance active and suppresses error toasts on payment-required", async () => {
+    useAuthStore().refreshToken = "test-refresh-token";
+    const billingStore = useBillingStore();
+    billingStore.applyEntitlement({
+      source: "free_allowance",
+      canUseCoach: true,
+      canUseClassify: true,
+      evaluatedAt: "2026-11-26T12:00:00.000Z",
+      freeAllowance: { coachUsed: 6, coachLimit: 30, classifyUsed: 2, classifyLimit: 40 },
+      subscription: null,
+      inviteGrant: null,
+      hasCustomerPortal: false,
+    });
+
+    const vm = useCoachChatViewModel();
+    expect(vm.showStarterBadge.value).toBe(true);
+    expect(vm.starterRemainingCount.value).toBe(24);
+    expect(vm.starterLimitCount.value).toBe(30);
+    expect(vm.isCoachLocked.value).toBe(false);
+
+    mockToast.mockClear();
+    const orchestrator = useAiOrchestratorStore();
+    vi.spyOn(orchestrator, "requestAdvice").mockReturnValueOnce(errAsync("payment-required"));
+    vm.userQuestion.value = "How many sets today?";
+    vm.handleAskQuestion();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mockToast).not.toHaveBeenCalled();
+    expect(vm.userQuestion.value).toBe("");
+
+    billingStore.applyEntitlement({
+      source: "none",
+      canUseCoach: false,
+      canUseClassify: false,
+      evaluatedAt: "2026-11-26T12:05:00.000Z",
+      freeAllowance: { coachUsed: 30, coachLimit: 30, classifyUsed: 40, classifyLimit: 40 },
+      subscription: null,
+      inviteGrant: null,
+      hasCustomerPortal: false,
+    });
+    expect(vm.showStarterBadge.value).toBe(false);
+    expect(vm.isCoachLocked.value).toBe(true);
+
+    vm.applyQuickPrompt("Should not fill disabled textarea");
+    expect(vm.userQuestion.value).toBe("");
   });
 });

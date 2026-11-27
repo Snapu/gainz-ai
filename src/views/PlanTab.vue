@@ -5,6 +5,7 @@ import {
   usePlanTabViewModel,
   WorkoutExerciseList,
 } from "@/modules/aiCoach/presentation";
+import { UpgradeCard } from "@/modules/billing/presentation";
 import EmptyState from "@/shared/presentation/components/EmptyState.vue";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
@@ -17,6 +18,10 @@ const {
   isRegenerating,
   activePlan,
   activeSessionIndex,
+  showStarterBadge,
+  starterRemainingCount,
+  starterLimitCount,
+  isCoachLocked,
 
   isPlanSessionCompleted,
   regeneratePlan,
@@ -27,6 +32,14 @@ const {
 <template>
   <div class="h-full bg-background flex flex-col relative overflow-hidden">
     <main class="flex-1 w-full max-w-2xl mx-auto px-4 pt-4 pb-28 overflow-y-auto overscroll-y-contain no-scrollbar flex flex-col gap-5">
+      <div v-if="showStarterBadge" class="flex justify-end">
+        <UiBadge variant="info" class="uppercase tracking-wider tabular-nums">
+          {{ t("billing.starterRemaining", { remaining: starterRemainingCount, limit: starterLimitCount }) }}
+        </UiBadge>
+      </div>
+
+      <UpgradeCard v-if="isCoachLocked" />
+
       <template v-if="(isLoading && !activePlan) || isRegenerating">
         <UiTelemetryLoader :text="t('plan.loading')" />
       </template>
@@ -41,7 +54,7 @@ const {
               variant="secondary"
               size="xs"
               class="shrink-0"
-              :disabled="isLoading || isRegenerating"
+              :disabled="isLoading || isRegenerating || isCoachLocked"
               @click="regeneratePlan"
             >
               <RotateCw class="w-3.5 h-3.5 mr-1.5" :class="{ 'animate-spin': isRegenerating }" />
@@ -115,7 +128,7 @@ const {
           <UiButton 
             @click="regeneratePlan"
             class="w-full max-w-xs mt-4 rounded-xl font-semibold shadow-sm"
-            :disabled="isLoading"
+            :disabled="isLoading || isCoachLocked"
           >
             <RotateCw class="w-4 h-4 mr-2" :class="{ 'animate-spin': isLoading }" />
             {{ t("plan.generateNewPlan") }}

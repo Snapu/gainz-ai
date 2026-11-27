@@ -612,4 +612,26 @@ export const de: MessageSchema = {
     trashSheetFailedDesc:
       "Die Google-Drive-Tabelle konnte nicht in den Papierkorb verschoben werden. Prüfe deine Verbindung oder deaktiviere die Option und versuche es erneut.",
   },
+  billing: {
+    starterRemaining: "{remaining} / {limit} Starter-Anfragen",
+    upgradeTitle: "GainzAI Pro",
+    upgradeBadge: "Starter-Kontingent erreicht",
+    upgradeSubtitle:
+      "Deine 30 kostenlosen KI-Coaching-Briefings sind aufgebraucht. Dein Trainingslogbuch, dein aktiver Plan und deine Insights bleiben vollständig nutzbar.",
+    priceLabel: "7,99 € / Monat inkl. MwSt., monatlich kündbar",
+    proHeading: "Mit GainzAI Pro",
+    proFeatureCoach: "KI-Krafttrainer & Belastungs-/RPE-Analyse",
+    proFeaturePlan: "Automatische 2-Wochen-Mesozyklus-Planung",
+    proFeatureTargets: "Adaptive Gewichts-, Wiederholungs- & Progressionsziele",
+    proFeatureChat: "Direkte Plan-Anpassungen im Chat bei Zeitmangel oder Beschwerden",
+    proFeatureBriefings: "Proaktive Session-Briefings beim Öffnen der App",
+    freeHeading: "Ohne Pro immer kostenlos",
+    freeFeatureLog: "Manuelles Workout-Logging (Sätze, Wdh., Gewicht, RPE)",
+    freeFeatureHistory: "Gesamte Trainingshistorie & aktiver Trainingsplan",
+    freeFeatureTimer: "Pausentimer & Supersatz-Tracking",
+    freeFeatureSheets: "Google-Sheets-Sync in deinem Drive & Offline-Warteschlange",
+    freeFeatureInsights: "Trainingswissenschaftliche Insights (ACWR, e1RM, Volumen-Landmarks)",
+    billingNotice:
+      "Abrechnung, Rechnungen und Kündigung laufen sicher über Stripe / Link (erscheint als LINK.COM* auf dem Kontoauszug).",
+  },
 };

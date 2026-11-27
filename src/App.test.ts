@@ -8,6 +8,8 @@ import {
 const pushMock = vi.fn(() => Promise.resolve());
 const postMessageMock = vi.fn();
 const clearPendingRequestMock = vi.fn();
+const fetchEntitlementMock = vi.fn();
+const clearBillingMock = vi.fn();
 const refreshLogsMock = vi.fn();
 const handleAuthErrorMock = vi.fn(async () => true);
 const watcherDisposedMock = vi.fn();
@@ -63,6 +65,13 @@ vi.mock("vue-router", () => ({
 vi.mock("@/modules/aiCoach/presentation", () => ({
   useAiOrchestratorStore: () => ({
     clearPendingRequest: clearPendingRequestMock,
+  }),
+}));
+
+vi.mock("@/modules/billing/presentation", () => ({
+  useBillingStore: () => ({
+    fetchEntitlement: fetchEntitlementMock,
+    clear: clearBillingMock,
   }),
 }));
 
@@ -168,6 +177,33 @@ describe("App.vue", () => {
       await nextTick();
 
       expect(watcherDisposedMock).toHaveBeenCalledTimes(1);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("refreshes billing entitlement on consent + online events and clears billing state on sign-out", async () => {
+    const mounted = mountApp();
+    try {
+      await nextTick();
+      expect(fetchEntitlementMock).not.toHaveBeenCalled();
+
+      useLegalConsent().acceptLegalConsent("2026-11-22T20:00:00.000Z");
+      await nextTick();
+      expect(fetchEntitlementMock).toHaveBeenCalledTimes(1);
+
+      window.dispatchEvent(new Event("online"));
+      expect(fetchEntitlementMock).toHaveBeenCalledTimes(2);
+
+      authState.isLoggedIn = false;
+      await nextTick();
+
+      expect(clearPendingRequestMock).toHaveBeenCalledTimes(1);
+      expect(clearBillingMock).toHaveBeenCalledTimes(1);
+
+      // Online listener disposed after stopping consented services
+      window.dispatchEvent(new Event("online"));
+      expect(fetchEntitlementMock).toHaveBeenCalledTimes(2);
     } finally {
       mounted.unmount();
     }

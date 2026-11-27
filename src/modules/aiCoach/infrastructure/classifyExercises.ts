@@ -1,6 +1,8 @@
 import * as Sentry from "@sentry/vue";
 import { errAsync, okAsync, ResultAsync } from "neverthrow";
 import { z } from "zod";
+import type { Entitlement } from "@/modules/billing/domain";
+import { parseEntitlement } from "@/modules/billing/infrastructure";
 import { VALID_MUSCLE_GROUPS } from "@/modules/sharedKernel/application";
 import type { CoachingAdviceError, ExerciseCleanupResult } from "../domain/types";
 import { AiEdgeHttpError, postAiEdgeFunction } from "./aiEdgeClient";
@@ -25,13 +27,14 @@ const exerciseCleanupValidationSchema = z.object({
 
 const classifyEndpointResponseSchema = z.object({
   text: z.string().min(1),
+  entitlement: z.unknown().optional(),
 });
 
 async function executeClassifyRequest(
   exerciseNames: string[],
   accessToken: string,
 ): Promise<ExerciseCleanupResult> {
-  const json = await postAiEdgeFunction<{ text: string }>({
+  const json = await postAiEdgeFunction<unknown>({
     accessToken,
     body: {
       action: "classify",
@@ -42,7 +45,14 @@ async function executeClassifyRequest(
   });
 
   const response = classifyEndpointResponseSchema.parse(json);
-  return exerciseCleanupValidationSchema.parse(JSON.parse(response.text)) as ExerciseCleanupResult;
+  const parsed = exerciseCleanupValidationSchema.parse(
+    JSON.parse(response.text),
+  ) as ExerciseCleanupResult;
+  const entitlement = parseEntitlement(response.entitlement) ?? undefined;
+  return {
+    ...parsed,
+    ...(entitlement ? { entitlement } : {}),
+  };
 }
 
 /**
@@ -52,6 +62,7 @@ async function executeClassifyRequest(
 export function classifyExercises(
   exerciseNames: string[],
   accessToken: string | undefined,
+  onEntitlementUpdate?: (entitlement: Entitlement) => void,
 ): ResultAsync<ExerciseCleanupResult, CoachingAdviceError> {
   if (!accessToken) return errAsync("unauthorized");
   if (exerciseNames.length === 0) return okAsync({ classifications: [] });
@@ -61,7 +72,15 @@ export function classifyExercises(
     (error): CoachingAdviceError => {
       if (error instanceof AiEdgeHttpError) {
         if (error.status === 401) return "unauthorized";
-        if (error.status === 429) return "rate-limit-exceeded";
+        if (error.status === 402 || error.status === 429) {
+          const body = error.body;
+          const updated =
+            body && typeof body === "object"
+              ? parseEntitlement((body as { entitlement?: unknown }).entitlement)
+              : null;
+          if (updated) onEntitlementUpdate?.(updated);
+          return error.status === 402 ? "payment-required" : "rate-limit-exceeded";
+        }
       }
       console.error("Exercise classification failed:", error);
       Sentry.captureException(error, {
@@ -70,5 +89,9 @@ export function classifyExercises(
       });
       return "coaching-request-failed";
     },
-  );
+  ).andTee((result) => {
+    if (result.entitlement) {
+      onEntitlementUpdate?.(result.entitlement);
+    }
+  });
 }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ArrowRight, ArrowUp, ChevronDown, Copy, Dumbbell, Sparkles } from "@lucide/vue";
 import { useCoachChatViewModel, WorkoutExerciseList } from "@/modules/aiCoach/presentation";
+import { UpgradeCard } from "@/modules/billing/presentation";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
@@ -19,6 +20,10 @@ const {
   chatMessages,
   quickPrompts,
   isKeyboardVisible,
+  showStarterBadge,
+  starterRemainingCount,
+  starterLimitCount,
+  isCoachLocked,
   handleAskQuestion,
   applyQuickPrompt,
   toggleScratchpad,
@@ -39,6 +44,12 @@ void scrollContainerRef;
       ref="scrollContainerRef"
       class="flex-1 min-h-0 px-4 pt-4 pb-4 overflow-y-auto overscroll-y-contain no-scrollbar flex flex-col gap-4 w-full max-w-2xl mx-auto"
     >
+      <div v-if="showStarterBadge" class="flex justify-end">
+        <UiBadge variant="info" class="uppercase tracking-wider tabular-nums">
+          {{ t("billing.starterRemaining", { remaining: starterRemainingCount, limit: starterLimitCount }) }}
+        </UiBadge>
+      </div>
+
       <!-- Telemetry Loader -->
       <UiTelemetryLoader
         v-if="isLoading && !streamingCoachMessage && chatMessages.length === 0"
@@ -47,7 +58,7 @@ void scrollContainerRef;
 
       <!-- Empty State -->
       <div
-        v-else-if="!isLoading && !streamingCoachMessage && chatMessages.length === 0"
+        v-else-if="!isLoading && !streamingCoachMessage && chatMessages.length === 0 && !isCoachLocked"
         class="flex-1 flex flex-col items-center justify-center text-center p-6 gap-5 my-auto animate-in fade-in duration-300"
       >
         <div class="w-16 h-16 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-sm">
@@ -65,7 +76,7 @@ void scrollContainerRef;
             :key="qp.id"
             variant="chip"
             size="xs"
-            :disabled="isLoading"
+            :disabled="isLoading || isCoachLocked"
             :title="qp.prompt"
             :aria-label="qp.prompt"
             class="text-foreground"
@@ -202,7 +213,7 @@ void scrollContainerRef;
 
           <!-- Quick Prompts (part of the latest coach response so they scroll with it) -->
           <div
-            v-if="index === chatMessages.length - 1 && quickPrompts.length > 0"
+            v-if="index === chatMessages.length - 1 && quickPrompts.length > 0 && !isCoachLocked"
             class="flex flex-wrap justify-end gap-2 pt-1 w-full"
           >
             <UiButton
@@ -210,7 +221,7 @@ void scrollContainerRef;
               :key="qp.id"
               variant="chip"
               size="xs"
-              :disabled="isLoading"
+              :disabled="isLoading || isCoachLocked"
               :title="qp.prompt"
               :aria-label="qp.prompt"
               @click="applyQuickPrompt(qp.prompt)"
@@ -256,6 +267,8 @@ void scrollContainerRef;
           <span class="text-xs text-muted-foreground/80 font-medium ml-1.5">{{ t("coach.thinking") }}</span>
         </div>
       </div>
+
+      <UpgradeCard v-if="isCoachLocked" />
     </main>
 
     <!-- Bottom Docked Actions & Input -->
@@ -267,7 +280,7 @@ void scrollContainerRef;
             auto-resize
             rows="1"
             enterkeyhint="send"
-            :disabled="isLoading"
+            :disabled="isLoading || isCoachLocked"
             :placeholder="t('coach.inputPlaceholder')"
             class="min-h-[52px] max-h-36 py-3.5 pl-4 pr-14 text-base placeholder:text-muted-foreground/60 placeholder:truncate leading-normal"
             @keydown.enter.exact.prevent="handleAskQuestion"
@@ -275,10 +288,10 @@ void scrollContainerRef;
           <UiButton
             type="button"
             size="icon"
-            :variant="userQuestion.trim() ? 'default' : 'secondary'"
+            :variant="userQuestion.trim() && !isCoachLocked ? 'default' : 'secondary'"
             class="absolute right-1.5 bottom-1.5 h-10 w-10 rounded-full active:scale-95 transition-all"
-            :class="!userQuestion.trim() ? 'opacity-40' : 'shadow-sm'"
-            :disabled="!userQuestion.trim() || isLoading"
+            :class="!userQuestion.trim() || isCoachLocked ? 'opacity-40' : 'shadow-sm'"
+            :disabled="!userQuestion.trim() || isLoading || isCoachLocked"
             @click="handleAskQuestion"
             :aria-label="t('coach.sendAria')"
           >

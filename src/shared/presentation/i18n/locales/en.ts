@@ -606,6 +606,28 @@ export const en = {
     trashSheetFailedDesc:
       "Failed to move your Google Drive spreadsheet to trash. Check your connection or uncheck that option and try again.",
   },
+  billing: {
+    starterRemaining: "{remaining} / {limit} starter requests",
+    upgradeTitle: "GainzAI Pro",
+    upgradeBadge: "Starter limit reached",
+    upgradeSubtitle:
+      "Your 30 complimentary AI coaching briefings are used. Your workouts, training plan, and calculated insights remain fully accessible.",
+    priceLabel: "€7.99 / month incl. VAT, cancel monthly",
+    proHeading: "With GainzAI Pro",
+    proFeatureCoach: "AI strength coach & technique/RPE analysis",
+    proFeaturePlan: "Automated 2-week mesocycle planning",
+    proFeatureTargets: "Adaptive load, rep, and progression targets",
+    proFeatureChat: "Instant chat adjustments for injuries or schedule swaps",
+    proFeatureBriefings: "Proactive session briefings on app open",
+    freeHeading: "Always Free Without Pro",
+    freeFeatureLog: "Manual workout logging (sets, reps, weight, RPE)",
+    freeFeatureHistory: "Complete workout history & active training plan",
+    freeFeatureTimer: "Rest timer & superset tracking",
+    freeFeatureSheets: "Private Google Sheets sync & offline queue",
+    freeFeatureInsights: "Sports-science insights (ACWR, e1RM, volume landmarks)",
+    billingNotice:
+      "Checkout & invoicing are processed securely via Stripe / Link (appears as LINK.COM* on your statement).",
+  },
 };
 
 type DeepStringRecord<T> = {

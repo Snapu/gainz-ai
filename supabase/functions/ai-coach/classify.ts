@@ -1,10 +1,11 @@
+import { formatEntitlementPayload } from "../_shared/entitlement.ts";
 import {
   CLASSIFICATION_MODELS,
   type GenerateWithFallbackOptions,
   generateWithFallback,
 } from "../_shared/gemini.ts";
 import { jsonResponse } from "../_shared/http.ts";
-import { formatQuotaPayload, type QuotaRow } from "../_shared/quota.ts";
+import { type AuthorizeAiRequestRow, formatQuotaPayload } from "../_shared/quota.ts";
 import { sanitizePromptText } from "./prompt.ts";
 import {
   type ClassifyActionRequestDto,
@@ -38,7 +39,7 @@ Important rules:
 export async function executeClassifyAction(
   dto: ClassifyActionRequestDto,
   geminiApiKey: string,
-  quota: QuotaRow,
+  authRow: AuthorizeAiRequestRow,
   generateFn: <T>(
     options: GenerateWithFallbackOptions<T>,
   ) => Promise<{ data: T; model: string }> = generateWithFallback,
@@ -57,6 +58,7 @@ export async function executeClassifyAction(
 
   return jsonResponse({
     text: JSON.stringify(result.data),
-    quota: formatQuotaPayload(quota),
+    quota: formatQuotaPayload(authRow),
+    entitlement: formatEntitlementPayload(authRow),
   });
 }

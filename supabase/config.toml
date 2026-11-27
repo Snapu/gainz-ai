@@ -29,3 +29,8 @@ entrypoint = "./functions/ai-coach/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/delete-account/index.ts"
+
+[functions.billing]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/billing/index.ts"

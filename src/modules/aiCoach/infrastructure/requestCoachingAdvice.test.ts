@@ -780,4 +780,109 @@ describe("requestCoachingAdvice", () => {
     ]);
     expect(() => coachActionRequestDtoSchema.parse(dto)).not.toThrow();
   });
+
+  it("maps HTTP 402 to payment-required without Sentry capture and emits updated entitlement", async () => {
+    const entitlement = {
+      source: "free_allowance" as const,
+      canUseCoach: false,
+      canUseClassify: true,
+      evaluatedAt: "2026-11-26T12:00:00.000Z",
+      freeAllowance: { coachUsed: 30, coachLimit: 30, classifyUsed: 10, classifyLimit: 40 },
+      subscription: null,
+      inviteGrant: null,
+      hasCustomerPortal: false,
+    };
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: "payment-required", entitlement }), {
+        status: 402,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const onEntitlementUpdate = vi.fn();
+
+    const result = await requestCoachingAdvice(
+      createBaseRequest({ question: "One more tip?", onEntitlementUpdate }),
+    );
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBe("payment-required");
+    }
+    expect(onEntitlementUpdate).toHaveBeenCalledWith(entitlement);
+    expect(captureExceptionMock).not.toHaveBeenCalled();
+  });
+
+  it("hydrates onEntitlementUpdate from HTTP 429 rate-limit-exceeded responses", async () => {
+    const entitlement = {
+      source: "free_allowance" as const,
+      canUseCoach: true,
+      canUseClassify: true,
+      evaluatedAt: "2026-11-26T12:00:00.000Z",
+      freeAllowance: { coachUsed: 5, coachLimit: 30, classifyUsed: 0, classifyLimit: 40 },
+      subscription: null,
+      inviteGrant: null,
+      hasCustomerPortal: false,
+    };
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: "rate-limit-exceeded", entitlement }), {
+        status: 429,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const onEntitlementUpdate = vi.fn();
+
+    const result = await requestCoachingAdvice(
+      createBaseRequest({ question: "Daily limit check?", onEntitlementUpdate }),
+    );
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBe("rate-limit-exceeded");
+    }
+    expect(onEntitlementUpdate).toHaveBeenCalledWith(entitlement);
+  });
+
+  it("hydrates piggybacked entitlement from completed SSE and recover responses", async () => {
+    const entitlement = {
+      source: "free_allowance" as const,
+      canUseCoach: true,
+      canUseClassify: true,
+      evaluatedAt: "2026-11-26T12:01:00.000Z",
+      freeAllowance: { coachUsed: 2, coachLimit: 30, classifyUsed: 0, classifyLimit: 40 },
+      subscription: null,
+      inviteGrant: null,
+      hasCustomerPortal: false,
+    };
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        advice: { coachMessage: "Keep pushing!" },
+        entitlement,
+      }),
+    });
+    const onEntitlementUpdate = vi.fn();
+
+    const coachRes = await requestCoachingAdvice(createBaseRequest({ onEntitlementUpdate }));
+    expect(coachRes.isOk()).toBe(true);
+    if (coachRes.isOk()) {
+      expect(coachRes.value.entitlement).toEqual(entitlement);
+    }
+    expect(onEntitlementUpdate).toHaveBeenCalledWith(entitlement);
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        status: "completed",
+        advice: { coachMessage: "Recovered!" },
+        entitlement,
+      }),
+    });
+    const recoverRes = await recoverCoachingAdvice("req-1", "test-access-token");
+    expect(recoverRes.isOk()).toBe(true);
+    if (recoverRes.isOk() && recoverRes.value.status === "completed") {
+      expect(recoverRes.value.entitlement).toEqual(entitlement);
+    }
+  });
 });

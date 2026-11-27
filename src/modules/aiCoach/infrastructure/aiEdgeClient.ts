@@ -2,11 +2,13 @@ import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "@/modules/platform/infra
 
 export class AiEdgeHttpError extends Error {
   readonly status: number;
+  readonly body?: unknown;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, body?: unknown) {
     super(message);
     this.name = "AiEdgeHttpError";
     this.status = status;
+    this.body = body;
   }
 }
 
@@ -27,7 +29,15 @@ async function fetchAiEdgeResponse(options: {
   });
 
   if (!response.ok) {
-    throw new AiEdgeHttpError(response.status, `AI Edge Function returned ${response.status}`);
+    const body =
+      response.status === 402 || response.status === 429
+        ? await response.json?.().catch(() => undefined)
+        : undefined;
+    throw new AiEdgeHttpError(
+      response.status,
+      `AI Edge Function returned ${response.status}`,
+      body,
+    );
   }
 
   return response;

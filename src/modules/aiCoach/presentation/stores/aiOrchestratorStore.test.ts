@@ -4,7 +4,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick, ref } from "vue";
 import { TrainingPlan } from "@/modules/aiCoach/domain";
 import { LocalStorageMessageRepository } from "@/modules/aiCoach/infrastructure";
+import { useBillingStore } from "@/modules/billing/presentation";
 import { isoDateString } from "@/modules/sharedKernel/domain";
+
+const { sentryCaptureMessageMock, sentryCaptureExceptionMock } = vi.hoisted(() => ({
+  sentryCaptureMessageMock: vi.fn(),
+  sentryCaptureExceptionMock: vi.fn(),
+}));
+
+vi.mock("@sentry/vue", () => ({
+  addBreadcrumb: vi.fn(),
+  captureMessage: sentryCaptureMessageMock,
+  captureException: sentryCaptureExceptionMock,
+}));
+
 import type { ExerciseLog } from "@/modules/trainingLogs/domain";
 import { useToast } from "@/shared/presentation/composables/useToast";
 import { t } from "@/shared/presentation/i18n";
@@ -2159,5 +2172,235 @@ describe("useAiOrchestratorStore & useCoachChatViewModel reactivity", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("allows optimistic pass-through on cold login (entitlement === null) and hydrates billingStore from piggybacked response", async () => {
+    const billingStore = useBillingStore();
+    expect(billingStore.entitlement).toBeNull();
+    expect(billingStore.canUseCoach).toBe(true);
+
+    const hydratedEntitlement = {
+      source: "free_allowance" as const,
+      canUseCoach: true,
+      canUseClassify: true,
+      evaluatedAt: "2026-11-26T12:00:00.000Z",
+      freeAllowance: { coachUsed: 1, coachLimit: 30, classifyUsed: 0, classifyLimit: 40 },
+      subscription: null,
+      inviteGrant: null,
+      hasCustomerPortal: false,
+    };
+
+    mockAsk.mockReturnValueOnce(
+      okAsync({
+        advice: {
+          coachMessage: "Your onboarding plan is ready.",
+          trainingPlan: {
+            cycleWeeks: 2,
+            sessions: [
+              {
+                weekNumber: 1,
+                dayOfWeek: 1,
+                sessionLabel: "Day 1",
+                focusDescription: "Push",
+                exercises: [{ exerciseName: "Bench Press", targetSets: 3 }],
+              },
+            ],
+          },
+        },
+        entitlement: hydratedEntitlement,
+      }),
+    );
+
+    const orchestrator = useAiOrchestratorStore();
+    const res = await orchestrator.ensureSessionAdvice();
+    for (let i = 0; i < 80; i++) await Promise.resolve();
+
+    expect(res.isOk()).toBe(true);
+    expect(mockAsk).toHaveBeenCalledTimes(1);
+    expect(billingStore.entitlement).toEqual(hydratedEntitlement);
+    expect(billingStore.freeCoachRemaining).toBe(29);
+  });
+
+  it("pauses classify independently when classify quota is exhausted while keeping daily briefings active", async () => {
+    sentryCaptureMessageMock.mockClear();
+    const billingStore = useBillingStore();
+    billingStore.applyEntitlement({
+      source: "free_allowance",
+      canUseCoach: true,
+      canUseClassify: false,
+      evaluatedAt: "2026-11-26T12:00:00.000Z",
+      freeAllowance: { coachUsed: 10, coachLimit: 30, classifyUsed: 40, classifyLimit: 40 },
+      subscription: null,
+      inviteGrant: null,
+      hasCustomerPortal: false,
+    });
+
+    useTrainingPlanStore().setPlan(
+      TrainingPlan.create(new Date().toISOString(), 2, [
+        {
+          weekNumber: 1,
+          dayOfWeek: new Date().getDay(),
+          sessionLabel: "Upper",
+          focusDescription: "Push/Pull",
+          exercises: [{ exerciseName: "Bench Press", targetSets: 3 }],
+        },
+      ]),
+    );
+
+    mockExerciseLogs.value = [
+      {
+        id: "log-unclassified",
+        exerciseName: "Custom Odd Lift",
+        reps: 8,
+        weight: 50,
+        loggedAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+      },
+    ];
+    mockAsk.mockReturnValueOnce(okAsync({ advice: { coachMessage: "Today's briefing ready!" } }));
+
+    const orchestrator = useAiOrchestratorStore();
+    const classifyRes = await orchestrator.classifyExercisesIfNeeded();
+    const sessionRes = await orchestrator.ensureSessionAdvice();
+    for (let i = 0; i < 80; i++) await Promise.resolve();
+
+    expect(classifyRes.isOk()).toBe(true);
+    expect(mockClassifyExercises).not.toHaveBeenCalled();
+    expect(sessionRes.isOk()).toBe(true);
+    expect(mockAsk).toHaveBeenCalledTimes(1);
+    expect(sentryCaptureMessageMock).not.toHaveBeenCalled();
+  });
+
+  it("handles HTTP 402 cleanly without Sentry errors, clears placeholder, skips recovery polling, and pauses auto-briefings", async () => {
+    sentryCaptureExceptionMock.mockClear();
+    sentryCaptureMessageMock.mockClear();
+    const billingStore = useBillingStore();
+    const chatStore = useCoachChatStore();
+    const planStore = useTrainingPlanStore();
+    planStore.setPlan(
+      TrainingPlan.create(new Date().toISOString(), 2, [
+        {
+          weekNumber: 1,
+          dayOfWeek: new Date().getDay(),
+          sessionLabel: "Push",
+          focusDescription: "Chest",
+          exercises: [{ exerciseName: "Bench Press", targetSets: 3 }],
+        },
+      ]),
+    );
+
+    const exhaustedEntitlement = {
+      source: "none" as const,
+      canUseCoach: false,
+      canUseClassify: true,
+      evaluatedAt: "2026-11-26T12:15:00.000Z",
+      freeAllowance: { coachUsed: 30, coachLimit: 30, classifyUsed: 5, classifyLimit: 40 },
+      subscription: null,
+      inviteGrant: null,
+      hasCustomerPortal: false,
+    };
+
+    mockAsk.mockImplementationOnce((req: { onEntitlementUpdate?: (e: unknown) => void }) => {
+      req.onEntitlementUpdate?.(exhaustedEntitlement);
+      return errAsync("payment-required" as const);
+    });
+
+    const orchestrator = useAiOrchestratorStore();
+    const askResult = await orchestrator.requestAdvice("Last message?");
+    for (let i = 0; i < 40; i++) await Promise.resolve();
+
+    expect(askResult.isErr()).toBe(true);
+    if (askResult.isErr()) {
+      expect(askResult.error).toBe("payment-required");
+    }
+    expect(mockRecover).not.toHaveBeenCalled();
+    expect(chatStore.messages).toHaveLength(0);
+    expect(billingStore.canUseCoach).toBe(false);
+    expect(sentryCaptureExceptionMock).not.toHaveBeenCalled();
+    expect(sentryCaptureMessageMock).not.toHaveBeenCalled();
+
+    // Subsequent automated briefing pauses silently with zero network requests
+    mockAsk.mockClear();
+    const autoRes = await orchestrator.ensureSessionAdvice();
+    expect(autoRes.isOk()).toBe(true);
+    expect(mockAsk).not.toHaveBeenCalled();
+  });
+
+  it("hydrates billingStore when recoverPendingRequest delivers completed 200 entitlement", async () => {
+    const billingStore = useBillingStore();
+    const recoveredEntitlement = {
+      source: "free_allowance" as const,
+      canUseCoach: false,
+      canUseClassify: true,
+      evaluatedAt: "2026-11-26T12:30:00.000Z",
+      freeAllowance: { coachUsed: 30, coachLimit: 30, classifyUsed: 3, classifyLimit: 40 },
+      subscription: null,
+      inviteGrant: null,
+      hasCustomerPortal: false,
+    };
+    localStorage.setItem(
+      "ai-coach:pending-request",
+      JSON.stringify({
+        clientRequestId: "recover-ent-req-1",
+        userMessageId: "u-rec-1",
+        sessionId: "s-rec-1",
+        mode: "execution",
+        startedAt: Date.now(),
+      }),
+    );
+    mockRecover.mockReturnValueOnce(
+      okAsync({
+        status: "completed",
+        advice: { coachMessage: "Recovered 30th briefing!" },
+        entitlement: recoveredEntitlement,
+      }),
+    );
+
+    const orchestrator = useAiOrchestratorStore();
+    orchestrator.initialize();
+    await vi.waitFor(() => {
+      expect(mockRecover).toHaveBeenCalledTimes(1);
+      expect(billingStore.entitlement).toEqual(recoveredEntitlement);
+    });
+    expect(billingStore.canUseCoach).toBe(false);
+    expect(billingStore.canUseClassify).toBe(true);
+  });
+
+  it("handles classify 402 silently without Sentry warnings, locks classify only, and keeps coach enabled", async () => {
+    sentryCaptureMessageMock.mockClear();
+    sentryCaptureExceptionMock.mockClear();
+    const billingStore = useBillingStore();
+    mockExerciseLogs.value = [
+      {
+        id: "log-unclassified-402",
+        exerciseName: "Pendlay Row",
+        reps: 8,
+        weight: 70,
+        loggedAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+      },
+    ];
+    mockClassifyExercises.mockImplementationOnce(
+      (_names: unknown, _token: unknown, onEntitlementUpdate?: (ent: unknown) => void) => {
+        onEntitlementUpdate?.({
+          source: "free_allowance",
+          canUseCoach: true,
+          canUseClassify: false,
+          evaluatedAt: "2026-11-26T12:40:00.000Z",
+          freeAllowance: { coachUsed: 4, coachLimit: 30, classifyUsed: 40, classifyLimit: 40 },
+          subscription: null,
+          inviteGrant: null,
+          hasCustomerPortal: false,
+        });
+        return errAsync("payment-required" as const);
+      },
+    );
+
+    const orchestrator = useAiOrchestratorStore();
+    const res = await orchestrator.classifyExercisesIfNeeded();
+
+    expect(res.isOk()).toBe(true);
+    expect(billingStore.canUseClassify).toBe(false);
+    expect(billingStore.canUseCoach).toBe(true);
+    expect(sentryCaptureMessageMock).not.toHaveBeenCalled();
+    expect(sentryCaptureExceptionMock).not.toHaveBeenCalled();
   });
 });

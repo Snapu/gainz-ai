@@ -68,18 +68,103 @@ describe("classifyExercises", () => {
     }
   });
 
-  it("maps HTTP 429 from the Edge Function to rate-limit-exceeded", async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: false,
-      status: 429,
-    });
+  it("maps HTTP 429 from the Edge Function to rate-limit-exceeded and hydrates entitlement if present", async () => {
+    const entitlement = {
+      source: "free_allowance" as const,
+      canUseCoach: true,
+      canUseClassify: true,
+      evaluatedAt: "2026-11-26T12:00:00.000Z",
+      freeAllowance: { coachUsed: 2, coachLimit: 30, classifyUsed: 20, classifyLimit: 40 },
+      subscription: null,
+      inviteGrant: null,
+      hasCustomerPortal: false,
+    };
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: "rate-limit-exceeded", entitlement }), {
+        status: 429,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const onEntitlementUpdate = vi.fn();
 
-    const result = await classifyExercises(["Bench Press"], "test-access-token");
+    const result = await classifyExercises(
+      ["Bench Press"],
+      "test-access-token",
+      onEntitlementUpdate,
+    );
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
       expect(result.error).toBe("rate-limit-exceeded");
     }
+    expect(onEntitlementUpdate).toHaveBeenCalledWith(entitlement);
+  });
+
+  it("maps HTTP 402 to payment-required without Sentry noise and invokes onEntitlementUpdate", async () => {
+    const entitlement = {
+      source: "free_allowance" as const,
+      canUseCoach: true,
+      canUseClassify: false,
+      evaluatedAt: "2026-11-26T12:00:00.000Z",
+      freeAllowance: { coachUsed: 5, coachLimit: 30, classifyUsed: 40, classifyLimit: 40 },
+      subscription: null,
+      inviteGrant: null,
+      hasCustomerPortal: false,
+    };
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: "payment-required", entitlement }), {
+        status: 402,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const onEntitlementUpdate = vi.fn();
+
+    const result = await classifyExercises(
+      ["Bench Press"],
+      "test-access-token",
+      onEntitlementUpdate,
+    );
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBe("payment-required");
+    }
+    expect(onEntitlementUpdate).toHaveBeenCalledWith(entitlement);
+    expect(captureExceptionMock).not.toHaveBeenCalled();
+  });
+
+  it("forwards piggybacked entitlement from 200 classify response", async () => {
+    const entitlement = {
+      source: "free_allowance" as const,
+      canUseCoach: true,
+      canUseClassify: true,
+      evaluatedAt: "2026-11-26T12:00:00.000Z",
+      freeAllowance: { coachUsed: 1, coachLimit: 30, classifyUsed: 1, classifyLimit: 40 },
+      subscription: null,
+      inviteGrant: null,
+      hasCustomerPortal: false,
+    };
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        text: JSON.stringify({
+          classifications: [
+            { exerciseName: "Bench Press", primaryMuscle: "Chest", confidence: 0.99 },
+          ],
+        }),
+        entitlement,
+      }),
+    });
+    const onEntitlementUpdate = vi.fn();
+
+    const result = await classifyExercises(
+      ["Bench Press"],
+      "test-access-token",
+      onEntitlementUpdate,
+    );
+    expect(result.isOk()).toBe(true);
+    expect(onEntitlementUpdate).toHaveBeenCalledWith(entitlement);
   });
 
   it("returns coaching-request-failed and captures exception for malformed JSON", async () => {

@@ -80,10 +80,11 @@ export function createSupabaseRequestResultsStore(
     body: Record<string, unknown>,
     attempt: number,
     canRetry: boolean,
+    extraFilter = "",
   ): Promise<{ result: AiRequestResultWriteResult; willRetry: boolean }> {
     try {
       const res = await fetchWithTimeout(
-        `${baseUrl}?${keyFilter(userId, clientRequestId)}&select=client_request_id`,
+        `${baseUrl}?${keyFilter(userId, clientRequestId)}${extraFilter}&select=client_request_id`,
         {
           method: "PATCH",
           headers: serviceHeaders(serviceRoleKey, {
@@ -135,6 +136,7 @@ export function createSupabaseRequestResultsStore(
     clientRequestId: string,
     body: Record<string, unknown>,
     retryDelaysMs: readonly number[],
+    extraFilter = "",
   ): Promise<AiRequestResultWriteResult> {
     const maxAttempts = retryDelaysMs.length + 1;
     for (let attempt = 1; ; attempt++) {
@@ -144,6 +146,7 @@ export function createSupabaseRequestResultsStore(
         body,
         attempt,
         attempt < maxAttempts,
+        extraFilter,
       );
       if (result.ok || !willRetry) {
         return result;
@@ -265,6 +268,7 @@ export function createSupabaseRequestResultsStore(
           error_code: errorCode,
         },
         [],
+        "&status=eq.processing",
       );
     },
 

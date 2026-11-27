@@ -111,7 +111,12 @@ function createMockRequestResultsStore(initial: Record<string, AiRequestResultRo
       return { ok: true as const };
     }),
     markFailed: vi.fn(async (userId, clientRequestId, errorCode) => {
-      rows.set(key(userId, clientRequestId), {
+      const k = key(userId, clientRequestId);
+      const existing = rows.get(k);
+      if (!existing || existing.status !== "processing") {
+        return { ok: false as const, error: "not-found" as const };
+      }
+      rows.set(k, {
         status: "failed",
         response_payload: null,
         error_code: errorCode,
@@ -191,20 +196,35 @@ function createDeps(overrides: Partial<AiCoachHandlerDeps> = {}) {
   const waitUntilPromises: Promise<unknown>[] = [];
   const { store: defaultRequestResults } = createMockRequestResultsStore();
 
+  const defaultAuthRow = {
+    allowed: true,
+    denial_reason: null,
+    admitted_source: "free_allowance" as const,
+    current_count: 1,
+    daily_limit: 5,
+    reset_at: "2026-11-16T00:00:00.000Z",
+    global_capped: false,
+    entitlement_source: "free_allowance" as const,
+    can_use_coach: true,
+    can_use_classify: true,
+    evaluated_at: "2026-11-15T10:30:00.000Z",
+    free_coach_used: 1,
+    free_coach_limit: 30,
+    free_classify_used: 0,
+    free_classify_limit: 40,
+  };
+
   const deps: AiCoachHandlerDeps = {
     getConfig: () => ({
       clientId: "test-client-id",
       geminiApiKey: "test-gemini-key",
       supabaseUrl: "https://test.supabase.co",
       serviceRoleKey: "test-service-role",
+      abusePreventionPepper: "0123456789abcdef0123456789abcdef",
+      abusePreventionPepperPrevious: null,
     }),
     verifyCaller: vi.fn(async () => ({ userId: "google-sub-123" })),
-    consumeQuota: vi.fn(async () => ({
-      allowed: true,
-      current_count: 1,
-      daily_limit: 10,
-      reset_at: "2026-11-16T00:00:00.000Z",
-    })),
+    authorizeAiRequest: vi.fn(async () => defaultAuthRow),
     refundQuota: vi.fn(async () => undefined),
     generateWithFallback: generateSpy as unknown as NonNullable<
       AiCoachHandlerDeps["generateWithFallback"]
@@ -282,8 +302,14 @@ describe("handleAiCoachRequest", () => {
     expect(completeData.requestPayload).toBeUndefined();
     expect(completeData.quota).toEqual({
       currentCount: 1,
-      dailyLimit: 10,
+      dailyLimit: 5,
       resetAt: "2026-11-16T00:00:00.000Z",
+    });
+    expect(completeData.entitlement).toMatchObject({
+      source: "free_allowance",
+      canUseCoach: true,
+      canUseClassify: true,
+      freeAllowance: { coachUsed: 1, coachLimit: 30, classifyUsed: 0, classifyLimit: 40 },
     });
 
     const genCall = streamSpy.mock.calls[0]?.[0];
@@ -508,11 +534,22 @@ describe("handleAiCoachRequest", () => {
 
     try {
       const { deps } = createDeps({
-        consumeQuota: vi.fn(async () => ({
+        authorizeAiRequest: vi.fn(async () => ({
           allowed: true,
-          current_count: 6,
-          daily_limit: 10,
+          denial_reason: null,
+          admitted_source: "free_allowance" as const,
+          current_count: 5,
+          daily_limit: 5,
           reset_at: "2026-11-16T00:00:00.000Z",
+          global_capped: false,
+          entitlement_source: "free_allowance" as const,
+          can_use_coach: true,
+          can_use_classify: true,
+          evaluated_at: "2026-11-15T10:30:00.000Z",
+          free_coach_used: 6,
+          free_coach_limit: 30,
+          free_classify_used: 0,
+          free_classify_limit: 40,
         })),
         streamWithFallback: vi.fn(async () => {
           throw new Error("All Gemini models failed");
@@ -538,9 +575,12 @@ describe("handleAiCoachRequest", () => {
       expect(deps.refundQuota).toHaveBeenCalledWith(
         "https://test.supabase.co",
         "test-service-role",
-        "google-sub-123",
-        "coach",
-        "2026-11-15",
+        expect.objectContaining({
+          userId: "google-sub-123",
+          kind: "coach",
+          usageDate: "2026-11-15",
+          refundFreeAllowance: true,
+        }),
       );
 
       const allLoggedText = [
@@ -637,7 +677,7 @@ describe("ai-coach idempotency and request recovery", () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(cachedPayload);
-    expect(deps.consumeQuota).not.toHaveBeenCalled();
+    expect(deps.authorizeAiRequest).not.toHaveBeenCalled();
     expect(generateSpy).not.toHaveBeenCalled();
   });
 
@@ -658,7 +698,7 @@ describe("ai-coach idempotency and request recovery", () => {
 
     expect(res.status).toBe(202);
     expect(await res.json()).toEqual({ status: "processing" });
-    expect(deps.consumeQuota).not.toHaveBeenCalled();
+    expect(deps.authorizeAiRequest).not.toHaveBeenCalled();
     expect(generateSpy).not.toHaveBeenCalled();
 
     // Simulate concurrent race: acquireProcessingLock returns conflict and getActive sees in-flight processing
@@ -677,19 +717,30 @@ describe("ai-coach idempotency and request recovery", () => {
     );
 
     expect(raceRes.status).toBe(202);
-    expect(raceDeps.consumeQuota).not.toHaveBeenCalled();
+    expect(raceDeps.authorizeAiRequest).not.toHaveBeenCalled();
     expect(raceGen).not.toHaveBeenCalled();
   });
 
-  it("deletes processing lock immediately when consumeQuota denies (429) or fails (500)", async () => {
+  it("deletes processing lock immediately when authorizeAiRequest denies (429 / 402) or fails (500)", async () => {
     const { store: quotaDeniedStore, rows: deniedRows } = createMockRequestResultsStore();
     const { deps: deniedDeps } = createDeps({
       requestResults: quotaDeniedStore,
-      consumeQuota: vi.fn(async () => ({
+      authorizeAiRequest: vi.fn(async () => ({
         allowed: false,
-        current_count: 15,
-        daily_limit: 15,
+        denial_reason: "rate-limit-exceeded" as const,
+        admitted_source: "none" as const,
+        current_count: 5,
+        daily_limit: 5,
         reset_at: "2026-11-16T00:00:00.000Z",
+        global_capped: false,
+        entitlement_source: "free_allowance" as const,
+        can_use_coach: true,
+        can_use_classify: true,
+        evaluated_at: "2026-11-15T10:30:00.000Z",
+        free_coach_used: 5,
+        free_coach_limit: 30,
+        free_classify_used: 0,
+        free_classify_limit: 40,
       })),
     });
 
@@ -701,10 +752,59 @@ describe("ai-coach idempotency and request recovery", () => {
     expect(quotaDeniedStore.deleteEntry).toHaveBeenCalledWith("google-sub-123", VALID_UUID_V4);
     expect(deniedRows.size).toBe(0);
 
+    const { store: paymentStore, rows: paymentRows } = createMockRequestResultsStore();
+    const { deps: paymentDeps, streamSpy: paymentStreamSpy } = createDeps({
+      requestResults: paymentStore,
+      authorizeAiRequest: vi.fn(async () => ({
+        allowed: false,
+        denial_reason: "payment-required" as const,
+        admitted_source: "none" as const,
+        current_count: 2,
+        daily_limit: 5,
+        reset_at: "2026-11-16T00:00:00.000Z",
+        global_capped: false,
+        entitlement_source: "free_allowance" as const,
+        can_use_coach: false,
+        can_use_classify: true,
+        evaluated_at: "2026-11-15T10:30:00.000Z",
+        free_coach_used: 30,
+        free_coach_limit: 30,
+        free_classify_used: 12,
+        free_classify_limit: 40,
+      })),
+    });
+
+    const paymentRes = await handleAiCoachRequest(
+      createJsonRequest(createValidCoachDto({ clientRequestId: VALID_UUID_V4 })),
+      paymentDeps,
+    );
+    expect(paymentRes.status).toBe(402);
+    expect(await paymentRes.json()).toEqual({
+      error: "payment-required",
+      entitlement: {
+        source: "free_allowance",
+        canUseCoach: false,
+        canUseClassify: true,
+        evaluatedAt: "2026-11-15T10:30:00.000Z",
+        freeAllowance: {
+          coachUsed: 30,
+          coachLimit: 30,
+          classifyUsed: 12,
+          classifyLimit: 40,
+        },
+        subscription: null,
+        inviteGrant: null,
+        hasCustomerPortal: false,
+      },
+    });
+    expect(paymentStreamSpy).not.toHaveBeenCalled();
+    expect(paymentStore.deleteEntry).toHaveBeenCalledWith("google-sub-123", VALID_UUID_V4);
+    expect(paymentRows.size).toBe(0);
+
     const { store: rpcErrorStore, rows: errRows } = createMockRequestResultsStore();
     const { deps: rpcErrorDeps } = createDeps({
       requestResults: rpcErrorStore,
-      consumeQuota: vi.fn(async () => null),
+      authorizeAiRequest: vi.fn(async () => null),
     });
 
     const errRes = await handleAiCoachRequest(
@@ -721,12 +821,22 @@ describe("ai-coach idempotency and request recovery", () => {
     const { store } = createMockRequestResultsStore();
     const { deps, streamSpy } = createDeps({
       requestResults: store,
-      consumeQuota: vi.fn(async () => ({
+      authorizeAiRequest: vi.fn(async () => ({
         allowed: false,
-        current_count: 15,
-        daily_limit: 15,
+        denial_reason: "rate-limit-exceeded" as const,
+        admitted_source: "none" as const,
+        current_count: 5,
+        daily_limit: 5,
         reset_at: "2026-11-16T00:00:00.000Z",
         global_capped: true,
+        entitlement_source: "free_allowance" as const,
+        can_use_coach: true,
+        can_use_classify: true,
+        evaluated_at: "2026-11-15T10:30:00.000Z",
+        free_coach_used: 4,
+        free_coach_limit: 30,
+        free_classify_used: 0,
+        free_classify_limit: 40,
       })),
     });
 
@@ -737,14 +847,14 @@ describe("ai-coach idempotency and request recovery", () => {
       );
 
       expect(res.status).toBe(429);
-      expect(await res.json()).toEqual({
-        error: "rate-limit-exceeded",
-        quota: {
-          currentCount: 15,
-          dailyLimit: 15,
-          resetAt: "2026-11-16T00:00:00.000Z",
-        },
+      const body = (await res.json()) as Record<string, unknown>;
+      expect(body.error).toBe("rate-limit-exceeded");
+      expect(body.quota).toEqual({
+        currentCount: 5,
+        dailyLimit: 5,
+        resetAt: "2026-11-16T00:00:00.000Z",
       });
+      expect(body.entitlement).toBeDefined();
       expect(store.deleteEntry).toHaveBeenCalledWith("google-sub-123", VALID_UUID_V4);
       expect(streamSpy).not.toHaveBeenCalled();
       expect(warnSpy).toHaveBeenCalledWith(
@@ -756,7 +866,7 @@ describe("ai-coach idempotency and request recovery", () => {
     }
   });
 
-  it("stores only { advice, quota } without any input DTO fields on completion", async () => {
+  it("stores only { advice, entitlement, quota } without any input DTO fields on completion", async () => {
     const { store } = createMockRequestResultsStore();
     const { deps } = createDeps({ requestResults: store });
 
@@ -781,7 +891,7 @@ describe("ai-coach idempotency and request recovery", () => {
       string,
       unknown
     >;
-    expect(Object.keys(savedPayload).sort()).toEqual(["advice", "quota"]);
+    expect(Object.keys(savedPayload).sort()).toEqual(["advice", "entitlement", "quota"]);
     const serialized = JSON.stringify(savedPayload);
     expect(serialized).not.toContain("Sensitive injury question");
     expect(serialized).not.toContain("Private medical note");
@@ -948,8 +1058,59 @@ describe("ai-coach idempotency and request recovery", () => {
     });
     expect(rows.has("google-sub-123:44444444-4444-4444-8444-444444444444")).toBe(false);
 
-    expect(deps.consumeQuota).not.toHaveBeenCalled();
+    expect(deps.authorizeAiRequest).not.toHaveBeenCalled();
     expect(generateSpy).not.toHaveBeenCalled();
+  });
+
+  it("delivers recovered completion without checking authorizeAiRequest even when entitlement would deny", async () => {
+    const storedPayload = {
+      advice: { coachMessage: "Last free briefing completed before screen lock" },
+      quota: { currentCount: 5, dailyLimit: 5, resetAt: "2026-11-16T00:00:00.000Z" },
+      entitlement: {
+        source: "none",
+        canUseCoach: false,
+        canUseClassify: true,
+        evaluatedAt: "2026-11-15T10:35:00.000Z",
+        freeAllowance: { coachUsed: 30, coachLimit: 30, classifyUsed: 5, classifyLimit: 40 },
+        subscription: null,
+        inviteGrant: null,
+        hasCustomerPortal: false,
+      },
+    };
+    const { store } = createMockRequestResultsStore({
+      [`google-sub-123:${VALID_UUID_V4}`]: {
+        status: "completed",
+        response_payload: storedPayload,
+        error_code: null,
+      },
+    });
+    const denyAuthSpy = vi.fn(async () => ({
+      allowed: false,
+      denial_reason: "payment-required" as const,
+      admitted_source: "none" as const,
+      current_count: 5,
+      daily_limit: 5,
+      reset_at: "2026-11-16T00:00:00.000Z",
+      global_capped: false,
+      entitlement_source: "none" as const,
+      can_use_coach: false,
+      can_use_classify: false,
+      evaluated_at: "2026-11-15T10:35:00.000Z",
+      free_coach_used: 30,
+      free_coach_limit: 30,
+      free_classify_used: 40,
+      free_classify_limit: 40,
+    }));
+    const { deps } = createDeps({ requestResults: store, authorizeAiRequest: denyAuthSpy });
+
+    const res = await handleAiCoachRequest(
+      createJsonRequest({ action: "recover", clientRequestId: VALID_UUID_V4 }),
+      deps,
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: "completed", ...storedPayload });
+    expect(denyAuthSpy).not.toHaveBeenCalled();
   });
 
   it("uses single-shot POST lock on happy path and atomic DELETE returning for terminal recovery", async () => {
@@ -1170,11 +1331,22 @@ describe("ai-coach idempotency and request recovery", () => {
       });
       const { deps } = createDeps({
         requestResults: store,
-        consumeQuota: vi.fn(async () => ({
+        authorizeAiRequest: vi.fn(async () => ({
           allowed: true,
+          denial_reason: null,
+          admitted_source: "free_allowance" as const,
           current_count: 4,
-          daily_limit: 15,
+          daily_limit: 5,
           reset_at: "2026-11-16T00:00:00.000Z",
+          global_capped: false,
+          entitlement_source: "free_allowance" as const,
+          can_use_coach: true,
+          can_use_classify: true,
+          evaluated_at: "2026-11-15T10:30:00.000Z",
+          free_coach_used: 4,
+          free_coach_limit: 30,
+          free_classify_used: 0,
+          free_classify_limit: 40,
         })),
       });
 
@@ -1204,9 +1376,12 @@ describe("ai-coach idempotency and request recovery", () => {
       expect(deps.refundQuota).toHaveBeenCalledWith(
         "https://test.supabase.co",
         "test-service-role",
-        "google-sub-123",
-        "coach",
-        "2026-11-15",
+        expect.objectContaining({
+          userId: "google-sub-123",
+          kind: "coach",
+          usageDate: "2026-11-15",
+          refundFreeAllowance: true,
+        }),
       );
       expect(store.markFailed).toHaveBeenCalledWith(
         "google-sub-123",
@@ -1395,24 +1570,43 @@ describe("ai-coach idempotency and request recovery", () => {
     }
   });
 
-  it("runs refundQuota and markFailed concurrently, isolates unexpected throws, and logs zero-PII markFailed failure", async () => {
+  it("gates refundQuota behind atomic processing->failed transition so already-settled requests never double-refund", async () => {
+    const { store } = createMockRequestResultsStore();
+    vi.mocked(store.markFailed).mockResolvedValueOnce({ ok: false, error: "not-found" });
+    const { deps } = createDeps({
+      requestResults: store,
+      streamWithFallback: vi.fn(async () => {
+        throw new Error("Gemini failed");
+      }) as unknown as NonNullable<AiCoachHandlerDeps["streamWithFallback"]>,
+    });
+
+    const response = await handleAiCoachRequest(
+      createJsonRequest(createValidCoachDto({ clientRequestId: VALID_UUID_V4 })),
+      deps,
+    );
+    expect(response.status).toBe(200);
+    const events = await readSseEvents(response);
+    expect(events).toEqual([{ event: "error", data: { error: "coaching-request-failed" } }]);
+    expect(store.markFailed).toHaveBeenCalledWith(
+      "google-sub-123",
+      VALID_UUID_V4,
+      "coaching-request-failed",
+    );
+    expect(deps.refundQuota).not.toHaveBeenCalled();
+  });
+
+  it("gates markFailed before refundQuota, isolates unexpected throws, and logs zero-PII failure diagnostics", async () => {
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       const { store } = createMockRequestResultsStore();
-      let resolveMarkFailed!: (res: { ok: false; error: "http-error"; status: number }) => void;
-      vi.mocked(store.markFailed).mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            resolveMarkFailed = resolve;
-          }),
-      );
-      let rejectRefund!: (err: Error) => void;
-      const refundQuotaSpy = vi.fn(
-        () =>
-          new Promise<void>((_resolve, reject) => {
-            rejectRefund = reject;
-          }),
-      );
+      vi.mocked(store.markFailed).mockResolvedValueOnce({
+        ok: false,
+        error: "http-error",
+        status: 503,
+      });
+      const refundQuotaSpy = vi.fn(async () => {
+        throw new TypeError("Unexpected network failure");
+      });
       const { deps, waitUntilPromises } = createDeps({
         requestResults: store,
         refundQuota: refundQuotaSpy,
@@ -1431,17 +1625,11 @@ describe("ai-coach idempotency and request recovery", () => {
         deps,
       );
       expect(response.status).toBe(200);
-      await vi.waitFor(() => {
-        expect(refundQuotaSpy).toHaveBeenCalledTimes(1);
-        expect(store.markFailed).toHaveBeenCalledTimes(1);
-      });
-
-      rejectRefund(new TypeError("Unexpected network failure"));
-      resolveMarkFailed({ ok: false, error: "http-error", status: 503 });
       const events = await readSseEvents(response);
       await expect(Promise.all(waitUntilPromises)).resolves.toBeDefined();
 
       expect(events).toEqual([{ event: "error", data: { error: "coaching-request-failed" } }]);
+      expect(store.markFailed).toHaveBeenCalledTimes(1);
       expect(refundQuotaSpy).toHaveBeenCalledTimes(1);
       const errorCalls = consoleErrorSpy.mock.calls.map((c) => JSON.stringify(c)).join(" ");
       expect(errorCalls).toContain("Quota refund failed unexpectedly:");

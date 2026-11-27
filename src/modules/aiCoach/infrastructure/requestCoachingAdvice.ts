@@ -2,6 +2,8 @@ import * as Sentry from "@sentry/vue";
 import { errAsync, ResultAsync } from "neverthrow";
 import { z } from "zod";
 import { getStoredLocale, toBcp47Locale } from "@/lib/locale";
+import type { Entitlement } from "@/modules/billing/domain";
+import { parseEntitlement } from "@/modules/billing/infrastructure";
 import { createExerciseMuscleMapRepository } from "@/modules/platform/infrastructure";
 import { normalizeEquipmentList } from "@/modules/profile/domain";
 import {
@@ -86,6 +88,7 @@ const coachAdviceSchema = z.object({
 const coachEndpointResponseSchema = z.union([
   z.object({
     advice: coachAdviceSchema,
+    entitlement: z.unknown().optional(),
   }),
   z.object({
     status: z.literal("processing"),
@@ -96,6 +99,7 @@ const recoverEndpointResponseSchema = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("completed"),
     advice: coachAdviceSchema,
+    entitlement: z.unknown().optional(),
   }),
   z.object({
     status: z.literal("processing"),
@@ -599,7 +603,16 @@ function persistLearnedMuscleGroups(advice: CoachingAdvice): void {
   }
 }
 
-function mapCoachRequestError(error: unknown, effectiveMode: CoachingMode): CoachingAdviceError {
+function extractEntitlementFromErrorBody(body: unknown): Entitlement | null {
+  if (!body || typeof body !== "object") return null;
+  return parseEntitlement((body as { entitlement?: unknown }).entitlement);
+}
+
+function mapCoachRequestError(
+  error: unknown,
+  effectiveMode: CoachingMode,
+  onEntitlementUpdate?: (entitlement: Entitlement) => void,
+): CoachingAdviceError {
   const isTerminalHttpError =
     error instanceof AiEdgeHttpError &&
     (error.status === 400 || error.status === 413 || error.status === 500 || error.status === 502);
@@ -608,8 +621,10 @@ function mapCoachRequestError(error: unknown, effectiveMode: CoachingMode): Coac
     if (error.status === 401) {
       return "unauthorized";
     }
-    if (error.status === 429) {
-      return "rate-limit-exceeded";
+    if (error.status === 402 || error.status === 429) {
+      const updated = extractEntitlementFromErrorBody(error.body);
+      if (updated) onEntitlementUpdate?.(updated);
+      return error.status === 402 ? "payment-required" : "rate-limit-exceeded";
     }
   }
   console.error("AI request failed:", error);
@@ -659,12 +674,16 @@ export function requestCoachingAdvice(
       body: dto,
       timeoutMs: clientTimeoutMs,
       onPreview: options.onStreamPreview,
-    }).then((payload): CoachingAdvice => {
+    }).then((payload): CoachingAdviceResult => {
       const parsed = coachEndpointResponseSchema.parse(payload);
       if (!("advice" in parsed)) {
         throw new ProcessingInProgressError();
       }
-      return normalizeParsedAdvice(parsed.advice);
+      const entitlement = parseEntitlement(parsed.entitlement) ?? undefined;
+      return {
+        advice: normalizeParsedAdvice(parsed.advice),
+        ...(entitlement ? { entitlement } : {}),
+      };
     }),
     (error): CoachingAdviceError => {
       if (error instanceof ProcessingInProgressError) {
@@ -673,11 +692,14 @@ export function requestCoachingAdvice(
       if (error instanceof z.ZodError) {
         return "generate-content-stream-failed";
       }
-      return mapCoachRequestError(error, dto.mode);
+      return mapCoachRequestError(error, dto.mode, options.onEntitlementUpdate);
     },
-  )
-    .andTee(persistLearnedMuscleGroups)
-    .map((advice) => ({ advice }));
+  ).andTee((result) => {
+    persistLearnedMuscleGroups(result.advice);
+    if (result.entitlement) {
+      options.onEntitlementUpdate?.(result.entitlement);
+    }
+  });
 }
 
 export function recoverCoachingAdvice(
@@ -696,7 +718,12 @@ export function recoverCoachingAdvice(
       if (parsed.status === "processing") {
         return { status: "processing" };
       }
-      return { status: "completed", advice: normalizeParsedAdvice(parsed.advice) };
+      const entitlement = parseEntitlement(parsed.entitlement) ?? undefined;
+      return {
+        status: "completed",
+        advice: normalizeParsedAdvice(parsed.advice),
+        ...(entitlement ? { entitlement } : {}),
+      };
     }),
     (error): RecoverCoachingAdviceError => {
       if (error instanceof z.ZodError) {

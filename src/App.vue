@@ -2,10 +2,11 @@
 import { useRegisterSW } from "virtual:pwa-register/vue";
 import { App as CapacitorApp } from "@capacitor/app";
 import { ConfigProvider } from "reka-ui";
-import { type EffectScope, effectScope, onMounted, onUnmounted, watch } from "vue";
+import { type EffectScope, effectScope, onMounted, onScopeDispose, onUnmounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useAiOrchestratorStore } from "@/modules/aiCoach/presentation";
 import { useAuthErrorHandler, useAuthStore } from "@/modules/auth/presentation";
+import { useBillingStore } from "@/modules/billing/presentation";
 import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
 import { isPublicRoute } from "@/router/routePolicy";
 import UiToaster from "@/shared/presentation/components/ui/UiToaster.vue";
@@ -31,6 +32,18 @@ function startConsentedServices(): void {
   consentedServicesScope.run(() => {
     useAuthExpirationWatcher();
     useSheetCacheSync();
+    const refreshBillingIfOnline = () => {
+      if (typeof navigator === "undefined" || navigator.onLine !== false) {
+        void useBillingStore().fetchEntitlement();
+      }
+    };
+    refreshBillingIfOnline();
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", refreshBillingIfOnline);
+      onScopeDispose(() => {
+        window.removeEventListener("online", refreshBillingIfOnline);
+      });
+    }
   });
 }
 
@@ -161,6 +174,7 @@ watch(
     if (isLoggedIn) return;
 
     useAiOrchestratorStore().clearPendingRequest();
+    useBillingStore().clear();
     postToServiceWorker({ type: "CLEAR_SYNC_QUEUE" });
     const currentPath = router.currentRoute.value.path;
     if (isPublicRoute(currentPath) || currentPath === "/") return;
