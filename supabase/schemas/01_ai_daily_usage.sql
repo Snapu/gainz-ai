@@ -80,7 +80,12 @@ returns table (
   free_coach_limit integer,
   free_classify_used integer,
   free_classify_limit integer,
-  invite_expires_at timestamptz
+  subscription_status text,
+  cancel_at_period_end boolean,
+  current_period_end timestamptz,
+  grace_ends_at timestamptz,
+  invite_expires_at timestamptz,
+  has_customer_portal boolean
 )
 language plpgsql
 security invoker
@@ -94,6 +99,13 @@ declare
   v_classify_used integer := 0;
   v_prev_coach_used integer := 0;
   v_prev_classify_used integer := 0;
+  v_sub_status text;
+  v_sub_cancel_at_period_end boolean;
+  v_sub_current_period_end timestamptz;
+  v_sub_grace_ends_at timestamptz;
+  v_provider_customer_id text;
+  v_has_customer_portal boolean := false;
+  v_has_active_subscription boolean := false;
   v_has_active_invite boolean := false;
   v_invite_expires_at timestamptz;
   v_can_use_coach boolean;
@@ -128,26 +140,66 @@ begin
     v_classify_used := greatest(v_classify_used, coalesce(v_prev_classify_used, 0));
   end if;
 
-  select true, g.expires_at
-  into v_has_active_invite, v_invite_expires_at
-  from public.invite_grants g
-  join public.invite_codes c on c.code = g.code
-  where g.user_id = p_user_id
-    and c.is_active = true
-    and g.revoked_at is null
-    and (g.expires_at is null or g.expires_at > v_now);
+  select
+    s.status,
+    s.cancel_at_period_end,
+    s.current_period_end,
+    s.grace_ends_at,
+    s.provider_customer_id
+  into
+    v_sub_status,
+    v_sub_cancel_at_period_end,
+    v_sub_current_period_end,
+    v_sub_grace_ends_at,
+    v_provider_customer_id
+  from public.user_subscriptions s
+  where s.user_id = p_user_id;
 
-  v_has_active_invite := coalesce(v_has_active_invite, false);
+  v_has_customer_portal :=
+    v_provider_customer_id is not null and length(trim(v_provider_customer_id)) > 0;
 
-  if v_has_active_invite then
-    v_source := 'invite_grant';
+  v_has_active_subscription :=
+    (
+      v_sub_status in ('active', 'trialing')
+      and (
+        not coalesce(v_sub_cancel_at_period_end, false)
+        or v_sub_current_period_end is null
+        or v_sub_current_period_end > v_now
+      )
+    )
+    or (
+      v_sub_status = 'past_due'
+      and v_sub_grace_ends_at is not null
+      and v_sub_grace_ends_at > v_now
+    );
+
+  if v_has_active_subscription then
+    v_source := 'subscription';
     v_can_use_coach := true;
     v_can_use_classify := true;
-  else
     v_invite_expires_at := null;
-    v_can_use_coach := v_coach_used < v_free_coach_limit;
-    v_can_use_classify := v_classify_used < v_free_classify_limit;
-    v_source := case when v_can_use_coach or v_can_use_classify then 'free_allowance' else 'none' end;
+  else
+    select true, g.expires_at
+    into v_has_active_invite, v_invite_expires_at
+    from public.invite_grants g
+    join public.invite_codes c on c.code = g.code
+    where g.user_id = p_user_id
+      and c.is_active = true
+      and g.revoked_at is null
+      and (g.expires_at is null or g.expires_at > v_now);
+
+    v_has_active_invite := coalesce(v_has_active_invite, false);
+
+    if v_has_active_invite then
+      v_source := 'invite_grant';
+      v_can_use_coach := true;
+      v_can_use_classify := true;
+    else
+      v_invite_expires_at := null;
+      v_can_use_coach := v_coach_used < v_free_coach_limit;
+      v_can_use_classify := v_classify_used < v_free_classify_limit;
+      v_source := case when v_can_use_coach or v_can_use_classify then 'free_allowance' else 'none' end;
+    end if;
   end if;
 
   return query select
@@ -159,7 +211,12 @@ begin
     v_free_coach_limit,
     v_classify_used,
     v_free_classify_limit,
-    v_invite_expires_at;
+    v_sub_status,
+    v_sub_cancel_at_period_end,
+    v_sub_current_period_end,
+    v_sub_grace_ends_at,
+    v_invite_expires_at,
+    v_has_customer_portal;
 end;
 $$;
 
@@ -192,7 +249,12 @@ returns table (
   free_coach_limit integer,
   free_classify_used integer,
   free_classify_limit integer,
-  invite_expires_at timestamptz
+  subscription_status text,
+  cancel_at_period_end boolean,
+  current_period_end timestamptz,
+  grace_ends_at timestamptz,
+  invite_expires_at timestamptz,
+  has_customer_portal boolean
 )
 language plpgsql
 security invoker
@@ -215,6 +277,13 @@ declare
   v_free_classify_used integer := 0;
   v_prev_coach_used integer := 0;
   v_prev_classify_used integer := 0;
+  v_sub_status text;
+  v_sub_cancel_at_period_end boolean;
+  v_sub_current_period_end timestamptz;
+  v_sub_grace_ends_at timestamptz;
+  v_provider_customer_id text;
+  v_has_customer_portal boolean := false;
+  v_has_active_subscription boolean := false;
   v_has_active_invite boolean := false;
   v_invite_expires_at timestamptz;
   v_effective_daily_limit integer;
@@ -242,20 +311,61 @@ begin
     raise exception 'p_free_daily_limit must be positive';
   end if;
 
-  select true, g.expires_at
-  into v_has_active_invite, v_invite_expires_at
-  from public.invite_grants g
-  join public.invite_codes c on c.code = g.code
-  where g.user_id = p_user_id
-    and c.is_active = true
-    and g.revoked_at is null
-    and (g.expires_at is null or g.expires_at > v_now);
+  select
+    s.status,
+    s.cancel_at_period_end,
+    s.current_period_end,
+    s.grace_ends_at,
+    s.provider_customer_id
+  into
+    v_sub_status,
+    v_sub_cancel_at_period_end,
+    v_sub_current_period_end,
+    v_sub_grace_ends_at,
+    v_provider_customer_id
+  from public.user_subscriptions s
+  where s.user_id = p_user_id;
 
-  v_has_active_invite := coalesce(v_has_active_invite, false);
+  v_has_customer_portal :=
+    v_provider_customer_id is not null and length(trim(v_provider_customer_id)) > 0;
+
+  v_has_active_subscription :=
+    (
+      v_sub_status in ('active', 'trialing')
+      and (
+        not coalesce(v_sub_cancel_at_period_end, false)
+        or v_sub_current_period_end is null
+        or v_sub_current_period_end > v_now
+      )
+    )
+    or (
+      v_sub_status = 'past_due'
+      and v_sub_grace_ends_at is not null
+      and v_sub_grace_ends_at > v_now
+    );
+
+  if not v_has_active_subscription then
+    select true, g.expires_at
+    into v_has_active_invite, v_invite_expires_at
+    from public.invite_grants g
+    join public.invite_codes c on c.code = g.code
+    where g.user_id = p_user_id
+      and c.is_active = true
+      and g.revoked_at is null
+      and (g.expires_at is null or g.expires_at > v_now);
+
+    v_has_active_invite := coalesce(v_has_active_invite, false);
+  end if;
+
   if not v_has_active_invite then
     v_invite_expires_at := null;
   end if;
-  v_effective_daily_limit := case when v_has_active_invite then p_paid_daily_limit else p_free_daily_limit end;
+
+  v_effective_daily_limit :=
+    case
+      when v_has_active_subscription or v_has_active_invite then p_paid_daily_limit
+      else p_free_daily_limit
+    end;
 
   v_global_cap := coalesce(
     p_global_cap,
@@ -302,7 +412,11 @@ begin
       v_free_classify_used := greatest(v_free_classify_used, coalesce(v_prev_classify_used, 0));
     end if;
 
-    if v_has_active_invite then
+    if v_has_active_subscription then
+      v_can_use_coach := true;
+      v_can_use_classify := true;
+      v_entitlement_source := 'subscription';
+    elsif v_has_active_invite then
       v_can_use_coach := true;
       v_can_use_classify := true;
       v_entitlement_source := 'invite_grant';
@@ -328,7 +442,12 @@ begin
       v_free_coach_limit,
       v_free_classify_used,
       v_free_classify_limit,
-      v_invite_expires_at;
+      v_sub_status,
+      v_sub_cancel_at_period_end,
+      v_sub_current_period_end,
+      v_sub_grace_ends_at,
+      v_invite_expires_at,
+      v_has_customer_portal;
     return;
   end if;
 
@@ -377,7 +496,7 @@ begin
     where f.subject_digest = p_previous_subject_digest;
   end if;
 
-  if v_has_active_invite then
+  if v_has_active_subscription or v_has_active_invite then
     select f.coach_used, f.classify_used
     into v_free_coach_used, v_free_classify_used
     from public.free_allowance_usage f
@@ -387,7 +506,7 @@ begin
     v_free_classify_used := greatest(coalesce(v_free_classify_used, 0), coalesce(v_prev_classify_used, 0));
     v_can_use_coach := true;
     v_can_use_classify := true;
-    v_entitlement_source := 'invite_grant';
+    v_entitlement_source := case when v_has_active_subscription then 'subscription' else 'invite_grant' end;
   else
     insert into public.free_allowance_usage (subject_digest, coach_used, classify_used, updated_at)
     values (
@@ -432,7 +551,12 @@ begin
         v_free_coach_limit,
         v_free_classify_used,
         v_free_classify_limit,
-        null::timestamptz;
+        v_sub_status,
+        v_sub_cancel_at_period_end,
+        v_sub_current_period_end,
+        v_sub_grace_ends_at,
+        null::timestamptz,
+        v_has_customer_portal;
       return;
     end if;
   end if;
@@ -455,7 +579,12 @@ begin
       v_free_coach_limit,
       v_free_classify_used,
       v_free_classify_limit,
-      v_invite_expires_at;
+      v_sub_status,
+      v_sub_cancel_at_period_end,
+      v_sub_current_period_end,
+      v_sub_grace_ends_at,
+      v_invite_expires_at,
+      v_has_customer_portal;
     return;
   end if;
 
@@ -495,7 +624,12 @@ begin
       v_free_coach_limit,
       v_free_classify_used,
       v_free_classify_limit,
-      v_invite_expires_at;
+      v_sub_status,
+      v_sub_cancel_at_period_end,
+      v_sub_current_period_end,
+      v_sub_grace_ends_at,
+      v_invite_expires_at,
+      v_has_customer_portal;
     return;
   end if;
 
@@ -507,7 +641,7 @@ begin
       and public.ai_daily_usage.usage_date = v_today
     returning public.ai_daily_usage.coaching_count into v_daily_count;
 
-    if not v_has_active_invite then
+    if not v_has_active_subscription and not v_has_active_invite then
       update public.free_allowance_usage
       set coach_used = public.free_allowance_usage.coach_used + 1,
           updated_at = v_now
@@ -522,7 +656,7 @@ begin
       and public.ai_daily_usage.usage_date = v_today
     returning public.ai_daily_usage.classify_count into v_daily_count;
 
-    if not v_has_active_invite then
+    if not v_has_active_subscription and not v_has_active_invite then
       update public.free_allowance_usage
       set classify_used = public.free_allowance_usage.classify_used + 1,
           updated_at = v_now
@@ -531,7 +665,7 @@ begin
     end if;
   end if;
 
-  if not v_has_active_invite then
+  if not v_has_active_subscription and not v_has_active_invite then
     v_can_use_coach := v_free_coach_used < v_free_coach_limit;
     v_can_use_classify := v_free_classify_used < v_free_classify_limit;
     v_entitlement_source := case when v_can_use_coach or v_can_use_classify then 'free_allowance' else 'none' end;
@@ -540,7 +674,11 @@ begin
   return query select
     true,
     null::text,
-    case when v_has_active_invite then 'invite_grant'::text else 'free_allowance'::text end,
+    case
+      when v_has_active_subscription then 'subscription'::text
+      when v_has_active_invite then 'invite_grant'::text
+      else 'free_allowance'::text
+    end,
     v_daily_count,
     v_effective_daily_limit,
     v_reset_at,
@@ -553,7 +691,12 @@ begin
     v_free_coach_limit,
     v_free_classify_used,
     v_free_classify_limit,
-    v_invite_expires_at;
+    v_sub_status,
+    v_sub_cancel_at_period_end,
+    v_sub_current_period_end,
+    v_sub_grace_ends_at,
+    v_invite_expires_at,
+    v_has_customer_portal;
 end;
 $$;
 

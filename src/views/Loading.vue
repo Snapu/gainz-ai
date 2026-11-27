@@ -4,6 +4,7 @@ import { useOnline } from "@vueuse/core";
 import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/modules/auth/presentation";
+import { clearPendingCheckoutRoute, hasPendingCheckoutRoute } from "@/modules/billing/presentation";
 import { type SpreadsheetChoiceError, useSpreadsheetStore } from "@/modules/platform/presentation";
 import { useUserProfileStore } from "@/modules/profile/presentation";
 import { resolveRouteTarget } from "@/router/routePolicy";
@@ -119,8 +120,15 @@ watch(
     setupCompleted: profileStore.setupCompleted,
   }),
   (state) => {
-    const target = resolveRouteTarget("/loading", undefined, state);
+    const hasCheckoutRoute = hasPendingCheckoutRoute();
+    const target = resolveRouteTarget("/loading", undefined, {
+      ...state,
+      hasPendingCheckoutReturn: hasCheckoutRoute,
+    });
     if (target !== true) {
+      if (target === "/app/coach" && hasCheckoutRoute) {
+        clearPendingCheckoutRoute();
+      }
       router.push(target);
     }
   },

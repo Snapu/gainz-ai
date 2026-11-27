@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ArrowRight, ArrowUp, ChevronDown, Copy, Dumbbell, Sparkles } from "@lucide/vue";
 import { useCoachChatViewModel, WorkoutExerciseList } from "@/modules/aiCoach/presentation";
-import { UpgradeCard } from "@/modules/billing/presentation";
+import { PastDueGraceBanner, UpgradeCard } from "@/modules/billing/presentation";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
@@ -24,6 +24,8 @@ const {
   starterRemainingCount,
   starterLimitCount,
   isCoachLocked,
+  isInPastDueGrace,
+  isPollingCheckout,
   handleAskQuestion,
   applyQuickPrompt,
   toggleScratchpad,
@@ -44,6 +46,8 @@ void scrollContainerRef;
       ref="scrollContainerRef"
       class="flex-1 min-h-0 px-4 pt-4 pb-4 overflow-y-auto overscroll-y-contain no-scrollbar flex flex-col gap-4 w-full max-w-2xl mx-auto"
     >
+      <PastDueGraceBanner v-if="isInPastDueGrace" />
+
       <div v-if="showStarterBadge" class="flex justify-end">
         <UiBadge variant="info" class="uppercase tracking-wider tabular-nums">
           {{ t("billing.starterRemaining", { remaining: starterRemainingCount, limit: starterLimitCount }) }}
@@ -268,7 +272,8 @@ void scrollContainerRef;
         </div>
       </div>
 
-      <UpgradeCard v-if="isCoachLocked" />
+      <UiTelemetryLoader v-if="isPollingCheckout" :text="t('billing.checkoutSyncing')" />
+      <UpgradeCard v-else-if="isCoachLocked" />
     </main>
 
     <!-- Bottom Docked Actions & Input -->

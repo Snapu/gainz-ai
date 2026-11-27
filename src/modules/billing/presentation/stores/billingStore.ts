@@ -1,10 +1,12 @@
-import { errAsync, type Result, type ResultAsync } from "neverthrow";
+import { err, errAsync, ok, type Result, type ResultAsync } from "neverthrow";
 import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
 import { useAuthStore } from "@/modules/auth/presentation";
 import {
   fetchEntitlement as fetchEntitlementUseCase,
+  openCustomerPortal as openCustomerPortalUseCase,
   redeemInviteCode as redeemInviteCodeUseCase,
+  startSubscriptionCheckout as startSubscriptionCheckoutUseCase,
 } from "../../application";
 import {
   type BillingError,
@@ -12,21 +14,42 @@ import {
   canUseCoach as canUseCoachRule,
   type Entitlement,
   getRemainingFreeCoachCount,
+  hasCustomerPortalAccess,
   isFreeAllowance as isFreeAllowanceRule,
   isInPastDueGrace as isInPastDueGraceRule,
   isInviteGrant as isInviteGrantRule,
   isNewerOrEqualSnapshot,
+  isSubscriptionActive,
+  isSubscriptionCancelling as isSubscriptionCancellingRule,
   normalizeInviteCode,
 } from "../../domain";
 import {
+  capturePendingCheckoutReturnFromUrl,
   capturePendingInviteFromUrl,
+  clearPendingCheckoutPoll,
+  clearPendingCheckoutReturn,
+  clearPendingCheckoutRoute,
   clearPendingInviteCode,
   createBillingGateway,
   createLocalStorageEntitlementCache,
+  hasPendingCheckoutReturn,
+  hasPendingCheckoutRoute,
+  navigateToTrustedBillingUrl,
   peekPendingInviteCode,
 } from "../../infrastructure";
 
-export { capturePendingInviteFromUrl, clearPendingInviteCode };
+export {
+  capturePendingCheckoutReturnFromUrl,
+  capturePendingInviteFromUrl,
+  clearPendingCheckoutReturn,
+  clearPendingCheckoutRoute,
+  clearPendingInviteCode,
+  hasPendingCheckoutReturn,
+  hasPendingCheckoutRoute,
+};
+
+export type CheckoutPollOutcome = "activated" | "pending";
+const DEFAULT_CHECKOUT_POLL_DELAYS_MS = [0, 1000, 1500, 2000, 2500, 3000];
 
 const TRANSIENT_PENDING_INVITE_ERRORS = new Set<BillingError>([
   "unauthorized",
@@ -46,12 +69,16 @@ export const useBillingStore = defineStore("billing", () => {
   const entitlement = ref<Entitlement | null>(authStore.isLoggedIn ? cache.load() : null);
   const isFetching = ref(false);
   const isRedeemingInvite = ref(false);
+  const isRedirectingToCheckout = ref(false);
+  const isOpeningPortal = ref(false);
+  const isPollingCheckout = ref(false);
   const lastError = ref<BillingError | null>(null);
 
   let sessionGeneration = 0;
   let fetchEpoch = 0;
   let inFlightFetch: ResultAsync<Entitlement, BillingError> | null = null;
   let inFlightPendingRedeem: Promise<Result<Entitlement, BillingError> | null> | null = null;
+  let inFlightCheckoutPoll: Promise<CheckoutPollOutcome | null> | null = null;
 
   const canUseCoach = computed(() => canUseCoachRule(entitlement.value));
   const canUseClassify = computed(() => canUseClassifyRule(entitlement.value));
@@ -60,6 +87,15 @@ export const useBillingStore = defineStore("billing", () => {
   const inviteExpiresAt = computed(() => entitlement.value?.inviteGrant?.expiresAt ?? null);
   const freeCoachRemaining = computed(() => getRemainingFreeCoachCount(entitlement.value));
   const freeCoachLimit = computed(() => entitlement.value?.freeAllowance.coachLimit ?? 30);
+  const isSubscription = computed(() => isSubscriptionActive(entitlement.value));
+  const isSubscriptionCancelling = computed(() => isSubscriptionCancellingRule(entitlement.value));
+  const subscriptionPeriodEnd = computed(
+    () => entitlement.value?.subscription?.currentPeriodEnd ?? null,
+  );
+  const subscriptionGraceEndsAt = computed(
+    () => entitlement.value?.subscription?.graceEndsAt ?? null,
+  );
+  const hasCustomerPortal = computed(() => hasCustomerPortalAccess(entitlement.value));
   const isInPastDueGrace = computed(() => isInPastDueGraceRule(entitlement.value));
 
   function applyEntitlement(incoming: Entitlement): void {
@@ -77,16 +113,20 @@ export const useBillingStore = defineStore("billing", () => {
     fetchEpoch++;
     inFlightFetch = null;
     inFlightPendingRedeem = null;
+    inFlightCheckoutPoll = null;
     isFetching.value = false;
     isRedeemingInvite.value = false;
+    isRedirectingToCheckout.value = false;
+    isOpeningPortal.value = false;
+    isPollingCheckout.value = false;
     entitlement.value = null;
     lastError.value = null;
     cache.clear();
   }
 
-  function callWithAuthRetry(
-    execute: (accessToken: string) => ResultAsync<Entitlement, BillingError>,
-  ): ResultAsync<Entitlement, BillingError> {
+  function callWithAuthRetry<T>(
+    execute: (accessToken: string) => ResultAsync<T, BillingError>,
+  ): ResultAsync<T, BillingError> {
     return authStore
       .ensureValidIdToken()
       .mapErr((): BillingError => "unauthorized")
@@ -208,6 +248,135 @@ export const useBillingStore = defineStore("billing", () => {
     }
   }
 
+  function startCheckout(
+    navigate: (url: string) => boolean = navigateToTrustedBillingUrl,
+  ): ResultAsync<void, BillingError> {
+    if (!authStore.isLoggedIn) {
+      return errAsync("unauthorized");
+    }
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      lastError.value = "billing-unavailable";
+      return errAsync("billing-unavailable");
+    }
+
+    const requestGeneration = sessionGeneration;
+    isRedirectingToCheckout.value = true;
+    lastError.value = null;
+
+    return callWithAuthRetry((token) => startSubscriptionCheckoutUseCase(gateway, token))
+      .andThen(({ checkoutUrl }) => {
+        if (requestGeneration !== sessionGeneration || !authStore.isLoggedIn) {
+          return ok(undefined);
+        }
+        isRedirectingToCheckout.value = false;
+        if (!navigate(checkoutUrl)) {
+          lastError.value = "billing-unavailable";
+          return err("billing-unavailable" as const);
+        }
+        return ok(undefined);
+      })
+      .orTee((error) => {
+        if (requestGeneration !== sessionGeneration) return;
+        lastError.value = error;
+        isRedirectingToCheckout.value = false;
+      });
+  }
+
+  function openPortal(
+    navigate: (url: string) => boolean = navigateToTrustedBillingUrl,
+  ): ResultAsync<void, BillingError> {
+    if (!authStore.isLoggedIn) {
+      return errAsync("unauthorized");
+    }
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      lastError.value = "billing-unavailable";
+      return errAsync("billing-unavailable");
+    }
+
+    const requestGeneration = sessionGeneration;
+    isOpeningPortal.value = true;
+    lastError.value = null;
+
+    return callWithAuthRetry((token) => openCustomerPortalUseCase(gateway, token))
+      .andThen(({ portalUrl }) => {
+        if (requestGeneration !== sessionGeneration || !authStore.isLoggedIn) {
+          return ok(undefined);
+        }
+        isOpeningPortal.value = false;
+        if (!navigate(portalUrl)) {
+          lastError.value = "billing-unavailable";
+          return err("billing-unavailable" as const);
+        }
+        return ok(undefined);
+      })
+      .orTee((error) => {
+        if (requestGeneration !== sessionGeneration) return;
+        lastError.value = error;
+        isOpeningPortal.value = false;
+      });
+  }
+
+  async function pollCheckoutEntitlementIfPending(options?: {
+    delaysMs?: number[];
+  }): Promise<CheckoutPollOutcome | null> {
+    if (!hasPendingCheckoutReturn() || !authStore.isLoggedIn) {
+      return null;
+    }
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      return null;
+    }
+    if (inFlightCheckoutPoll) {
+      return inFlightCheckoutPoll;
+    }
+
+    const requestGeneration = sessionGeneration;
+    const delays = options?.delaysMs ?? DEFAULT_CHECKOUT_POLL_DELAYS_MS;
+    const run = (async (): Promise<CheckoutPollOutcome | null> => {
+      isPollingCheckout.value = true;
+      try {
+        for (const delay of delays) {
+          if (delay > 0) {
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          }
+          if (
+            requestGeneration !== sessionGeneration ||
+            !authStore.isLoggedIn ||
+            !hasPendingCheckoutReturn()
+          ) {
+            return null;
+          }
+          if (typeof navigator !== "undefined" && navigator.onLine === false) {
+            return null;
+          }
+
+          const res = await fetchEntitlement();
+          if (requestGeneration !== sessionGeneration || !authStore.isLoggedIn) {
+            return null;
+          }
+          if (res.isOk() && res.value.source === "subscription") {
+            clearPendingCheckoutPoll();
+            return "activated";
+          }
+        }
+        clearPendingCheckoutPoll();
+        return "pending";
+      } finally {
+        if (requestGeneration === sessionGeneration) {
+          isPollingCheckout.value = false;
+        }
+      }
+    })();
+
+    inFlightCheckoutPoll = run;
+    try {
+      return await run;
+    } finally {
+      if (inFlightCheckoutPoll === run) {
+        inFlightCheckoutPoll = null;
+      }
+    }
+  }
+
   watch(
     () => authStore.isLoggedIn,
     (loggedIn, wasLoggedIn) => {
@@ -215,6 +384,7 @@ export const useBillingStore = defineStore("billing", () => {
         clear();
         if (wasLoggedIn) {
           clearPendingInviteCode();
+          clearPendingCheckoutReturn();
         }
       }
     },
@@ -224,6 +394,9 @@ export const useBillingStore = defineStore("billing", () => {
     entitlement,
     isFetching,
     isRedeemingInvite,
+    isRedirectingToCheckout,
+    isOpeningPortal,
+    isPollingCheckout,
     lastError,
     canUseCoach,
     canUseClassify,
@@ -232,11 +405,19 @@ export const useBillingStore = defineStore("billing", () => {
     inviteExpiresAt,
     freeCoachRemaining,
     freeCoachLimit,
+    isSubscription,
+    isSubscriptionCancelling,
+    subscriptionPeriodEnd,
+    subscriptionGraceEndsAt,
+    hasCustomerPortal,
     isInPastDueGrace,
     applyEntitlement,
     fetchEntitlement,
     redeemInvite,
     redeemPendingInviteIfPresent,
+    startCheckout,
+    openPortal,
+    pollCheckoutEntitlementIfPending,
     clear,
   };
 });

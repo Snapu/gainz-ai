@@ -39,7 +39,10 @@ const isDeleteDialogOpen = ref(false);
 const isMembershipSheetOpen = ref(false);
 
 const membershipStatusBadge = computed(() => {
-  if (billingStore.entitlement?.source === "subscription") {
+  if (billingStore.isInPastDueGrace) {
+    return { variant: "warning" as const, label: t("billing.statusPastDue") };
+  }
+  if (billingStore.isSubscription) {
     return { variant: "default" as const, label: t("billing.statusPro") };
   }
   if (billingStore.isInviteGrant) {
@@ -51,12 +54,29 @@ const membershipStatusBadge = computed(() => {
   return null;
 });
 
+function formatMetaDate(iso: string | null): string | null {
+  if (!iso) return null;
+  const parsed = new Date(iso);
+  return Number.isFinite(parsed.getTime()) ? formatMediumDate(parsed) : null;
+}
+
 const membershipMenuMeta = computed(() => {
-  if (!billingStore.isInviteGrant || !billingStore.inviteExpiresAt) return null;
-  const expiry = new Date(billingStore.inviteExpiresAt);
-  return Number.isFinite(expiry.getTime())
-    ? t("billing.inviteExpiresOn", { date: formatMediumDate(expiry) })
-    : null;
+  if (billingStore.isInPastDueGrace) {
+    const formattedGrace = formatMetaDate(billingStore.subscriptionGraceEndsAt);
+    return formattedGrace ? t("billing.pastDueBadge", { date: formattedGrace }) : null;
+  }
+  if (billingStore.isSubscription) {
+    const formattedEnd = formatMetaDate(billingStore.subscriptionPeriodEnd);
+    if (!formattedEnd) return null;
+    return billingStore.isSubscriptionCancelling
+      ? t("billing.cancelsOn", { date: formattedEnd })
+      : t("billing.renewsOn", { date: formattedEnd });
+  }
+  if (billingStore.isInviteGrant) {
+    const formattedInvite = formatMetaDate(billingStore.inviteExpiresAt);
+    return formattedInvite ? t("billing.inviteExpiresOn", { date: formattedInvite }) : null;
+  }
+  return null;
 });
 
 function handleSwitchSpreadsheet(): void {

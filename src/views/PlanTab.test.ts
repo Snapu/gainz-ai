@@ -1,3 +1,4 @@
+import { createPinia } from "pinia";
 import { describe, expect, it, vi } from "vitest";
 import { createApp, defineComponent, ref } from "vue";
 import { TrainingPlan } from "@/modules/aiCoach/domain";
@@ -22,6 +23,8 @@ const mockPlanVm = {
   starterRemainingCount: ref(30),
   starterLimitCount: ref(30),
   isCoachLocked: ref(false),
+  isInPastDueGrace: ref(false),
+  isPollingCheckout: ref(false),
   isPlanSessionCompleted: vi.fn(() => false),
   regeneratePlan: vi.fn(),
   copyPlanJson: vi.fn(),
@@ -39,6 +42,7 @@ import PlanTab from "./PlanTab.vue";
 function mountPlanTab() {
   const host = document.createElement("div");
   const app = createApp(PlanTab);
+  app.use(createPinia());
   app.component("EmptyState", defineComponent({ template: "<div><slot /></div>" }));
   app.component("UiBadge", defineComponent({ template: "<span><slot /></span>" }));
   app.component("UiButton", defineComponent({ template: "<button><slot /></button>" }));
@@ -86,6 +90,7 @@ describe("PlanTab.vue & UpgradeCard.vue", () => {
     const mountCard = () => {
       const host = document.createElement("div");
       const app = createApp(UpgradeCard);
+      app.use(createPinia());
       app.component("UiBadge", defineComponent({ template: "<span><slot /></span>" }));
       app.component("UiCard", defineComponent({ template: "<div><slot /></div>" }));
       app.mount(host);

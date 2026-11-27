@@ -32,6 +32,8 @@ const mockViewModel = {
   starterRemainingCount: ref(30),
   starterLimitCount: ref(30),
   isCoachLocked: ref(false),
+  isInPastDueGrace: ref(false),
+  isPollingCheckout: ref(false),
   handleAskQuestion: vi.fn(),
   applyQuickPrompt: vi.fn(),
   toggleScratchpad: vi.fn(),
@@ -47,6 +49,10 @@ vi.mock("@/modules/aiCoach/presentation", () => ({
 }));
 
 vi.mock("@/modules/billing/presentation", () => ({
+  PastDueGraceBanner: defineComponent({
+    name: "PastDueGraceBanner",
+    template: '<div data-testid="past-due-grace-banner">Payment Update Required</div>',
+  }),
   UpgradeCard: defineComponent({
     name: "UpgradeCard",
     template: '<div data-testid="upgrade-card">With GainzAI Pro / Always Free Without Pro</div>',
@@ -238,6 +244,26 @@ describe("CoachTab.vue", () => {
       mockViewModel.chatMessages.value = initialMessages;
       mockViewModel.quickPrompts.value = [];
       mockViewModel.isCoachLocked.value = false;
+      mounted.unmount();
+    }
+  });
+
+  it("renders PastDueGraceBanner during grace period and replaces UpgradeCard with loader while polling checkout", () => {
+    mockViewModel.isInPastDueGrace.value = true;
+    mockViewModel.isCoachLocked.value = true;
+    mockViewModel.isPollingCheckout.value = true;
+
+    const mounted = mountCoachTab();
+    try {
+      expect(mounted.host.querySelector('[data-testid="past-due-grace-banner"]')).not.toBeNull();
+      expect(mounted.host.querySelector('[data-testid="upgrade-card"]')).toBeNull();
+      const loader = mounted.host.querySelector('[role="status"]');
+      expect(loader).not.toBeNull();
+      expect(loader?.textContent).toContain("Confirming subscription status...");
+    } finally {
+      mockViewModel.isInPastDueGrace.value = false;
+      mockViewModel.isCoachLocked.value = false;
+      mockViewModel.isPollingCheckout.value = false;
       mounted.unmount();
     }
   });

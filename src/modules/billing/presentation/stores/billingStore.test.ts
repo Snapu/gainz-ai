@@ -22,7 +22,7 @@ vi.mock("@/modules/auth/presentation", () => ({
   }),
 }));
 
-import { useBillingStore } from "./billingStore";
+import { hasPendingCheckoutRoute, useBillingStore } from "./billingStore";
 
 const ENTITLEMENT_CACHE_KEY = "billing:entitlement-v1";
 
@@ -569,5 +569,190 @@ describe("useBillingStore", () => {
 
     await pendingPromise;
     expect(sessionStorage.getItem("gainz-pending-invite-code")).toBe("CODE_B");
+  });
+
+  it("validates Stripe URLs on startCheckout and openPortal before top-level navigation", async () => {
+    const store = useBillingStore();
+    const navigated: string[] = [];
+    const navFn = (url: string) => {
+      navigated.push(url);
+      return true;
+    };
+
+    // Untrusted redirect URL rejected at ACL boundary
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        checkoutUrl: "https://evil.example.com/pay",
+        redirectedToPortal: false,
+      }),
+    });
+    const badRes = await store.startCheckout(navFn);
+    expect(badRes.isErr()).toBe(true);
+    expect(navigated).toEqual([]);
+    expect(store.isRedirectingToCheckout).toBe(false);
+
+    // Trusted Stripe Checkout URL triggers navigation
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        checkoutUrl: "https://checkout.stripe.com/c/pay/cs_test_99",
+        redirectedToPortal: false,
+      }),
+    });
+    const okCheckout = await store.startCheckout(navFn);
+    expect(okCheckout.isOk()).toBe(true);
+    expect(navigated).toEqual(["https://checkout.stripe.com/c/pay/cs_test_99"]);
+
+    // Trusted Stripe Customer Portal URL triggers navigation
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        portalUrl: "https://billing.stripe.com/p/session/bps_test_99",
+      }),
+    });
+    const okPortal = await store.openPortal(navFn);
+    expect(okPortal.isOk()).toBe(true);
+    expect(navigated).toEqual([
+      "https://checkout.stripe.com/c/pay/cs_test_99",
+      "https://billing.stripe.com/p/session/bps_test_99",
+    ]);
+  });
+
+  it("polls server status on ?checkout=success without unlocking from URL flag alone and clears flag on activation or timeout", async () => {
+    sessionStorage.setItem("gainz-pending-checkout-return", "success");
+    const store = useBillingStore();
+
+    // Never unlocks Pro locally from URL flag alone before webhook settles
+    expect(store.isSubscription).toBe(false);
+
+    const freeSnapshot = createEntitlement({ source: "free_allowance" });
+    const proSnapshot = createEntitlement({
+      source: "subscription",
+      evaluatedAt: "2026-11-27T18:00:00.000Z",
+      subscription: {
+        status: "active",
+        cancelAtPeriodEnd: false,
+        currentPeriodEnd: "2026-12-27T00:00:00.000Z",
+        graceEndsAt: null,
+      },
+      hasCustomerPortal: true,
+    });
+
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ entitlement: freeSnapshot }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ entitlement: proSnapshot }),
+      });
+
+    const outcome = await store.pollCheckoutEntitlementIfPending({ delaysMs: [0, 0, 0] });
+    expect(outcome).toBe("activated");
+    expect(store.isSubscription).toBe(true);
+    expect(store.hasCustomerPortal).toBe(true);
+    expect(sessionStorage.getItem("gainz-pending-checkout-return")).toBeNull();
+
+    // Timeout clears pending poll flag cleanly while keeping one-shot checkout route intact
+    localStorage.clear();
+    replaceActivePinia();
+    const freshStore = useBillingStore();
+    sessionStorage.setItem("gainz-pending-checkout-return", "success");
+    sessionStorage.setItem("gainz-pending-checkout-route", "coach");
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ entitlement: freeSnapshot }),
+    });
+
+    const timeoutOutcome = await freshStore.pollCheckoutEntitlementIfPending({ delaysMs: [0, 0] });
+    expect(timeoutOutcome).toBe("pending");
+    expect(freshStore.isSubscription).toBe(false);
+    expect(sessionStorage.getItem("gainz-pending-checkout-return")).toBeNull();
+    expect(sessionStorage.getItem("gainz-pending-checkout-route")).toBe("coach");
+  });
+
+  it("deduplicates concurrent checkout polls, aborts cleanly on sign-out, and preserves poll flag while offline", async () => {
+    const store = useBillingStore();
+    const hadOwnOnLine = Object.getOwnPropertyDescriptor(navigator, "onLine");
+    let isOnline = false;
+    Object.defineProperty(navigator, "onLine", { get: () => isOnline, configurable: true });
+
+    try {
+      sessionStorage.setItem("gainz-pending-checkout-return", "success");
+      sessionStorage.setItem("gainz-pending-checkout-route", "coach");
+
+      // Offline preserves poll flag and avoids network fetch
+      expect(await store.pollCheckoutEntitlementIfPending({ delaysMs: [0] })).toBeNull();
+      expect(sessionStorage.getItem("gainz-pending-checkout-return")).toBe("success");
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      // Deduplicates concurrent polls onto one single status sequence
+      isOnline = true;
+      let resolveFirstStatus!: (val: unknown) => void;
+      fetchMock.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirstStatus = resolve;
+          }),
+      );
+      const p1 = store.pollCheckoutEntitlementIfPending({ delaysMs: [0] });
+      const p2 = store.pollCheckoutEntitlementIfPending({ delaysMs: [0] });
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+      resolveFirstStatus({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          entitlement: createEntitlement({
+            source: "subscription",
+            subscription: {
+              status: "active",
+              cancelAtPeriodEnd: false,
+              currentPeriodEnd: "2026-12-27T00:00:00.000Z",
+              graceEndsAt: null,
+            },
+            hasCustomerPortal: true,
+          }),
+        }),
+      });
+      expect(await Promise.all([p1, p2])).toEqual(["activated", "activated"]);
+      expect(hasPendingCheckoutRoute()).toBe(true);
+
+      // Sign-out mid-poll aborts and clears both checkout flags
+      sessionStorage.setItem("gainz-pending-checkout-return", "success");
+      sessionStorage.setItem("gainz-pending-checkout-route", "coach");
+      let resolveSignedOutFetch!: (val: unknown) => void;
+      fetchMock.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveSignedOutFetch = resolve;
+          }),
+      );
+      const abortPoll = store.pollCheckoutEntitlementIfPending({ delaysMs: [0] });
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+      mockIsLoggedIn.value = false;
+      await nextTick();
+      expect(sessionStorage.getItem("gainz-pending-checkout-return")).toBeNull();
+      expect(sessionStorage.getItem("gainz-pending-checkout-route")).toBeNull();
+
+      resolveSignedOutFetch({
+        ok: true,
+        status: 200,
+        json: async () => ({ entitlement: createEntitlement({ source: "subscription" }) }),
+      });
+      expect(await abortPoll).toBeNull();
+    } finally {
+      if (hadOwnOnLine) Object.defineProperty(navigator, "onLine", hadOwnOnLine);
+      else delete (navigator as unknown as Record<string, unknown>).onLine;
+    }
   });
 });

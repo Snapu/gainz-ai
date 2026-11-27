@@ -4,10 +4,13 @@ import {
   canUseCoach,
   type Entitlement,
   getRemainingFreeCoachCount,
+  hasCustomerPortalAccess,
   isFreeAllowance,
   isInPastDueGrace,
   isInviteGrant,
   isNewerOrEqualSnapshot,
+  isSubscriptionActive,
+  isSubscriptionCancelling,
   normalizeInviteCode,
 } from "./entitlement";
 
@@ -96,6 +99,40 @@ describe("Entitlement domain predicates", () => {
     });
     expect(isInPastDueGrace(graceActive, Date.parse("2026-11-27T00:00:00.000Z"))).toBe(true);
     expect(isInPastDueGrace(graceActive, Date.parse("2026-11-30T00:00:00.000Z"))).toBe(false);
+    expect(isSubscriptionActive(graceActive, Date.parse("2026-11-27T00:00:00.000Z"))).toBe(true);
+  });
+
+  it("evaluates active, cancelling period-end, expired, and portal-eligible subscription states", () => {
+    const now = Date.parse("2026-11-27T12:00:00.000Z");
+    const activeCancelling = makeEntitlement({
+      source: "subscription",
+      subscription: {
+        status: "active",
+        cancelAtPeriodEnd: true,
+        currentPeriodEnd: "2026-12-27T00:00:00.000Z",
+        graceEndsAt: null,
+      },
+      hasCustomerPortal: true,
+    });
+    expect(isSubscriptionActive(activeCancelling, now)).toBe(true);
+    expect(isSubscriptionCancelling(activeCancelling, now)).toBe(true);
+    expect(hasCustomerPortalAccess(activeCancelling)).toBe(true);
+
+    const canceledWithReceipts = makeEntitlement({
+      source: "none",
+      canUseCoach: false,
+      canUseClassify: false,
+      subscription: {
+        status: "canceled",
+        cancelAtPeriodEnd: false,
+        currentPeriodEnd: "2026-10-27T00:00:00.000Z",
+        graceEndsAt: null,
+      },
+      hasCustomerPortal: true,
+    });
+    expect(isSubscriptionActive(canceledWithReceipts, now)).toBe(false);
+    expect(isSubscriptionCancelling(canceledWithReceipts, now)).toBe(false);
+    expect(hasCustomerPortalAccess(canceledWithReceipts)).toBe(true);
   });
 
   it("normalizes invite codes and detects active InviteGrant entitlements", () => {

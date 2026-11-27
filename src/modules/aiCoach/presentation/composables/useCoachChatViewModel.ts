@@ -129,6 +129,8 @@ export function useCoachChatViewModel(options: { isDev?: boolean } = {}) {
   const starterRemainingCount = computed<number>(() => billingStore.freeCoachRemaining);
   const starterLimitCount = computed<number>(() => billingStore.freeCoachLimit);
   const isCoachLocked = computed<boolean>(() => !billingStore.canUseCoach);
+  const isInPastDueGrace = computed<boolean>(() => billingStore.isInPastDueGrace);
+  const isPollingCheckout = computed<boolean>(() => billingStore.isPollingCheckout);
 
   // Conversation stream containing user questions and coach responses
   const chatMessages = computed<ChatBubbleMessage[]>(() => {
@@ -309,6 +311,8 @@ export function useCoachChatViewModel(options: { isDev?: boolean } = {}) {
     starterRemainingCount,
     starterLimitCount,
     isCoachLocked,
+    isInPastDueGrace,
+    isPollingCheckout,
     handleAskQuestion,
     applyQuickPrompt,
     toggleScratchpad,

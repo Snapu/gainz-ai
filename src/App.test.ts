@@ -12,6 +12,9 @@ const fetchEntitlementMock = vi.fn();
 const redeemPendingInviteMock = vi.fn(async () => null);
 const clearBillingMock = vi.fn();
 const capturePendingInviteMock = vi.fn(() => null);
+const capturePendingCheckoutMock = vi.fn(() => false);
+const hasPendingCheckoutMock = vi.fn(() => false);
+const pollCheckoutMock = vi.fn(async () => null);
 const toastMock = vi.fn();
 const refreshLogsMock = vi.fn();
 const handleAuthErrorMock = vi.fn(async () => true);
@@ -73,10 +76,14 @@ vi.mock("@/modules/aiCoach/presentation", () => ({
 
 vi.mock("@/modules/billing/presentation", () => ({
   capturePendingInviteFromUrl: () => capturePendingInviteMock(),
+  capturePendingCheckoutReturnFromUrl: () => capturePendingCheckoutMock(),
+  clearPendingCheckoutRoute: vi.fn(),
+  hasPendingCheckoutReturn: () => hasPendingCheckoutMock(),
   resolveInviteErrorMessage: (error: string) => `mapped:${error}`,
   useBillingStore: () => ({
     fetchEntitlement: fetchEntitlementMock,
     redeemPendingInviteIfPresent: redeemPendingInviteMock,
+    pollCheckoutEntitlementIfPending: pollCheckoutMock,
     clear: clearBillingMock,
   }),
 }));
@@ -406,6 +413,29 @@ describe("App.vue", () => {
       );
       expect(toastMock).toHaveBeenNthCalledWith(2, expect.objectContaining({ variant: "default" }));
     } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("polls checkout entitlement on pending ?checkout=success return and shows Pro activation toast", async () => {
+    hasPendingCheckoutMock.mockReturnValue(true);
+    pollCheckoutMock.mockResolvedValueOnce("activated" as never);
+
+    const mounted = mountApp();
+    try {
+      useLegalConsent().acceptLegalConsent("2026-11-22T20:00:00.000Z");
+      await vi.waitFor(() => {
+        expect(pollCheckoutMock).toHaveBeenCalledTimes(1);
+        expect(toastMock).toHaveBeenCalledWith(
+          expect.objectContaining({
+            variant: "default",
+            title: "GainzAI Pro Activated",
+          }),
+        );
+      });
+      expect(fetchEntitlementMock).not.toHaveBeenCalled();
+    } finally {
+      hasPendingCheckoutMock.mockReturnValue(false);
       mounted.unmount();
     }
   });

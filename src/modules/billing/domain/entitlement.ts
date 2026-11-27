@@ -76,6 +76,33 @@ export function isInPastDueGrace(entitlement: Entitlement | null, nowMs = Date.n
   return Number.isFinite(deadlineMs) && deadlineMs > nowMs;
 }
 
+export function isSubscriptionActive(entitlement: Entitlement | null, nowMs = Date.now()): boolean {
+  const sub = entitlement?.subscription;
+  if (!sub) {
+    return entitlement?.source === "subscription";
+  }
+  if (sub.status === "active" || sub.status === "trialing") {
+    if (!sub.cancelAtPeriodEnd || !sub.currentPeriodEnd) return true;
+    const periodEndMs = Date.parse(sub.currentPeriodEnd);
+    return Number.isFinite(periodEndMs) && periodEndMs > nowMs;
+  }
+  return isInPastDueGrace(entitlement, nowMs);
+}
+
+export function isSubscriptionCancelling(
+  entitlement: Entitlement | null,
+  nowMs = Date.now(),
+): boolean {
+  return (
+    isSubscriptionActive(entitlement, nowMs) &&
+    Boolean(entitlement?.subscription?.cancelAtPeriodEnd)
+  );
+}
+
+export function hasCustomerPortalAccess(entitlement: Entitlement | null): boolean {
+  return Boolean(entitlement?.hasCustomerPortal);
+}
+
 export function isNewerOrEqualSnapshot(
   incoming: Entitlement,
   current: Entitlement | null,

@@ -2,11 +2,26 @@
 import { Check, ChevronDown, Lock, Sparkles } from "@lucide/vue";
 import { ref } from "vue";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
+import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
+import { useToast } from "@/shared/presentation/composables/useToast";
 import { t } from "@/shared/presentation/i18n";
+import { useBillingStore } from "../stores/billingStore";
 import InviteCodeForm from "./InviteCodeForm.vue";
 
+const billingStore = useBillingStore();
+const { toast } = useToast();
 const showInviteForm = ref(false);
+
+function handleSubscribe(): void {
+  void billingStore.startCheckout().orTee(() => {
+    toast({
+      variant: "destructive",
+      title: t("billing.checkoutErrorTitle"),
+      description: t("billing.checkoutErrorDesc"),
+    });
+  });
+}
 </script>
 
 <template>
@@ -84,7 +99,21 @@ const showInviteForm = ref(false);
       </div>
     </div>
 
-    <slot name="actions" />
+    <slot name="actions">
+      <UiButton
+        type="button"
+        variant="default"
+        class="w-full"
+        :disabled="billingStore.isRedirectingToCheckout"
+        @click="handleSubscribe"
+      >
+        {{
+          billingStore.isRedirectingToCheckout
+            ? t("billing.subscribingCta")
+            : t("billing.subscribeCta")
+        }}
+      </UiButton>
+    </slot>
 
     <div class="border-t border-white/5 pt-3 flex flex-col gap-3">
       <button

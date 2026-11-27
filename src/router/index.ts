@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory } from "vue-router";
 import { useAuthStore } from "@/modules/auth/presentation";
+import { clearPendingCheckoutRoute, hasPendingCheckoutRoute } from "@/modules/billing/presentation";
 import { useSpreadsheetStore } from "@/modules/platform/presentation";
 import { useUserProfileStore } from "@/modules/profile/presentation";
 import { useLegalConsent } from "@/shared/presentation/composables/useLegalConsent";
@@ -117,13 +118,22 @@ router.beforeEach(async (to) => {
   const userProfileStore = useUserProfileStore();
   const spreadsheetStore = useSpreadsheetStore();
 
-  return resolveRouteTarget(to.path, to.query, {
+  const hasCheckoutRoute = hasPendingCheckoutRoute();
+  const target = resolveRouteTarget(to.path, to.query, {
     isLoggedIn: authStore.isLoggedIn,
     hasConsent,
     hasDoc: !!spreadsheetStore.doc,
     isLoading: userProfileStore.isLoading,
     setupCompleted: userProfileStore.setupCompleted,
+    hasPendingCheckoutReturn: hasCheckoutRoute,
   });
+  if (
+    hasCheckoutRoute &&
+    (target === "/app/coach" || (target === true && to.path === "/app/coach"))
+  ) {
+    clearPendingCheckoutRoute();
+  }
+  return target;
 });
 
 export default router;

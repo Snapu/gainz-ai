@@ -4,7 +4,7 @@ import { useRouter } from "vue-router";
 import { LEGAL_CONSENT_STORAGE_KEY } from "@/lib/legalConsent";
 import { LOCALE_STORAGE_KEY } from "@/lib/locale";
 import { useAuthStore } from "@/modules/auth/presentation";
-import { clearPendingInviteCode } from "@/modules/billing/presentation";
+import { clearPendingCheckoutReturn, clearPendingInviteCode } from "@/modules/billing/presentation";
 import { useRestTimerStore, useSpreadsheetStore } from "@/modules/platform/presentation";
 import { useLegalConsent } from "@/shared/presentation/composables/useLegalConsent";
 import { clearDerivedSheetCaches } from "@/shared/presentation/composables/useSheetCacheSync";
@@ -70,6 +70,7 @@ export function useAccountActions(): AccountActions {
       useRestTimerStore().reset();
     }
     clearPendingInviteCode();
+    clearPendingCheckoutReturn();
     await nextTick();
     purgeLocalStorage(
       options.keepConsent ? [LOCALE_STORAGE_KEY, LEGAL_CONSENT_STORAGE_KEY] : [LOCALE_STORAGE_KEY],

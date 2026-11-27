@@ -82,6 +82,7 @@ vi.mock("@/shared/presentation/components/ui/UiDropdownMenuItem.vue", () => ({
 
 import GlobalHeaderActions from "@/shared/presentation/components/GlobalHeaderActions.vue";
 import MembershipSheet from "./MembershipSheet.vue";
+import PastDueGraceBanner from "./PastDueGraceBanner.vue";
 import UpgradeCard from "./UpgradeCard.vue";
 
 function makeEntitlement(overrides: Partial<Entitlement> = {}): Entitlement {
@@ -307,6 +308,98 @@ describe("InviteCodeForm, UpgradeCard, and MembershipSheet flows", () => {
       expect(mounted.host.querySelector('[data-testid="membership-sheet"]')).not.toBeNull();
     } finally {
       mounted.unmount();
+    }
+  });
+
+  it("launches checkout from UpgradeCard primary CTA, handles PastDueGraceBanner portal recovery, and shows portal access even for canceled customers", async () => {
+    const store = useBillingStore();
+    const startCheckoutSpy = vi.spyOn(store, "startCheckout").mockReturnValue(okAsync(undefined));
+    const openPortalSpy = vi.spyOn(store, "openPortal").mockReturnValue(okAsync(undefined));
+
+    // UpgradeCard subscribe CTA launches checkout
+    const upgradeMounted = mountWithPinia(UpgradeCard);
+    try {
+      const subscribeBtn = Array.from(upgradeMounted.host.querySelectorAll("button")).find((btn) =>
+        btn.textContent?.includes("Subscribe to GainzAI Pro"),
+      );
+      expect(subscribeBtn).toBeDefined();
+      subscribeBtn?.click();
+      expect(startCheckoutSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      upgradeMounted.unmount();
+    }
+
+    // PastDueGraceBanner shows deadline and opens Stripe Portal in 1 tap
+    store.applyEntitlement(
+      makeEntitlement({
+        source: "subscription",
+        subscription: {
+          status: "past_due",
+          cancelAtPeriodEnd: false,
+          currentPeriodEnd: "2026-12-01T00:00:00.000Z",
+          graceEndsAt: "2026-11-30T00:00:00.000Z",
+        },
+        hasCustomerPortal: true,
+      }),
+    );
+
+    const bannerMounted = mountWithPinia(PastDueGraceBanner);
+    try {
+      expect(bannerMounted.host.textContent).toContain("Nov 30, 2026");
+      const updateBtn = Array.from(bannerMounted.host.querySelectorAll("button")).find((btn) =>
+        btn.textContent?.includes("Update Payment Method"),
+      );
+      expect(updateBtn).toBeDefined();
+      updateBtn?.click();
+      expect(openPortalSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      bannerMounted.unmount();
+    }
+
+    // MembershipSheet shows cancelling expiry & retains invoice/receipt portal access after cancellation
+    store.applyEntitlement(
+      makeEntitlement({
+        source: "subscription",
+        evaluatedAt: "2026-11-27T13:00:00.000Z",
+        subscription: {
+          status: "active",
+          cancelAtPeriodEnd: true,
+          currentPeriodEnd: "2026-12-27T00:00:00.000Z",
+          graceEndsAt: null,
+        },
+        hasCustomerPortal: true,
+      }),
+    );
+
+    const sheetMounted = mountWithPinia(MembershipSheet, { open: true });
+    try {
+      await nextTick();
+      expect(sheetMounted.host.textContent).toContain("Ends Dec 27, 2026");
+
+      store.applyEntitlement(
+        makeEntitlement({
+          source: "none",
+          canUseCoach: false,
+          canUseClassify: false,
+          evaluatedAt: "2026-11-27T14:00:00.000Z",
+          subscription: {
+            status: "canceled",
+            cancelAtPeriodEnd: false,
+            currentPeriodEnd: "2026-10-27T00:00:00.000Z",
+            graceEndsAt: null,
+          },
+          hasCustomerPortal: true,
+        }),
+      );
+      await nextTick();
+      const receiptsBtn = Array.from(sheetMounted.host.querySelectorAll("button")).find((btn) =>
+        btn.textContent?.includes("Download Receipts / Invoices"),
+      );
+      expect(receiptsBtn).toBeDefined();
+      receiptsBtn?.click();
+      expect(openPortalSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      sheetMounted.unmount();
     }
   });
 });

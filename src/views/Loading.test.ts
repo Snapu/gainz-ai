@@ -269,4 +269,30 @@ describe("Loading.vue", () => {
 
     unmount();
   });
+
+  it("routes checkout returns to /app/coach after loading even if checkout polling already settled and consumes the route flag", async () => {
+    const {
+      capturePendingCheckoutReturnFromUrl,
+      clearPendingCheckoutPoll,
+      hasPendingCheckoutRoute,
+    } = await import("@/modules/billing/infrastructure/pendingCheckoutStorage");
+
+    window.history.replaceState(null, "", "/?checkout=success#/loading");
+    capturePendingCheckoutReturnFromUrl();
+    clearPendingCheckoutPoll();
+    expect(hasPendingCheckoutRoute()).toBe(true);
+
+    const first = mountLoading();
+    await nextTick();
+    expect(pushMock).toHaveBeenCalledWith("/app/coach");
+    expect(hasPendingCheckoutRoute()).toBe(false);
+    first.unmount();
+
+    // Subsequent load without pending checkout routes normally to /app/home
+    pushMock.mockClear();
+    const second = mountLoading();
+    await nextTick();
+    expect(pushMock).toHaveBeenCalledWith("/app/home");
+    second.unmount();
+  });
 });

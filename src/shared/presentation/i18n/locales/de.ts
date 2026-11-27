@@ -634,10 +634,37 @@ export const de: MessageSchema = {
     freeFeatureInsights: "Trainingswissenschaftliche Insights (ACWR, e1RM, Volumen-Landmarks)",
     billingNotice:
       "Abrechnung, Rechnungen und Kündigung laufen sicher über Stripe / Link (erscheint als LINK.COM* auf dem Kontoauszug).",
+    subscribeCta: "GainzAI Pro abonnieren",
+    subscribingCta: "Checkout wird geöffnet...",
+    checkoutErrorTitle: "Checkout nicht verfügbar",
+    checkoutErrorDesc:
+      "Der Stripe-Checkout konnte gerade nicht geöffnet werden. Bitte versuche es erneut.",
+    checkoutSyncing: "Mitgliedschaftsstatus wird bestätigt...",
+    checkoutSuccessTitle: "GainzAI Pro aktiviert",
+    checkoutSuccessDesc:
+      "Volles KI-Coaching und adaptive Trainingsplanung sind jetzt freigeschaltet.",
+    checkoutPendingTitle: "Zahlung eingegangen — Zugang wird aktiviert",
+    checkoutPendingDesc:
+      "Dein Abo wird gerade synchronisiert und in Kürze automatisch freigeschaltet.",
     membershipTitle: "Mitgliedschaft",
-    membershipSubtitle: "Aktueller Zugangsstatus und Einlösung von Einladungscodes.",
+    membershipSubtitle: "Aktueller Zugangsstatus, Abo-Verwaltung und Einladungscodes.",
     statusPro: "GainzAI Pro",
+    statusPastDue: "Zahlungs-Kulanzfrist",
     statusTester: "Tester-Zugang",
+    renewsOn: "Verlängert am {date}",
+    cancelsOn: "Endet am {date}",
+    pastDueBadge: "Frist bis {date}",
+    pastDueTitle: "Zahlungsmethode aktualisieren",
+    pastDueDesc:
+      "Deine letzte Verlängerung ist fehlgeschlagen. Das KI-Coaching bleibt bis {date} aktiv, damit dein Training ungestört weiterläuft.",
+    pastDueFallbackDesc:
+      "Deine letzte Verlängerung ist fehlgeschlagen. Bitte aktualisiere deine Zahlungsmethode im Stripe-Portal.",
+    pastDueAction: "Zahlungsmethode aktualisieren",
+    manageSubscription: "Abo verwalten & Belege",
+    viewBillingHistory: "Belege & Rechnungen abrufen",
+    openingPortal: "Portal wird geöffnet...",
+    portalErrorTitle: "Portal nicht verfügbar",
+    portalErrorDesc: "Das Stripe-Kundenportal konnte gerade nicht geöffnet werden.",
     statusStarter: "Starter-Kontingent",
     statusStarterDetail: "{remaining} / {limit} KI-Coaching-Briefings verbleibend",
     statusFree: "Kostenlose Basisfunktionen",

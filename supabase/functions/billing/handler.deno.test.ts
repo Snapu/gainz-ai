@@ -333,3 +333,181 @@ Deno.test("handleBillingRequest validates redeem-invite codes, maps typed errors
     },
   });
 });
+
+Deno.test("handleBillingRequest checkout binds server config, prevents duplicate subscriptions across cancelling/past_due states, and reuses customer after canceled", async () => {
+  const stripeEnv = {
+    STRIPE_SECRET_KEY: "sk_test_123",
+    STRIPE_MONTHLY_PRICE_ID: "price_monthly_799",
+    APP_PUBLIC_URL: "https://gainz.example.com/",
+  };
+
+  // Fresh checkout uses strict APP_PUBLIC_URL (ignores spoofable Origin/body URLs) and binds user_id
+  let capturedCheckoutParams: Record<string, unknown> | null = null;
+  const freshCheckoutRes = await handleBillingRequest(
+    createPostRequest(
+      { action: "checkout", successUrl: "https://evil.com" },
+      "ya29.valid-access-token",
+      { Origin: "https://evil.com" },
+    ),
+    createDeps({
+      getEnv: createTestEnv(stripeEnv),
+      getUserSubscriptionSummary: async () => ({ ok: true, row: null }),
+      createManagedCheckoutSession: async (_key, params) => {
+        capturedCheckoutParams = params;
+        return { ok: true, url: "https://checkout.stripe.com/c/pay/cs_new" };
+      },
+    }),
+  );
+  assert.equal(freshCheckoutRes.status, 200);
+  assert.deepEqual(await freshCheckoutRes.json(), {
+    checkoutUrl: "https://checkout.stripe.com/c/pay/cs_new",
+    redirectedToPortal: false,
+  });
+  assert.deepEqual(capturedCheckoutParams, {
+    priceId: "price_monthly_799",
+    userId: "google-sub-123",
+    customerId: null,
+    successUrl: "https://gainz.example.com/?checkout=success",
+    cancelUrl: "https://gainz.example.com/?checkout=cancelled",
+  });
+
+  // Active subscription with cancel_at_period_end=true OR past_due redirects to Customer Portal
+  for (const status of ["active", "trialing", "past_due", "unpaid", "paused"] as const) {
+    let portalCustomer: string | null = null;
+    const dupGuardRes = await handleBillingRequest(
+      createPostRequest({ action: "checkout" }),
+      createDeps({
+        getEnv: createTestEnv(stripeEnv),
+        getUserSubscriptionSummary: async () => ({
+          ok: true,
+          row: {
+            user_id: "google-sub-123",
+            provider: "stripe",
+            provider_subscription_id: "sub_existing_1",
+            provider_customer_id: "cus_existing_1",
+            price_id: "price_monthly_799",
+            status,
+            cancel_at_period_end: status === "active",
+            current_period_end: "2026-12-27T00:00:00.000Z",
+            grace_ends_at: status === "past_due" ? "2026-11-30T00:00:00.000Z" : null,
+            last_event_created: 100,
+          },
+        }),
+        createCustomerPortalSession: async (_key, params) => {
+          portalCustomer = params.customerId;
+          return { ok: true, url: "https://billing.stripe.com/p/session/bps_dup_guard" };
+        },
+        createManagedCheckoutSession: async () => {
+          throw new Error("must not create a duplicate checkout session");
+        },
+      }),
+    );
+    assert.equal(dupGuardRes.status, 200);
+    assert.equal(portalCustomer, "cus_existing_1");
+    assert.deepEqual(await dupGuardRes.json(), {
+      checkoutUrl: "https://billing.stripe.com/p/session/bps_dup_guard",
+      redirectedToPortal: true,
+    });
+  }
+
+  // Re-subscribing after canceled reuses existing customerId
+  let reusedCustomer: string | null | undefined = null;
+  const resubRes = await handleBillingRequest(
+    createPostRequest({ action: "checkout" }),
+    createDeps({
+      getEnv: createTestEnv(stripeEnv),
+      getUserSubscriptionSummary: async () => ({
+        ok: true,
+        row: {
+          user_id: "google-sub-123",
+          provider: "stripe",
+          provider_subscription_id: "sub_old_canceled",
+          provider_customer_id: "cus_returning_99",
+          price_id: "price_monthly_799",
+          status: "canceled",
+          cancel_at_period_end: false,
+          current_period_end: "2026-11-01T00:00:00.000Z",
+          grace_ends_at: null,
+          last_event_created: 90,
+        },
+      }),
+      createManagedCheckoutSession: async (_key, params) => {
+        reusedCustomer = params.customerId;
+        return { ok: true, url: "https://checkout.stripe.com/c/pay/cs_resub" };
+      },
+    }),
+  );
+  assert.equal(resubRes.status, 200);
+  assert.equal(reusedCustomer, "cus_returning_99");
+});
+
+Deno.test("handleBillingRequest portal mints Customer Portal sessions for active and canceled customers and returns 404 when absent", async () => {
+  const stripeEnv = {
+    STRIPE_SECRET_KEY: "sk_test_123",
+    APP_PUBLIC_URL: "https://gainz.example.com",
+  };
+
+  const missingRes = await handleBillingRequest(
+    createPostRequest({ action: "portal" }),
+    createDeps({
+      getEnv: createTestEnv(stripeEnv),
+      getUserSubscriptionSummary: async () => ({ ok: true, row: null }),
+    }),
+  );
+  assert.equal(missingRes.status, 404);
+  assert.deepEqual(await missingRes.json(), { error: "no-customer-portal" });
+
+  let capturedReturnUrl = "";
+  const canceledCustomerPortalRes = await handleBillingRequest(
+    createPostRequest({ action: "portal" }),
+    createDeps({
+      getEnv: createTestEnv(stripeEnv),
+      getUserSubscriptionSummary: async () => ({
+        ok: true,
+        row: {
+          user_id: "google-sub-123",
+          provider: "stripe",
+          provider_subscription_id: "sub_canceled",
+          provider_customer_id: "cus_past_subscriber",
+          price_id: "price_monthly_799",
+          status: "canceled",
+          cancel_at_period_end: false,
+          current_period_end: "2026-10-01T00:00:00.000Z",
+          grace_ends_at: null,
+          last_event_created: 50,
+        },
+      }),
+      createCustomerPortalSession: async (_key, params) => {
+        capturedReturnUrl = params.returnUrl;
+        return { ok: true, url: "https://billing.stripe.com/p/session/bps_receipts" };
+      },
+    }),
+  );
+  assert.equal(canceledCustomerPortalRes.status, 200);
+  assert.equal(capturedReturnUrl, "https://gainz.example.com/");
+  assert.deepEqual(await canceledCustomerPortalRes.json(), {
+    portalUrl: "https://billing.stripe.com/p/session/bps_receipts",
+  });
+});
+
+Deno.test("handleBillingRequest returns 503 for checkout and portal when Stripe config is unset while status succeeds", async () => {
+  const statusRes = await handleBillingRequest(
+    createPostRequest({ action: "status" }),
+    createDeps(),
+  );
+  assert.equal(statusRes.status, 200);
+
+  const checkoutUnconfigured = await handleBillingRequest(
+    createPostRequest({ action: "checkout" }),
+    createDeps(),
+  );
+  assert.equal(checkoutUnconfigured.status, 503);
+  assert.deepEqual(await checkoutUnconfigured.json(), { error: "billing-unavailable" });
+
+  const portalUnconfigured = await handleBillingRequest(
+    createPostRequest({ action: "portal" }),
+    createDeps(),
+  );
+  assert.equal(portalUnconfigured.status, 503);
+  assert.deepEqual(await portalUnconfigured.json(), { error: "billing-unavailable" });
+});

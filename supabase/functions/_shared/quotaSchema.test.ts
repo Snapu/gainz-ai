@@ -6,6 +6,7 @@ import { DEFAULT_DAILY_COST_CAP_USD_MICROS } from "./tokenCost";
 const SCHEMA_PATH = resolve(process.cwd(), "supabase/schemas/01_ai_daily_usage.sql");
 const TOKEN_SCHEMA_PATH = resolve(process.cwd(), "supabase/schemas/03_ai_token_usage.sql");
 const INVITE_SCHEMA_PATH = resolve(process.cwd(), "supabase/schemas/04_invite_grants.sql");
+const SUBSCRIPTION_SCHEMA_PATH = resolve(process.cwd(), "supabase/schemas/05_subscriptions.sql");
 const MIGRATIONS_DIR = resolve(process.cwd(), "supabase/migrations");
 
 const GLOBAL_TABLE_START = "create table if not exists public.ai_daily_global_usage";
@@ -64,6 +65,18 @@ const REDEEM_INVITE_CODE_START = "create or replace function public.redeem_invit
 const REDEEM_INVITE_CODE_END =
   "grant execute on function public.redeem_invite_code(text, text) to service_role;";
 
+const USER_SUBSCRIPTIONS_TABLE_START = "create table if not exists public.user_subscriptions";
+const USER_SUBSCRIPTIONS_TABLE_END =
+  "grant select, insert, update, delete on table public.user_subscriptions to service_role;";
+
+const PROCESSED_WEBHOOK_TABLE_START = "create table if not exists public.processed_webhook_events";
+const PROCESSED_WEBHOOK_TABLE_END =
+  "grant select, insert, update, delete on table public.processed_webhook_events to service_role;";
+
+const SYNC_SUBSCRIPTION_RPC_START = "create or replace function public.sync_subscription_webhook(";
+const SYNC_SUBSCRIPTION_RPC_END =
+  "grant execute on function public.sync_subscription_webhook(text, bigint, text, text, text, text, text, text, boolean, timestamptz) to service_role;";
+
 function extractSection(sql: string, startMarker: string, endMarker: string): string {
   const start = sql.indexOf(startMarker);
   if (start === -1) {
@@ -92,6 +105,7 @@ describe("ai_daily_global_usage schema and migration contract", () => {
   const schemaSql = readFileSync(SCHEMA_PATH, "utf8");
   const tokenSchemaSql = readFileSync(TOKEN_SCHEMA_PATH, "utf8");
   const inviteSchemaSql = readFileSync(INVITE_SCHEMA_PATH, "utf8");
+  const subscriptionSchemaSql = readFileSync(SUBSCRIPTION_SCHEMA_PATH, "utf8");
   const migrations = readdirSync(MIGRATIONS_DIR)
     .filter((file) => file.endsWith(".sql"))
     .sort()
@@ -155,6 +169,21 @@ describe("ai_daily_global_usage schema and migration contract", () => {
     REDEEM_INVITE_CODE_START,
     REDEEM_INVITE_CODE_END,
   );
+  const userSubscriptionsBlock = extractSection(
+    subscriptionSchemaSql,
+    USER_SUBSCRIPTIONS_TABLE_START,
+    USER_SUBSCRIPTIONS_TABLE_END,
+  );
+  const processedWebhookBlock = extractSection(
+    subscriptionSchemaSql,
+    PROCESSED_WEBHOOK_TABLE_START,
+    PROCESSED_WEBHOOK_TABLE_END,
+  );
+  const syncSubscriptionRpcBlock = extractSection(
+    subscriptionSchemaSql,
+    SYNC_SUBSCRIPTION_RPC_START,
+    SYNC_SUBSCRIPTION_RPC_END,
+  );
 
   it("keeps ai_daily_global_usage, free_allowance_usage, token usage, invite tables, views, and RPCs in zero-drift sync with latest migrations", () => {
     expect(loadLatestMigrationSection(migrations, GLOBAL_TABLE_START, GLOBAL_TABLE_END)).toBe(
@@ -205,6 +234,27 @@ describe("ai_daily_global_usage schema and migration contract", () => {
     expect(
       loadLatestMigrationSection(migrations, REDEEM_INVITE_CODE_START, REDEEM_INVITE_CODE_END),
     ).toBe(redeemInviteCodeBlock);
+    expect(
+      loadLatestMigrationSection(
+        migrations,
+        USER_SUBSCRIPTIONS_TABLE_START,
+        USER_SUBSCRIPTIONS_TABLE_END,
+      ),
+    ).toBe(userSubscriptionsBlock);
+    expect(
+      loadLatestMigrationSection(
+        migrations,
+        PROCESSED_WEBHOOK_TABLE_START,
+        PROCESSED_WEBHOOK_TABLE_END,
+      ),
+    ).toBe(processedWebhookBlock);
+    expect(
+      loadLatestMigrationSection(
+        migrations,
+        SYNC_SUBSCRIPTION_RPC_START,
+        SYNC_SUBSCRIPTION_RPC_END,
+      ),
+    ).toBe(syncSubscriptionRpcBlock);
   });
 
   it("wraps LOCK TABLE migrations in an explicit transaction (the Supabase CLI adds none)", () => {
@@ -320,6 +370,8 @@ describe("ai_daily_global_usage schema and migration contract", () => {
       ["invite_codes", inviteCodesBlock],
       ["invite_grants", inviteGrantsBlock],
       ["invite_redeem_attempts", inviteAttemptsBlock],
+      ["user_subscriptions", userSubscriptionsBlock],
+      ["processed_webhook_events", processedWebhookBlock],
     ] as const) {
       expect(block).toContain(`alter table public.${tableName} enable row level security;`);
       expect(block).toContain('create policy "service_role_full_access"');
@@ -353,6 +405,11 @@ describe("ai_daily_global_usage schema and migration contract", () => {
         checkInviteRateLimitBlock,
       ],
       ["redeem_invite_code", "text, text", redeemInviteCodeBlock],
+      [
+        "sync_subscription_webhook",
+        "text, bigint, text, text, text, text, text, text, boolean, timestamptz",
+        syncSubscriptionRpcBlock,
+      ],
     ] as const) {
       expect(block).toMatch(/security invoker/i);
       expect(block).toContain("set search_path = ''");
@@ -395,5 +452,24 @@ describe("ai_daily_global_usage schema and migration contract", () => {
     expect(allMigrationsSql).toContain(
       "drop function if exists public.authorize_ai_request(text, text, text, text, integer, integer, integer, bigint);",
     );
+
+    // Subscription precedence (active/trialing/3-day past_due grace) & monotonic webhook sync
+    for (const block of [entitlementStatusBlock, authorizeBlock]) {
+      expect(block).toContain("from public.user_subscriptions");
+      expect(block).toContain("v_sub_status in ('active', 'trialing')");
+      expect(block).toContain("v_sub_status = 'past_due'");
+      expect(block).toContain("v_sub_grace_ends_at > v_now");
+    }
+    expect(authorizeBlock).toContain("'subscription'::text");
+    expect(syncSubscriptionRpcBlock).toContain("pg_advisory_xact_lock");
+    expect(syncSubscriptionRpcBlock).toContain("interval '3 days'");
+    expect(syncSubscriptionRpcBlock).toContain("public.user_subscriptions.status <> 'canceled'");
+    expect(syncSubscriptionRpcBlock).toContain(
+      "(public.user_subscriptions.status = 'canceled' and excluded.status <> 'canceled')",
+    );
+    expect(syncSubscriptionRpcBlock).toContain(
+      "excluded.last_event_created >= public.user_subscriptions.last_event_created",
+    );
+    expect(processedWebhookBlock).toContain("idx_processed_webhook_events_processed_at");
   });
 });

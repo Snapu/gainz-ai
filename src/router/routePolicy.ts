@@ -14,6 +14,7 @@ export interface NavigationState {
   hasDoc: boolean;
   isLoading: boolean;
   setupCompleted: boolean;
+  hasPendingCheckoutReturn?: boolean;
 }
 
 function isExcludedAuthenticatedRoute(
@@ -50,5 +51,8 @@ export function resolveRouteTarget(
     return normalizedPath.startsWith("/wizard") ? true : "/wizard/goal";
   }
 
-  return isExcludedAuthenticatedRoute(normalizedPath, query) ? "/app/home" : true;
+  if (isExcludedAuthenticatedRoute(normalizedPath, query)) {
+    return state.hasPendingCheckoutReturn ? "/app/coach" : "/app/home";
+  }
+  return true;
 }

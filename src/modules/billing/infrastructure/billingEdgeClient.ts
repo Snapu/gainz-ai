@@ -1,7 +1,7 @@
 import { ResultAsync } from "neverthrow";
 import { z } from "zod";
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "@/modules/platform/infrastructure";
-import type { BillingGateway } from "../application";
+import type { BillingGateway, CheckoutRedirectResult, PortalRedirectResult } from "../application";
 import type { BillingError, Entitlement } from "../domain";
 import { billingStatusResponseSchema } from "./entitlementSchema";
 
@@ -18,6 +18,34 @@ const KNOWN_INVITE_ERRORS = new Set<BillingError>([
   "invite-already-redeemed",
   "rate-limit-exceeded",
 ]);
+
+export function isTrustedStripeUrl(rawUrl: string): boolean {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== "https:") return false;
+    if (parsed.username || parsed.password) return false;
+    const host = parsed.hostname.toLowerCase();
+    return host === "stripe.com" || host.endsWith(".stripe.com");
+  } catch {
+    return false;
+  }
+}
+
+export function navigateToTrustedBillingUrl(rawUrl: string): boolean {
+  if (!isTrustedStripeUrl(rawUrl)) return false;
+  if (typeof window === "undefined") return false;
+  window.location.assign(rawUrl);
+  return true;
+}
+
+const checkoutResponseSchema: z.ZodType<CheckoutRedirectResult> = z.object({
+  checkoutUrl: z.string().refine(isTrustedStripeUrl, "Untrusted Stripe checkout URL"),
+  redirectedToPortal: z.boolean(),
+});
+
+const portalResponseSchema: z.ZodType<PortalRedirectResult> = z.object({
+  portalUrl: z.string().refine(isTrustedStripeUrl, "Untrusted Stripe portal URL"),
+});
 
 class BillingHttpError extends Error {
   readonly status: number;
@@ -44,10 +72,11 @@ async function parseErrorCode(response: Response): Promise<BillingError | undefi
   return undefined;
 }
 
-async function callBillingEdge(
+async function callBillingEdge<T>(
   accessToken: string,
   payloadBody: Record<string, unknown>,
-): Promise<Entitlement> {
+  schema: z.ZodType<T>,
+): Promise<T> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), BILLING_REQUEST_TIMEOUT_MS);
 
@@ -68,8 +97,7 @@ async function callBillingEdge(
       throw new BillingHttpError(response.status, code);
     }
 
-    const parsed = billingStatusResponseSchema.parse(await response.json());
-    return parsed.entitlement;
+    return schema.parse(await response.json());
   } finally {
     clearTimeout(timeoutId);
   }
@@ -88,13 +116,31 @@ export function createBillingGateway(): BillingGateway {
   return {
     fetchStatus(accessToken: string): ResultAsync<Entitlement, BillingError> {
       return ResultAsync.fromPromise(
-        callBillingEdge(accessToken, { action: "status" }),
+        callBillingEdge(accessToken, { action: "status" }, billingStatusResponseSchema).then(
+          (res) => res.entitlement,
+        ),
         mapBillingEdgeError,
       );
     },
     redeemInvite(accessToken: string, code: string): ResultAsync<Entitlement, BillingError> {
       return ResultAsync.fromPromise(
-        callBillingEdge(accessToken, { action: "redeem-invite", code }),
+        callBillingEdge(
+          accessToken,
+          { action: "redeem-invite", code },
+          billingStatusResponseSchema,
+        ).then((res) => res.entitlement),
+        mapBillingEdgeError,
+      );
+    },
+    createCheckoutSession(accessToken: string): ResultAsync<CheckoutRedirectResult, BillingError> {
+      return ResultAsync.fromPromise(
+        callBillingEdge(accessToken, { action: "checkout" }, checkoutResponseSchema),
+        mapBillingEdgeError,
+      );
+    },
+    createPortalSession(accessToken: string): ResultAsync<PortalRedirectResult, BillingError> {
+      return ResultAsync.fromPromise(
+        callBillingEdge(accessToken, { action: "portal" }, portalResponseSchema),
         mapBillingEdgeError,
       );
     },

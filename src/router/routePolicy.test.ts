@@ -93,4 +93,15 @@ describe("resolveRouteTarget", () => {
     expect(resolveRouteTarget("/app/home", undefined, readyState)).toBe(true);
     expect(resolveRouteTarget("/app/insights", undefined, readyState)).toBe(true);
   });
+
+  it("routes post-load checkout returns away from auth/loading gates to /app/coach", () => {
+    const checkoutReady: NavigationState = {
+      ...readyState,
+      hasPendingCheckoutReturn: true,
+    };
+    expect(resolveRouteTarget("/", undefined, checkoutReady)).toBe("/app/coach");
+    expect(resolveRouteTarget("/loading", undefined, checkoutReady)).toBe("/app/coach");
+    expect(resolveRouteTarget("/consent", undefined, checkoutReady)).toBe("/app/coach");
+    expect(resolveRouteTarget("/app/coach", undefined, checkoutReady)).toBe(true);
+  });
 });

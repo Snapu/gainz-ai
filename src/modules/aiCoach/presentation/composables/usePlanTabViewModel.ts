@@ -25,6 +25,8 @@ export function usePlanTabViewModel() {
   const starterRemainingCount = computed<number>(() => billingStore.freeCoachRemaining);
   const starterLimitCount = computed<number>(() => billingStore.freeCoachLimit);
   const isCoachLocked = computed<boolean>(() => !billingStore.canUseCoach);
+  const isInPastDueGrace = computed<boolean>(() => billingStore.isInPastDueGrace);
+  const isPollingCheckout = computed<boolean>(() => billingStore.isPollingCheckout);
 
   const activeSessionIndex = computed<number>(() => {
     if (!planStore.activePlan) return -1;
@@ -104,6 +106,8 @@ export function usePlanTabViewModel() {
     starterRemainingCount,
     starterLimitCount,
     isCoachLocked,
+    isInPastDueGrace,
+    isPollingCheckout,
     isPlanSessionCompleted,
     isRegenerating,
     regeneratePlan,

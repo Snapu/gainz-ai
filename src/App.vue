@@ -7,7 +7,10 @@ import { useRouter } from "vue-router";
 import { useAiOrchestratorStore } from "@/modules/aiCoach/presentation";
 import { useAuthErrorHandler, useAuthStore } from "@/modules/auth/presentation";
 import {
+  capturePendingCheckoutReturnFromUrl,
   capturePendingInviteFromUrl,
+  clearPendingCheckoutRoute,
+  hasPendingCheckoutReturn,
   resolveInviteErrorMessage,
   useBillingStore,
 } from "@/modules/billing/presentation";
@@ -29,6 +32,38 @@ const { handleAuthError } = useAuthErrorHandler();
 const { hasLegalConsent } = useLegalConsent();
 const { toast } = useToast();
 
+function showPendingInviteToast(
+  result: Awaited<ReturnType<ReturnType<typeof useBillingStore>["redeemPendingInviteIfPresent"]>>,
+): void {
+  if (!result) return;
+  if (result.isOk()) {
+    toast({
+      variant: "default",
+      title: t("billing.inviteRedeemSuccessTitle"),
+      description: t("billing.inviteRedeemSuccessDesc"),
+    });
+    return;
+  }
+  toast({
+    variant: "destructive",
+    title: t("billing.inviteRedeemErrorTitle"),
+    description: resolveInviteErrorMessage(result.error),
+  });
+}
+
+function showCheckoutSyncToast(outcome: "activated" | "pending" | null): void {
+  if (!outcome) return;
+  toast({
+    variant: "default",
+    title:
+      outcome === "activated"
+        ? t("billing.checkoutSuccessTitle")
+        : t("billing.checkoutPendingTitle"),
+    description:
+      outcome === "activated" ? t("billing.checkoutSuccessDesc") : t("billing.checkoutPendingDesc"),
+  });
+}
+
 let consentedServicesScope: EffectScope | null = null;
 let triggerConsentedBillingSync: (() => void) | null = null;
 
@@ -42,34 +77,22 @@ function startConsentedServices(): void {
     let isSyncing = false;
     let pendingResync = false;
     const billingStore = useBillingStore();
-    const showPendingInviteToast = (
-      result: Awaited<ReturnType<typeof billingStore.redeemPendingInviteIfPresent>>,
-    ) => {
-      if (!result) return;
-      if (result.isOk()) {
-        toast({
-          variant: "default",
-          title: t("billing.inviteRedeemSuccessTitle"),
-          description: t("billing.inviteRedeemSuccessDesc"),
-        });
-        return;
-      }
-      toast({
-        variant: "destructive",
-        title: t("billing.inviteRedeemErrorTitle"),
-        description: resolveInviteErrorMessage(result.error),
-      });
+    const isScopeActive = () => !disposed && authStore.isLoggedIn;
+    const syncPendingInvite = async () => {
+      const result = await billingStore.redeemPendingInviteIfPresent();
+      if (!isScopeActive() || !result) return false;
+      showPendingInviteToast(result);
+      return result.isOk() && !hasPendingCheckoutReturn();
     };
     const runSingleBillingSync = async () => {
-      const result = await billingStore.redeemPendingInviteIfPresent();
-      if (disposed || !authStore.isLoggedIn) return;
-      if (result) {
-        showPendingInviteToast(result);
-        if (result.isOk()) return;
+      if (await syncPendingInvite()) return;
+      if (!isScopeActive()) return;
+      if (hasPendingCheckoutReturn()) {
+        const pollOutcome = await billingStore.pollCheckoutEntitlementIfPending();
+        if (isScopeActive()) showCheckoutSyncToast(pollOutcome);
+        return;
       }
-      if (!disposed && authStore.isLoggedIn) {
-        await billingStore.fetchEntitlement();
-      }
+      await billingStore.fetchEntitlement();
     };
     const syncBillingOnConnect = async () => {
       if (typeof navigator !== "undefined" && navigator.onLine === false) return;
@@ -108,8 +131,19 @@ function startConsentedServices(): void {
 }
 
 function handleHashChange(): void {
-  const captured = capturePendingInviteFromUrl();
-  if (captured && authStore.isLoggedIn && hasLegalConsent.value) {
+  const capturedInvite = capturePendingInviteFromUrl();
+  const capturedCheckout = capturePendingCheckoutReturnFromUrl();
+  if (!authStore.isLoggedIn || !hasLegalConsent.value) {
+    return;
+  }
+  if (capturedCheckout) {
+    if (router.currentRoute.value.path === "/app/coach") {
+      clearPendingCheckoutRoute();
+    } else {
+      void router.push("/app/coach");
+    }
+  }
+  if (capturedInvite || capturedCheckout) {
     triggerConsentedBillingSync?.();
   }
 }

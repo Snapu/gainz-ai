@@ -16,10 +16,16 @@ import {
 } from "../_shared/invite.ts";
 import { getEntitlementStatus } from "../_shared/quota.ts";
 import {
+  createCustomerPortalSession,
+  createManagedCheckoutSession,
+  normalizeAppPublicUrl,
+} from "../_shared/stripe.ts";
+import {
   type AbusePreventionPeppers,
   deriveSubjectDigests,
   loadAbusePreventionPeppers,
 } from "../_shared/subjectDigest.ts";
+import { getUserSubscriptionSummary } from "../_shared/subscriptions.ts";
 
 export interface BillingServerConfig {
   clientId: string;
@@ -34,9 +40,16 @@ export interface BillingHandlerDeps {
   getEntitlementStatus?: typeof getEntitlementStatus;
   checkInviteRateLimit?: typeof checkInviteRedeemRateLimit;
   redeemInviteCode?: typeof redeemInviteCode;
+  getUserSubscriptionSummary?: typeof getUserSubscriptionSummary;
+  createManagedCheckoutSession?: typeof createManagedCheckoutSession;
+  createCustomerPortalSession?: typeof createCustomerPortalSession;
 }
 
-type BillingAction = { action: "status" } | { action: "redeem-invite"; code: string };
+type BillingAction =
+  | { action: "status" }
+  | { action: "redeem-invite"; code: string }
+  | { action: "checkout" }
+  | { action: "portal" };
 
 function loadBillingServerConfig(
   readEnv: (name: string) => string | undefined = getEnv,
@@ -62,7 +75,97 @@ function parseBillingAction(value: unknown): BillingAction | null {
   if (record.action === "redeem-invite" && typeof record.code === "string") {
     return { action: "redeem-invite", code: record.code };
   }
+  if (record.action === "checkout") {
+    return { action: "checkout" };
+  }
+  if (record.action === "portal") {
+    return { action: "portal" };
+  }
   return null;
+}
+
+const PORTAL_REDIRECT_STATUSES = new Set(["active", "trialing", "past_due", "unpaid", "paused"]);
+
+async function handleCheckoutAction(
+  userId: string,
+  config: BillingServerConfig,
+  readEnv: (name: string) => string | undefined,
+  deps: BillingHandlerDeps,
+): Promise<Response> {
+  const stripeSecretKey = readEnv("STRIPE_SECRET_KEY")?.trim();
+  const priceId = readEnv("STRIPE_MONTHLY_PRICE_ID")?.trim();
+  const appPublicUrl = normalizeAppPublicUrl(readEnv("APP_PUBLIC_URL"));
+  if (!stripeSecretKey || !priceId || !appPublicUrl) {
+    return jsonResponse({ error: "billing-unavailable" }, 503);
+  }
+
+  const getSummary = deps.getUserSubscriptionSummary ?? getUserSubscriptionSummary;
+  const subResult = await getSummary(config.supabaseUrl, config.serviceRoleKey, userId);
+  if (!subResult.ok) {
+    return jsonResponse({ error: "billing-unavailable" }, 500);
+  }
+
+  const existing = subResult.row;
+  if (existing && PORTAL_REDIRECT_STATUSES.has(existing.status)) {
+    const createPortal = deps.createCustomerPortalSession ?? createCustomerPortalSession;
+    const portalRes = await createPortal(stripeSecretKey, {
+      customerId: existing.provider_customer_id,
+      returnUrl: `${appPublicUrl}/`,
+    });
+    if (!portalRes.ok) {
+      return jsonResponse({ error: "billing-unavailable" }, 500);
+    }
+    return jsonResponse({ checkoutUrl: portalRes.url, redirectedToPortal: true }, 200);
+  }
+
+  const createCheckout = deps.createManagedCheckoutSession ?? createManagedCheckoutSession;
+  const sessionRes = await createCheckout(stripeSecretKey, {
+    priceId,
+    userId,
+    customerId: existing?.provider_customer_id ?? null,
+    successUrl: `${appPublicUrl}/?checkout=success`,
+    cancelUrl: `${appPublicUrl}/?checkout=cancelled`,
+  });
+  if (!sessionRes.ok) {
+    return jsonResponse({ error: "billing-unavailable" }, 500);
+  }
+
+  return jsonResponse({ checkoutUrl: sessionRes.url, redirectedToPortal: false }, 200);
+}
+
+async function handlePortalAction(
+  userId: string,
+  config: BillingServerConfig,
+  readEnv: (name: string) => string | undefined,
+  deps: BillingHandlerDeps,
+): Promise<Response> {
+  const stripeSecretKey = readEnv("STRIPE_SECRET_KEY")?.trim();
+  const appPublicUrl = normalizeAppPublicUrl(readEnv("APP_PUBLIC_URL"));
+  if (!stripeSecretKey || !appPublicUrl) {
+    return jsonResponse({ error: "billing-unavailable" }, 503);
+  }
+
+  const getSummary = deps.getUserSubscriptionSummary ?? getUserSubscriptionSummary;
+  const subResult = await getSummary(config.supabaseUrl, config.serviceRoleKey, userId);
+  if (!subResult.ok) {
+    return jsonResponse({ error: "billing-unavailable" }, 500);
+  }
+
+  const customerId = subResult.row?.provider_customer_id?.trim();
+  if (!customerId) {
+    return jsonResponse({ error: "no-customer-portal" }, 404);
+  }
+
+  const createPortal = deps.createCustomerPortalSession ?? createCustomerPortalSession;
+  const portalRes = await createPortal(stripeSecretKey, {
+    customerId,
+    returnUrl: `${appPublicUrl}/`,
+  });
+  if (!portalRes.ok) {
+    return jsonResponse({ error: "billing-unavailable" }, 500);
+  }
+
+  return jsonResponse({ portalUrl: portalRes.url }, 200);
 }
 
 const INVITE_ERROR_STATUS: Record<InviteRedeemErrorCode | "billing-unavailable", number> = {
@@ -147,7 +250,8 @@ export async function handleBillingRequest(
     return jsonResponse({ error: "unauthorized" }, 401);
   }
 
-  const config = loadBillingServerConfig(deps.getEnv ?? getEnv);
+  const readEnv = deps.getEnv ?? getEnv;
+  const config = loadBillingServerConfig(readEnv);
   if (!config) {
     return jsonResponse({ error: "missing-server-config" }, 500);
   }
@@ -166,6 +270,13 @@ export async function handleBillingRequest(
   const parsedAction = parseBillingAction(bodyResult.data);
   if (!parsedAction) {
     return jsonResponse({ error: "invalid-request" }, 400);
+  }
+
+  if (parsedAction.action === "checkout") {
+    return handleCheckoutAction(caller.userId, config, readEnv, deps);
+  }
+  if (parsedAction.action === "portal") {
+    return handlePortalAction(caller.userId, config, readEnv, deps);
   }
 
   const digests = await deriveSubjectDigests(caller.userId, config.peppers);
