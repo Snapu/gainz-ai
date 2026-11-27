@@ -582,8 +582,11 @@ export const en = {
     deleteSubtitle: "Permanent removal of app data and permissions",
     deleteWarning:
       "This action permanently deletes your server-side usage data, revokes Gainz AI's Google access, and clears all local app data on this device. This cannot be undone.",
+    deleteSubscriptionNotice:
+      "Your active GainzAI Pro subscription will also be canceled immediately (not at the end of the billing period) when you delete your account.",
     deleteItemsTitle: "What will be deleted or revoked",
-    deleteItemServer: "Server usage counters and temporary AI recovery entries (Supabase)",
+    deleteItemServer:
+      "Server usage counters, active subscription/tester access, and temporary AI recovery entries (Supabase)",
     deleteItemGoogle: "Google OAuth access permissions granted to Gainz AI",
     deleteItemLocal: "All local tokens, consent status, cached plans, chats, and recovery events",
     deleteDriveNoteKeep:
@@ -598,6 +601,9 @@ export const en = {
       "Your server records, Google connection, and local app data have been deleted.",
     deletedPartialRevokeToastDesc:
       "Your server records and local app data have been deleted. You can also verify Google permissions in your Google Account settings.",
+    deletedBillingPendingToastTitle: "Subscription Cancellation Queued",
+    deletedBillingPendingToastDesc:
+      "Your account data was erased immediately. Stripe was briefly unreachable, so your subscription cancellation is queued automatically.",
     deleteFailedTitle: "Deletion Failed",
     deleteFailedDesc:
       "Could not delete server data right now. Please check your internet connection and try again.",

@@ -15,6 +15,7 @@ import {
   type Entitlement,
   getRemainingFreeCoachCount,
   hasCustomerPortalAccess,
+  hasNonTerminatedSubscription as hasNonTerminatedSubscriptionRule,
   isFreeAllowance as isFreeAllowanceRule,
   isInPastDueGrace as isInPastDueGraceRule,
   isInviteGrant as isInviteGrantRule,
@@ -88,6 +89,9 @@ export const useBillingStore = defineStore("billing", () => {
   const freeCoachRemaining = computed(() => getRemainingFreeCoachCount(entitlement.value));
   const freeCoachLimit = computed(() => entitlement.value?.freeAllowance.coachLimit ?? 30);
   const isSubscription = computed(() => isSubscriptionActive(entitlement.value));
+  const hasNonTerminatedSubscription = computed(() =>
+    hasNonTerminatedSubscriptionRule(entitlement.value),
+  );
   const isSubscriptionCancelling = computed(() => isSubscriptionCancellingRule(entitlement.value));
   const subscriptionPeriodEnd = computed(
     () => entitlement.value?.subscription?.currentPeriodEnd ?? null,
@@ -406,6 +410,7 @@ export const useBillingStore = defineStore("billing", () => {
     freeCoachRemaining,
     freeCoachLimit,
     isSubscription,
+    hasNonTerminatedSubscription,
     isSubscriptionCancelling,
     subscriptionPeriodEnd,
     subscriptionGraceEndsAt,

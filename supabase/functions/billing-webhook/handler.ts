@@ -1,11 +1,17 @@
 import { getEnv, jsonResponse } from "../_shared/http.ts";
 import {
+  cancelStripeSubscription,
   extractSubscriptionIdFromStripeEvent,
   fetchCanonicalSubscription,
   type StripeWebhookEventLike,
   verifyStripeWebhookSignature,
 } from "../_shared/stripe.ts";
-import { hasProcessedWebhookEvent, syncSubscriptionWebhook } from "../_shared/subscriptions.ts";
+import {
+  deletePendingSubscriptionCancellation,
+  hasPendingSubscriptionCancellation,
+  hasProcessedWebhookEvent,
+  syncSubscriptionWebhook,
+} from "../_shared/subscriptions.ts";
 
 const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
 
@@ -20,6 +26,9 @@ export interface BillingWebhookDeps {
   getEnv?: (name: string) => string | undefined;
   verifySignature?: typeof verifyStripeWebhookSignature;
   hasProcessedWebhookEvent?: typeof hasProcessedWebhookEvent;
+  hasPendingSubscriptionCancellation?: typeof hasPendingSubscriptionCancellation;
+  cancelStripeSubscription?: typeof cancelStripeSubscription;
+  deletePendingSubscriptionCancellation?: typeof deletePendingSubscriptionCancellation;
   fetchCanonicalSubscription?: typeof fetchCanonicalSubscription;
   syncSubscriptionWebhook?: typeof syncSubscriptionWebhook;
   nowSeconds?: () => number;
@@ -136,6 +145,49 @@ function parseStripeEvent(rawText: string): StripeWebhookEventLike | null {
   }
 }
 
+async function completeTombstonedCancellation(
+  config: WebhookServerConfig,
+  subscriptionId: string,
+  deps: BillingWebhookDeps,
+): Promise<Response> {
+  const cancelSub = deps.cancelStripeSubscription ?? cancelStripeSubscription;
+  const cancelResult = await cancelSub(config.stripeSecretKey, subscriptionId);
+  if (!cancelResult.ok) {
+    return jsonResponse({ error: "stripe-cancel-failed" }, 502);
+  }
+
+  const deletePending =
+    deps.deletePendingSubscriptionCancellation ?? deletePendingSubscriptionCancellation;
+  const removed = await deletePending(config.supabaseUrl, config.serviceRoleKey, subscriptionId);
+  if (!removed) {
+    return jsonResponse({ error: "sync-failed" }, 500);
+  }
+
+  return jsonResponse({ received: true, tombstoneCanceled: true }, 200);
+}
+
+async function handleTombstonedSubscription(
+  config: WebhookServerConfig,
+  subscriptionId: string,
+  deps: BillingWebhookDeps,
+): Promise<Response | null> {
+  const checkPending =
+    deps.hasPendingSubscriptionCancellation ?? hasPendingSubscriptionCancellation;
+  const pendingResult = await checkPending(
+    config.supabaseUrl,
+    config.serviceRoleKey,
+    subscriptionId,
+  );
+  if (!pendingResult.ok) {
+    return jsonResponse({ error: "sync-failed" }, 500);
+  }
+  if (!pendingResult.pending) {
+    return null;
+  }
+
+  return completeTombstonedCancellation(config, subscriptionId, deps);
+}
+
 export async function handleBillingWebhook(
   req: Request,
   deps: BillingWebhookDeps = {},
@@ -176,6 +228,11 @@ export async function handleBillingWebhook(
     return jsonResponse({ received: true, ignored: true }, 200);
   }
 
+  const tombstoneResponse = await handleTombstonedSubscription(config, subscriptionId, deps);
+  if (tombstoneResponse) {
+    return tombstoneResponse;
+  }
+
   const checkProcessed = deps.hasProcessedWebhookEvent ?? hasProcessedWebhookEvent;
   const processedCheck = await checkProcessed(config.supabaseUrl, config.serviceRoleKey, event.id);
   if (!processedCheck.ok) {
@@ -213,6 +270,9 @@ export async function handleBillingWebhook(
   });
   if (!syncResult.ok) {
     return jsonResponse({ error: "sync-failed" }, 500);
+  }
+  if (syncResult.tombstoned) {
+    return completeTombstonedCancellation(config, subscriptionId, deps);
   }
 
   return jsonResponse(

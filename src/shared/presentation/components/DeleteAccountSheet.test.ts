@@ -3,12 +3,16 @@ import { createApp, defineComponent, h, nextTick, ref } from "vue";
 
 const isDeleting = ref(false);
 const hasActiveSpreadsheetMock = vi.fn(() => true);
+const hasActiveSubscriptionMock = vi.fn(() => false);
+const ensureSubscriptionStatusLoadedMock = vi.fn();
 const deleteAccountMock = vi.fn();
 
 vi.mock("@/shared/presentation/composables/useAccountActions", () => ({
   useAccountActions: () => ({
     isDeleting,
     hasActiveSpreadsheet: hasActiveSpreadsheetMock,
+    hasActiveSubscription: hasActiveSubscriptionMock,
+    ensureSubscriptionStatusLoaded: ensureSubscriptionStatusLoadedMock,
     signOut: vi.fn(),
     deleteAccount: deleteAccountMock,
   }),
@@ -179,6 +183,52 @@ describe("DeleteAccountSheet.vue", () => {
       });
       expect(mounted.open.value).toBe(true);
     } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("shows orange subscription cancellation notice only when subscriber has active subscription", async () => {
+    hasActiveSubscriptionMock.mockReturnValue(false);
+    const nonSubscriber = mountSheet(true);
+    try {
+      await nextTick();
+      expect(document.body.querySelector("[data-testid='delete-subscription-notice']")).toBeNull();
+    } finally {
+      nonSubscriber.unmount();
+    }
+
+    hasActiveSubscriptionMock.mockReturnValue(true);
+    const subscriber = mountSheet(true);
+    try {
+      await nextTick();
+      const notice = document.body.querySelector("[data-testid='delete-subscription-notice']");
+      expect(notice).not.toBeNull();
+      expect(notice?.className).toContain("orange-500");
+    } finally {
+      hasActiveSubscriptionMock.mockReturnValue(false);
+      subscriber.unmount();
+    }
+  });
+
+  it("reactively renders subscription cancellation notice once async entitlement fetch finishes while open", async () => {
+    const reactiveSubscribed = ref(false);
+    hasActiveSubscriptionMock.mockImplementation(() => reactiveSubscribed.value);
+    ensureSubscriptionStatusLoadedMock.mockClear();
+
+    const mounted = mountSheet(true);
+    try {
+      await nextTick();
+      expect(ensureSubscriptionStatusLoadedMock).toHaveBeenCalledOnce();
+      expect(document.body.querySelector("[data-testid='delete-subscription-notice']")).toBeNull();
+
+      reactiveSubscribed.value = true;
+      await nextTick();
+      const notice = document.body.querySelector("[data-testid='delete-subscription-notice']");
+      expect(notice).not.toBeNull();
+      expect(notice?.textContent).toContain("canceled immediately");
+    } finally {
+      hasActiveSubscriptionMock.mockReset();
+      hasActiveSubscriptionMock.mockReturnValue(false);
       mounted.unmount();
     }
   });

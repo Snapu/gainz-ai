@@ -5,6 +5,7 @@ import {
   type Entitlement,
   getRemainingFreeCoachCount,
   hasCustomerPortalAccess,
+  hasNonTerminatedSubscription,
   isFreeAllowance,
   isInPastDueGrace,
   isInviteGrant,
@@ -148,5 +149,41 @@ describe("Entitlement domain predicates", () => {
         }),
       ),
     ).toBe(true);
+  });
+
+  it("detects all non-terminated subscription statuses including past_due (even expired grace), unpaid, paused, and source fallback", () => {
+    expect(hasNonTerminatedSubscription(null)).toBe(false);
+    expect(hasNonTerminatedSubscription(makeEntitlement({ source: "free_allowance" }))).toBe(false);
+    expect(hasNonTerminatedSubscription(makeEntitlement({ source: "subscription" }))).toBe(true);
+
+    for (const status of ["active", "trialing", "past_due", "unpaid", "paused"] as const) {
+      expect(
+        hasNonTerminatedSubscription(
+          makeEntitlement({
+            source: status === "unpaid" || status === "paused" ? "none" : "subscription",
+            subscription: {
+              status,
+              cancelAtPeriodEnd: false,
+              currentPeriodEnd: "2026-12-27T00:00:00.000Z",
+              graceEndsAt: status === "past_due" ? "2026-11-20T00:00:00.000Z" : null,
+            },
+          }),
+        ),
+      ).toBe(true);
+    }
+
+    expect(
+      hasNonTerminatedSubscription(
+        makeEntitlement({
+          source: "none",
+          subscription: {
+            status: "canceled",
+            cancelAtPeriodEnd: false,
+            currentPeriodEnd: "2026-10-27T00:00:00.000Z",
+            graceEndsAt: null,
+          },
+        }),
+      ),
+    ).toBe(false);
   });
 });

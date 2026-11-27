@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  cancelStripeSubscription,
   createCustomerPortalSession,
   createManagedCheckoutSession,
   extractSubscriptionIdFromStripeEvent,
@@ -278,6 +279,49 @@ Deno.test("createManagedCheckoutSession, createCustomerPortalSession, and fetchC
     assert.deepEqual(await fetchCanonicalSubscription("sk_test_123", "sub_../evil"), {
       ok: true,
       kind: "ignored",
+    });
+
+    // cancelStripeSubscription treats 200, 404, and resource_missing idempotently and fails cleanly on 503
+    nextResponse = () =>
+      new Response(JSON.stringify({ id: "sub_del", status: "canceled" }), { status: 200 });
+    assert.deepEqual(await cancelStripeSubscription("sk_test_123", "sub_del"), { ok: true });
+    assert.equal(capturedRequests.at(-1)?.method, "DELETE");
+    assert.equal(capturedRequests.at(-1)?.headers.get("stripe-version"), STRIPE_API_VERSION);
+
+    nextResponse = () => new Response(null, { status: 404 });
+    assert.deepEqual(await cancelStripeSubscription("sk_test_123", "sub_404"), { ok: true });
+
+    nextResponse = () =>
+      new Response(JSON.stringify({ error: { code: "resource_missing" } }), { status: 400 });
+    assert.deepEqual(await cancelStripeSubscription("sk_test_123", "sub_missing"), { ok: true });
+
+    nextResponse = () =>
+      new Response(
+        JSON.stringify({ error: { message: "Subscription sub_done is already canceled." } }),
+        { status: 400 },
+      );
+    assert.deepEqual(await cancelStripeSubscription("sk_test_123", "sub_done"), { ok: true });
+
+    nextResponse = () =>
+      new Response(
+        JSON.stringify({ error: { code: "invalid_request_error", message: "bad parameter" } }),
+        { status: 400 },
+      );
+    assert.deepEqual(await cancelStripeSubscription("sk_test_123", "sub_bad400"), {
+      ok: false,
+      error: "stripe-http-400",
+    });
+
+    const beforeInvalidCount = capturedRequests.length;
+    assert.deepEqual(await cancelStripeSubscription("sk_test_123", "invalid_sub_id"), { ok: true });
+    assert.equal(capturedRequests.length, beforeInvalidCount);
+
+    globalThis.fetch = (async () => {
+      throw new TypeError("network down");
+    }) as typeof fetch;
+    assert.deepEqual(await cancelStripeSubscription("sk_test_123", "sub_neterr"), {
+      ok: false,
+      error: "stripe-TypeError",
     });
   } finally {
     globalThis.fetch = originalFetch;

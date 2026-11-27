@@ -27,7 +27,7 @@ function handleBack(): void {
       <template v-if="locale === 'de'">
         <section class="space-y-4">
           <h2 class="text-2xl font-bold text-foreground">Nutzungsbedingungen</h2>
-          <p class="text-sm italic">Stand: 22. November 2026</p>
+          <p class="text-sm italic">Stand: 27. November 2026</p>
           <p>
             Diese Nutzungsbedingungen regeln die Nutzung der Anwendung <strong>Gainz AI</strong>
             (nachfolgend „App“) zwischen Ihnen als Nutzer und dem Anbieter.
@@ -51,13 +51,40 @@ function handleBack(): void {
 
         <section class="space-y-4">
           <h2 class="text-xl font-semibold text-foreground">
-            2. Leistungsbeschreibung, Google Drive &amp; Fair-Use-Limits
+            2. Leistungsbeschreibung, Abonnement (GainzAI Pro) &amp; Fair-Use-Limits
           </h2>
           <ul class="list-disc pl-5 space-y-2">
             <li>
-              <strong>Kostenfreie Nutzung:</strong> Gainz AI ist ein kostenloses Trainings- und
-              Analysewerkzeug zur Dokumentation von Kraft- und Ausdauertraining sowie zur
-              KI-gestützten Trainingsplanung.
+              <strong>Dauerhaft kostenfreier Kernbereich:</strong> Das manuelle Trainingslogbuch,
+              Ihre Trainingshistorie, der Pausentimer, die Google-Drive-Synchronisation sowie
+              deterministische Trainingsanalysen (ACWR, e1RM, Volumen-Landmarks, Ermüdungsstatus)
+              sind dauerhaft kostenfrei und offline nutzbar – auch ohne aktives Abonnement.
+            </li>
+            <li>
+              <strong>Kostenfreies Starter-Kontingent (FreeAllowance):</strong> Neu angemeldete
+              Nutzer erhalten ohne Zeitablauf ein einmaliges Startbudget von <strong>30 KI-Coaching-Anfragen</strong>
+              (begrenzt auf maximal 5 Anfragen pro UTC-Tag) sowie <strong>40 Übungsklassifizierungen</strong>
+              (begrenzt auf maximal 20 Klassifizierungen pro UTC-Tag).
+            </li>
+            <li>
+              <strong>Einladungscodes (InviteGrant):</strong> Berechtigte Beta-Tester können über
+              einen zeitlich begrenzten oder unbefristeten Einladungscode KI-Funktionen im Rahmen
+              der täglichen Fair-Use-Limits (15 Coaching- und 50 Klassifizierungs-Anfragen pro UTC-Tag)
+              kostenfrei testen.
+            </li>
+            <li>
+              <strong>GainzAI Pro Abonnement &amp; Stripe Managed Payments:</strong> Das kostenpflichtige
+              Monatsabonnement <strong>GainzAI Pro</strong> kostet <strong>7,99 € / Monat inkl. MwSt.</strong>
+              und schaltet fortlaufendes KI-Coaching und adaptive Trainingsplanung frei
+              (Fair-Use-Limit: 15 Coaching- und 50 Klassifizierungs-Anfragen pro UTC-Tag).
+              Die Kündigung ist jederzeit monatlich zum Ende des jeweiligen Abrechnungszeitraums über
+              das Stripe-Kundenportal möglich. Bei Löschung des Kontos in der App („Konto &amp; Daten
+              löschen“) wird ein aktives Abonnement abweichend davon mit sofortiger Wirkung gekündigt
+              und der Zugang sofort beendet. Bestellabwicklung, Umsatzsteuer-Berechnung, Belege,
+              Zahlungsausfall-Mahnwesen und Rechnungsstellung erfolgen über unseren Merchant of Record
+              <strong>Stripe / Link</strong> (erscheint als <code>LINK.COM*</code> auf dem Kontoauszug).
+              Bei einer fehlgeschlagenen Verlängerung bleibt der Zugang während einer <strong>3-tägigen
+              Kulanzfrist (<code>past_due</code>)</strong> aktiv.
             </li>
             <li>
               <strong>Datenspeicherung bei Ihnen:</strong> Ihre Trainingsprotokolle und Profildaten
@@ -65,14 +92,14 @@ function handleBack(): void {
               Hierfür ist ein aktives Google-Konto erforderlich.
             </li>
             <li>
-              <strong>Tägliche KI-Kontingente (Fair Use):</strong> Zur Vermeidung von Missbrauch und
-              zur Kostenkontrolle unterliegen KI-Anfragen (Coaching &amp; Übungsklassifizierung)
-              täglichen Nutzungs- und globalen Kapazitätslimits.
+              <strong>Tägliche KI-Kontingente &amp; globale Kapazitätsgrenzen:</strong> Zur
+              Vermeidung von Missbrauch und zur Kostenkontrolle unterliegen alle KI-Anfragen
+              täglichen Nutzer- und globalen Kapazitätslimits.
             </li>
             <li>
               <strong>Keine Verfügbarkeitsgarantie:</strong> Die App wird ohne Anspruch auf
               unterbrechungsfreie Verfügbarkeit oder bestimmte Funktionen bereitgestellt und kann
-              jederzeit weiterentwickelt, eingeschränkt oder eingestellt werden.
+              jederzeit weiterentwickelt oder angepasst werden.
             </li>
           </ul>
         </section>
@@ -199,7 +226,7 @@ function handleBack(): void {
       <template v-else>
         <section class="space-y-4">
           <h2 class="text-2xl font-bold text-foreground">Terms of Use</h2>
-          <p class="text-sm italic">Last Updated: November 22, 2026</p>
+          <p class="text-sm italic">Last Updated: November 27, 2026</p>
           <p>
             These Terms of Use govern your use of the <strong>Gainz AI</strong> application
             (hereinafter "App") provided by the operator listed below.
@@ -222,12 +249,39 @@ function handleBack(): void {
 
         <section class="space-y-4">
           <h2 class="text-xl font-semibold text-foreground">
-            2. Service Scope, Google Drive &amp; Fair-Use Limits
+            2. Service Scope, Subscriptions (GainzAI Pro) &amp; Fair-Use Limits
           </h2>
           <ul class="list-disc pl-5 space-y-2">
             <li>
-              <strong>Free Service:</strong> Gainz AI is provided free of charge as a training log,
-              analytics tool, and AI-assisted workout planner.
+              <strong>Permanently Free Core:</strong> Manual workout logging, full training history,
+              the rest timer, Google Drive spreadsheet sync, and deterministic sports-science insights
+              (ACWR, e1RM, volume landmarks, fatigue/deload indicators) remain permanently free and
+              offline-capable without an active subscription.
+            </li>
+            <li>
+              <strong>Starter Budget (FreeAllowance):</strong> Newly signed-in athletes receive a
+              one-time complimentary budget of <strong>30 AI coaching requests</strong> (capped at 5
+              coaching requests per UTC day) plus <strong>40 background exercise classifications</strong>
+              (capped at 20 classifications per UTC day), with no calendar expiration.
+            </li>
+            <li>
+              <strong>Invitation Codes (InviteGrant):</strong> Eligible beta testers may redeem a
+              time-limited or ongoing invitation code for complimentary AI coaching within daily
+              fair-use limits (15 coaching and 50 classification requests per UTC day).
+            </li>
+            <li>
+              <strong>GainzAI Pro Subscription &amp; Stripe Managed Payments:</strong> The optional
+              <strong>GainzAI Pro</strong> monthly subscription is billed at <strong>€7.99 / month
+              incl. VAT</strong> (cancellable monthly to the end of the billing period via the
+              Stripe Customer Portal) and unlocks ongoing AI coaching and adaptive training planning
+              under daily fair-use limits (15 coaching and 50 classification requests per UTC day).
+              Deleting your account inside the app (“Delete Account &amp; Data”) cancels an active
+              subscription with immediate effect rather than at period end, ending subscription access
+              right away. Checkout, VAT calculation, customer invoices/receipts, dunning retries,
+              and self-service cancellation are processed via <strong>Stripe / Link</strong> acting
+              as Merchant of Record (appearing as <code>LINK.COM*</code> on statements). Failed
+              renewal payments receive a <strong>3-day grace period (<code>past_due</code>)</strong>
+              before AI features pause.
             </li>
             <li>
               <strong>User-Controlled Storage:</strong> Your training logs and profile are stored
@@ -235,14 +289,13 @@ function handleBack(): void {
               required for cloud sync and AI requests.
             </li>
             <li>
-              <strong>Daily AI Quotas (Fair Use):</strong> To prevent abuse and manage operating
-              costs, AI coaching and exercise classification requests are subject to daily per-user
-              and global capacity limits.
+              <strong>Daily AI Quotas &amp; Global Limits:</strong> To prevent abuse and manage
+              operating costs, AI coaching and exercise classification requests are subject to daily
+              per-user and global capacity limits.
             </li>
             <li>
               <strong>No Uptime Guarantee:</strong> The App is provided "as is" without any
-              guarantee of uninterrupted availability and may be modified or discontinued at any
-              time.
+              guarantee of uninterrupted availability and may be modified at any time.
             </li>
           </ul>
         </section>

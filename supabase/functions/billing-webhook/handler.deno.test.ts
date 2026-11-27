@@ -46,6 +46,7 @@ function createDeps(overrides: Partial<BillingWebhookDeps> = {}): BillingWebhook
   return {
     getEnv: createEnv(),
     nowSeconds: () => 1_764_270_000,
+    hasPendingSubscriptionCancellation: async () => ({ ok: true, pending: false }),
     hasProcessedWebhookEvent: async () => ({ ok: true, processed: false }),
     ...overrides,
   };
@@ -327,4 +328,220 @@ Deno.test("handleBillingWebhook fails closed on missing user_id metadata and syn
   );
   assert.equal(dbFailRes.status, 500);
   assert.deepEqual(await dbFailRes.json(), { error: "sync-failed" });
+
+  // Self-healing tombstone: cancels subscription on Stripe, removes tombstone, returns 200 without fetching/recreating user_subscriptions
+  let canonicalCalledForTombstone = false;
+  let syncCalledForTombstone = false;
+  let canceledSubId: string | null = null;
+  let deletedTombstoneId: string | null = null;
+  const tombstoneRes = await handleBillingWebhook(
+    new Request(WEBHOOK_URL, {
+      method: "POST",
+      headers: { "stripe-signature": sig },
+      body: rawBody,
+    }),
+    createDeps({
+      hasPendingSubscriptionCancellation: async () => ({ ok: true, pending: true }),
+      cancelStripeSubscription: async (_key, subId) => {
+        canceledSubId = subId;
+        return { ok: true };
+      },
+      deletePendingSubscriptionCancellation: async (_url, _key, subId) => {
+        deletedTombstoneId = subId;
+        return true;
+      },
+      fetchCanonicalSubscription: async () => {
+        canonicalCalledForTombstone = true;
+        return { ok: true, kind: "ignored" };
+      },
+      syncSubscriptionWebhook: async () => {
+        syncCalledForTombstone = true;
+        return { ok: true, alreadyProcessed: false, applied: true };
+      },
+    }),
+  );
+  assert.equal(tombstoneRes.status, 200);
+  assert.deepEqual(await tombstoneRes.json(), { received: true, tombstoneCanceled: true });
+  assert.equal(canceledSubId, "sub_basil_99");
+  assert.equal(deletedTombstoneId, "sub_basil_99");
+  assert.equal(canonicalCalledForTombstone, false);
+  assert.equal(syncCalledForTombstone, false);
+
+  // Tombstone cancellation failure returns 502 without deleting the tombstone so later webhooks retry cleanly
+  let deletedOnFailure = false;
+  const tombstoneRetryRes = await handleBillingWebhook(
+    new Request(WEBHOOK_URL, {
+      method: "POST",
+      headers: { "stripe-signature": sig },
+      body: rawBody,
+    }),
+    createDeps({
+      hasPendingSubscriptionCancellation: async () => ({ ok: true, pending: true }),
+      cancelStripeSubscription: async () => ({ ok: false, error: "stripe-http-503" }),
+      deletePendingSubscriptionCancellation: async () => {
+        deletedOnFailure = true;
+        return true;
+      },
+    }),
+  );
+  assert.equal(tombstoneRetryRes.status, 502);
+  assert.deepEqual(await tombstoneRetryRes.json(), { error: "stripe-cancel-failed" });
+  assert.equal(deletedOnFailure, false);
+});
+
+Deno.test("handleBillingWebhook prevents post-deletion resurrection on customer.subscription.deleted, intercepts checkout/subscription tombstones, and self-heals lock races", async () => {
+  // Post-deletion customer.subscription.deleted leaves applied=false without recreating user_subscriptions
+  const deletedSubBody = JSON.stringify({
+    id: "evt_sub_deleted_after_erasure",
+    type: "customer.subscription.deleted",
+    created: 1_764_270_100,
+    data: { object: { id: "sub_deleted_already" } },
+  });
+  const deletedRes = await handleBillingWebhook(
+    new Request(WEBHOOK_URL, {
+      method: "POST",
+      headers: { "stripe-signature": await signStripeHeader(1_764_270_000, deletedSubBody) },
+      body: deletedSubBody,
+    }),
+    createDeps({
+      fetchCanonicalSubscription: async () => ({
+        ok: true,
+        kind: "subscription",
+        subscription: {
+          id: "sub_deleted_already",
+          userId: "erased-user-9",
+          customerId: "cus_9",
+          priceId: "price_monthly_799",
+          status: "canceled",
+          cancelAtPeriodEnd: false,
+          currentPeriodEnd: "2026-11-27T00:00:00.000Z",
+        },
+      }),
+      syncSubscriptionWebhook: async () => ({
+        ok: true,
+        alreadyProcessed: false,
+        applied: false,
+        tombstoned: false,
+      }),
+    }),
+  );
+  assert.equal(deletedRes.status, 200);
+  assert.deepEqual(await deletedRes.json(), {
+    received: true,
+    applied: false,
+    duplicate: false,
+  });
+
+  // Tombstone interception works across checkout.session.completed and customer.subscription.updated
+  for (const eventPayload of [
+    {
+      id: "evt_tomb_checkout",
+      type: "checkout.session.completed",
+      created: 1_764_270_110,
+      data: { object: { mode: "subscription", subscription: "sub_tomb_checkout" } },
+    },
+    {
+      id: "evt_tomb_updated",
+      type: "customer.subscription.updated",
+      created: 1_764_270_120,
+      data: { object: { id: "sub_tomb_updated" } },
+    },
+  ]) {
+    const raw = JSON.stringify(eventPayload);
+    const canceled: string[] = [];
+    const removed: string[] = [];
+    const res = await handleBillingWebhook(
+      new Request(WEBHOOK_URL, {
+        method: "POST",
+        headers: { "stripe-signature": await signStripeHeader(1_764_270_000, raw) },
+        body: raw,
+      }),
+      createDeps({
+        hasPendingSubscriptionCancellation: async () => ({ ok: true, pending: true }),
+        cancelStripeSubscription: async (_k, subId) => {
+          canceled.push(subId);
+          return { ok: true };
+        },
+        deletePendingSubscriptionCancellation: async (_u, _k, subId) => {
+          removed.push(subId);
+          return true;
+        },
+      }),
+    );
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { received: true, tombstoneCanceled: true });
+    assert.equal(canceled.length, 1);
+    assert.equal(removed.length, 1);
+  }
+
+  // Tombstone lookup and tombstone delete DB failures return 500
+  const lookupErrRes = await handleBillingWebhook(
+    new Request(WEBHOOK_URL, {
+      method: "POST",
+      headers: { "stripe-signature": await signStripeHeader(1_764_270_000, deletedSubBody) },
+      body: deletedSubBody,
+    }),
+    createDeps({
+      hasPendingSubscriptionCancellation: async () => ({ ok: false }),
+    }),
+  );
+  assert.equal(lookupErrRes.status, 500);
+
+  const removeErrRes = await handleBillingWebhook(
+    new Request(WEBHOOK_URL, {
+      method: "POST",
+      headers: { "stripe-signature": await signStripeHeader(1_764_270_000, deletedSubBody) },
+      body: deletedSubBody,
+    }),
+    createDeps({
+      hasPendingSubscriptionCancellation: async () => ({ ok: true, pending: true }),
+      cancelStripeSubscription: async () => ({ ok: true }),
+      deletePendingSubscriptionCancellation: async () => false,
+    }),
+  );
+  assert.equal(removeErrRes.status, 500);
+
+  // Concurrent lock race: syncSubscriptionWebhook signals tombstoned: true -> immediate Stripe cancel & tombstone delete
+  let lockRaceCanceledId: string | null = null;
+  let lockRaceDeletedId: string | null = null;
+  const lockRaceRes = await handleBillingWebhook(
+    new Request(WEBHOOK_URL, {
+      method: "POST",
+      headers: { "stripe-signature": await signStripeHeader(1_764_270_000, deletedSubBody) },
+      body: deletedSubBody,
+    }),
+    createDeps({
+      fetchCanonicalSubscription: async () => ({
+        ok: true,
+        kind: "subscription",
+        subscription: {
+          id: "sub_deleted_already",
+          userId: "erased-user-9",
+          customerId: "cus_9",
+          priceId: "price_monthly_799",
+          status: "active",
+          cancelAtPeriodEnd: false,
+          currentPeriodEnd: "2026-12-27T00:00:00.000Z",
+        },
+      }),
+      syncSubscriptionWebhook: async () => ({
+        ok: true,
+        alreadyProcessed: false,
+        applied: false,
+        tombstoned: true,
+      }),
+      cancelStripeSubscription: async (_k, subId) => {
+        lockRaceCanceledId = subId;
+        return { ok: true };
+      },
+      deletePendingSubscriptionCancellation: async (_u, _k, subId) => {
+        lockRaceDeletedId = subId;
+        return true;
+      },
+    }),
+  );
+  assert.equal(lockRaceRes.status, 200);
+  assert.deepEqual(await lockRaceRes.json(), { received: true, tombstoneCanceled: true });
+  assert.equal(lockRaceCanceledId, "sub_deleted_already");
+  assert.equal(lockRaceDeletedId, "sub_deleted_already");
 });

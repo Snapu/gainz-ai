@@ -46,8 +46,32 @@ vi.mock("vue-router", () => ({
   }),
 }));
 
+const billingClearMock = vi.fn();
+const billingFetchEntitlementMock = vi.fn();
+const billingState: {
+  hasNonTerminatedSubscription: boolean;
+  entitlement: unknown;
+  isFetching: boolean;
+  clear: typeof billingClearMock;
+  fetchEntitlement: typeof billingFetchEntitlementMock;
+} = {
+  hasNonTerminatedSubscription: false,
+  entitlement: null,
+  isFetching: false,
+  clear: billingClearMock,
+  fetchEntitlement: billingFetchEntitlementMock,
+};
+const clearPendingInviteCodeMock = vi.fn();
+const clearPendingCheckoutReturnMock = vi.fn();
+
 vi.mock("@/modules/auth/presentation", () => ({
   useAuthStore: () => authState,
+}));
+
+vi.mock("@/modules/billing/presentation", () => ({
+  useBillingStore: () => billingState,
+  clearPendingInviteCode: () => clearPendingInviteCodeMock(),
+  clearPendingCheckoutReturn: () => clearPendingCheckoutReturnMock(),
 }));
 
 vi.mock("@/modules/platform/presentation", () => ({
@@ -80,6 +104,9 @@ describe("useAccountActions", () => {
     authState.isLoggedIn = true;
     legalConsentState.hasLegalConsent.value = true;
     spreadsheetState.activeSpreadsheetId = "sheet-123";
+    billingState.hasNonTerminatedSubscription = false;
+    billingState.entitlement = null;
+    billingState.isFetching = false;
   });
 
   afterEach(() => {
@@ -214,6 +241,63 @@ describe("useAccountActions", () => {
       expect.objectContaining({
         variant: "destructive",
         title: "Deletion Failed",
+      }),
+    );
+  });
+
+  it("reports hasActiveSubscription regardless of legal consent and refreshes stale cached entitlement when opened", () => {
+    billingState.hasNonTerminatedSubscription = true;
+    const actions = useAccountActions();
+    expect(actions.hasActiveSubscription()).toBe(true);
+
+    // Works on public /privacy even before consent is re-accepted
+    legalConsentState.hasLegalConsent.value = false;
+    expect(actions.hasActiveSubscription()).toBe(true);
+
+    authState.isLoggedIn = false;
+    expect(actions.hasActiveSubscription()).toBe(false);
+    actions.ensureSubscriptionStatusLoaded();
+    expect(billingFetchEntitlementMock).not.toHaveBeenCalled();
+
+    authState.isLoggedIn = true;
+    billingState.hasNonTerminatedSubscription = false;
+    expect(actions.hasActiveSubscription()).toBe(false);
+
+    // Refreshes even if a cached entitlement snapshot is present (avoids stale cross-device cache)
+    billingState.entitlement = { source: "free_allowance" };
+    billingState.isFetching = false;
+    actions.ensureSubscriptionStatusLoaded();
+    expect(billingFetchEntitlementMock).toHaveBeenCalledOnce();
+
+    billingFetchEntitlementMock.mockClear();
+    billingState.isFetching = true;
+    actions.ensureSubscriptionStatusLoaded();
+    expect(billingFetchEntitlementMock).not.toHaveBeenCalled();
+  });
+
+  it("clears billing store and surfaces pending-cancellation notice toast when billingCancellationPending is true", async () => {
+    billingClearMock.mockClear();
+    clearPendingInviteCodeMock.mockClear();
+    clearPendingCheckoutReturnMock.mockClear();
+    deleteAccountMock.mockReturnValueOnce(
+      okAsync({
+        deleted: true,
+        googleRevoked: true,
+        billingCancellationPending: true,
+      }),
+    );
+
+    const actions = useAccountActions();
+    const result = await actions.deleteAccount({ trashSpreadsheet: false });
+
+    expect(result).toBe(true);
+    expect(billingClearMock).toHaveBeenCalledOnce();
+    expect(clearPendingInviteCodeMock).toHaveBeenCalledOnce();
+    expect(clearPendingCheckoutReturnMock).toHaveBeenCalledOnce();
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Subscription Cancellation Queued",
+        duration: 10000,
       }),
     );
   });

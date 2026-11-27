@@ -76,6 +76,22 @@ export function isInPastDueGrace(entitlement: Entitlement | null, nowMs = Date.n
   return Number.isFinite(deadlineMs) && deadlineMs > nowMs;
 }
 
+const NON_TERMINATED_SUBSCRIPTION_STATUSES: ReadonlySet<SubscriptionStatus> = new Set([
+  "active",
+  "trialing",
+  "past_due",
+  "unpaid",
+  "paused",
+]);
+
+export function hasNonTerminatedSubscription(entitlement: Entitlement | null): boolean {
+  const sub = entitlement?.subscription;
+  if (!sub) {
+    return entitlement?.source === "subscription";
+  }
+  return NON_TERMINATED_SUBSCRIPTION_STATUSES.has(sub.status);
+}
+
 export function isSubscriptionActive(entitlement: Entitlement | null, nowMs = Date.now()): boolean {
   const sub = entitlement?.subscription;
   if (!sub) {

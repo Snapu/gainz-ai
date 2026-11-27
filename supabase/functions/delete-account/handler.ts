@@ -7,10 +7,20 @@ import {
   jsonResponse,
   readJsonBodyWithLimit,
 } from "../_shared/http.ts";
+import { cancelStripeSubscription } from "../_shared/stripe.ts";
+import { deleteUserAccountData, getUserSubscriptionSummary } from "../_shared/subscriptions.ts";
 
 const GOOGLE_REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke";
-const SUPABASE_DELETE_TIMEOUT_MS = 10_000;
 const GOOGLE_REVOKE_TIMEOUT_MS = 10_000;
+const INTERACTIVE_STRIPE_CANCEL_TIMEOUT_MS = 5_000;
+
+const NON_TERMINATED_SUBSCRIPTION_STATUSES = new Set([
+  "active",
+  "trialing",
+  "past_due",
+  "unpaid",
+  "paused",
+]);
 
 interface DeleteAccountRequestBody {
   revokeToken?: string;
@@ -20,6 +30,9 @@ export interface DeleteAccountHandlerDeps {
   getEnv?: (name: string) => string | undefined;
   verifyCaller?: typeof verifyGoogleCaller;
   fetchImpl?: typeof fetchWithTimeout;
+  getUserSubscriptionSummary?: typeof getUserSubscriptionSummary;
+  cancelStripeSubscription?: typeof cancelStripeSubscription;
+  deleteUserAccountData?: typeof deleteUserAccountData;
 }
 
 function parseDeleteAccountBody(value: unknown): DeleteAccountRequestBody | null {
@@ -36,41 +49,6 @@ function parseDeleteAccountBody(value: unknown): DeleteAccountRequestBody | null
   }
 
   return {};
-}
-
-async function deleteUserTableRows(
-  fetchFn: typeof fetchWithTimeout,
-  supabaseUrl: string,
-  serviceRoleKey: string,
-  table: "ai_daily_usage" | "ai_request_results",
-  userId: string,
-): Promise<boolean> {
-  const url = `${supabaseUrl}/rest/v1/${table}?user_id=eq.${encodeURIComponent(userId)}`;
-  try {
-    const res = await fetchFn(
-      url,
-      {
-        method: "DELETE",
-        headers: {
-          apikey: serviceRoleKey,
-          Authorization: `Bearer ${serviceRoleKey}`,
-        },
-      },
-      SUPABASE_DELETE_TIMEOUT_MS,
-    );
-    void res.body?.cancel().catch(() => {});
-    if (!res.ok) {
-      console.warn("delete-account table deletion failed:", { table, status: res.status });
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.warn("delete-account table deletion error:", {
-      table,
-      error: err instanceof Error ? err.name : "unknown-error",
-    });
-    return false;
-  }
 }
 
 async function revokeGoogleOAuthToken(
@@ -122,6 +100,7 @@ function resolveEnvConfig(readEnv: (name: string) => string | undefined): {
   clientId: string;
   supabaseUrl: string;
   serviceRoleKey: string;
+  stripeSecretKey: string | undefined;
 } | null {
   const clientId = (readEnv("GOOGLE_CLIENT_ID") ?? "").trim() || DEFAULT_GOOGLE_CLIENT_ID;
   const supabaseUrl = readEnv("SUPABASE_URL");
@@ -129,7 +108,8 @@ function resolveEnvConfig(readEnv: (name: string) => string | undefined): {
   if (!supabaseUrl || !serviceRoleKey) {
     return null;
   }
-  return { clientId, supabaseUrl, serviceRoleKey };
+  const stripeSecretKey = readEnv("STRIPE_SECRET_KEY")?.trim() || undefined;
+  return { clientId, supabaseUrl, serviceRoleKey, stripeSecretKey };
 }
 
 function selectTokenToRevoke(
@@ -138,6 +118,65 @@ function selectTokenToRevoke(
 ): string | null {
   if (explicitRevokeToken) return explicitRevokeToken;
   return bearerToken.split(".").length !== 3 ? bearerToken : null;
+}
+
+async function resolveSubscriptionCancellation(
+  config: { supabaseUrl: string; serviceRoleKey: string; stripeSecretKey: string | undefined },
+  userId: string,
+  deps: DeleteAccountHandlerDeps,
+): Promise<
+  | {
+      ok: true;
+      canceledSubscriptionId: string | null;
+      pendingCancelSubscriptionId: string | null;
+      pendingCancelError: string | null;
+    }
+  | { ok: false }
+> {
+  const getSummary = deps.getUserSubscriptionSummary ?? getUserSubscriptionSummary;
+  const summaryResult = await getSummary(config.supabaseUrl, config.serviceRoleKey, userId);
+  if (!summaryResult.ok) {
+    return { ok: false };
+  }
+
+  const row = summaryResult.row;
+  if (!row || !NON_TERMINATED_SUBSCRIPTION_STATUSES.has(row.status)) {
+    return {
+      ok: true,
+      canceledSubscriptionId: null,
+      pendingCancelSubscriptionId: null,
+      pendingCancelError: null,
+    };
+  }
+
+  if (!config.stripeSecretKey) {
+    return {
+      ok: true,
+      canceledSubscriptionId: null,
+      pendingCancelSubscriptionId: row.provider_subscription_id,
+      pendingCancelError: "missing-stripe-secret",
+    };
+  }
+
+  const cancelSub = deps.cancelStripeSubscription ?? cancelStripeSubscription;
+  const cancelRes = await cancelSub(config.stripeSecretKey, row.provider_subscription_id, {
+    timeoutMs: INTERACTIVE_STRIPE_CANCEL_TIMEOUT_MS,
+  });
+  if (cancelRes.ok) {
+    return {
+      ok: true,
+      canceledSubscriptionId: row.provider_subscription_id,
+      pendingCancelSubscriptionId: null,
+      pendingCancelError: null,
+    };
+  }
+
+  return {
+    ok: true,
+    canceledSubscriptionId: null,
+    pendingCancelSubscriptionId: row.provider_subscription_id,
+    pendingCancelError: cancelRes.error,
+  };
 }
 
 export async function handleDeleteAccountRequest(
@@ -173,31 +212,31 @@ export async function handleDeleteAccountRequest(
     return jsonResponse({ error: "invalid-request" }, 400);
   }
 
-  const fetchFn = deps.fetchImpl ?? fetchWithTimeout;
-  const deleteResults = await Promise.all([
-    deleteUserTableRows(
-      fetchFn,
-      config.supabaseUrl,
-      config.serviceRoleKey,
-      "ai_daily_usage",
-      caller.userId,
-    ),
-    deleteUserTableRows(
-      fetchFn,
-      config.supabaseUrl,
-      config.serviceRoleKey,
-      "ai_request_results",
-      caller.userId,
-    ),
-  ]);
-  if (deleteResults.some((deleted) => !deleted)) {
+  const cancelPrep = await resolveSubscriptionCancellation(config, caller.userId, deps);
+  if (!cancelPrep.ok) {
     return jsonResponse({ error: "account-deletion-failed" }, 502);
   }
 
+  const deleteAccountData = deps.deleteUserAccountData ?? deleteUserAccountData;
+  const eraseResult = await deleteAccountData(config.supabaseUrl, config.serviceRoleKey, {
+    userId: caller.userId,
+    canceledSubscriptionId: cancelPrep.canceledSubscriptionId,
+    pendingCancelSubscriptionId: cancelPrep.pendingCancelSubscriptionId,
+    pendingCancelError: cancelPrep.pendingCancelError,
+  });
+  if (!eraseResult.ok) {
+    return jsonResponse({ error: "account-deletion-failed" }, 502);
+  }
+
+  const fetchFn = deps.fetchImpl ?? fetchWithTimeout;
   const tokenToRevoke = selectTokenToRevoke(parsedBody.revokeToken, bearerToken);
   const googleRevoked = tokenToRevoke
     ? await revokeGoogleOAuthToken(fetchFn, tokenToRevoke)
     : false;
 
-  return jsonResponse({ deleted: true, googleRevoked });
+  return jsonResponse({
+    deleted: true,
+    googleRevoked,
+    billingCancellationPending: eraseResult.billingCancellationPending,
+  });
 }

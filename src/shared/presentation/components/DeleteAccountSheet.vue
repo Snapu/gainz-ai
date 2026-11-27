@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { AlertTriangle } from "@lucide/vue";
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import UiBottomSheet from "@/shared/presentation/components/ui/UiBottomSheet.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import { useAccountActions } from "@/shared/presentation/composables/useAccountActions";
@@ -8,9 +8,16 @@ import { t } from "@/shared/presentation/i18n";
 
 const open = defineModel<boolean>("open", { required: true });
 
-const { isDeleting, hasActiveSpreadsheet, deleteAccount } = useAccountActions();
+const {
+  isDeleting,
+  hasActiveSpreadsheet,
+  hasActiveSubscription,
+  ensureSubscriptionStatusLoaded,
+  deleteAccount,
+} = useAccountActions();
 const trashSpreadsheet = ref(false);
 const canTrashSpreadsheet = ref(false);
+const showSubscriptionNotice = computed(() => open.value && hasActiveSubscription());
 
 watch(
   open,
@@ -18,6 +25,7 @@ watch(
     if (isOpen) {
       trashSpreadsheet.value = false;
       canTrashSpreadsheet.value = hasActiveSpreadsheet();
+      ensureSubscriptionStatusLoaded();
     }
   },
   { immediate: true, flush: "sync" },
@@ -48,6 +56,17 @@ async function handleConfirmDelete(): Promise<void> {
         <AlertTriangle class="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
         <p class="text-xs font-medium text-red-400 leading-relaxed">
           {{ t("account.deleteWarning") }}
+        </p>
+      </div>
+
+      <div
+        v-if="showSubscriptionNotice"
+        data-testid="delete-subscription-notice"
+        class="rounded-xl bg-orange-500/10 border border-orange-500/20 p-4 flex items-start gap-3"
+      >
+        <AlertTriangle class="w-5 h-5 text-orange-400 shrink-0 mt-0.5" />
+        <p class="text-xs font-medium text-orange-400 leading-relaxed">
+          {{ t("account.deleteSubscriptionNotice") }}
         </p>
       </div>
 

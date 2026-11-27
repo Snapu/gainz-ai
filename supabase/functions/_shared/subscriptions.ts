@@ -114,7 +114,9 @@ export async function syncSubscriptionWebhook(
     cancelAtPeriodEnd: boolean;
     currentPeriodEnd: string | null;
   },
-): Promise<{ ok: true; alreadyProcessed: boolean; applied: boolean } | { ok: false }> {
+): Promise<
+  { ok: true; alreadyProcessed: boolean; applied: boolean; tombstoned?: boolean } | { ok: false }
+> {
   try {
     const res = await fetchWithTimeout(
       `${supabaseUrl}/rest/v1/rpc/sync_subscription_webhook`,
@@ -147,7 +149,11 @@ export async function syncSubscriptionWebhook(
       return { ok: false };
     }
 
-    const rows = (await res.json()) as Array<{ already_processed?: boolean; applied?: boolean }>;
+    const rows = (await res.json()) as Array<{
+      already_processed?: boolean;
+      applied?: boolean;
+      tombstoned?: boolean;
+    }>;
     const row = Array.isArray(rows) ? rows[0] : undefined;
     if (!row || typeof row.already_processed !== "boolean" || typeof row.applied !== "boolean") {
       return { ok: false };
@@ -157,10 +163,141 @@ export async function syncSubscriptionWebhook(
       ok: true,
       alreadyProcessed: row.already_processed,
       applied: row.applied,
+      tombstoned: Boolean(row.tombstoned),
     };
   } catch (err) {
     console.warn(
       `[subscriptions] sync_subscription_webhook error: ${err instanceof Error ? err.name : "unknown"}`,
+    );
+    return { ok: false };
+  }
+}
+
+export async function hasPendingSubscriptionCancellation(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  subscriptionId: string,
+): Promise<{ ok: true; pending: boolean } | { ok: false }> {
+  try {
+    const query =
+      `${supabaseUrl}/rest/v1/pending_subscription_cancellations` +
+      `?provider_subscription_id=eq.${encodeURIComponent(subscriptionId)}` +
+      "&select=provider_subscription_id&limit=1";
+    const res = await fetchWithTimeout(
+      query,
+      {
+        method: "GET",
+        headers: {
+          apikey: serviceRoleKey,
+          Authorization: `Bearer ${serviceRoleKey}`,
+        },
+      },
+      SUBSCRIPTIONS_RPC_TIMEOUT_MS,
+    );
+
+    if (!res.ok) {
+      void res.body?.cancel().catch(() => {});
+      console.warn(
+        `[subscriptions] select pending_subscription_cancellations failed HTTP ${res.status}`,
+      );
+      return { ok: false };
+    }
+
+    const rows = (await res.json()) as Array<{ provider_subscription_id: string }>;
+    return {
+      ok: true,
+      pending: Array.isArray(rows) && rows.length > 0,
+    };
+  } catch (err) {
+    console.warn(
+      `[subscriptions] select pending_subscription_cancellations error: ${err instanceof Error ? err.name : "unknown"}`,
+    );
+    return { ok: false };
+  }
+}
+
+export async function deletePendingSubscriptionCancellation(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  subscriptionId: string,
+): Promise<boolean> {
+  try {
+    const url =
+      `${supabaseUrl}/rest/v1/pending_subscription_cancellations` +
+      `?provider_subscription_id=eq.${encodeURIComponent(subscriptionId)}`;
+    const res = await fetchWithTimeout(
+      url,
+      {
+        method: "DELETE",
+        headers: {
+          apikey: serviceRoleKey,
+          Authorization: `Bearer ${serviceRoleKey}`,
+        },
+      },
+      SUBSCRIPTIONS_RPC_TIMEOUT_MS,
+    );
+    void res.body?.cancel().catch(() => {});
+    if (!res.ok) {
+      console.warn(
+        `[subscriptions] delete pending_subscription_cancellations failed HTTP ${res.status}`,
+      );
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn(
+      `[subscriptions] delete pending_subscription_cancellations error: ${err instanceof Error ? err.name : "unknown"}`,
+    );
+    return false;
+  }
+}
+
+export async function deleteUserAccountData(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  params: {
+    userId: string;
+    canceledSubscriptionId?: string | null;
+    pendingCancelSubscriptionId?: string | null;
+    pendingCancelError?: string | null;
+  },
+): Promise<{ ok: true; billingCancellationPending: boolean } | { ok: false }> {
+  try {
+    const res = await fetchWithTimeout(
+      `${supabaseUrl}/rest/v1/rpc/delete_user_account_data`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: serviceRoleKey,
+          Authorization: `Bearer ${serviceRoleKey}`,
+        },
+        body: JSON.stringify({
+          p_user_id: params.userId,
+          p_canceled_subscription_id: params.canceledSubscriptionId ?? null,
+          p_pending_cancel_subscription_id: params.pendingCancelSubscriptionId ?? null,
+          p_pending_cancel_error: params.pendingCancelError ?? null,
+        }),
+      },
+      SUBSCRIPTIONS_RPC_TIMEOUT_MS,
+    );
+    if (!res.ok) {
+      void res.body?.cancel().catch(() => {});
+      console.warn(`[subscriptions] delete_user_account_data failed HTTP ${res.status}`);
+      return { ok: false };
+    }
+    const rows = (await res.json()) as Array<{ billing_cancellation_pending?: boolean }>;
+    const row = Array.isArray(rows) ? rows[0] : undefined;
+    if (!row || typeof row.billing_cancellation_pending !== "boolean") {
+      return { ok: false };
+    }
+    return {
+      ok: true,
+      billingCancellationPending: row.billing_cancellation_pending,
+    };
+  } catch (err) {
+    console.warn(
+      `[subscriptions] delete_user_account_data error: ${err instanceof Error ? err.name : "unknown"}`,
     );
     return { ok: false };
   }

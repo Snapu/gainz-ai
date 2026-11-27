@@ -5,6 +5,7 @@ import {
   syncLegalConsent,
   useLegalConsent,
 } from "@/shared/presentation/composables/useLegalConsent";
+import { setLocale } from "@/shared/presentation/i18n";
 
 const pushMock = vi.fn(() => Promise.resolve());
 const backMock = vi.fn();
@@ -196,6 +197,43 @@ describe("PrivacyPolicy.vue", () => {
       ).not.toBeNull();
     } finally {
       loggedInMount.unmount();
+    }
+  });
+
+  it("renders updated Stripe / Link, 24-month anti-abuse HMAC, tombstone, and UUID cost anonymization disclosures in German and English", async () => {
+    const mounted = mountPrivacyPolicy();
+    try {
+      setLocale("de");
+      await nextTick();
+      const deText = mounted.host.textContent ?? "";
+      expect(deText).toContain("Stripe / Link");
+      expect(deText).toContain("LINK.COM*");
+      expect(deText).toContain("7,99 €");
+      expect(deText).toContain("billing:entitlement-v1");
+      expect(deText).toContain("pending_subscription_cancellations");
+      expect(deText).toContain("deleted:<uuid>");
+      expect(deText).toContain("Art. 17 Abs. 3 lit. e DSGVO");
+      expect(deText).toContain("HGB/AO");
+      expect(deText).toContain("24");
+      expect(deText).toContain("28 Tage");
+      expect(deText).not.toContain("7 Tage");
+
+      setLocale("en");
+      await nextTick();
+      const enText = mounted.host.textContent ?? "";
+      expect(enText).toContain("Stripe / Link");
+      expect(enText).toContain("LINK.COM*");
+      expect(enText).toContain("billing:entitlement-v1");
+      expect(enText).toContain("pending_subscription_cancellations");
+      expect(enText).toContain("deleted:<uuid>");
+      expect(enText).toContain("Art. 17(3)(e) GDPR");
+      expect(enText).toContain("HGB/AO");
+      expect(enText).toContain("24");
+      expect(enText).toContain("28 days");
+      expect(enText).not.toContain("7 days");
+    } finally {
+      setLocale("en");
+      mounted.unmount();
     }
   });
 });

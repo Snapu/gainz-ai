@@ -61,7 +61,7 @@ async function handleWithdrawConsent(): Promise<void> {
         <template v-if="locale === 'de'">
           <section class="space-y-4">
             <h2 class="text-2xl font-bold text-foreground">Datenschutzerklärung</h2>
-            <p class="text-sm italic">Letzte Aktualisierung: 22. November 2026</p>
+            <p class="text-sm italic">Letzte Aktualisierung: 27. November 2026</p>
             <p>
               Diese Datenschutzerklärung gilt für die Gainz AI App (nachfolgend „App“ oder
               „Anwendung“) und erläutert, welche personenbezogenen und freiwilligen
@@ -199,7 +199,12 @@ async function handleWithdrawConsent(): Promise<void> {
                   Trainingsprotokoll-Cache, Muskelklassifizierungen, Trainingspläne,
                   Auszeiten/Gesundheitsereignisse, Setup-Status, Spracheinstellung
                   (<code>gainz-locale</code>), Einwilligungsnachweis mit Zeitstempel und Version
-                  (<code>gainz-legal-consent</code>) sowie KI-Unterhaltungen (begrenzt auf 28 Tage)
+                  (<code>gainz-legal-consent</code>), lokaler Billing-Status-Cache
+                  (<code>billing:entitlement-v1</code>) sowie KI-Unterhaltungen (begrenzt auf 28 Tage)
+                </li>
+                <li>
+                  <strong>Sitzungsstatus (<code>sessionStorage</code>):</strong> Kurzzeitige Marker
+                  für ausstehende Einladungscodes und die Checkout-Rückkehr
                 </li>
                 <li>
                   <strong>OAuth-Tokens:</strong> Google OAuth Access Token, Refresh Token, ID Token
@@ -223,8 +228,11 @@ async function handleWithdrawConsent(): Promise<void> {
               </ul>
               <p class="text-sm mt-2">
                 Für den OAuth-Token-Austausch, die Weiterleitung von KI-Anfragen an Google Generative
-                AI, zur Durchsetzung täglicher Nutzungslimits (Rate-Limiting anhand Ihrer pseudonymen
-                Google-Konto-ID und eines Tageszählers) sowie zur kurzfristigen
+                AI, die Verwaltung von Abonnement- und Tester-Zugängen
+                (<code>user_subscriptions</code>, <code>invite_grants</code>), den pseudonymen
+                Starter-Kontingent-Schutz (<code>HMAC-SHA256</code>-Digest mit max. 24 Monaten
+                Inaktivitäts-Frist), monatlich aggregierte KI-Token-Kostenstatistiken, die
+                Durchsetzung täglicher Nutzungslimits sowie zur kurzfristigen
                 Verbindungs-Wiederherstellung bei Bildschirmsperre (max. 30 Minuten gültiger
                 Zwischenspeicher) nutzt die App ein Backend auf Basis von <strong>Supabase</strong>
                 (Hosting-Region EU Central / Frankfurt am Main, Deutschland).
@@ -497,9 +505,18 @@ async function handleWithdrawConsent(): Promise<void> {
                 <li>
                   <strong>Gespeicherte Daten:</strong> Pseudonyme Google-Subjekt-ID
                   (<code>sub</code>), Tagesdatum (UTC) und Anzahl der täglichen KI-Anfragen in der
-                  Tabelle <code>ai_daily_usage</code> sowie kurzfristig die zugehörige KI-Antwort
-                  (<code>response_payload</code>) in der Tabelle <code>ai_request_results</code>
-                  (Idempotenz- &amp; Wiederherstellungs-Cache mit 30 Minuten Gültigkeit)
+                  Tabelle <code>ai_daily_usage</code>, kurzfristige Recovery-Antworten
+                  (<code>response_payload</code>, 30 Minuten gültig) in <code>ai_request_results</code>,
+                  Abonnement-/Einladungsstatus (<code>user_subscriptions</code>,
+                  <code>invite_grants</code>), ein serverseitig gepfefferter pseudonymer
+                  <code>HMAC-SHA256</code>-Subjekt-Digest zum Missbrauchsschutz des Starter-Kontingents
+                  (<code>free_allowance_usage</code>, Rechtsgrundlage Art. 6 Abs. 1 lit. f und Art.
+                  17 Abs. 3 lit. e DSGVO) sowie pro Monat aggregierte KI-Token-Statistiken
+                  (<code>ai_monthly_token_usage</code>). Im Falle einer vorübergehenden
+                  Nicht-Erreichbarkeit von Stripe bei Kontolöschung wird kurzfristig ausschließlich
+                  die nicht-personenbezogene Abonnement-ID (ohne <code>user_id</code> oder E-Mail)
+                  in <code>pending_subscription_cancellations</code> zur automatischen Nachholung der
+                  Kündigung vorgemerkt.
                 </li>
                 <li>
                   <strong>Datenschutzerklärung:</strong>
@@ -516,7 +533,48 @@ async function handleWithdrawConsent(): Promise<void> {
 
             <div class="space-y-2">
               <h3 class="text-lg font-medium text-foreground">
-                4.4 Cloudflare Pages (Hosting &amp; CDN)
+                4.4 Stripe / Link (Zahlungsabwicklung &amp; Merchant of Record)
+              </h3>
+              <p>
+                Für das kostenpflichtige Abonnement <strong>GainzAI Pro</strong> (7,99 € / Monat
+                inkl. MwSt.) nutzt die App <strong>Stripe Managed Payments / Link</strong> als
+                Merchant of Record.
+              </p>
+              <ul class="list-disc pl-5 space-y-1">
+                <li>
+                  <strong>Anbieter:</strong> Stripe Payments Europe, Limited (1 Grand Canal Street
+                  Lower, Grand Canal Dock, Dublin, D02 H210, Irland) bzw. Stripe, Inc. (USA)
+                </li>
+                <li>
+                  <strong>Zweck:</strong> Hosted Checkout, Zahlungsabwicklung, Umsatzsteuer-Berechnung,
+                  Rechnungen/Belege (Ausweis als <code>LINK.COM*</code>), Kulanz-/Mahnwesen sowie
+                  Self-Service-Kündigung im Kundenportal
+                </li>
+                <li>
+                  <strong>Rechtsgrundlage:</strong> Art. 6 Abs. 1 lit. b DSGVO (Vertragserfüllung)
+                </li>
+                <li>
+                  <strong>Übermittelte Daten:</strong> Pseudonyme Konto-Referenz
+                  (<code>client_reference_id</code> / <code>user_id</code>-Metadatum zur eindeutigen
+                  Zuordnung) sowie von Ihnen direkt bei Stripe / Link eingegebene Zahlungs-,
+                  Adress- und Rechnungsdaten
+                </li>
+                <li>
+                  <strong>Datenschutzerklärung:</strong>
+                  <a
+                    href="https://stripe.com/privacy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-primary hover:underline"
+                    >https://stripe.com/privacy</a
+                  >
+                </li>
+              </ul>
+            </div>
+
+            <div class="space-y-2">
+              <h3 class="text-lg font-medium text-foreground">
+                4.5 Cloudflare Pages (Hosting &amp; CDN)
               </h3>
               <p>Diese Web-Anwendung wird über Cloudflare Pages bereitgestellt.</p>
               <ul class="list-disc pl-5 space-y-1">
@@ -551,13 +609,14 @@ async function handleWithdrawConsent(): Promise<void> {
             </div>
 
             <div class="space-y-2">
-              <h3 class="text-lg font-medium text-foreground">4.5 Übermittlung in Drittländer</h3>
+              <h3 class="text-lg font-medium text-foreground">4.6 Übermittlung in Drittländer</h3>
               <p>
                 <strong>USA &amp; Singapur / Drittländer:</strong> Die Datenübermittlung an
                 Dienstleister mit Sitz oder Muttergesellschaft in den USA bzw. in Singapur (Google LLC
-                [USA], Cloudflare, Inc. [USA], Functional Software, Inc. / Sentry [USA], Supabase,
-                Inc. [Singapur, mit EU-Datenbankhosting in Frankfurt am Main]) erfolgt auf Grundlage
-                der Standardvertragsklauseln der EU-Kommission (SCCs) sowie, soweit für US-Anbieter
+                [USA], Stripe, Inc. / Stripe Payments Europe [USA/IE], Cloudflare, Inc. [USA],
+                Functional Software, Inc. / Sentry [USA], Supabase, Inc. [Singapur, mit
+                EU-Datenbankhosting in Frankfurt am Main]) erfolgt auf Grundlage der
+                Standardvertragsklauseln der EU-Kommission (SCCs) sowie, soweit für US-Anbieter
                 zutreffend, des EU-U.S. Data Privacy Frameworks.
               </p>
               <p>
@@ -606,19 +665,29 @@ async function handleWithdrawConsent(): Promise<void> {
 
             <div class="space-y-2">
               <h3 class="text-lg font-medium text-foreground">
-                5.4 Bei Google Generative AI &amp; Supabase
+                5.4 Bei Google Generative AI, Supabase &amp; Stripe / Link
               </h3>
               <p>
                 Google verarbeitet übermittelte Daten gemäß den Generative AI API Terms of Service.
-                In unserem Supabase-Backend sind pseudonyme Nutzungszähler zur Kontingentprüfung
-                (<code>ai_daily_usage</code>) auf eine Aufbewahrungsdauer von
-                <strong>30 Tagen</strong> begrenzt und zwischengespeicherte KI-Antworten zur
-                Wiederherstellung bei Verbindungsabbruch (<code>ai_request_results</code>) nach
-                <strong>30 Minuten</strong> abgelaufen und nicht mehr abrufbar. Die tatsächliche
-                Datenbankbereinigung abgelaufener Einträge erfolgt jeweils im Zuge nachfolgender
-                Anfragen (request-gesteuerte Bereinigung); über die App-Funktion
-                <strong>„Konto &amp; Daten löschen“</strong> (Menü oder Abschnitt 6.3 unten) sowie
-                auf Anfrage per E-Mail löschen wir Ihre Server-Einträge zudem jederzeit sofort.
+                In unserem Supabase-Backend sind pseudonyme Tageszähler (<code>ai_daily_usage</code>)
+                auf <strong>30 Tage</strong> und Recovery-Zwischenspeicher (<code>ai_request_results</code>)
+                auf <strong>30 Minuten</strong> begrenzt. Abonnement- und Tester-Einträge
+                (<code>user_subscriptions</code>, <code>invite_grants</code>) bleiben für die Dauer
+                des Zugangs bzw. Ihres Kontos gespeichert und werden bei Kontolöschung sofort
+                gelöscht; ein bei temporärem Stripe-Ausfall angelegter, nicht-personenbezogener
+                Kündigungs-Vormerk-Eintrag (<code>pending_subscription_cancellations</code>) wird
+                entfernt, sobald die Kündigung bei Stripe bestätigt wurde. Der serverseitig
+                gepfefferte <code>HMAC-SHA256</code>-Digest zum Schutz vor mehrfacher
+                Inanspruchnahme des kostenfreien Starter-Kontingents (<code>free_allowance_usage</code>)
+                unterliegt gemäß Art. 5 Abs. 1 lit. e, Art. 6 Abs. 1 lit. f und Art. 17 Abs. 3
+                lit. e DSGVO einer maximalen Inaktivitäts-Speicherdauer von
+                <strong>24 Monaten</strong> und wird danach automatisch bereinigt. Monatliche
+                Kostenstatistiken (<code>ai_monthly_token_usage</code>) werden bei Kontolöschung je
+                Monat mit einer nicht verknüpfbaren Zufalls-UUID (<code>deleted:&lt;uuid&gt;</code>)
+                irreversibel anonymisiert. Bei <strong>Stripe / Link</strong> (Merchant of Record)
+                unterliegen Rechnungs-, Steuer- und Transaktionsbelege den gesetzlichen
+                handels- und steuerrechtlichen Aufbewahrungspflichten (insbesondere 6 bis 10 Jahre
+                nach HGB/AO), die von einer Kontolöschung in der App unberührt bleiben.
               </p>
             </div>
           </section>
@@ -653,10 +722,17 @@ async function handleWithdrawConsent(): Promise<void> {
               <p class="text-sm font-medium">So löschen Sie Ihre Daten:</p>
               <ul class="list-disc pl-5 space-y-1 text-sm">
                 <li>
-                  <strong>Direkt in der App („Konto &amp; Daten löschen“):</strong> Löscht sofort
-                  Ihre Supabase-Serverdaten, widerruft den Google-OAuth-Zugriff, entfernt alle
-                  lokalen App-Daten und verschiebt auf Wunsch auch Ihre verknüpfte
-                  Google-Drive-Tabelle in den Papierkorb
+                  <strong>Direkt in der App („Konto &amp; Daten löschen“):</strong> Kündigt ein
+                  aktives Stripe-Abonnement (sofern Stripe vorübergehend nicht erreichbar ist, über
+                  einen nicht-personenbezogenen Vormerk-Eintrag), löscht sofort Ihre
+                  Supabase-Serverdaten (<code>user_subscriptions</code>, <code>invite_grants</code>,
+                  <code>ai_daily_usage</code>, <code>ai_request_results</code>), anonymisiert
+                  monatliche Token-Kostenzeilen irreversibel je Monat per Zufalls-UUID
+                  (<code>deleted:&lt;uuid&gt;</code>), widerruft den Google-OAuth-Zugriff und
+                  entfernt alle lokalen App-Daten inkl. Billing-Cache. Der pseudonyme
+                  <code>HMAC-SHA256</code>-Starter-Digest bleibt ausschließlich zweckgebunden zum
+                  Missbrauchsschutz (Art. 6 Abs. 1 lit. f, Art. 17 Abs. 3 lit. e DSGVO) für maximal
+                  24 Monate Inaktivität (Art. 5 Abs. 1 lit. e DSGVO) gespeichert.
                 </li>
                 <li>
                   <strong>Lokale Daten:</strong> Löschen Sie zusätzlich bei Bedarf Browser-Cache
@@ -670,9 +746,19 @@ async function handleWithdrawConsent(): Promise<void> {
                   <strong>Sentry:</strong> Fehlerdaten werden automatisch nach 90 Tagen gelöscht
                 </li>
                 <li>
-                  <strong>Supabase:</strong> Kurzzeit-Cache verfällt nach 30 Minuten und
-                  Kontingentzähler nach 30 Tagen (sofortige Löschung über „Konto &amp; Daten
-                  löschen“ oder auf Anfrage per E-Mail)
+                  <strong>Supabase:</strong> Recovery-Cache verfällt nach 30 Minuten, Tageszähler
+                  nach 30 Tagen; Abo- und Einladungsdaten (<code>user_subscriptions</code>,
+                  <code>invite_grants</code>) werden über „Konto &amp; Daten löschen“ sofort
+                  entfernt, Monatskosten je Monat per <code>deleted:&lt;uuid&gt;</code>
+                  anonymisiert, eventuelle Kündigungs-Vormerkungen
+                  (<code>pending_subscription_cancellations</code>) nach Stripe-Vollzug gelöscht
+                  und der pseudonyme <code>HMAC-SHA256</code>-Starter-Digest nach spätestens 24
+                  Monaten Inaktivität bereinigt
+                </li>
+                <li>
+                  <strong>Stripe / Link:</strong> Aktive Abonnements werden bei Kontolöschung
+                  sofort gekündigt; gesetzlich vorgeschriebene Abrechnungs- und Steuerbelege
+                  (z. B. 6–10 Jahre nach HGB/AO) verbleiben gemäß gesetzlicher Pflicht bei Stripe
                 </li>
                 <li>
                   <strong>Google Generative AI:</strong> Kontaktieren Sie Google gemäß deren
@@ -782,10 +868,13 @@ async function handleWithdrawConsent(): Promise<void> {
               </li>
               <li>
                 <strong>Minimale Server-Speicherung:</strong> Ihre Trainingsprotokolle und
-                Profildaten werden ausschließlich lokal und in Ihrem eigenen Google Drive gespeichert;
-                auf dem Backend (Supabase EU) werden nur pseudonyme Tageszähler (30 Tage) sowie ein
-                kurzfristiger Recovery-Zwischenspeicher für KI-Antworten (30 Minuten Gültigkeit)
-                gehalten
+                Profildaten verbleiben ausschließlich lokal und in Ihrem eigenen Google Drive; auf
+                dem Supabase-EU-Backend werden nur pseudonyme Tageszähler (30 Tage),
+                Recovery-Zwischenspeicher (30 Minuten), Abo-/Tester-Berechtigungen
+                (<code>user_subscriptions</code>, <code>invite_grants</code>), monatliche
+                Token-Kostenstatistiken (bei Kontolöschung je Monat per Zufalls-UUID anonymisiert)
+                sowie der zweckgebundene <code>HMAC-SHA256</code>-Starter-Digest (max. 24 Monate
+                Inaktivität) gespeichert
               </li>
               <li>
                 <strong>Access &amp; Refresh Token Management:</strong> Kurze Gültigkeitsdauer der
@@ -847,7 +936,7 @@ async function handleWithdrawConsent(): Promise<void> {
         <template v-else>
           <section class="space-y-4">
             <h2 class="text-2xl font-bold text-foreground">Privacy Policy</h2>
-            <p class="text-sm italic">Last Updated: November 22, 2026</p>
+            <p class="text-sm italic">Last Updated: November 27, 2026</p>
             <p>
               This Privacy Policy applies to the Gainz AI app (hereinafter "App" or "Application") and
               explains what personal and optional health-related data we collect, how we process it,
@@ -977,8 +1066,13 @@ async function handleWithdrawConsent(): Promise<void> {
                   <strong>Browser/WebView <code>localStorage</code>:</strong> User profile data,
                   training log cache, exercise muscle classifications, training plans, rest &amp;
                   recovery events, setup status, language preference (<code>gainz-locale</code>),
-                  consent record with timestamp and version (<code>gainz-legal-consent</code>), and
-                  AI conversations (retained for 28 days)
+                  consent record with timestamp and version (<code>gainz-legal-consent</code>),
+                  local billing entitlement cache (<code>billing:entitlement-v1</code>), and AI
+                  conversations (retained for 28 days)
+                </li>
+                <li>
+                  <strong>Session state (<code>sessionStorage</code>):</strong> Short-lived
+                  pending invite code and checkout return markers
                 </li>
                 <li>
                   <strong>OAuth tokens:</strong> Google OAuth access token, refresh token, ID token,
@@ -1001,11 +1095,14 @@ async function handleWithdrawConsent(): Promise<void> {
                 <li>in your own Google Drive spreadsheet (Google Sheets)</li>
               </ul>
               <p class="text-sm mt-2">
-                For OAuth token exchange, forwarding AI requests to Google Generative AI, enforcing
-                daily usage limits (rate limiting using your pseudonymous Google account ID and a
-                daily counter), and short-lived recovery after screen lock or connection drops (up to
-                30-minute temporary response cache), the app uses a backend powered by
-                <strong>Supabase</strong> (hosting region EU Central / Frankfurt am Main, Germany).
+                For OAuth token exchange, forwarding AI requests to Google Generative AI, managing
+                subscription and tester entitlements (<code>user_subscriptions</code>,
+                <code>invite_grants</code>), maintaining the pseudonymous starter-budget anti-abuse
+                digest (<code>HMAC-SHA256</code> with a 24-month inactivity TTL), monthly
+                aggregated AI token cost statistics, enforcing daily usage limits, and short-lived
+                recovery after screen lock or connection drops (up to 30-minute temporary response
+                cache), the app uses a backend powered by <strong>Supabase</strong> (hosting
+                region EU Central / Frankfurt am Main, Germany).
               </p>
             </div>
           </section>
@@ -1253,10 +1350,17 @@ async function handleWithdrawConsent(): Promise<void> {
                 </li>
                 <li>
                   <strong>Stored data:</strong> Pseudonymous Google subject ID (<code>sub</code>),
-                  calendar day (UTC), and daily AI request count in table
-                  <code>ai_daily_usage</code>, plus a short-lived idempotency/recovery cache of the AI
-                  response (<code>response_payload</code>) in table <code>ai_request_results</code>
-                  (30-minute validity)
+                  UTC calendar day and daily AI request count in <code>ai_daily_usage</code>, a
+                  30-minute AI response recovery cache in <code>ai_request_results</code>,
+                  subscription/invite status (<code>user_subscriptions</code>,
+                  <code>invite_grants</code>), a server-peppered pseudonymous
+                  <code>HMAC-SHA256</code> subject digest to prevent repeated free starter-budget
+                  redemption (<code>free_allowance_usage</code>, legal basis Art. 6(1)(f) and Art.
+                  17(3)(e) GDPR), and monthly aggregated AI token statistics
+                  (<code>ai_monthly_token_usage</code>). If Stripe is temporarily unreachable during
+                  account deletion, only the non-personal subscription ID (zero <code>user_id</code>
+                  or email) is temporarily recorded in <code>pending_subscription_cancellations</code>
+                  for automatic self-healing cancellation.
                 </li>
                 <li>
                   <strong>Privacy Policy:</strong>
@@ -1273,7 +1377,48 @@ async function handleWithdrawConsent(): Promise<void> {
 
             <div class="space-y-2">
               <h3 class="text-lg font-medium text-foreground">
-                4.4 Cloudflare Pages (Hosting &amp; CDN)
+                4.4 Stripe / Link (Payments &amp; Merchant of Record)
+              </h3>
+              <p>
+                For the paid <strong>GainzAI Pro</strong> subscription (€7.99 / month incl. VAT),
+                the app uses <strong>Stripe Managed Payments / Link</strong> acting as Merchant of
+                Record.
+              </p>
+              <ul class="list-disc pl-5 space-y-1">
+                <li>
+                  <strong>Provider:</strong> Stripe Payments Europe, Limited (1 Grand Canal Street
+                  Lower, Grand Canal Dock, Dublin, D02 H210, Ireland) and Stripe, Inc. (USA)
+                </li>
+                <li>
+                  <strong>Purpose:</strong> Hosted Checkout, payment processing, VAT/GST remittance,
+                  receipts/invoices (appearing as <code>LINK.COM*</code>), dunning retries, and
+                  self-service cancellation via Customer Portal
+                </li>
+                <li>
+                  <strong>Legal basis:</strong> Art. 6(1)(b) GDPR (performance of contract)
+                </li>
+                <li>
+                  <strong>Data transmitted:</strong> Pseudonymous account identifier
+                  (<code>client_reference_id</code> / <code>user_id</code> metadata for reliable
+                  entitlement binding) plus payment and billing details you enter directly with
+                  Stripe / Link
+                </li>
+                <li>
+                  <strong>Privacy Policy:</strong>
+                  <a
+                    href="https://stripe.com/privacy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-primary hover:underline"
+                    >https://stripe.com/privacy</a
+                  >
+                </li>
+              </ul>
+            </div>
+
+            <div class="space-y-2">
+              <h3 class="text-lg font-medium text-foreground">
+                4.5 Cloudflare Pages (Hosting &amp; CDN)
               </h3>
               <p>This web application is delivered via Cloudflare Pages.</p>
               <ul class="list-disc pl-5 space-y-1">
@@ -1308,14 +1453,15 @@ async function handleWithdrawConsent(): Promise<void> {
             </div>
 
             <div class="space-y-2">
-              <h3 class="text-lg font-medium text-foreground">4.5 International Data Transfers</h3>
+              <h3 class="text-lg font-medium text-foreground">4.6 International Data Transfers</h3>
               <p>
                 <strong>USA &amp; Singapore / Third countries:</strong> Data transfers involving
                 service providers established or parent-held in the USA or Singapore (Google LLC
-                [USA], Cloudflare, Inc. [USA], Functional Software, Inc. / Sentry [USA], Supabase,
-                Inc. [Singapore, with EU database hosting in Frankfurt am Main]) rely on the European
-                Commission's Standard Contractual Clauses (SCCs) and, where applicable for US
-                providers, the EU-U.S. Data Privacy Framework.
+                [USA], Stripe, Inc. / Stripe Payments Europe [USA/IE], Cloudflare, Inc. [USA],
+                Functional Software, Inc. / Sentry [USA], Supabase, Inc. [Singapore, with EU database
+                hosting in Frankfurt am Main]) rely on the European Commission's Standard Contractual
+                Clauses (SCCs) and, where applicable for US providers, the EU-U.S. Data Privacy
+                Framework.
               </p>
               <p>
                 <strong>Risks:</strong> Transferring data to countries outside the EU/EEA carries
@@ -1362,18 +1508,29 @@ async function handleWithdrawConsent(): Promise<void> {
 
             <div class="space-y-2">
               <h3 class="text-lg font-medium text-foreground">
-                5.4 Google Generative AI &amp; Supabase
+                5.4 Google Generative AI, Supabase &amp; Stripe / Link
               </h3>
               <p>
                 Google processes submitted data under the Generative AI API Terms of Service. In our
                 Supabase backend, pseudonymous daily usage counters (<code>ai_daily_usage</code>)
                 are limited to a retention window of <strong>30 days</strong>, and temporary AI
                 response recovery entries (<code>ai_request_results</code>) expire after
-                <strong>30 minutes</strong> and cannot be retrieved thereafter. Database rows past
-                their expiry window are purged during subsequent request-triggered cleanup; you can
-                delete all server records immediately at any time via the in-app
-                <strong>“Delete Account &amp; Data”</strong> flow (menu or Section 6.3 below), or
-                upon email request.
+                <strong>30 minutes</strong>. Subscription and tester records
+                (<code>user_subscriptions</code>, <code>invite_grants</code>) are retained for the
+                duration of active entitlement or account existence and are deleted immediately upon
+                account deletion; any non-personal cancellation tombstone
+                (<code>pending_subscription_cancellations</code>) created during a transient Stripe
+                outage is removed once Stripe confirms cancellation. The server-peppered
+                pseudonymous <code>HMAC-SHA256</code> anti-abuse starter digest
+                (<code>free_allowance_usage</code>) is strictly limited under GDPR Art. 5(1)(e), Art.
+                6(1)(f), and Art. 17(3)(e) to a maximum inactivity period of
+                <strong>24 months</strong> before automatic cleanup. Monthly AI token cost rollups
+                (<code>ai_monthly_token_usage</code>) are irreversibly anonymized per month on
+                account deletion using an unlinked random UUID (<code>deleted:&lt;uuid&gt;</code>).
+                At <strong>Stripe / Link</strong> (Merchant of Record), invoices, tax records, and
+                transaction logs remain subject to mandatory statutory commercial and tax retention
+                periods (typically 6–10 years under German HGB/AO), which are unaffected by app
+                account deletion.
               </p>
             </div>
           </section>
@@ -1409,9 +1566,16 @@ async function handleWithdrawConsent(): Promise<void> {
               <p class="text-sm font-medium">How to delete your data:</p>
               <ul class="list-disc pl-5 space-y-1 text-sm">
                 <li>
-                  <strong>Direct in-app (“Delete Account &amp; Data”):</strong> Immediately deletes
-                  your Supabase server data, revokes Google OAuth access, wipes all local app
-                  data, and optionally moves your linked Google Drive spreadsheet to Trash
+                  <strong>Direct in-app (“Delete Account &amp; Data”):</strong> Immediately cancels
+                  any active Stripe subscription (or records a non-personal tombstone for automatic
+                  cancellation if Stripe is temporarily unreachable), deletes your Supabase server
+                  data (<code>user_subscriptions</code>, <code>invite_grants</code>,
+                  <code>ai_daily_usage</code>, <code>ai_request_results</code>), irreversibly
+                  anonymizes monthly token cost rows per month with a random UUID
+                  (<code>deleted:&lt;uuid&gt;</code>), revokes Google OAuth access, and wipes local
+                  app data and billing caches. Only the pseudonymous <code>HMAC-SHA256</code>
+                  starter digest is retained strictly for anti-abuse prevention (Art. 6(1)(f),
+                  Art. 17(3)(e) GDPR) for up to 24 months of inactivity (Art. 5(1)(e) GDPR).
                 </li>
                 <li>
                   <strong>Local data:</strong> You may also clear browser cache and app data on your
@@ -1423,9 +1587,19 @@ async function handleWithdrawConsent(): Promise<void> {
                 </li>
                 <li><strong>Sentry:</strong> Error records are automatically deleted after 90 days</li>
                 <li>
-                  <strong>Supabase:</strong> Recovery cache expires after 30 minutes and usage
-                  counters after 30 days (immediate deletion via “Delete Account &amp; Data” or upon
-                  email request)
+                  <strong>Supabase:</strong> Recovery cache expires after 30 minutes and daily usage
+                  counters after 30 days; subscription and invite records
+                  (<code>user_subscriptions</code>, <code>invite_grants</code>) are deleted
+                  immediately via “Delete Account &amp; Data”, monthly token cost rows are
+                  anonymized per month via <code>deleted:&lt;uuid&gt;</code>, cancellation
+                  tombstones (<code>pending_subscription_cancellations</code>) are deleted once
+                  Stripe cancellation completes, and the pseudonymous <code>HMAC-SHA256</code>
+                  starter digest expires after at most 24 months of inactivity
+                </li>
+                <li>
+                  <strong>Stripe / Link:</strong> Active subscriptions are canceled immediately on
+                  account deletion; statutory invoices and tax records (e.g., 6–10 years under
+                  German HGB/AO) remain retained by Stripe as required by law
                 </li>
                 <li>
                   <strong>Google Generative AI:</strong> Contact Google under their privacy policy
@@ -1531,8 +1705,11 @@ async function handleWithdrawConsent(): Promise<void> {
               <li>
                 <strong>Minimal server footprint:</strong> Training logs and profile data stay local
                 and in your own Google Drive; the Supabase EU backend stores only pseudonymous daily
-                AI request counters (30-day retention window) and a short-lived AI response recovery
-                cache (30-minute validity)
+                AI request counters (30 days), short-lived AI recovery cache (30 minutes),
+                subscription/tester entitlements (<code>user_subscriptions</code>,
+                <code>invite_grants</code>), monthly AI token cost rollups (anonymized per month on
+                deletion with a random UUID), and the purpose-bound <code>HMAC-SHA256</code> starter
+                digest (up to 24 months of inactivity)
               </li>
               <li>
                 <strong>Access &amp; refresh token handling:</strong> Short-lived access tokens via

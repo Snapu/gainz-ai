@@ -60,6 +60,8 @@ vi.mock("@/shared/presentation/composables/useAccountActions", () => ({
   useAccountActions: () => ({
     isDeleting: ref(false),
     hasActiveSpreadsheet: () => false,
+    hasActiveSubscription: () => false,
+    ensureSubscriptionStatusLoaded: vi.fn(),
     signOut: vi.fn(),
     deleteAccount: vi.fn(),
   }),

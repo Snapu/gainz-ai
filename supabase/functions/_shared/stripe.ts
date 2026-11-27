@@ -296,6 +296,62 @@ export async function fetchCanonicalSubscription(
   }
 }
 
+export async function cancelStripeSubscription(
+  stripeSecretKey: string,
+  subscriptionId: string,
+  options?: { timeoutMs?: number },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const trimmedId = subscriptionId.trim();
+  if (!/^sub_[A-Za-z0-9_]+$/.test(trimmedId)) {
+    return { ok: true };
+  }
+
+  try {
+    const res = await fetchWithTimeout(
+      `https://api.stripe.com/v1/subscriptions/${encodeURIComponent(trimmedId)}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${stripeSecretKey}`,
+          "Stripe-Version": STRIPE_API_VERSION,
+        },
+      },
+      options?.timeoutMs ?? STRIPE_API_TIMEOUT_MS,
+    );
+
+    if (res.ok || res.status === 404) {
+      void res.body?.cancel().catch(() => {});
+      return { ok: true };
+    }
+
+    if (res.status === 400) {
+      try {
+        const errBody = (await res.json()) as {
+          error?: { code?: unknown; message?: unknown };
+        };
+        const code = typeof errBody?.error?.code === "string" ? errBody.error.code : "";
+        const message =
+          typeof errBody?.error?.message === "string" ? errBody.error.message.toLowerCase() : "";
+        if (code === "resource_missing" || /already\s+(?:been\s+)?canceled/.test(message)) {
+          return { ok: true };
+        }
+      } catch {
+        // Non-JSON 400 falls through as cancel error
+      }
+      console.warn("[stripe] DELETE subscription rejected HTTP 400");
+      return { ok: false, error: "stripe-http-400" };
+    }
+
+    void res.body?.cancel().catch(() => {});
+    console.warn(`[stripe] DELETE subscription failed HTTP ${res.status}`);
+    return { ok: false, error: `stripe-http-${res.status}` };
+  } catch (err) {
+    const errName = err instanceof Error ? err.name : "unknown";
+    console.warn(`[stripe] DELETE subscription request error: ${errName}`);
+    return { ok: false, error: `stripe-${errName}` };
+  }
+}
+
 function hexToBytes(hex: string): Uint8Array | null {
   if (!/^[0-9a-f]{64}$/i.test(hex)) return null;
   const out = new Uint8Array(32);

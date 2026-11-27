@@ -4,7 +4,11 @@ import { useRouter } from "vue-router";
 import { LEGAL_CONSENT_STORAGE_KEY } from "@/lib/legalConsent";
 import { LOCALE_STORAGE_KEY } from "@/lib/locale";
 import { useAuthStore } from "@/modules/auth/presentation";
-import { clearPendingCheckoutReturn, clearPendingInviteCode } from "@/modules/billing/presentation";
+import {
+  clearPendingCheckoutReturn,
+  clearPendingInviteCode,
+  useBillingStore,
+} from "@/modules/billing/presentation";
 import { useRestTimerStore, useSpreadsheetStore } from "@/modules/platform/presentation";
 import { useLegalConsent } from "@/shared/presentation/composables/useLegalConsent";
 import { clearDerivedSheetCaches } from "@/shared/presentation/composables/useSheetCacheSync";
@@ -14,6 +18,8 @@ import { t } from "@/shared/presentation/i18n";
 interface AccountActions {
   isDeleting: Ref<boolean>;
   hasActiveSpreadsheet: () => boolean;
+  hasActiveSubscription: () => boolean;
+  ensureSubscriptionStatusLoaded: () => void;
   signOut: () => Promise<void>;
   deleteAccount: (options: { trashSpreadsheet: boolean }) => Promise<boolean>;
 }
@@ -57,6 +63,23 @@ export function useAccountActions(): AccountActions {
     return Boolean(useSpreadsheetStore().activeSpreadsheetId);
   }
 
+  function hasActiveSubscription(): boolean {
+    if (!authStore.isLoggedIn) {
+      return false;
+    }
+    return useBillingStore().hasNonTerminatedSubscription;
+  }
+
+  function ensureSubscriptionStatusLoaded(): void {
+    if (!authStore.isLoggedIn) {
+      return;
+    }
+    const billingStore = useBillingStore();
+    if (!billingStore.isFetching) {
+      void billingStore.fetchEntitlement();
+    }
+  }
+
   async function clearLocalSessionState(options: { keepConsent: boolean }): Promise<void> {
     if (!options.keepConsent) {
       revokeLegalConsent();
@@ -68,6 +91,9 @@ export function useAccountActions(): AccountActions {
     clearDerivedSheetCaches({ onlyInstantiated: true });
     if (isStoreInstantiated("restTimer")) {
       useRestTimerStore().reset();
+    }
+    if (isStoreInstantiated("billing")) {
+      useBillingStore().clear();
     }
     clearPendingInviteCode();
     clearPendingCheckoutReturn();
@@ -131,6 +157,13 @@ export function useAccountActions(): AccountActions {
           ? t("account.deletedToastDesc")
           : t("account.deletedPartialRevokeToastDesc"),
       });
+      if (deleteResult.value.billingCancellationPending) {
+        toast({
+          title: t("account.deletedBillingPendingToastTitle"),
+          description: t("account.deletedBillingPendingToastDesc"),
+          duration: 10000,
+        });
+      }
       await router.push("/");
       return true;
     } finally {
@@ -141,6 +174,8 @@ export function useAccountActions(): AccountActions {
   return {
     isDeleting,
     hasActiveSpreadsheet,
+    hasActiveSubscription,
+    ensureSubscriptionStatusLoaded,
     signOut,
     deleteAccount,
   };

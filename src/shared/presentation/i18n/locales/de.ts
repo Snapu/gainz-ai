@@ -587,8 +587,11 @@ export const de: MessageSchema = {
     deleteSubtitle: "Dauerhafte Löschung von App-Daten & Berechtigungen",
     deleteWarning:
       "Dieser Vorgang löscht dauerhaft deine serverseitigen Nutzungsdaten, widerruft den Google-Zugriff von Gainz AI und entfernt alle lokalen App-Daten auf diesem Gerät. Dies kann nicht rückgängig gemacht werden.",
+    deleteSubscriptionNotice:
+      "Dein aktives GainzAI Pro Abonnement wird bei der Kontolöschung ebenfalls sofort gekündigt (nicht erst zum Ende des Abrechnungszeitraums).",
     deleteItemsTitle: "Was gelöscht bzw. widerrufen wird",
-    deleteItemServer: "Serverseitige Nutzungszähler und temporäre KI-Recovery-Einträge (Supabase)",
+    deleteItemServer:
+      "Serverseitige Nutzungszähler, aktiver Abo-/Tester-Zugang sowie temporäre KI-Recovery-Einträge (Supabase)",
     deleteItemGoogle: "Die für Gainz AI erteilten Google-OAuth-Berechtigungen",
     deleteItemLocal: "Alle lokalen Tokens, Einwilligungsstatus, Pläne, Chats und Auszeiten",
     deleteDriveNoteKeep:
@@ -604,6 +607,9 @@ export const de: MessageSchema = {
       "Deine Serverdaten, die Google-Verbindung und alle lokalen App-Daten wurden gelöscht.",
     deletedPartialRevokeToastDesc:
       "Deine Serverdaten und lokalen App-Daten wurden gelöscht. Prüfe bei Bedarf zusätzlich die Berechtigungen in deinem Google-Konto.",
+    deletedBillingPendingToastTitle: "Abo-Kündigung vorgemerkt",
+    deletedBillingPendingToastDesc:
+      "Deine Kontodaten wurden sofort gelöscht. Da Stripe kurzzeitig nicht erreichbar war, ist die Kündigung automatisch zur Nachholung vorgemerkt.",
     deleteFailedTitle: "Löschung fehlgeschlagen",
     deleteFailedDesc:
       "Die Serverdaten konnten derzeit nicht gelöscht werden. Bitte prüfe deine Internetverbindung und versuche es erneut.",

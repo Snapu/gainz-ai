@@ -1,5 +1,5 @@
 export const LEGAL_CONSENT_STORAGE_KEY = "gainz-legal-consent";
-export const CURRENT_LEGAL_CONSENT_VERSION = "2026-11-22";
+export const CURRENT_LEGAL_CONSENT_VERSION = "2026-11-27";
 
 export interface LegalConsentRecord {
   version: string;

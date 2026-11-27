@@ -153,9 +153,10 @@ export function createGoogleAccessTokenService(): GoogleAccessTokenService {
 const deleteAccountResponseSchema = z.object({
   deleted: z.literal(true),
   googleRevoked: z.boolean(),
+  billingCancellationPending: z.boolean().default(false),
 });
 
-const DELETE_ACCOUNT_TIMEOUT_MS = 15_000;
+const DELETE_ACCOUNT_TIMEOUT_MS = 25_000;
 
 export function createAccountDeletionService(): AccountDeletionService {
   return {

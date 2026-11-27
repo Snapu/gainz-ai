@@ -28,4 +28,5 @@ export type AccountDeletionError =
 export interface DeleteAccountResult {
   deleted: boolean;
   googleRevoked: boolean;
+  billingCancellationPending?: boolean;
 }

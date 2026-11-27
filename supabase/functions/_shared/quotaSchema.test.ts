@@ -77,6 +77,15 @@ const SYNC_SUBSCRIPTION_RPC_START = "create or replace function public.sync_subs
 const SYNC_SUBSCRIPTION_RPC_END =
   "grant execute on function public.sync_subscription_webhook(text, bigint, text, text, text, text, text, text, boolean, timestamptz) to service_role;";
 
+const PENDING_CANCELLATIONS_TABLE_START =
+  "create table if not exists public.pending_subscription_cancellations";
+const PENDING_CANCELLATIONS_TABLE_END =
+  "grant select, insert, update, delete on table public.pending_subscription_cancellations to service_role;";
+
+const DELETE_USER_ACCOUNT_RPC_START = "create or replace function public.delete_user_account_data(";
+const DELETE_USER_ACCOUNT_RPC_END =
+  "grant execute on function public.delete_user_account_data(text, text, text, text) to service_role;";
+
 function extractSection(sql: string, startMarker: string, endMarker: string): string {
   const start = sql.indexOf(startMarker);
   if (start === -1) {
@@ -184,6 +193,16 @@ describe("ai_daily_global_usage schema and migration contract", () => {
     SYNC_SUBSCRIPTION_RPC_START,
     SYNC_SUBSCRIPTION_RPC_END,
   );
+  const pendingCancellationsBlock = extractSection(
+    subscriptionSchemaSql,
+    PENDING_CANCELLATIONS_TABLE_START,
+    PENDING_CANCELLATIONS_TABLE_END,
+  );
+  const deleteUserAccountRpcBlock = extractSection(
+    subscriptionSchemaSql,
+    DELETE_USER_ACCOUNT_RPC_START,
+    DELETE_USER_ACCOUNT_RPC_END,
+  );
 
   it("keeps ai_daily_global_usage, free_allowance_usage, token usage, invite tables, views, and RPCs in zero-drift sync with latest migrations", () => {
     expect(loadLatestMigrationSection(migrations, GLOBAL_TABLE_START, GLOBAL_TABLE_END)).toBe(
@@ -255,6 +274,20 @@ describe("ai_daily_global_usage schema and migration contract", () => {
         SYNC_SUBSCRIPTION_RPC_END,
       ),
     ).toBe(syncSubscriptionRpcBlock);
+    expect(
+      loadLatestMigrationSection(
+        migrations,
+        PENDING_CANCELLATIONS_TABLE_START,
+        PENDING_CANCELLATIONS_TABLE_END,
+      ),
+    ).toBe(pendingCancellationsBlock);
+    expect(
+      loadLatestMigrationSection(
+        migrations,
+        DELETE_USER_ACCOUNT_RPC_START,
+        DELETE_USER_ACCOUNT_RPC_END,
+      ),
+    ).toBe(deleteUserAccountRpcBlock);
   });
 
   it("wraps LOCK TABLE migrations in an explicit transaction (the Supabase CLI adds none)", () => {
@@ -372,6 +405,7 @@ describe("ai_daily_global_usage schema and migration contract", () => {
       ["invite_redeem_attempts", inviteAttemptsBlock],
       ["user_subscriptions", userSubscriptionsBlock],
       ["processed_webhook_events", processedWebhookBlock],
+      ["pending_subscription_cancellations", pendingCancellationsBlock],
     ] as const) {
       expect(block).toContain(`alter table public.${tableName} enable row level security;`);
       expect(block).toContain('create policy "service_role_full_access"');
@@ -410,6 +444,7 @@ describe("ai_daily_global_usage schema and migration contract", () => {
         "text, bigint, text, text, text, text, text, text, boolean, timestamptz",
         syncSubscriptionRpcBlock,
       ],
+      ["delete_user_account_data", "text, text, text, text", deleteUserAccountRpcBlock],
     ] as const) {
       expect(block).toMatch(/security invoker/i);
       expect(block).toContain("set search_path = ''");
@@ -471,5 +506,39 @@ describe("ai_daily_global_usage schema and migration contract", () => {
       "excluded.last_event_created >= public.user_subscriptions.last_event_created",
     );
     expect(processedWebhookBlock).toContain("idx_processed_webhook_events_processed_at");
+
+    // Non-personal cancellation tombstone, immediate personal erasure, per-month random-UUID cost anonymization, and preserved FreeAllowance
+    expect(allMigrationsSql).toContain(
+      "drop function if exists public.sync_subscription_webhook(text, bigint, text, text, text, text, text, text, boolean, timestamptz);",
+    );
+    expect(pendingCancellationsBlock).not.toMatch(/\buser_id\b/i);
+    expect(pendingCancellationsBlock).not.toMatch(/\bemail\b/i);
+    expect(syncSubscriptionRpcBlock).toContain("from public.pending_subscription_cancellations");
+    expect(syncSubscriptionRpcBlock).toContain("tombstoned boolean");
+    expect(syncSubscriptionRpcBlock).toContain("delete from public.processed_webhook_events");
+    expect(syncSubscriptionRpcBlock).toContain("if p_status = 'canceled' then");
+    const canceledBranchEndIdx = syncSubscriptionRpcBlock.indexOf(
+      "insert into public.user_subscriptions",
+    );
+    const canceledBranch = syncSubscriptionRpcBlock.slice(
+      syncSubscriptionRpcBlock.indexOf("if p_status = 'canceled' then"),
+      canceledBranchEndIdx,
+    );
+    expect(canceledBranch).toContain("update public.user_subscriptions");
+    expect(canceledBranch).not.toMatch(/\binsert\s+into\s+public\.user_subscriptions\b/i);
+
+    expect(deleteUserAccountRpcBlock).toContain("billing_cancellation_pending boolean");
+    expect(deleteUserAccountRpcBlock).toContain("with distinct_months as materialized");
+    expect(deleteUserAccountRpcBlock).toContain("from public.user_subscriptions us");
+    expect(deleteUserAccountRpcBlock).toContain("'concurrent-subscription-detected'");
+    expect(deleteUserAccountRpcBlock).toContain("delete from public.user_subscriptions");
+    expect(deleteUserAccountRpcBlock).toContain("delete from public.invite_grants");
+    expect(deleteUserAccountRpcBlock).toContain("delete from public.ai_daily_usage");
+    expect(deleteUserAccountRpcBlock).toContain("delete from public.ai_request_results");
+    expect(deleteUserAccountRpcBlock.replace(/--[^\n]*/g, "")).not.toContain(
+      "free_allowance_usage",
+    );
+    expect(deleteUserAccountRpcBlock).toContain("pg_catalog.gen_random_uuid()");
+    expect(deleteUserAccountRpcBlock).toContain("is_anonymized = true");
   });
 });
