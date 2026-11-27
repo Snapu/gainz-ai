@@ -18,6 +18,7 @@ This glossary establishes the **Ubiquitous Language** for Gainz AI across all Bo
 | **`sharedKernel`**     | Cross-domain domain primitives, muscle group definitions, fatigue triggers, date/time utils.     | `MuscleGroup`, `FatigueTriggerId`, `DateIsoString`                                       |
 | **`platform`**         | Technical infrastructure adapters: Google Sheets sync, LocalStorage, rest timer, network status. | `SheetsClient`, `OfflineQueue`, `RestTimer`                                              |
 | **`auth`**             | Google OAuth authentication, session tokens, and identity state.                                 | `AuthSession`, `UserIdentity`                                                            |
+| **`billing`**          | Athlete access entitlements, recurring subscriptions, tester invite grants, and AI cost metrics. | `Entitlement`, `FreeAllowance`, `Subscription`, `InviteGrant`, `TokenUsage`              |
 | **`migration`**        | Schema upcasters and historical data migrations.                                                 | `SchemaMigration`, `LegacyExerciseUpcaster`                                              |
 
 ---
@@ -87,7 +88,36 @@ Scientific set thresholds per muscle group over a rolling weekly window:
 
 ---
 
-## 3. Architecture & Codebase Concepts
+## 3. Monetization & Access Control
+
+### `Entitlement`
+
+- **Definition**: The authoritative right of an athlete to invoke AI coaching capabilities at a given moment, conferred by an active `Subscription`, an active `InviteGrant`, or remaining `FreeAllowance`.
+- _Avoid_: Paid flag, VIP status, account tier.
+
+### `FreeAllowance`
+
+- **Definition**: A finite, one-time starter budget of complimentary AI coaching requests granted to every newly registered athlete before a `Subscription` is required.
+- _Avoid_: Free tier, demo mode, token credit.
+
+### `Subscription`
+
+- **Definition**: A recurring paid membership plan that grants continuous `Entitlement` while active or within a payment grace period.
+- _Avoid_: Package, license, pass.
+
+### `InviteGrant`
+
+- **Definition**: Complimentary `Entitlement` granted to an invited tester via a redeemable invitation code, optionally bounded by an expiration date and subject to fair-use quotas.
+- _Avoid_: Paywall bypass, cheat code, promo coupon.
+
+### `TokenUsage`
+
+- **Definition**: The metered AI consumption of a model invocation across input, cached input, output, and reasoning tokens, used to determine average and per-athlete AI unit costs.
+- _Avoid_: Payload cost, request weight.
+
+---
+
+## 4. Architecture & Codebase Concepts
 
 ### Strict DDD Layering (4 Layers)
 

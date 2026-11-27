@@ -23,6 +23,7 @@ This file specifies where domain models, ubiquitous language, and architectural 
   - `sharedKernel`: Shared domain primitives (muscle groups, fatigue trigger IDs, leveling)
   - `platform`: Infrastructure (Google Sheets sync, LocalStorage, rest timer, Supabase config)
   - `auth`: Google OAuth 2.0, token management, session state
+  - `billing`: Athlete entitlements, recurring subscriptions, tester invite grants, AI token cost tracking
   - `migration`: Schema migrations and upcasters
 
 ---
