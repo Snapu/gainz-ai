@@ -1,8 +1,10 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { DEFAULT_DAILY_COST_CAP_USD_MICROS } from "./tokenCost";
 
 const SCHEMA_PATH = resolve(process.cwd(), "supabase/schemas/01_ai_daily_usage.sql");
+const TOKEN_SCHEMA_PATH = resolve(process.cwd(), "supabase/schemas/03_ai_token_usage.sql");
 const MIGRATIONS_DIR = resolve(process.cwd(), "supabase/migrations");
 
 const GLOBAL_TABLE_START = "create table if not exists public.ai_daily_global_usage";
@@ -19,11 +21,26 @@ const ENTITLEMENT_STATUS_END =
 
 const AUTHORIZE_START = "create or replace function public.authorize_ai_request(";
 const AUTHORIZE_END =
-  "grant execute on function public.authorize_ai_request(text, text, text, text, integer, integer, integer) to service_role;";
+  "grant execute on function public.authorize_ai_request(text, text, text, text, integer, integer, integer, bigint) to service_role;";
 
 const REFUND_START = "create or replace function public.refund_ai_quota(";
 const REFUND_END =
   "grant execute on function public.refund_ai_quota(text, text, date, text, boolean) to service_role;";
+
+const TOKEN_USAGE_TABLE_START = "create table if not exists public.ai_monthly_token_usage";
+const TOKEN_USAGE_TABLE_END =
+  "grant select, insert, update, delete on table public.ai_monthly_token_usage to service_role;";
+
+const RECORD_TOKEN_USAGE_START = "create or replace function public.record_ai_token_usage(";
+const RECORD_TOKEN_USAGE_END =
+  "grant execute on function public.record_ai_token_usage(text, date, text, text, text, boolean, bigint, bigint, bigint, bigint, bigint) to service_role;";
+
+const USER_COSTS_VIEW_START = "create or replace view public.v_ai_user_costs";
+const USER_COSTS_VIEW_END = "grant select on public.v_ai_user_costs to service_role;";
+
+const UNIT_ECONOMICS_VIEW_START = "create or replace view public.v_ai_unit_economics_monthly";
+const UNIT_ECONOMICS_VIEW_END =
+  "grant select on public.v_ai_unit_economics_monthly to service_role;";
 
 function extractSection(sql: string, startMarker: string, endMarker: string): string {
   const start = sql.indexOf(startMarker);
@@ -51,6 +68,7 @@ function loadLatestMigrationSection(
 
 describe("ai_daily_global_usage schema and migration contract", () => {
   const schemaSql = readFileSync(SCHEMA_PATH, "utf8");
+  const tokenSchemaSql = readFileSync(TOKEN_SCHEMA_PATH, "utf8");
   const migrations = readdirSync(MIGRATIONS_DIR)
     .filter((file) => file.endsWith(".sql"))
     .sort()
@@ -69,8 +87,28 @@ describe("ai_daily_global_usage schema and migration contract", () => {
   );
   const authorizeBlock = extractSection(schemaSql, AUTHORIZE_START, AUTHORIZE_END);
   const refundBlock = extractSection(schemaSql, REFUND_START, REFUND_END);
+  const tokenUsageBlock = extractSection(
+    tokenSchemaSql,
+    TOKEN_USAGE_TABLE_START,
+    TOKEN_USAGE_TABLE_END,
+  );
+  const recordTokenUsageBlock = extractSection(
+    tokenSchemaSql,
+    RECORD_TOKEN_USAGE_START,
+    RECORD_TOKEN_USAGE_END,
+  );
+  const userCostsViewBlock = extractSection(
+    tokenSchemaSql,
+    USER_COSTS_VIEW_START,
+    USER_COSTS_VIEW_END,
+  );
+  const unitEconomicsViewBlock = extractSection(
+    tokenSchemaSql,
+    UNIT_ECONOMICS_VIEW_START,
+    UNIT_ECONOMICS_VIEW_END,
+  );
 
-  it("keeps ai_daily_global_usage, free_allowance_usage, and RPCs in zero-drift sync with latest migrations", () => {
+  it("keeps ai_daily_global_usage, free_allowance_usage, token usage, views, and RPCs in zero-drift sync with latest migrations", () => {
     expect(loadLatestMigrationSection(migrations, GLOBAL_TABLE_START, GLOBAL_TABLE_END)).toBe(
       globalBlock,
     );
@@ -84,6 +122,18 @@ describe("ai_daily_global_usage schema and migration contract", () => {
       authorizeBlock,
     );
     expect(loadLatestMigrationSection(migrations, REFUND_START, REFUND_END)).toBe(refundBlock);
+    expect(
+      loadLatestMigrationSection(migrations, TOKEN_USAGE_TABLE_START, TOKEN_USAGE_TABLE_END),
+    ).toBe(tokenUsageBlock);
+    expect(
+      loadLatestMigrationSection(migrations, RECORD_TOKEN_USAGE_START, RECORD_TOKEN_USAGE_END),
+    ).toBe(recordTokenUsageBlock);
+    expect(loadLatestMigrationSection(migrations, USER_COSTS_VIEW_START, USER_COSTS_VIEW_END)).toBe(
+      userCostsViewBlock,
+    );
+    expect(
+      loadLatestMigrationSection(migrations, UNIT_ECONOMICS_VIEW_START, UNIT_ECONOMICS_VIEW_END),
+    ).toBe(unitEconomicsViewBlock);
   });
 
   it("wraps LOCK TABLE migrations in an explicit transaction (the Supabase CLI adds none)", () => {
@@ -101,12 +151,38 @@ describe("ai_daily_global_usage schema and migration contract", () => {
     expect(authorizeBlock).toContain("from public.ai_daily_global_usage");
     expect(authorizeBlock).toContain("insert into public.ai_daily_global_usage");
 
-    const capFastPathIdx = authorizeBlock.indexOf(
-      "if v_global_cap <= 0 or coalesce(v_global_count, 0) >= v_global_cap then",
-    );
+    const capFastPathIdx = authorizeBlock.indexOf("if v_global_cap <= 0");
     const requestResultsPruneIdx = authorizeBlock.indexOf("delete from public.ai_request_results");
     expect(capFastPathIdx).toBeGreaterThan(-1);
     expect(requestResultsPruneIdx).toBeGreaterThan(capFastPathIdx);
+    expect(globalBlock).toContain(
+      "estimated_cost_usd_micros bigint not null default 0 check (estimated_cost_usd_micros >= 0)",
+    );
+    expect(authorizeBlock).toContain(
+      `v_default_global_cost_cap_micros constant bigint := ${DEFAULT_DAILY_COST_CAP_USD_MICROS};`,
+    );
+    expect(authorizeBlock).toContain("coalesce(v_global_cost_micros, 0) >= v_global_cost_cap");
+    expect(authorizeBlock).toContain(
+      "and public.ai_daily_global_usage.estimated_cost_usd_micros < v_global_cost_cap",
+    );
+    expect(tokenUsageBlock).toContain("constraint ai_monthly_token_usage_pkey primary key");
+    expect(tokenUsageBlock).toContain("year_month char(7) not null check");
+    expect(tokenUsageBlock).toContain("request_kind text not null check");
+    expect(tokenUsageBlock).toContain("entitlement_source text not null check");
+    for (const col of [
+      "active_ai_users",
+      "p50_cost_usd",
+      "p95_cost_usd",
+      "cost_usd_by_kind",
+      "cost_usd_by_source",
+      "active_subscribers",
+      "estimated_margin_eur_per_subscriber",
+    ]) {
+      expect(unitEconomicsViewBlock).toContain(col);
+    }
+    expect(allMigrationsSql).toContain(
+      "drop function if exists public.authorize_ai_request(text, text, text, text, integer, integer, integer);",
+    );
 
     // 24-month FreeAllowance retention must use interval '24 months' (separate from 30-day daily pruning)
     expect(freeAllowanceBlock).toContain("idx_free_allowance_usage_updated_at");
@@ -147,6 +223,14 @@ describe("ai_daily_global_usage schema and migration contract", () => {
     expect(refFreeIdx).toBeGreaterThan(refDailyIdx);
     expect(refGlobalIdx).toBeGreaterThan(refFreeIdx);
 
+    // User quota refunds must never reverse recorded API costs
+    expect(refundBlock).not.toContain("ai_monthly_token_usage");
+    expect(refundBlock).not.toContain("estimated_cost_usd_micros");
+
+    expect(recordTokenUsageBlock).toContain("insert into public.ai_monthly_token_usage");
+    expect(recordTokenUsageBlock).toContain("insert into public.ai_daily_global_usage");
+    expect(recordTokenUsageBlock).toContain("estimated_cost_usd_micros");
+
     expect(allMigrationsSql).toContain("lock table public.ai_daily_usage in share mode;");
     expect(allMigrationsSql).toContain("insert into public.ai_daily_global_usage");
     expect(allMigrationsSql).toContain(
@@ -161,6 +245,7 @@ describe("ai_daily_global_usage schema and migration contract", () => {
     for (const [tableName, block] of [
       ["ai_daily_global_usage", globalBlock],
       ["free_allowance_usage", freeAllowanceBlock],
+      ["ai_monthly_token_usage", tokenUsageBlock],
     ] as const) {
       expect(block).toContain(`alter table public.${tableName} enable row level security;`);
       expect(block).toContain('create policy "service_role_full_access"');
@@ -177,8 +262,17 @@ describe("ai_daily_global_usage schema and migration contract", () => {
 
     for (const [fnName, sig, block] of [
       ["get_entitlement_status", "text, text, text", entitlementStatusBlock],
-      ["authorize_ai_request", "text, text, text, text, integer, integer, integer", authorizeBlock],
+      [
+        "authorize_ai_request",
+        "text, text, text, text, integer, integer, integer, bigint",
+        authorizeBlock,
+      ],
       ["refund_ai_quota", "text, text, date, text, boolean", refundBlock],
+      [
+        "record_ai_token_usage",
+        "text, date, text, text, text, boolean, bigint, bigint, bigint, bigint, bigint",
+        recordTokenUsageBlock,
+      ],
     ] as const) {
       expect(block).toMatch(/security invoker/i);
       expect(block).toContain("set search_path = ''");
@@ -188,6 +282,15 @@ describe("ai_daily_global_usage schema and migration contract", () => {
       expect(block).toContain(
         `grant execute on function public.${fnName}(${sig}) to service_role;`,
       );
+    }
+
+    for (const [viewName, block] of [
+      ["v_ai_user_costs", userCostsViewBlock],
+      ["v_ai_unit_economics_monthly", unitEconomicsViewBlock],
+    ] as const) {
+      expect(block).toMatch(/with\s*\(\s*security_invoker\s*=\s*true\s*\)/i);
+      expect(block).toContain(`revoke all on public.${viewName} from public, anon, authenticated;`);
+      expect(block).toContain(`grant select on public.${viewName} to service_role;`);
     }
 
     expect(authorizeBlock).toContain(

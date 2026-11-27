@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { NonRetryableModelError, RetryableModelError, streamWithFallback } from "./gemini";
+import {
+  type AttemptTokenUsage,
+  buildGeminiRequestBody,
+  generateWithFallback,
+  NonRetryableModelError,
+  RetryableModelError,
+  streamWithFallback,
+} from "./gemini";
 
 function makeSseStream(chunks: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -581,6 +588,495 @@ describe("streamWithFallback", () => {
     expect(result).toEqual({
       data: { coachMessage: "Fallback ok" },
       model: "gemini-3.5-flash-lite",
+    });
+  });
+
+  it("includes explicit maxOutputTokens in buildGeminiRequestBody when configured and omits when undefined", () => {
+    const withCap = buildGeminiRequestBody(
+      {
+        contents: [{ role: "user", parts: [{ text: "Plan" }] }],
+        responseJsonSchema: { type: "object" },
+        temperature: 0.4,
+        maxOutputTokens: 8192,
+      },
+      "gemini-3.8-flash",
+    );
+    expect((withCap.generationConfig as Record<string, unknown>).maxOutputTokens).toBe(8192);
+
+    const withoutCap = buildGeminiRequestBody(
+      {
+        contents: [{ role: "user", parts: [{ text: "Plan" }] }],
+        responseJsonSchema: { type: "object" },
+        temperature: 0.4,
+      },
+      "gemini-3.8-flash",
+    );
+    expect("maxOutputTokens" in (withoutCap.generationConfig as Record<string, unknown>)).toBe(
+      false,
+    );
+  });
+
+  it("clamps fallback execution to at most 2 model attempts per logical request", async () => {
+    const fetchMock = vi.fn(async () => new Response("rate limit", { status: 429 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      generateWithFallback({
+        geminiApiKey: "test-key",
+        models: ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash"],
+        contents: [{ role: "user", parts: [{ text: "Hi" }] }],
+        responseJsonSchema: { type: "object" },
+        temperature: 0.2,
+        timeoutMs: 10_000,
+        parseResponse: (json) => json,
+      }),
+    ).rejects.toThrow();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("captures per-attempt usageMetadata before finishReason !== STOP and validation errors across primary & fallback", async () => {
+    const attempts: AttemptTokenUsage[] = [];
+    const primaryChunk = JSON.stringify({
+      candidates: [
+        {
+          content: { parts: [{ text: '{"coachMessage":"Cut' }] },
+          finishReason: "MAX_TOKENS",
+        },
+      ],
+      usageMetadata: {
+        promptTokenCount: 1500,
+        cachedContentTokenCount: 500,
+        candidatesTokenCount: 8192,
+        thoughtsTokenCount: 400,
+      },
+    });
+    const fallbackChunk = JSON.stringify({
+      candidates: [
+        {
+          content: { parts: [{ text: '{"coachMessage":"Recovered"}' }] },
+          finishReason: "STOP",
+        },
+      ],
+      usageMetadata: {
+        promptTokenCount: 1500,
+        cachedContentTokenCount: 0,
+        candidatesTokenCount: 320,
+        thoughtsTokenCount: 0,
+      },
+    });
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(makeSseStream([`data: ${primaryChunk}\n\n`]), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(makeSseStream([`data: ${fallbackChunk}\n\n`]), { status: 200 }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await streamWithFallback({
+      geminiApiKey: "test-key",
+      models: ["gemini-3.8-flash", "gemini-3.5-flash-lite"],
+      contents: [{ role: "user", parts: [{ text: "Hi" }] }],
+      responseJsonSchema: { type: "object" },
+      temperature: 0.4,
+      timeoutMs: 10_000,
+      onAttemptUsage: (usage) => {
+        attempts.push(usage);
+      },
+      parseResponse: (json) => json,
+    });
+
+    expect(result.model).toBe("gemini-3.5-flash-lite");
+    expect(attempts).toEqual([
+      {
+        model: "gemini-3.8-flash",
+        unmeasured: false,
+        promptTokens: 1500,
+        cachedTokens: 500,
+        outputTokens: 8192,
+        thinkingTokens: 400,
+      },
+      {
+        model: "gemini-3.5-flash-lite",
+        unmeasured: false,
+        promptTokens: 1500,
+        cachedTokens: 0,
+        outputTokens: 320,
+        thinkingTokens: 0,
+      },
+    ]);
+  });
+
+  it("captures generateWithFallback usageMetadata before Zod/parse validation error and across fallback", async () => {
+    const attempts: AttemptTokenUsage[] = [];
+    const badSchemaPayload = JSON.stringify({
+      candidates: [
+        {
+          content: { parts: [{ text: '{"wrongField": 123}' }] },
+          finishReason: "STOP",
+        },
+      ],
+      usageMetadata: {
+        promptTokenCount: 900,
+        cachedContentTokenCount: 200,
+        candidatesTokenCount: 150,
+        thoughtsTokenCount: 50,
+      },
+    });
+    const goodPayload = JSON.stringify({
+      candidates: [
+        {
+          content: { parts: [{ text: '{"coachMessage":"Valid"}' }] },
+          finishReason: "STOP",
+        },
+      ],
+      usageMetadata: {
+        promptTokenCount: 900,
+        cachedContentTokenCount: 0,
+        candidatesTokenCount: 80,
+      },
+    });
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(badSchemaPayload, { status: 200 }))
+      .mockResolvedValueOnce(new Response(goodPayload, { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await generateWithFallback({
+      geminiApiKey: "test-key",
+      models: ["gemini-3.8-flash", "gemini-3.5-flash-lite"],
+      contents: [{ role: "user", parts: [{ text: "Hi" }] }],
+      responseJsonSchema: { type: "object" },
+      temperature: 0.4,
+      timeoutMs: 10_000,
+      onAttemptUsage: (usage) => {
+        attempts.push(usage);
+      },
+      parseResponse: (json) => {
+        const record = json as { coachMessage?: string };
+        if (!record.coachMessage) throw new Error("missing coachMessage");
+        return record;
+      },
+    });
+
+    expect(result.model).toBe("gemini-3.5-flash-lite");
+    expect(attempts).toEqual([
+      {
+        model: "gemini-3.8-flash",
+        unmeasured: false,
+        promptTokens: 900,
+        cachedTokens: 200,
+        outputTokens: 150,
+        thinkingTokens: 50,
+      },
+      {
+        model: "gemini-3.5-flash-lite",
+        unmeasured: false,
+        promptTokens: 900,
+        cachedTokens: 0,
+        outputTokens: 80,
+        thinkingTokens: 0,
+      },
+    ]);
+  });
+
+  it("reports unmeasured conservative ceil(chars / 4) estimates when stream aborts before usageMetadata arrives", async () => {
+    vi.useFakeTimers();
+    const attempts: AttemptTokenUsage[] = [];
+    const encoder = new TextEncoder();
+
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(async (_url: string, init?: RequestInit) => {
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            init?.signal?.addEventListener("abort", () => {
+              controller.error(new DOMException("Aborted", "AbortError"));
+            });
+            setTimeout(() => {
+              if (init?.signal?.aborted) return;
+              // Emit 9 chars without any usageMetadata chunk
+              controller.enqueue(
+                encoder.encode(`data: ${makeChunkPayload([{ text: '{"x":"ab"' }])}\n\n`),
+              );
+            }, 200);
+            setTimeout(() => {
+              if (init?.signal?.aborted) return;
+              // Transport drops mid-stream before final usageMetadata chunk arrives
+              controller.error(new TypeError("network stream aborted"));
+            }, 400);
+          },
+        });
+        return new Response(body, { status: 200 });
+      })
+      .mockResolvedValueOnce(
+        new Response(
+          makeSseStream([
+            `data: ${JSON.stringify({
+              candidates: [
+                {
+                  content: { parts: [{ text: '{"coachMessage":"Recovered"}' }] },
+                  finishReason: "STOP",
+                },
+              ],
+              usageMetadata: {
+                promptTokenCount: 20,
+                cachedContentTokenCount: 0,
+                candidatesTokenCount: 15,
+              },
+            })}\n\n`,
+          ]),
+          { status: 200 },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const promise = streamWithFallback({
+      geminiApiKey: "test-key",
+      models: ["gemini-3.8-flash", "gemini-3.5-flash-lite"],
+      contents: [{ role: "user", parts: [{ text: "1234567890" }] }],
+      systemInstruction: "ABCD",
+      responseJsonSchema: { type: "object" },
+      temperature: 0.4,
+      timeoutMs: 10_000,
+      onAttemptUsage: (usage) => {
+        attempts.push(usage);
+      },
+      parseResponse: (json) => json,
+    });
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    await promise;
+
+    expect(attempts[0]).toEqual({
+      model: "gemini-3.8-flash",
+      unmeasured: true,
+      promptTokens: Math.ceil((10 + 4) / 4),
+      cachedTokens: 0,
+      outputTokens: Math.ceil(9 / 4),
+      thinkingTokens: 0,
+    });
+    expect(attempts[1]).toEqual({
+      model: "gemini-3.5-flash-lite",
+      unmeasured: false,
+      promptTokens: 20,
+      cachedTokens: 0,
+      outputTokens: 15,
+      thinkingTokens: 0,
+    });
+  });
+
+  it("flags unmeasured=true and estimates output tokens when an intermediate SSE chunk has partial usageMetadata before abort", async () => {
+    vi.useFakeTimers();
+    const attempts: AttemptTokenUsage[] = [];
+    const encoder = new TextEncoder();
+
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(async (_url: string, init?: RequestInit) => {
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            init?.signal?.addEventListener("abort", () => {
+              controller.error(new DOMException("Aborted", "AbortError"));
+            });
+            setTimeout(() => {
+              if (init?.signal?.aborted) return;
+              // Intermediate chunk reports prompt tokens + text, then stream drops before final usage chunk
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    candidates: [{ content: { parts: [{ text: '{"coachMessage":"12345678"' }] } }],
+                    usageMetadata: { promptTokenCount: 2000, candidatesTokenCount: 0 },
+                  })}\n\n`,
+                ),
+              );
+            }, 100);
+            setTimeout(() => {
+              if (init?.signal?.aborted) return;
+              controller.error(new TypeError("mid-stream disconnect"));
+            }, 250);
+          },
+        });
+        return new Response(body, { status: 200 });
+      })
+      .mockResolvedValueOnce(
+        new Response(
+          makeSseStream([
+            `data: ${JSON.stringify({
+              candidates: [
+                {
+                  content: { parts: [{ text: '{"coachMessage":"Recovered"}' }] },
+                  finishReason: "STOP",
+                },
+              ],
+              usageMetadata: {
+                promptTokenCount: 50,
+                cachedContentTokenCount: 10,
+                candidatesTokenCount: 12,
+                thoughtsTokenCount: 3,
+              },
+            })}\n\n`,
+          ]),
+          { status: 200 },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const promise = streamWithFallback({
+      geminiApiKey: "test-key",
+      models: ["gemini-3.8-flash", "gemini-3.5-flash-lite"],
+      contents: [{ role: "user", parts: [{ text: "Hi" }] }],
+      responseJsonSchema: { type: "object" },
+      temperature: 0.4,
+      timeoutMs: 10_000,
+      onAttemptUsage: (usage) => {
+        attempts.push(usage);
+      },
+      parseResponse: (json) => json,
+    });
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    await promise;
+
+    expect(attempts[0]).toEqual({
+      model: "gemini-3.8-flash",
+      unmeasured: true,
+      promptTokens: 2000,
+      cachedTokens: 0,
+      outputTokens: Math.ceil('{"coachMessage":"12345678"'.length / 4),
+      thinkingTokens: 0,
+    });
+    expect(attempts[1]).toEqual({
+      model: "gemini-3.5-flash-lite",
+      unmeasured: false,
+      promptTokens: 50,
+      cachedTokens: 10,
+      outputTokens: 12,
+      thinkingTokens: 3,
+    });
+  });
+
+  it("merges SSE usageMetadata monotonically, ignores empty {}, and counts text from unmeasured MAX_TOKENS chunks", async () => {
+    const attempts: AttemptTokenUsage[] = [];
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          makeSseStream([
+            // Chunk terminates with MAX_TOKENS and no usageMetadata
+            `data: ${makeChunkPayload([{ text: '{"partial":"abcdefgh"}' }], "MAX_TOKENS")}\n\n`,
+          ]),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          makeSseStream([
+            `data: ${JSON.stringify({
+              candidates: [{ content: { parts: [{ text: '{"coach' }] } }],
+              usageMetadata: { promptTokenCount: 400, cachedContentTokenCount: 150 },
+            })}\n\n`,
+            `data: ${JSON.stringify({
+              candidates: [
+                { content: { parts: [{ text: 'Message":"Ok"}' }] }, finishReason: "STOP" },
+              ],
+              // Subsequent chunk omits cachedContentTokenCount; earlier cached count must persist
+              usageMetadata: {
+                promptTokenCount: 400,
+                candidatesTokenCount: 25,
+                thoughtsTokenCount: 5,
+              },
+            })}\n\n`,
+            // Empty trailing usageMetadata must not overwrite accumulated stats
+            `data: ${JSON.stringify({ candidates: [], usageMetadata: {} })}\n\n`,
+          ]),
+          { status: 200 },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await streamWithFallback({
+      geminiApiKey: "test-key",
+      models: ["gemini-3.8-flash", "gemini-3.5-flash-lite"],
+      contents: [{ role: "user", parts: [{ text: "ABCDEFGH" }] }],
+      responseJsonSchema: { type: "object" },
+      temperature: 0.4,
+      timeoutMs: 10_000,
+      onAttemptUsage: (usage) => {
+        attempts.push(usage);
+      },
+      parseResponse: (json) => json,
+    });
+
+    expect(attempts[0]).toEqual({
+      model: "gemini-3.8-flash",
+      unmeasured: true,
+      promptTokens: 2,
+      cachedTokens: 0,
+      outputTokens: Math.ceil('{"partial":"abcdefgh"}'.length / 4),
+      thinkingTokens: 0,
+    });
+    expect(attempts[1]).toEqual({
+      model: "gemini-3.5-flash-lite",
+      unmeasured: false,
+      promptTokens: 400,
+      cachedTokens: 150,
+      outputTokens: 25,
+      thinkingTokens: 5,
+    });
+  });
+
+  it("reports unmeasured fallback estimation in generateWithFallback when HTTP 200 lacks usageMetadata or aborts mid-body", async () => {
+    const attempts: AttemptTokenUsage[] = [];
+    const malformedBody = '{"candidates":[{"content":{"parts":[{"text":"partial';
+    const noUsagePayload = JSON.stringify({
+      candidates: [
+        {
+          content: { parts: [{ text: '{"coachMessage":"NoMeta"}' }] },
+          finishReason: "STOP",
+        },
+      ],
+    });
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(malformedBody, { status: 200 }))
+      .mockResolvedValueOnce(new Response(noUsagePayload, { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await generateWithFallback({
+      geminiApiKey: "test-key",
+      models: ["gemini-3.8-flash", "gemini-3.5-flash-lite"],
+      contents: [{ role: "user", parts: [{ text: "123456789012" }] }],
+      responseJsonSchema: { type: "object" },
+      temperature: 0.2,
+      timeoutMs: 10_000,
+      onAttemptUsage: (usage) => {
+        attempts.push(usage);
+      },
+      parseResponse: (json) => json as { coachMessage: string },
+    });
+
+    expect(result.model).toBe("gemini-3.5-flash-lite");
+    expect(attempts[0]).toEqual({
+      model: "gemini-3.8-flash",
+      unmeasured: true,
+      promptTokens: Math.ceil(12 / 4),
+      cachedTokens: 0,
+      outputTokens: Math.ceil(malformedBody.length / 4),
+      thinkingTokens: 0,
+    });
+    expect(attempts[1]).toEqual({
+      model: "gemini-3.5-flash-lite",
+      unmeasured: true,
+      promptTokens: Math.ceil(12 / 4),
+      cachedTokens: 0,
+      outputTokens: Math.ceil('{"coachMessage":"NoMeta"}'.length / 4),
+      thinkingTokens: 0,
     });
   });
 });

@@ -127,6 +127,28 @@ export function shouldAllowPlanUpdate(mode: CoachingMode, question?: string): bo
   return PLAN_UPDATE_INTENT_RE.test(sanitizePromptText(question));
 }
 
+export type CoachRequestKind =
+  | "initial_plan"
+  | "plan_regeneration"
+  | "plan_update"
+  | "session_briefing"
+  | "chat";
+
+export function deriveCoachRequestKind(dto: CoachActionRequestDto): CoachRequestKind {
+  if (dto.mode === "planning") {
+    const hasHistory =
+      dto.recentLogs.length > 0 || dto.trainingSummaries.length > 0 || Boolean(dto.activePlan);
+    return hasHistory ? "plan_regeneration" : "initial_plan";
+  }
+  if (shouldAllowPlanUpdate(dto.mode, dto.question)) {
+    return "plan_update";
+  }
+  if (!dto.question?.trim()) {
+    return "session_briefing";
+  }
+  return "chat";
+}
+
 export function buildSystemInstruction(mode: CoachingMode): string {
   const modeDirective =
     mode === "planning"

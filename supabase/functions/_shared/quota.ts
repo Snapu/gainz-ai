@@ -94,6 +94,7 @@ export async function authorizeAiRequest(
     kind: QuotaKind;
     paidDailyLimit: number;
     freeDailyLimit: number;
+    globalCostCapUsdMicros?: number;
   },
 ): Promise<AuthorizeAiRequestRow | null> {
   return callSupabaseRpc<AuthorizeAiRequestRow>(
@@ -107,6 +108,9 @@ export async function authorizeAiRequest(
       p_kind: params.kind,
       p_paid_daily_limit: params.paidDailyLimit,
       p_free_daily_limit: params.freeDailyLimit,
+      ...(params.globalCostCapUsdMicros !== undefined
+        ? { p_global_cost_cap_usd_micros: params.globalCostCapUsdMicros }
+        : {}),
     },
   );
 }

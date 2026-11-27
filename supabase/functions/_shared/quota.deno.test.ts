@@ -191,3 +191,62 @@ Deno.test("refundQuota passes free-allowance refund params and logs errors witho
     console.error = originalError;
   }
 });
+
+Deno.test("authorizeAiRequest forwards globalCostCapUsdMicros (including 0) as p_global_cost_cap_usd_micros", async () => {
+  const originalFetch = globalThis.fetch;
+  const capturedBodies: Record<string, unknown>[] = [];
+
+  globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+    const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
+    capturedBodies.push(body);
+    return new Response(
+      JSON.stringify([
+        {
+          allowed: false,
+          denial_reason: "rate-limit-exceeded",
+          admitted_source: "none",
+          current_count: 1,
+          daily_limit: 5,
+          reset_at: "2026-11-28T00:00:00Z",
+          global_capped: true,
+          entitlement_source: "subscription",
+          can_use_coach: true,
+          can_use_classify: true,
+          evaluated_at: "2026-11-27T12:00:00Z",
+          free_coach_used: 0,
+          free_coach_limit: 30,
+          free_classify_used: 0,
+          free_classify_limit: 40,
+        },
+      ]),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  }) as typeof fetch;
+
+  try {
+    const row = await authorizeAiRequest(SUPABASE_URL, SERVICE_KEY, {
+      userId: USER_ID,
+      subjectDigest: SUBJECT_DIGEST,
+      kind: "coach",
+      paidDailyLimit: 25,
+      freeDailyLimit: 5,
+      globalCostCapUsdMicros: 5_000_000,
+    });
+
+    assert.equal(row?.global_capped, true);
+    assert.equal(row?.current_count, 1);
+    assert.equal(capturedBodies[0].p_global_cost_cap_usd_micros, 5_000_000);
+
+    await authorizeAiRequest(SUPABASE_URL, SERVICE_KEY, {
+      userId: USER_ID,
+      subjectDigest: SUBJECT_DIGEST,
+      kind: "coach",
+      paidDailyLimit: 25,
+      freeDailyLimit: 5,
+      globalCostCapUsdMicros: 0,
+    });
+    assert.equal(capturedBodies[1].p_global_cost_cap_usd_micros, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

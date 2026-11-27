@@ -1,5 +1,6 @@
 import { formatEntitlementPayload } from "../_shared/entitlement.ts";
 import {
+  type AttemptTokenUsage,
   CLASSIFICATION_MODELS,
   type GenerateWithFallbackOptions,
   generateWithFallback,
@@ -43,6 +44,7 @@ export async function executeClassifyAction(
   generateFn: <T>(
     options: GenerateWithFallbackOptions<T>,
   ) => Promise<{ data: T; model: string }> = generateWithFallback,
+  onAttemptUsage?: (usage: AttemptTokenUsage) => void,
 ): Promise<Response> {
   const classifyPrompt = buildClassifyPrompt(dto.exerciseNames, dto.muscleGroups);
   const result = await generateFn<ExerciseCleanupResult>({
@@ -52,8 +54,10 @@ export async function executeClassifyAction(
     responseJsonSchema: createExerciseCleanupJsonSchema(dto.muscleGroups),
     temperature: 0.1,
     thinkingConfig: { level: "minimal", includeThoughts: false },
+    maxOutputTokens: 4096,
     timeoutMs: 30_000,
     parseResponse: parseClassifyResponse,
+    onAttemptUsage,
   });
 
   return jsonResponse({

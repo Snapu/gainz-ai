@@ -1,4 +1,7 @@
+import { estimateTokensFromChars } from "./tokenCost.ts";
+
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
+const MAX_MODEL_ATTEMPTS = 2;
 
 export const COACHING_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash-lite"] as const;
 
@@ -76,6 +79,108 @@ function extractTextAndFinishReason(
     text: trimText ? rawText.trim() : rawText,
     finishReason,
   };
+}
+
+export interface AttemptTokenUsage {
+  model: string;
+  unmeasured: boolean;
+  promptTokens: number;
+  cachedTokens: number;
+  outputTokens: number;
+  thinkingTokens: number;
+}
+
+interface RawGeminiUsageMetadata {
+  promptTokenCount?: unknown;
+  cachedContentTokenCount?: unknown;
+  candidatesTokenCount?: unknown;
+  thoughtsTokenCount?: unknown;
+}
+
+function toNonNegInt(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+function extractUsageMetadata(model: string, payload: unknown): AttemptTokenUsage | null {
+  if (!payload || typeof payload !== "object") return null;
+  const meta = (payload as { usageMetadata?: RawGeminiUsageMetadata }).usageMetadata;
+  if (!meta || typeof meta !== "object") return null;
+
+  const promptTokens = toNonNegInt(meta.promptTokenCount);
+  const cachedTokens = toNonNegInt(meta.cachedContentTokenCount);
+  const outputTokens = toNonNegInt(meta.candidatesTokenCount);
+  const thinkingTokens = toNonNegInt(meta.thoughtsTokenCount);
+  if (promptTokens === 0 && cachedTokens === 0 && outputTokens === 0 && thinkingTokens === 0) {
+    return null;
+  }
+
+  return {
+    model,
+    unmeasured: false,
+    promptTokens,
+    cachedTokens,
+    outputTokens,
+    thinkingTokens,
+  };
+}
+
+function mergeUsageMetadata(
+  prev: AttemptTokenUsage | null,
+  next: AttemptTokenUsage,
+): AttemptTokenUsage {
+  if (!prev) return next;
+  return {
+    model: next.model,
+    unmeasured: false,
+    promptTokens: Math.max(prev.promptTokens, next.promptTokens),
+    cachedTokens: Math.max(prev.cachedTokens, next.cachedTokens),
+    outputTokens: Math.max(prev.outputTokens, next.outputTokens),
+    thinkingTokens: Math.max(prev.thinkingTokens, next.thinkingTokens),
+  };
+}
+
+function finalizeAttemptUsage(params: {
+  model: string;
+  latestUsage: AttemptTokenUsage | null;
+  completedCleanly: boolean;
+  sawTerminalFinishReason: boolean;
+  promptChars: number;
+  outputChars: number;
+}): AttemptTokenUsage {
+  const {
+    model,
+    latestUsage,
+    completedCleanly,
+    sawTerminalFinishReason,
+    promptChars,
+    outputChars,
+  } = params;
+  const isMeasured =
+    latestUsage !== null &&
+    (completedCleanly || sawTerminalFinishReason) &&
+    (outputChars === 0 || latestUsage.outputTokens > 0);
+  if (isMeasured) {
+    return latestUsage;
+  }
+
+  return {
+    model,
+    unmeasured: true,
+    promptTokens: Math.max(latestUsage?.promptTokens ?? 0, estimateTokensFromChars(promptChars)),
+    cachedTokens: latestUsage?.cachedTokens ?? 0,
+    outputTokens: Math.max(latestUsage?.outputTokens ?? 0, estimateTokensFromChars(outputChars)),
+    thinkingTokens: latestUsage?.thinkingTokens ?? 0,
+  };
+}
+
+function countPromptChars(contents: GeminiContent[], systemInstruction?: string): number {
+  let total = systemInstruction?.length ?? 0;
+  for (const content of contents) {
+    for (const part of content.parts) {
+      total += part.text.length;
+    }
+  }
+  return total;
 }
 
 export function stripMarkdownCodeFences(text: string): string {
@@ -160,6 +265,7 @@ export function buildGeminiRequestBody(
     temperature: number;
     topP?: number;
     thinkingConfig?: GeminiThinkingConfig;
+    maxOutputTokens?: number;
   },
   model = "gemini-3.8-flash",
 ): Record<string, unknown> {
@@ -175,6 +281,9 @@ export function buildGeminiRequestBody(
   }
   if (options.thinkingConfig) {
     generationConfig.thinkingConfig = resolveModelThinkingConfig(model, options.thinkingConfig);
+  }
+  if (options.maxOutputTokens !== undefined) {
+    generationConfig.maxOutputTokens = options.maxOutputTokens;
   }
 
   const requestBody: Record<string, unknown> = {
@@ -246,7 +355,9 @@ async function callSingleGeminiModel<T>(
   geminiApiKey: string,
   requestBody: Record<string, unknown>,
   attemptTimeoutMs: number,
+  promptChars: number,
   parseResponse: (parsedJson: unknown) => T,
+  onAttemptUsage?: (usage: AttemptTokenUsage) => void,
 ): Promise<T> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), attemptTimeoutMs);
@@ -259,24 +370,59 @@ async function callSingleGeminiModel<T>(
       controller.signal,
     );
 
-    const payload = await res.json();
-    const { text, finishReason } = extractTextAndFinishReason(payload);
-    if (!text) {
-      throw new RetryableModelError("empty-response");
-    }
-    if (finishReason && finishReason !== "STOP") {
-      throw new RetryableModelError(`finish-${finishReason}`);
-    }
+    let rawBodyText = "";
+    let extractedTextLength: number | null = null;
+    let latestUsage: AttemptTokenUsage | null = null;
+    let sawTerminalFinishReason = false;
+    let completedCleanly = false;
 
-    return parseCompletedJson(text, parseResponse);
+    try {
+      rawBodyText = await res.text();
+      let payload: unknown;
+      try {
+        payload = JSON.parse(rawBodyText);
+      } catch {
+        throw new RetryableModelError("invalid-json");
+      }
+
+      latestUsage = extractUsageMetadata(model, payload);
+      const { text, finishReason } = extractTextAndFinishReason(payload);
+      extractedTextLength = text.length;
+      sawTerminalFinishReason = Boolean(finishReason);
+      completedCleanly = true;
+
+      if (!text) {
+        throw new RetryableModelError("empty-response");
+      }
+      if (finishReason && finishReason !== "STOP") {
+        throw new RetryableModelError(`finish-${finishReason}`);
+      }
+
+      return parseCompletedJson(text, parseResponse);
+    } finally {
+      onAttemptUsage?.(
+        finalizeAttemptUsage({
+          model,
+          latestUsage,
+          completedCleanly,
+          sawTerminalFinishReason,
+          promptChars,
+          outputChars: extractedTextLength ?? rawBodyText.length,
+        }),
+      );
+    }
   } finally {
     clearTimeout(timeoutId);
   }
 }
 
-function parseGeminiSseChunk(rawPayload: string): {
+function parseGeminiSseChunk(
+  model: string,
+  rawPayload: string,
+): {
   text: string;
   finishReason?: string;
+  usage: AttemptTokenUsage | null;
 } {
   let chunkJson: unknown;
   try {
@@ -285,11 +431,9 @@ function parseGeminiSseChunk(rawPayload: string): {
     throw new RetryableModelError("invalid-sse-payload");
   }
 
+  const usage = extractUsageMetadata(model, chunkJson);
   const parsed = extractTextAndFinishReason(chunkJson, false);
-  if (parsed.finishReason && parsed.finishReason !== "STOP") {
-    throw new RetryableModelError(`finish-${parsed.finishReason}`);
-  }
-  return parsed;
+  return { ...parsed, usage };
 }
 
 function createAttemptTimer(
@@ -331,8 +475,10 @@ async function streamSingleGeminiModel<T>(
   requestBody: Record<string, unknown>,
   attemptTimeoutMs: number,
   deadlineMs: number,
+  promptChars: number,
   parseResponse: (parsedJson: unknown) => T,
   onAccumulatedText: ((accumulatedText: string) => boolean | undefined) | undefined,
+  onAttemptUsage: ((usage: AttemptTokenUsage) => void) | undefined,
   markCommitted: () => void,
 ): Promise<T> {
   const controller = new AbortController();
@@ -362,6 +508,9 @@ async function streamSingleGeminiModel<T>(
     let dataLines: string[] = [];
     let accumulatedText = "";
     let lastFinishReason: string | undefined;
+    let latestUsage: AttemptTokenUsage | null = null;
+    let sawTerminalFinishReason = false;
+    let streamCompletedCleanly = false;
 
     const flushEvent = () => {
       if (dataLines.length === 0) return;
@@ -369,11 +518,22 @@ async function streamSingleGeminiModel<T>(
       dataLines = [];
       if (!rawPayload || rawPayload === "[DONE]") return;
 
-      const { text, finishReason } = parseGeminiSseChunk(rawPayload);
-      if (finishReason) lastFinishReason = finishReason;
+      const { text, finishReason, usage } = parseGeminiSseChunk(model, rawPayload);
+      if (usage) {
+        latestUsage = mergeUsageMetadata(latestUsage, usage);
+      }
+      if (text) {
+        accumulatedText += text;
+      }
+      if (finishReason) {
+        lastFinishReason = finishReason;
+        sawTerminalFinishReason = true;
+        if (finishReason !== "STOP") {
+          throw new RetryableModelError(`finish-${finishReason}`);
+        }
+      }
       if (!text) return;
 
-      accumulatedText += text;
       if (accumulatedText.trim().length > 0) {
         timer.extendToDeadline();
       }
@@ -395,39 +555,54 @@ async function streamSingleGeminiModel<T>(
     };
 
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        sseBuffer += decoder.decode(value, { stream: true });
-        let newlineIdx = sseBuffer.indexOf("\n");
-        while (newlineIdx !== -1) {
-          consumeLine(sseBuffer.slice(0, newlineIdx));
-          sseBuffer = sseBuffer.slice(newlineIdx + 1);
-          newlineIdx = sseBuffer.indexOf("\n");
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          sseBuffer += decoder.decode(value, { stream: true });
+          let newlineIdx = sseBuffer.indexOf("\n");
+          while (newlineIdx !== -1) {
+            consumeLine(sseBuffer.slice(0, newlineIdx));
+            sseBuffer = sseBuffer.slice(newlineIdx + 1);
+            newlineIdx = sseBuffer.indexOf("\n");
+          }
         }
+        sseBuffer += decoder.decode();
+        if (sseBuffer.length > 0) {
+          consumeLine(sseBuffer);
+        }
+        flushEvent();
+      } finally {
+        controller.signal.removeEventListener("abort", onAbort);
+        await reader.cancel().catch(() => {});
+        reader.releaseLock();
       }
-      sseBuffer += decoder.decode();
-      if (sseBuffer.length > 0) {
-        consumeLine(sseBuffer);
+
+      if (controller.signal.aborted) {
+        throw new DOMException("The operation was aborted", "AbortError");
       }
-      flushEvent();
+      streamCompletedCleanly = true;
+
+      if (!accumulatedText.trim()) {
+        throw new RetryableModelError("empty-response");
+      }
+      if (lastFinishReason && lastFinishReason !== "STOP") {
+        throw new RetryableModelError(`finish-${lastFinishReason}`);
+      }
+
+      return parseCompletedJson(accumulatedText, parseResponse);
     } finally {
-      controller.signal.removeEventListener("abort", onAbort);
-      await reader.cancel().catch(() => {});
-      reader.releaseLock();
+      onAttemptUsage?.(
+        finalizeAttemptUsage({
+          model,
+          latestUsage,
+          completedCleanly: streamCompletedCleanly,
+          sawTerminalFinishReason,
+          promptChars,
+          outputChars: accumulatedText.length,
+        }),
+      );
     }
-
-    if (controller.signal.aborted) {
-      throw new DOMException("The operation was aborted", "AbortError");
-    }
-    if (!accumulatedText.trim()) {
-      throw new RetryableModelError("empty-response");
-    }
-    if (lastFinishReason && lastFinishReason !== "STOP") {
-      throw new RetryableModelError(`finish-${lastFinishReason}`);
-    }
-
-    return parseCompletedJson(accumulatedText, parseResponse);
   } finally {
     timer.clear();
   }
@@ -449,8 +624,10 @@ export interface GenerateWithFallbackOptions<T> {
   temperature: number;
   topP?: number;
   thinkingConfig?: GeminiThinkingConfig;
+  maxOutputTokens?: number;
   timeoutMs: number;
   parseResponse: (parsedJson: unknown) => T;
+  onAttemptUsage?: (usage: AttemptTokenUsage) => void;
 }
 
 export interface StreamWithFallbackOptions<T> extends GenerateWithFallbackOptions<T> {
@@ -480,15 +657,21 @@ async function runModelsWithFallback<T>(
     markCommitted: () => void,
   ) => Promise<T>,
 ): Promise<{ data: T; model: string }> {
-  const { models, timeoutMs } = options;
+  const boundedModels = options.models.slice(0, MAX_MODEL_ATTEMPTS);
+  const { timeoutMs } = options;
   const deadlineMs = Date.now() + timeoutMs;
   let lastError: unknown;
 
-  for (let i = 0; i < models.length; i++) {
-    const model = models[i];
+  for (let i = 0; i < boundedModels.length; i++) {
+    const model = boundedModels[i];
     if (!model) break;
 
-    const attemptTimeoutMs = computeAttemptTimeoutMs(deadlineMs, timeoutMs, i, models.length - i);
+    const attemptTimeoutMs = computeAttemptTimeoutMs(
+      deadlineMs,
+      timeoutMs,
+      i,
+      boundedModels.length - i,
+    );
     if (attemptTimeoutMs <= 0) break;
 
     const requestBody = buildGeminiRequestBody(options, model);
@@ -500,7 +683,7 @@ async function runModelsWithFallback<T>(
       return { data, model };
     } catch (err) {
       lastError = err;
-      const hasMoreModels = i + 1 < models.length;
+      const hasMoreModels = i + 1 < boundedModels.length;
       if (!committed && hasMoreModels && isRetryableFailure(err)) {
         logFallbackRetry(model, err, attemptTimeoutMs);
         continue;
@@ -515,13 +698,16 @@ async function runModelsWithFallback<T>(
 export async function generateWithFallback<T>(
   options: GenerateWithFallbackOptions<T>,
 ): Promise<{ data: T; model: string }> {
+  const promptChars = countPromptChars(options.contents, options.systemInstruction);
   return runModelsWithFallback(options, (model, requestBody, attemptTimeoutMs) =>
     callSingleGeminiModel(
       model,
       options.geminiApiKey,
       requestBody,
       attemptTimeoutMs,
+      promptChars,
       options.parseResponse,
+      options.onAttemptUsage,
     ),
   );
 }
@@ -529,6 +715,7 @@ export async function generateWithFallback<T>(
 export async function streamWithFallback<T>(
   options: StreamWithFallbackOptions<T>,
 ): Promise<{ data: T; model: string }> {
+  const promptChars = countPromptChars(options.contents, options.systemInstruction);
   return runModelsWithFallback(
     options,
     (model, requestBody, attemptTimeoutMs, deadlineMs, markCommitted) =>
@@ -538,8 +725,10 @@ export async function streamWithFallback<T>(
         requestBody,
         attemptTimeoutMs,
         deadlineMs,
+        promptChars,
         options.parseResponse,
         options.onAccumulatedText,
+        options.onAttemptUsage,
         markCommitted,
       ),
   );

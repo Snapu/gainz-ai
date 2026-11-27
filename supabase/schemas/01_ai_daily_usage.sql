@@ -26,12 +26,14 @@ create table if not exists public.ai_daily_global_usage (
   usage_date date not null default (now() at time zone 'utc')::date,
   coaching_count integer not null default 0 check (coaching_count >= 0),
   classify_count integer not null default 0 check (classify_count >= 0),
+  estimated_cost_usd_micros bigint not null default 0 check (estimated_cost_usd_micros >= 0),
   updated_at timestamptz not null default now(),
   constraint ai_daily_global_usage_pkey primary key (usage_date)
 );
 
 alter table public.ai_daily_global_usage enable row level security;
 
+drop policy if exists "service_role_full_access" on public.ai_daily_global_usage;
 create policy "service_role_full_access"
 on public.ai_daily_global_usage
 for all
@@ -149,7 +151,8 @@ create or replace function public.authorize_ai_request(
   p_kind text default 'coach',
   p_paid_daily_limit integer default 15,
   p_free_daily_limit integer default 5,
-  p_global_cap integer default null
+  p_global_cap integer default null,
+  p_global_cost_cap_usd_micros bigint default null
 )
 returns table (
   allowed boolean,
@@ -177,8 +180,11 @@ declare
   v_today date := (v_now at time zone 'utc')::date;
   v_reset_at timestamptz := ((v_today + 1)::timestamp at time zone 'utc');
   v_global_daily_cap constant integer := 10000;
+  v_default_global_cost_cap_micros constant bigint := 5000000;
   v_global_cap integer;
+  v_global_cost_cap bigint;
   v_global_count integer;
+  v_global_cost_micros bigint := 0;
   v_free_coach_limit constant integer := 30;
   v_free_classify_limit constant integer := 40;
   v_daily_count integer := 0;
@@ -210,21 +216,27 @@ begin
     p_global_cap,
     case when p_kind = 'coach' then v_global_daily_cap else v_global_daily_cap * 2 end
   );
+  v_global_cost_cap := coalesce(p_global_cost_cap_usd_micros, v_default_global_cost_cap_micros);
 
-  -- Lock-free O(1) fast-path check against global daily cap (no writes or pruning on rejection)
-  if v_global_cap > 0 then
+  -- Lock-free O(1) fast-path check against global daily request + spend caps (no writes or pruning on rejection)
+  if v_global_cap > 0 and v_global_cost_cap > 0 then
     if p_kind = 'coach' then
-      select g.coaching_count into v_global_count
+      select g.coaching_count, g.estimated_cost_usd_micros
+      into v_global_count, v_global_cost_micros
       from public.ai_daily_global_usage g
       where g.usage_date = v_today;
     else
-      select g.classify_count into v_global_count
+      select g.classify_count, g.estimated_cost_usd_micros
+      into v_global_count, v_global_cost_micros
       from public.ai_daily_global_usage g
       where g.usage_date = v_today;
     end if;
   end if;
 
-  if v_global_cap <= 0 or coalesce(v_global_count, 0) >= v_global_cap then
+  if v_global_cap <= 0
+     or coalesce(v_global_count, 0) >= v_global_cap
+     or v_global_cost_cap <= 0
+     or coalesce(v_global_cost_micros, 0) >= v_global_cost_cap then
     select f.coach_used, f.classify_used
     into v_free_coach_used, v_free_classify_used
     from public.free_allowance_usage f
@@ -396,7 +408,8 @@ begin
       when p_kind = 'coach' then public.ai_daily_global_usage.coaching_count
       else public.ai_daily_global_usage.classify_count
     end
-  ) < v_global_cap;
+  ) < v_global_cap
+    and public.ai_daily_global_usage.estimated_cost_usd_micros < v_global_cost_cap;
 
   if not found then
     return query select
@@ -469,8 +482,8 @@ begin
 end;
 $$;
 
-revoke all on function public.authorize_ai_request(text, text, text, text, integer, integer, integer) from public, anon, authenticated;
-grant execute on function public.authorize_ai_request(text, text, text, text, integer, integer, integer) to service_role;
+revoke all on function public.authorize_ai_request(text, text, text, text, integer, integer, integer, bigint) from public, anon, authenticated;
+grant execute on function public.authorize_ai_request(text, text, text, text, integer, integer, integer, bigint) to service_role;
 
 create or replace function public.refund_ai_quota(
   p_user_id text,

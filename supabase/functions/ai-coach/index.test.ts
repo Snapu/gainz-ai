@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import type { GenerateWithFallbackOptions, StreamWithFallbackOptions } from "../_shared/gemini";
 import { type AiCoachHandlerDeps, handleAiCoachRequest } from "./index";
+import { deriveCoachRequestKind } from "./prompt";
 import {
   type AiRequestResultRow,
   type AiRequestResultsStore,
   createSupabaseRequestResultsStore,
 } from "./requestResults";
+import type { CoachActionRequestDto } from "./schemas";
 
 const VALID_UUID_V4 = "11111111-1111-4111-8111-111111111111";
 const UUID_V1 = "11111111-1111-1111-8111-111111111111";
@@ -226,6 +228,7 @@ function createDeps(overrides: Partial<AiCoachHandlerDeps> = {}) {
     verifyCaller: vi.fn(async () => ({ userId: "google-sub-123" })),
     authorizeAiRequest: vi.fn(async () => defaultAuthRow),
     refundQuota: vi.fn(async () => undefined),
+    recordTokenUsage: vi.fn(async () => true),
     generateWithFallback: generateSpy as unknown as NonNullable<
       AiCoachHandlerDeps["generateWithFallback"]
     >,
@@ -1639,5 +1642,493 @@ describe("ai-coach idempotency and request recovery", () => {
     } finally {
       consoleErrorSpy.mockRestore();
     }
+  });
+});
+
+describe("TICKET-019 token usage metering and cost caps", () => {
+  it("derives all 5 coach request_kind variants cleanly via deriveCoachRequestKind", () => {
+    expect(
+      deriveCoachRequestKind(
+        createValidCoachDto({
+          mode: "planning",
+          activePlan: null,
+          recentLogs: [],
+          trainingSummaries: [],
+        }) as CoachActionRequestDto,
+      ),
+    ).toBe("initial_plan");
+
+    expect(
+      deriveCoachRequestKind(
+        createValidCoachDto({
+          mode: "planning",
+          activePlan: null,
+          recentLogs: [
+            {
+              exerciseName: "Bench Press",
+              reps: 8,
+              weight: 80,
+              loggedAt: "2026-11-14T10:00:00.000Z",
+              localDate: "2026-11-14",
+            },
+          ],
+          trainingSummaries: [],
+        }) as CoachActionRequestDto,
+      ),
+    ).toBe("plan_regeneration");
+
+    expect(
+      deriveCoachRequestKind(
+        createValidCoachDto({
+          mode: "planning",
+          activePlan: null,
+          recentLogs: [],
+          trainingSummaries: [
+            {
+              year: 2026,
+              month: 11,
+              workoutDays: 10,
+              exercises: [{ exerciseName: "Squat", sets: 12 }],
+            },
+          ],
+        }) as CoachActionRequestDto,
+      ),
+    ).toBe("plan_regeneration");
+
+    expect(
+      deriveCoachRequestKind(
+        createValidCoachDto({
+          mode: "execution",
+          question: "Please update my training plan to swap bench press",
+        }) as CoachActionRequestDto,
+      ),
+    ).toBe("plan_update");
+
+    expect(
+      deriveCoachRequestKind(
+        createValidCoachDto({
+          mode: "execution",
+          question: "   ",
+        }) as CoachActionRequestDto,
+      ),
+    ).toBe("session_briefing");
+
+    expect(
+      deriveCoachRequestKind(
+        createValidCoachDto({
+          mode: "execution",
+          question: "How heavy should I go on my top set today?",
+        }) as CoachActionRequestDto,
+      ),
+    ).toBe("chat");
+  });
+
+  it("passes explicit mode-specific maxOutputTokens caps for planning, plan_update, chat, and classify", async () => {
+    const planningDeps = createDeps();
+    const planningRes = await handleAiCoachRequest(
+      createJsonRequest(createValidCoachDto({ mode: "planning" })),
+      planningDeps.deps,
+    );
+    await readSseEvents(planningRes);
+    await Promise.all(planningDeps.waitUntilPromises);
+    expect(planningDeps.streamSpy.mock.calls[0]?.[0]?.maxOutputTokens).toBe(8192);
+
+    const planUpdateDeps = createDeps();
+    const planUpdateRes = await handleAiCoachRequest(
+      createJsonRequest(
+        createValidCoachDto({
+          mode: "execution",
+          question: "Please update my training plan to replace squats with hack squats",
+        }),
+      ),
+      planUpdateDeps.deps,
+    );
+    await readSseEvents(planUpdateRes);
+    await Promise.all(planUpdateDeps.waitUntilPromises);
+    expect(planUpdateDeps.streamSpy.mock.calls[0]?.[0]?.maxOutputTokens).toBe(8192);
+
+    const chatDeps = createDeps();
+    const chatRes = await handleAiCoachRequest(
+      createJsonRequest(
+        createValidCoachDto({
+          mode: "execution",
+          question: "Should I pause my reps today?",
+        }),
+      ),
+      chatDeps.deps,
+    );
+    await readSseEvents(chatRes);
+    await Promise.all(chatDeps.waitUntilPromises);
+    expect(chatDeps.streamSpy.mock.calls[0]?.[0]?.maxOutputTokens).toBe(4096);
+
+    const classifyDeps = createDeps();
+    const classifyRes = await handleAiCoachRequest(
+      createJsonRequest({
+        action: "classify",
+        exerciseNames: ["Incline DB Press"],
+        muscleGroups: ["Chest"],
+      }),
+      classifyDeps.deps,
+    );
+    expect(classifyRes.status).toBe(200);
+    await Promise.all(classifyDeps.waitUntilPromises);
+    expect(classifyDeps.generateSpy.mock.calls[0]?.[0]?.maxOutputTokens).toBe(4096);
+  });
+
+  it("records multi-attempt fallback usage via waitUntil on coach success and failure without reversing cost on refund", async () => {
+    const recordTokenUsageSpy = vi.fn(async () => true);
+    const fallbackDeps = createDeps({
+      recordTokenUsage: recordTokenUsageSpy,
+      streamWithFallback: vi.fn(async (opts: StreamWithFallbackOptions<unknown>) => {
+        opts.onAttemptUsage?.({
+          model: "gemini-3.8-flash",
+          unmeasured: false,
+          promptTokens: 1200,
+          cachedTokens: 300,
+          outputTokens: 8192,
+          thinkingTokens: 250,
+        });
+        opts.onAttemptUsage?.({
+          model: "gemini-3.5-flash-lite",
+          unmeasured: false,
+          promptTokens: 1200,
+          cachedTokens: 0,
+          outputTokens: 450,
+          thinkingTokens: 0,
+        });
+        return {
+          data: {
+            coachMessage: "Focus on clean reps.",
+            scratchpad: "ok",
+            suggestedFollowUps: [],
+          },
+          model: "gemini-3.5-flash-lite",
+        };
+      }) as unknown as NonNullable<AiCoachHandlerDeps["streamWithFallback"]>,
+    });
+
+    const okRes = await handleAiCoachRequest(
+      createJsonRequest(
+        createValidCoachDto({
+          mode: "planning",
+          activePlan: null,
+        }),
+      ),
+      fallbackDeps.deps,
+    );
+    await readSseEvents(okRes);
+    await Promise.all(fallbackDeps.waitUntilPromises);
+
+    expect(recordTokenUsageSpy).toHaveBeenCalledTimes(2);
+    expect(recordTokenUsageSpy).toHaveBeenNthCalledWith(
+      1,
+      "https://test.supabase.co",
+      "test-service-role",
+      {
+        actorKey: "google-sub-123",
+        usageDate: "2026-11-15",
+        model: "gemini-3.8-flash",
+        requestKind: "initial_plan",
+        entitlementSource: "free_allowance",
+        unmeasured: false,
+        promptTokens: 1200,
+        cachedTokens: 300,
+        outputTokens: 8192,
+        thinkingTokens: 250,
+      },
+    );
+    expect(recordTokenUsageSpy).toHaveBeenNthCalledWith(
+      2,
+      "https://test.supabase.co",
+      "test-service-role",
+      expect.objectContaining({
+        model: "gemini-3.5-flash-lite",
+        requestKind: "initial_plan",
+        outputTokens: 450,
+      }),
+    );
+
+    // Failed coach request refunds user quota, but still records incurred attempt token cost
+    const failedRecordSpy = vi.fn(async () => true);
+    const failedDeps = createDeps({
+      recordTokenUsage: failedRecordSpy,
+      streamWithFallback: vi.fn(async (opts: StreamWithFallbackOptions<unknown>) => {
+        opts.onAttemptUsage?.({
+          model: "gemini-3.8-flash",
+          unmeasured: true,
+          promptTokens: 500,
+          cachedTokens: 0,
+          outputTokens: 90,
+          thinkingTokens: 0,
+        });
+        throw new Error("Stream aborted");
+      }) as unknown as NonNullable<AiCoachHandlerDeps["streamWithFallback"]>,
+    });
+
+    const failRes = await handleAiCoachRequest(
+      createJsonRequest(
+        createValidCoachDto({
+          clientRequestId: VALID_UUID_V4,
+          question: "How many sets?",
+        }),
+      ),
+      failedDeps.deps,
+    );
+    await readSseEvents(failRes);
+    await Promise.all(failedDeps.waitUntilPromises);
+
+    expect(failedDeps.deps.refundQuota).toHaveBeenCalledTimes(1);
+    expect(failedRecordSpy).toHaveBeenCalledTimes(1);
+    expect(failedRecordSpy).toHaveBeenCalledWith(
+      "https://test.supabase.co",
+      "test-service-role",
+      expect.objectContaining({
+        actorKey: "google-sub-123",
+        requestKind: "chat",
+        unmeasured: true,
+        promptTokens: 500,
+        outputTokens: 90,
+      }),
+    );
+  });
+
+  it("records classify token usage via waitUntil on both success and failure without reversing cost on refund", async () => {
+    const okRecordSpy = vi.fn(async () => true);
+    const okDeps = createDeps({
+      recordTokenUsage: okRecordSpy,
+      generateWithFallback: vi.fn(async (opts: GenerateWithFallbackOptions<unknown>) => {
+        opts.onAttemptUsage?.({
+          model: "gemini-3.5-flash-lite",
+          unmeasured: false,
+          promptTokens: 300,
+          cachedTokens: 50,
+          outputTokens: 120,
+          thinkingTokens: 0,
+        });
+        return { data: { classifications: [] }, model: "gemini-3.5-flash-lite" };
+      }) as unknown as NonNullable<AiCoachHandlerDeps["generateWithFallback"]>,
+    });
+
+    const okRes = await handleAiCoachRequest(
+      createJsonRequest({
+        action: "classify",
+        exerciseNames: ["Bench Press"],
+        muscleGroups: ["Chest"],
+      }),
+      okDeps.deps,
+    );
+    expect(okRes.status).toBe(200);
+    await Promise.all(okDeps.waitUntilPromises);
+
+    expect(okRecordSpy).toHaveBeenCalledTimes(1);
+    expect(okRecordSpy).toHaveBeenCalledWith(
+      "https://test.supabase.co",
+      "test-service-role",
+      expect.objectContaining({
+        actorKey: "google-sub-123",
+        usageDate: "2026-11-15",
+        model: "gemini-3.5-flash-lite",
+        requestKind: "classify",
+        entitlementSource: "free_allowance",
+        promptTokens: 300,
+        cachedTokens: 50,
+        outputTokens: 120,
+      }),
+    );
+
+    const failRecordSpy = vi.fn(async () => true);
+    const failDeps = createDeps({
+      recordTokenUsage: failRecordSpy,
+      generateWithFallback: vi.fn(async (opts: GenerateWithFallbackOptions<unknown>) => {
+        opts.onAttemptUsage?.({
+          model: "gemini-3.5-flash-lite",
+          unmeasured: false,
+          promptTokens: 300,
+          cachedTokens: 0,
+          outputTokens: 40,
+          thinkingTokens: 0,
+        });
+        throw new Error("Classify schema failure");
+      }) as unknown as NonNullable<AiCoachHandlerDeps["generateWithFallback"]>,
+    });
+
+    const failRes = await handleAiCoachRequest(
+      createJsonRequest({
+        action: "classify",
+        exerciseNames: ["Bench Press"],
+        muscleGroups: ["Chest"],
+      }),
+      failDeps.deps,
+    );
+    expect(failRes.status).toBe(502);
+    await Promise.all(failDeps.waitUntilPromises);
+
+    expect(failDeps.deps.refundQuota).toHaveBeenCalledTimes(1);
+    expect(failRecordSpy).toHaveBeenCalledTimes(1);
+    expect(failRecordSpy).toHaveBeenCalledWith(
+      "https://test.supabase.co",
+      "test-service-role",
+      expect.objectContaining({
+        requestKind: "classify",
+        promptTokens: 300,
+        outputTokens: 40,
+      }),
+    );
+  });
+
+  it("forwards dailyCostCapUsdMicros to authorizeAiRequest and returns 429 rate-limit-exceeded (never 402) when global_capped is true", async () => {
+    const authorizeSpy = vi.fn(async () => ({
+      allowed: false,
+      denial_reason: "payment-required" as const,
+      admitted_source: "none" as const,
+      current_count: 0,
+      daily_limit: 5,
+      reset_at: "2026-11-16T00:00:00.000Z",
+      global_capped: true,
+      entitlement_source: "none" as const,
+      can_use_coach: false,
+      can_use_classify: false,
+      evaluated_at: "2026-11-15T10:30:00.000Z",
+      free_coach_used: 0,
+      free_coach_limit: 30,
+      free_classify_used: 0,
+      free_classify_limit: 40,
+    }));
+
+    const { deps } = createDeps({
+      getConfig: () => ({
+        clientId: "test-client-id",
+        geminiApiKey: "test-gemini-key",
+        supabaseUrl: "https://test.supabase.co",
+        serviceRoleKey: "test-service-role",
+        abusePreventionPepper: "0123456789abcdef0123456789abcdef",
+        abusePreventionPepperPrevious: null,
+        dailyCostCapUsdMicros: 2_500_000,
+      }),
+      authorizeAiRequest: authorizeSpy,
+    });
+
+    const response = await handleAiCoachRequest(createJsonRequest(createValidCoachDto()), deps);
+
+    expect(authorizeSpy).toHaveBeenCalledWith(
+      "https://test.supabase.co",
+      "test-service-role",
+      expect.objectContaining({
+        globalCostCapUsdMicros: 2_500_000,
+      }),
+    );
+    expect(response.status).toBe(429);
+    expect(await response.json()).toMatchObject({
+      error: "rate-limit-exceeded",
+    });
+
+    // Kill-switch cap = 0 must also forward 0 (never coerce falsy 0 to default) and return 429 on classify
+    const classifyResponse = await handleAiCoachRequest(
+      createJsonRequest({
+        action: "classify",
+        exerciseNames: ["Squat"],
+        muscleGroups: ["Quads"],
+      }),
+      createDeps({
+        getConfig: () => ({
+          clientId: "test-client-id",
+          geminiApiKey: "test-gemini-key",
+          supabaseUrl: "https://test.supabase.co",
+          serviceRoleKey: "test-service-role",
+          abusePreventionPepper: "0123456789abcdef0123456789abcdef",
+          abusePreventionPepperPrevious: null,
+          dailyCostCapUsdMicros: 0,
+        }),
+        authorizeAiRequest: authorizeSpy,
+      }).deps,
+    );
+    expect(authorizeSpy).toHaveBeenLastCalledWith(
+      "https://test.supabase.co",
+      "test-service-role",
+      expect.objectContaining({
+        globalCostCapUsdMicros: 0,
+      }),
+    );
+    expect(classifyResponse.status).toBe(429);
+    expect(await classifyResponse.json()).toMatchObject({ error: "rate-limit-exceeded" });
+  });
+
+  it("attributes the 30th free request to admitted_source free_allowance and preserves token metering when markCompleted fails", async () => {
+    const recordSpy = vi.fn(async () => true);
+    const { store } = createMockRequestResultsStore();
+    vi.mocked(store.markCompleted).mockResolvedValueOnce({
+      ok: false,
+      error: "http-error",
+      status: 503,
+    });
+
+    const boundaryAuthRow = {
+      allowed: true,
+      denial_reason: null,
+      admitted_source: "free_allowance" as const,
+      current_count: 1,
+      daily_limit: 5,
+      reset_at: "2026-11-16T00:00:00.000Z",
+      global_capped: false,
+      // Post-consumption entitlement becomes "none" on the 30th free request, but admitted_source stays "free_allowance"
+      entitlement_source: "none" as const,
+      can_use_coach: false,
+      can_use_classify: true,
+      evaluated_at: "2026-11-15T10:30:00.000Z",
+      free_coach_used: 30,
+      free_coach_limit: 30,
+      free_classify_used: 0,
+      free_classify_limit: 40,
+    };
+
+    const { deps, waitUntilPromises } = createDeps({
+      authorizeAiRequest: vi.fn(async () => boundaryAuthRow),
+      recordTokenUsage: recordSpy,
+      requestResults: store,
+      streamWithFallback: vi.fn(async (opts: StreamWithFallbackOptions<unknown>) => {
+        opts.onAttemptUsage?.({
+          model: "gemini-3.8-flash",
+          unmeasured: false,
+          promptTokens: 600,
+          cachedTokens: 0,
+          outputTokens: 200,
+          thinkingTokens: 50,
+        });
+        return {
+          data: {
+            coachMessage: "Boundary advice.",
+            scratchpad: "ok",
+            suggestedFollowUps: [],
+          },
+          model: "gemini-3.8-flash",
+        };
+      }) as unknown as NonNullable<AiCoachHandlerDeps["streamWithFallback"]>,
+    });
+
+    const res = await handleAiCoachRequest(
+      createJsonRequest(
+        createValidCoachDto({
+          clientRequestId: VALID_UUID_V4,
+          question: "One question?",
+        }),
+      ),
+      deps,
+    );
+    await readSseEvents(res);
+    await Promise.all(waitUntilPromises);
+
+    expect(deps.refundQuota).toHaveBeenCalledTimes(1);
+    expect(recordSpy).toHaveBeenCalledTimes(1);
+    expect(recordSpy).toHaveBeenCalledWith(
+      "https://test.supabase.co",
+      "test-service-role",
+      expect.objectContaining({
+        entitlementSource: "free_allowance",
+        requestKind: "chat",
+        promptTokens: 600,
+        outputTokens: 200,
+        thinkingTokens: 50,
+      }),
+    );
   });
 });
