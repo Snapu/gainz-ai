@@ -20,12 +20,14 @@ function createTestEnv(overrides: Record<string, string | undefined> = {}) {
 function createPostRequest(
   body: unknown,
   token: string | null = "ya29.valid-access-token",
+  extraHeaders: Record<string, string> = {},
 ): Request {
   return new Request(BILLING_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...extraHeaders,
     },
     body: typeof body === "string" ? body : JSON.stringify(body),
   });
@@ -167,4 +169,167 @@ Deno.test("handleBillingRequest returns 500 billing-unavailable when getEntitlem
 
   assert.equal(res.status, 500);
   assert.deepEqual(await res.json(), { error: "billing-unavailable" });
+});
+
+Deno.test("handleBillingRequest handles redeem-invite rate limiting with HMAC-hashed user/IP keys", async () => {
+  const rateLimitCalls: Array<{ userKey: string; ipKey?: string | null }> = [];
+
+  const rateLimitedRes = await handleBillingRequest(
+    createPostRequest({ action: "redeem-invite", code: "BETA2026" }, "ya29.valid-access-token", {
+      "cf-connecting-ip": "203.0.113.42",
+    }),
+    createDeps({
+      checkInviteRateLimit: async (_url, _key, params) => {
+        rateLimitCalls.push(params);
+        return "rate-limited";
+      },
+    }),
+  );
+
+  assert.equal(rateLimitedRes.status, 429);
+  assert.deepEqual(await rateLimitedRes.json(), { error: "rate-limit-exceeded" });
+  const captured = rateLimitCalls[0];
+  assert.ok(captured);
+  assert.match(captured.userKey, /^u:v1:[0-9a-f]{64}$/);
+  assert.match(captured.ipKey ?? "", /^ip:v1:[0-9a-f]{64}$/);
+  assert.equal(captured.ipKey?.includes("203.0.113.42"), false);
+
+  const errorRes = await handleBillingRequest(
+    createPostRequest({ action: "redeem-invite", code: "BETA2026" }),
+    createDeps({
+      checkInviteRateLimit: async () => "error",
+    }),
+  );
+  assert.equal(errorRes.status, 500);
+  assert.deepEqual(await errorRes.json(), { error: "billing-unavailable" });
+});
+
+Deno.test("handleBillingRequest validates redeem-invite codes, maps typed errors, and returns updated invite_grant entitlement", async () => {
+  const emptyCodeRes = await handleBillingRequest(
+    createPostRequest({ action: "redeem-invite", code: "   " }),
+    createDeps({
+      checkInviteRateLimit: async () => "allowed",
+    }),
+  );
+  assert.equal(emptyCodeRes.status, 400);
+  assert.deepEqual(await emptyCodeRes.json(), { error: "invite-invalid" });
+
+  let redeemCalledForShort = false;
+  const shortCodeRes = await handleBillingRequest(
+    createPostRequest({ action: "redeem-invite", code: "ab" }),
+    createDeps({
+      checkInviteRateLimit: async () => "allowed",
+      redeemInviteCode: async () => {
+        redeemCalledForShort = true;
+        return { ok: true, inviteExpiresAt: null };
+      },
+    }),
+  );
+  assert.equal(shortCodeRes.status, 400);
+  assert.deepEqual(await shortCodeRes.json(), { error: "invite-invalid" });
+  assert.equal(redeemCalledForShort, false);
+
+  let redeemCalledForLong = false;
+  const longCodeRes = await handleBillingRequest(
+    createPostRequest({ action: "redeem-invite", code: "A".repeat(65) }),
+    createDeps({
+      checkInviteRateLimit: async () => "allowed",
+      redeemInviteCode: async () => {
+        redeemCalledForLong = true;
+        return { ok: true, inviteExpiresAt: null };
+      },
+    }),
+  );
+  assert.equal(longCodeRes.status, 400);
+  assert.deepEqual(await longCodeRes.json(), { error: "invite-invalid" });
+  assert.equal(redeemCalledForLong, false);
+
+  const missingEntitlementRes = await handleBillingRequest(
+    createPostRequest({ action: "redeem-invite", code: "BETA2026" }),
+    createDeps({
+      checkInviteRateLimit: async () => "allowed",
+      redeemInviteCode: async () => ({ ok: true, inviteExpiresAt: null }),
+      getEntitlementStatus: async () => null,
+    }),
+  );
+  assert.equal(missingEntitlementRes.status, 500);
+  assert.deepEqual(await missingEntitlementRes.json(), { error: "billing-unavailable" });
+
+  const unknownErrorRes = await handleBillingRequest(
+    createPostRequest({ action: "redeem-invite", code: "BETA2026" }),
+    createDeps({
+      checkInviteRateLimit: async () => "allowed",
+      redeemInviteCode: async () => ({
+        ok: false,
+        error: "unexpected-future-error" as never,
+      }),
+    }),
+  );
+  assert.equal(unknownErrorRes.status, 500);
+  assert.deepEqual(await unknownErrorRes.json(), { error: "unexpected-future-error" });
+
+  const errorStatusMap = [
+    ["invite-invalid", 400],
+    ["invite-exhausted", 409],
+    ["invite-already-redeemed", 409],
+    ["invite-expired", 410],
+    ["billing-unavailable", 500],
+  ] as const;
+
+  for (const [errorCode, expectedStatus] of errorStatusMap) {
+    const res = await handleBillingRequest(
+      createPostRequest({ action: "redeem-invite", code: "beta2026" }),
+      createDeps({
+        checkInviteRateLimit: async () => "allowed",
+        redeemInviteCode: async () => ({ ok: false, error: errorCode }),
+      }),
+    );
+    assert.equal(res.status, expectedStatus);
+    assert.deepEqual(await res.json(), { error: errorCode });
+  }
+
+  let redeemedParams: { userId: string; code: string } | null = null;
+  const okRes = await handleBillingRequest(
+    createPostRequest({ action: "redeem-invite", code: " beta2026 " }),
+    createDeps({
+      checkInviteRateLimit: async () => "allowed",
+      redeemInviteCode: async (_url, _key, params) => {
+        redeemedParams = params;
+        return { ok: true, inviteExpiresAt: "2026-12-27T00:00:00.000Z" };
+      },
+      getEntitlementStatus: async () => ({
+        entitlement_source: "invite_grant",
+        can_use_coach: true,
+        can_use_classify: true,
+        evaluated_at: "2026-11-27T16:00:00.000Z",
+        free_coach_used: 4,
+        free_coach_limit: 30,
+        free_classify_used: 2,
+        free_classify_limit: 40,
+        invite_expires_at: "2026-12-27T00:00:00.000Z",
+      }),
+    }),
+  );
+
+  assert.equal(okRes.status, 200);
+  assert.deepEqual(redeemedParams, { userId: "google-sub-123", code: "BETA2026" });
+  assert.deepEqual(await okRes.json(), {
+    entitlement: {
+      source: "invite_grant",
+      canUseCoach: true,
+      canUseClassify: true,
+      evaluatedAt: "2026-11-27T16:00:00.000Z",
+      freeAllowance: {
+        coachUsed: 4,
+        coachLimit: 30,
+        classifyUsed: 2,
+        classifyLimit: 40,
+      },
+      subscription: null,
+      inviteGrant: {
+        expiresAt: "2026-12-27T00:00:00.000Z",
+      },
+      hasCustomerPortal: false,
+    },
+  });
 });

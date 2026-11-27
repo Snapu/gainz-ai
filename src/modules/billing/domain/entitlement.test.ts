@@ -6,7 +6,9 @@ import {
   getRemainingFreeCoachCount,
   isFreeAllowance,
   isInPastDueGrace,
+  isInviteGrant,
   isNewerOrEqualSnapshot,
+  normalizeInviteCode,
 } from "./entitlement";
 
 function makeEntitlement(overrides: Partial<Entitlement> = {}): Entitlement {
@@ -94,5 +96,20 @@ describe("Entitlement domain predicates", () => {
     });
     expect(isInPastDueGrace(graceActive, Date.parse("2026-11-27T00:00:00.000Z"))).toBe(true);
     expect(isInPastDueGrace(graceActive, Date.parse("2026-11-30T00:00:00.000Z"))).toBe(false);
+  });
+
+  it("normalizes invite codes and detects active InviteGrant entitlements", () => {
+    expect(normalizeInviteCode("  beta-2026 ")).toBe("BETA-2026");
+    expect(normalizeInviteCode("   ")).toBe("");
+    expect(isInviteGrant(null)).toBe(false);
+    expect(isInviteGrant(makeEntitlement({ source: "free_allowance" }))).toBe(false);
+    expect(
+      isInviteGrant(
+        makeEntitlement({
+          source: "invite_grant",
+          inviteGrant: { expiresAt: "2026-12-31T00:00:00.000Z" },
+        }),
+      ),
+    ).toBe(true);
   });
 });

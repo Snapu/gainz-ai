@@ -11,27 +11,53 @@ import {
   Menu,
   Trash2,
 } from "@lucide/vue";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
+import { MembershipSheet, useBillingStore } from "@/modules/billing/presentation";
 import { useSpreadsheetStore } from "@/modules/platform/presentation";
 import { WIZARD_STEPS } from "@/modules/profile/presentation";
 import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
 import DeleteAccountSheet from "@/shared/presentation/components/DeleteAccountSheet.vue";
+import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiButton from "@/shared/presentation/components/ui/UiButton.vue";
 import UiDropdownMenu from "@/shared/presentation/components/ui/UiDropdownMenu.vue";
 import UiDropdownMenuItem from "@/shared/presentation/components/ui/UiDropdownMenuItem.vue";
 import { useAccountActions } from "@/shared/presentation/composables/useAccountActions";
 import { useToast } from "@/shared/presentation/composables/useToast";
 import { t } from "@/shared/presentation/i18n";
+import { formatMediumDate } from "@/shared/presentation/i18n/formatters";
 import { useLocale } from "@/shared/presentation/i18n/useLocale";
 
 const router = useRouter();
+const billingStore = useBillingStore();
 const spreadsheetStore = useSpreadsheetStore();
 const logsStore = useExerciseLogsStore();
 const { toast } = useToast();
 const { locale, setLocale } = useLocale();
 const { signOut } = useAccountActions();
 const isDeleteDialogOpen = ref(false);
+const isMembershipSheetOpen = ref(false);
+
+const membershipStatusBadge = computed(() => {
+  if (billingStore.entitlement?.source === "subscription") {
+    return { variant: "default" as const, label: t("billing.statusPro") };
+  }
+  if (billingStore.isInviteGrant) {
+    return { variant: "default" as const, label: t("billing.statusTester") };
+  }
+  if (billingStore.isFreeAllowance) {
+    return { variant: "secondary" as const, label: t("billing.statusStarter") };
+  }
+  return null;
+});
+
+const membershipMenuMeta = computed(() => {
+  if (!billingStore.isInviteGrant || !billingStore.inviteExpiresAt) return null;
+  const expiry = new Date(billingStore.inviteExpiresAt);
+  return Number.isFinite(expiry.getTime())
+    ? t("billing.inviteExpiresOn", { date: formatMediumDate(expiry) })
+    : null;
+});
 
 function handleSwitchSpreadsheet(): void {
   void spreadsheetStore.switchSpreadsheet().orTee((error) => {
@@ -163,6 +189,33 @@ function handleSwitchSpreadsheet(): void {
       <div class="h-px bg-white/5 my-1 mx-3"></div>
 
       <div class="px-3 py-2 text-micro tracking-widest text-muted-foreground/60">
+        {{ t("nav.membership") }}
+      </div>
+
+      <UiDropdownMenuItem @select="isMembershipSheetOpen = true" class="group">
+        <div class="flex flex-col min-w-0">
+          <span>{{ t("nav.membership") }}</span>
+          <span v-if="membershipMenuMeta" class="text-xs font-medium text-muted-foreground">
+            {{ membershipMenuMeta }}
+          </span>
+        </div>
+        <div class="ml-auto flex items-center gap-2 shrink-0">
+          <UiBadge
+            v-if="membershipStatusBadge"
+            :variant="membershipStatusBadge.variant"
+            class="uppercase tracking-wider"
+          >
+            {{ membershipStatusBadge.label }}
+          </UiBadge>
+          <ChevronRight
+            class="w-4 h-4 opacity-40 group-hover:text-primary transition-colors"
+          />
+        </div>
+      </UiDropdownMenuItem>
+
+      <div class="h-px bg-white/5 my-1 mx-3"></div>
+
+      <div class="px-3 py-2 text-micro tracking-widest text-muted-foreground/60">
         {{ t("nav.account") }}
       </div>
 
@@ -180,6 +233,7 @@ function handleSwitchSpreadsheet(): void {
       </UiDropdownMenuItem>
     </UiDropdownMenu>
 
+    <MembershipSheet v-model:open="isMembershipSheetOpen" />
     <DeleteAccountSheet v-model:open="isDeleteDialogOpen" />
   </div>
 </template>

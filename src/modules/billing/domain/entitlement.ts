@@ -14,6 +14,7 @@ export type BillingError =
   | "invite-exhausted"
   | "invite-expired"
   | "invite-already-redeemed"
+  | "rate-limit-exceeded"
   | "billing-unavailable"
   | "unauthorized";
 
@@ -52,6 +53,14 @@ export function canUseClassify(entitlement: Entitlement | null): boolean {
 
 export function isFreeAllowance(entitlement: Entitlement | null): boolean {
   return entitlement?.source === "free_allowance";
+}
+
+export function isInviteGrant(entitlement: Entitlement | null): boolean {
+  return entitlement?.source === "invite_grant";
+}
+
+export function normalizeInviteCode(raw: string): string {
+  return raw.trim().toUpperCase();
 }
 
 export function getRemainingFreeCoachCount(entitlement: Entitlement | null): number {

@@ -12,9 +12,12 @@ import router from "@/router";
 import "@fontsource-variable/outfit";
 import "@/theme/variables.css";
 import { CLIENT_ID } from "@/modules/auth/presentation";
+import { capturePendingInviteFromUrl } from "@/modules/billing/presentation";
 import { purgeLegacyApiKeys } from "@/modules/profile/presentation";
 import { scrubSentryEvent } from "@/sentryScrubber";
 import { i18n } from "@/shared/presentation/i18n";
+
+capturePendingInviteFromUrl();
 
 const PRELOAD_RELOAD_KEY = "gainz-preload-reload";
 window.addEventListener("vite:preloadError", (event) => {

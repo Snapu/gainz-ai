@@ -100,4 +100,72 @@ describe("scrubSentryEvent", () => {
     expect(scrubbed.extra?.cyclicArr).toBe(cyclicArr);
     expect(cyclicArr[0]).toBe("https://example.com?access_token=[REDACTED]");
   });
+
+  it("redacts ?invite= codes in URLs, hash fragments, query_string, extra, and breadcrumbs", () => {
+    const scrubbed = scrubSentryEvent({
+      request: {
+        url: "https://app.example.com/#/app/coach?invite=BETA-2026&view=1",
+        query_string: "invite=BETA-2026&foo=bar",
+      },
+      extra: {
+        invite: "SECRET-INVITE",
+        inviteCode: "SECRET-INVITE-2",
+        originUrl: "https://app.example.com/?invite=BETA-2026#/login",
+      },
+      breadcrumbs: [
+        {
+          data: {
+            url: "https://app.example.com/?view=coach#/?invite=BETA-2026",
+          },
+        },
+      ],
+    });
+
+    expect(scrubbed.request?.url).toBe(
+      "https://app.example.com/#/app/coach?invite=[REDACTED]&view=1",
+    );
+    expect(scrubbed.request?.query_string).toBe("invite=[REDACTED]&foo=bar");
+    expect(scrubbed.extra).toEqual({
+      originUrl: "https://app.example.com/?invite=[REDACTED]#/login",
+    });
+    expect(scrubbed.breadcrumbs).toEqual([
+      {
+        data: {
+          url: "https://app.example.com/?view=coach#/?invite=[REDACTED]",
+        },
+      },
+    ]);
+  });
+
+  it("redacts invite_code, tuple-array query_string, and breadcrumb messages", () => {
+    const scrubbed = scrubSentryEvent({
+      request: {
+        query_string: [
+          ["invite", "ALPHA-99"],
+          ["invite_code", "BETA-88"],
+          ["tab", "coach"],
+        ],
+      },
+      extra: {
+        invite_code: "SECRET-SNAKE-CASE",
+      },
+      breadcrumbs: [
+        {
+          message: "Navigated to https://app.example.com/#/app/coach?invite=BETA-2026",
+        },
+      ],
+    });
+
+    expect(scrubbed.request?.query_string).toEqual([
+      ["invite", "[REDACTED]"],
+      ["invite_code", "[REDACTED]"],
+      ["tab", "coach"],
+    ]);
+    expect(scrubbed.extra).toEqual({});
+    expect(scrubbed.breadcrumbs).toEqual([
+      {
+        message: "Navigated to https://app.example.com/#/app/coach?invite=[REDACTED]",
+      },
+    ]);
+  });
 });

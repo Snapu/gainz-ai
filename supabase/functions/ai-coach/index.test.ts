@@ -2131,4 +2131,71 @@ describe("TICKET-019 token usage metering and cost caps", () => {
       }),
     );
   });
+
+  it("attributes InviteGrant admissions to invite_grant in token metering and passes refundFreeAllowance=false on failure", async () => {
+    const recordSpy = vi.fn(async () => true);
+    const inviteAuthRow = {
+      allowed: true,
+      denial_reason: null,
+      admitted_source: "invite_grant" as const,
+      current_count: 1,
+      daily_limit: 15,
+      reset_at: "2026-11-16T00:00:00.000Z",
+      global_capped: false,
+      entitlement_source: "invite_grant" as const,
+      can_use_coach: true,
+      can_use_classify: true,
+      evaluated_at: "2026-11-15T10:30:00.000Z",
+      free_coach_used: 4,
+      free_coach_limit: 30,
+      free_classify_used: 2,
+      free_classify_limit: 40,
+      invite_expires_at: "2026-12-15T00:00:00.000Z",
+    };
+
+    const { deps, waitUntilPromises } = createDeps({
+      authorizeAiRequest: vi.fn(async () => inviteAuthRow),
+      recordTokenUsage: recordSpy,
+      streamWithFallback: vi.fn(async (opts: StreamWithFallbackOptions<unknown>) => {
+        opts.onAttemptUsage?.({
+          model: "gemini-3.8-flash",
+          unmeasured: true,
+          promptTokens: 400,
+          cachedTokens: 0,
+          outputTokens: 50,
+          thinkingTokens: 0,
+        });
+        throw new Error("Gemini upstream error");
+      }) as unknown as NonNullable<AiCoachHandlerDeps["streamWithFallback"]>,
+    });
+
+    const res = await handleAiCoachRequest(
+      createJsonRequest(
+        createValidCoachDto({
+          clientRequestId: VALID_UUID_V4,
+          question: "How is my volume?",
+        }),
+      ),
+      deps,
+    );
+    await readSseEvents(res);
+    await Promise.all(waitUntilPromises);
+
+    expect(deps.refundQuota).toHaveBeenCalledWith(
+      "https://test.supabase.co",
+      "test-service-role",
+      expect.objectContaining({
+        refundFreeAllowance: false,
+      }),
+    );
+    expect(recordSpy).toHaveBeenCalledWith(
+      "https://test.supabase.co",
+      "test-service-role",
+      expect.objectContaining({
+        entitlementSource: "invite_grant",
+        promptTokens: 400,
+        outputTokens: 50,
+      }),
+    );
+  });
 });

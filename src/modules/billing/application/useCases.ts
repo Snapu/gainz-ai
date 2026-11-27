@@ -8,3 +8,11 @@ export function fetchEntitlement(
 ): ResultAsync<Entitlement, BillingError> {
   return gateway.fetchStatus(accessToken);
 }
+
+export function redeemInviteCode(
+  gateway: BillingGateway,
+  accessToken: string,
+  code: string,
+): ResultAsync<Entitlement, BillingError> {
+  return gateway.redeemInvite(accessToken, code);
+}

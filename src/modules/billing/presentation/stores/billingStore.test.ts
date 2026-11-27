@@ -49,21 +49,36 @@ describe("useBillingStore", () => {
   const fetchMock = vi.fn();
   let activePinia: ReturnType<typeof createPinia> | undefined;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    localStorage.clear();
-    mockIsLoggedIn.value = true;
-    mockIdToken.value = "valid-id-token";
-    vi.stubGlobal("fetch", fetchMock);
-    activePinia = createPinia();
-    setActivePinia(activePinia);
-  });
-
-  afterEach(() => {
+  function disposeActivePinia(): void {
+    const storeMap = (activePinia as { _s?: Map<string, { $dispose: () => void }> } | undefined)
+      ?._s;
+    storeMap?.forEach((store) => {
+      store.$dispose();
+    });
     (
       activePinia as (ReturnType<typeof createPinia> & { _e?: { stop: () => void } }) | undefined
     )?._e?.stop();
     activePinia = undefined;
+  }
+
+  function replaceActivePinia(): void {
+    disposeActivePinia();
+    activePinia = createPinia();
+    setActivePinia(activePinia);
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    sessionStorage.clear();
+    mockIsLoggedIn.value = true;
+    mockIdToken.value = "valid-id-token";
+    vi.stubGlobal("fetch", fetchMock);
+    replaceActivePinia();
+  });
+
+  afterEach(() => {
+    disposeActivePinia();
     vi.unstubAllGlobals();
   });
 
@@ -80,8 +95,7 @@ describe("useBillingStore", () => {
     expect(store.canUseCoach).toBe(true);
 
     localStorage.setItem(ENTITLEMENT_CACHE_KEY, "{not-valid-entitlement");
-    activePinia = createPinia();
-    setActivePinia(activePinia);
+    replaceActivePinia();
     const cleanStore = useBillingStore();
     expect(cleanStore.entitlement).toBeNull();
     expect(cleanStore.canUseCoach).toBe(true);
@@ -156,8 +170,7 @@ describe("useBillingStore", () => {
   it("clears stale localStorage immediately if instantiated while already signed out", () => {
     localStorage.setItem(ENTITLEMENT_CACHE_KEY, JSON.stringify(createEntitlement()));
     mockIsLoggedIn.value = false;
-    activePinia = createPinia();
-    setActivePinia(activePinia);
+    replaceActivePinia();
 
     const store = useBillingStore();
     expect(store.entitlement).toBeNull();
@@ -260,5 +273,301 @@ describe("useBillingStore", () => {
       if (hadOwnOnLine) Object.defineProperty(navigator, "onLine", hadOwnOnLine);
       else delete (navigator as unknown as Record<string, unknown>).onLine;
     }
+  });
+
+  it("redeems an invite code, retries once on 401, updates entitlement + cache, and maps typed invite errors", async () => {
+    const inviteEntitlement = createEntitlement({
+      source: "invite_grant",
+      canUseCoach: true,
+      canUseClassify: true,
+      evaluatedAt: "2026-11-27T16:15:00.000Z",
+      inviteGrant: { expiresAt: "2026-12-27T00:00:00.000Z" },
+    });
+
+    mockRefreshSession.mockReturnValueOnce(okAsync("fresh-id-token"));
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: async () => ({ error: "unauthorized" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ entitlement: inviteEntitlement }),
+      });
+
+    const store = useBillingStore();
+    const okRes = await store.redeemInvite("  beta-2026 ");
+
+    expect(okRes.isOk()).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
+      action: "redeem-invite",
+      code: "BETA-2026",
+    });
+    expect(store.entitlement).toEqual(inviteEntitlement);
+    expect(store.isInviteGrant).toBe(true);
+    expect(store.inviteExpiresAt).toBe("2026-12-27T00:00:00.000Z");
+
+    const errorCases = [
+      { status: 400, error: "invite-invalid" },
+      { status: 409, error: "invite-exhausted" },
+      { status: 409, error: "invite-already-redeemed" },
+      { status: 410, error: "invite-expired" },
+      { status: 429, error: "rate-limit-exceeded" },
+    ] as const;
+
+    for (const c of errorCases) {
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        status: c.status,
+        json: async () => ({ error: c.error }),
+      });
+      const errRes = await store.redeemInvite("SOME-CODE");
+      expect(errRes.isErr()).toBe(true);
+      if (errRes.isErr()) {
+        expect(errRes.error).toBe(c.error);
+      }
+      expect(store.lastError).toBe(c.error);
+    }
+
+    const emptyRes = await store.redeemInvite("   ");
+    expect(emptyRes.isErr()).toBe(true);
+    if (emptyRes.isErr()) {
+      expect(emptyRes.error).toBe("invite-invalid");
+    }
+  });
+
+  it("redeems captured sessionStorage invite code once authenticated and preserves pending code across offline/transient failures", async () => {
+    sessionStorage.setItem("gainz-pending-invite-code", "TESTER2026");
+
+    // Logged out -> preserves pending code and makes zero network calls
+    mockIsLoggedIn.value = false;
+    const loggedOutStore = useBillingStore();
+    const skipped = await loggedOutStore.redeemPendingInviteIfPresent();
+    expect(skipped).toBeNull();
+    expect(sessionStorage.getItem("gainz-pending-invite-code")).toBe("TESTER2026");
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // Logged in, transient HTTP 500 -> keeps pending code for later retry
+    mockIsLoggedIn.value = true;
+    replaceActivePinia();
+    const store = useBillingStore();
+
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: "billing-unavailable" }),
+    });
+    const transientOutcome = await store.redeemPendingInviteIfPresent();
+    expect(transientOutcome?.isErr()).toBe(true);
+    expect(sessionStorage.getItem("gainz-pending-invite-code")).toBe("TESTER2026");
+
+    // Logged in, terminal invite error -> clears pending code so it does not loop forever
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 410,
+      json: async () => ({ error: "invite-expired" }),
+    });
+    const terminalOutcome = await store.redeemPendingInviteIfPresent();
+    expect(terminalOutcome?.isErr()).toBe(true);
+    expect(sessionStorage.getItem("gainz-pending-invite-code")).toBeNull();
+
+    // Logged in, success -> redeems and clears pending code
+    sessionStorage.setItem("gainz-pending-invite-code", "FRESH2026");
+    const inviteEntitlement = createEntitlement({
+      source: "invite_grant",
+      inviteGrant: { expiresAt: null },
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ entitlement: inviteEntitlement }),
+    });
+    const okOutcome = await store.redeemPendingInviteIfPresent();
+    expect(okOutcome?.isOk()).toBe(true);
+    expect(sessionStorage.getItem("gainz-pending-invite-code")).toBeNull();
+    expect(store.isInviteGrant).toBe(true);
+  });
+
+  it("prevents earlier in-flight fetchEntitlement from overwriting a newly redeemed invite_grant even with identical timestamps", async () => {
+    const sameTimestamp = "2026-11-27T16:30:00.000Z";
+    const staleStatusEntitlement = createEntitlement({
+      source: "free_allowance",
+      evaluatedAt: sameTimestamp,
+      freeAllowance: { coachUsed: 29, coachLimit: 30, classifyUsed: 0, classifyLimit: 40 },
+    });
+    const freshInviteEntitlement = createEntitlement({
+      source: "invite_grant",
+      evaluatedAt: sameTimestamp,
+      inviteGrant: { expiresAt: null },
+    });
+
+    let resolveStatusFetch!: (val: unknown) => void;
+    fetchMock
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveStatusFetch = resolve;
+          }),
+      )
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ entitlement: freshInviteEntitlement }),
+      });
+
+    const store = useBillingStore();
+    const statusPromise = store.fetchEntitlement();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    const redeemRes = await store.redeemInvite("RACEFREE");
+    expect(redeemRes.isOk()).toBe(true);
+    expect(store.entitlement?.source).toBe("invite_grant");
+
+    resolveStatusFetch({
+      ok: true,
+      status: 200,
+      json: async () => ({ entitlement: staleStatusEntitlement }),
+    });
+    await statusPromise;
+
+    expect(store.entitlement?.source).toBe("invite_grant");
+    expect(store.isInviteGrant).toBe(true);
+  });
+
+  it("deduplicates concurrent pending redemptions, handles offline, and clears sessionStorage on explicit sign-out", async () => {
+    sessionStorage.setItem("gainz-pending-invite-code", "DEDUP99");
+    const hadOwnOnLine = Object.getOwnPropertyDescriptor(navigator, "onLine");
+    let isOnline = false;
+    Object.defineProperty(navigator, "onLine", { get: () => isOnline, configurable: true });
+
+    try {
+      const store = useBillingStore();
+      expect(await store.redeemPendingInviteIfPresent()).toBeNull();
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      isOnline = true;
+      let resolveRedeem!: (val: unknown) => void;
+      fetchMock.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveRedeem = resolve;
+          }),
+      );
+
+      const p1 = store.redeemPendingInviteIfPresent();
+      const p2 = store.redeemPendingInviteIfPresent();
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+      // Sign-out invalidates in-flight pending redemption and clears stale sessionStorage key
+      mockIsLoggedIn.value = false;
+      await nextTick();
+      expect(sessionStorage.getItem("gainz-pending-invite-code")).toBeNull();
+
+      resolveRedeem({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          entitlement: createEntitlement({
+            source: "invite_grant",
+            inviteGrant: { expiresAt: null },
+          }),
+        }),
+      });
+      const [r1, r2] = await Promise.all([p1, p2]);
+      expect(r1).toBeNull();
+      expect(r2).toBeNull();
+      expect(store.entitlement).toBeNull();
+    } finally {
+      if (hadOwnOnLine) Object.defineProperty(navigator, "onLine", hadOwnOnLine);
+      else delete (navigator as unknown as Record<string, unknown>).onLine;
+    }
+  });
+
+  it("prevents a stale fetchEntitlement from clobbering isFetching or inFlightFetch of a newer fetch started after redeemInvite", async () => {
+    const staleEntitlement = createEntitlement({ source: "free_allowance" });
+    const inviteEntitlement = createEntitlement({
+      source: "invite_grant",
+      inviteGrant: { expiresAt: null },
+    });
+
+    let resolveFetch1!: (val: unknown) => void;
+    let resolveFetch2!: (val: unknown) => void;
+    fetchMock
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFetch1 = resolve;
+          }),
+      )
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ entitlement: inviteEntitlement }),
+      })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFetch2 = resolve;
+          }),
+      );
+
+    const store = useBillingStore();
+    const fetch1 = store.fetchEntitlement();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    await store.redeemInvite("REDEEM2026");
+
+    const fetch2 = store.fetchEntitlement();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(store.isFetching).toBe(true);
+
+    // Settling stale fetch1 after fetchEpoch bumped must NOT clear fetch2's loading/dedup state
+    resolveFetch1({
+      ok: true,
+      status: 200,
+      json: async () => ({ entitlement: staleEntitlement }),
+    });
+    await fetch1;
+
+    expect(store.isFetching).toBe(true);
+    expect(store.entitlement?.source).toBe("invite_grant");
+    expect(store.fetchEntitlement()).toBe(fetch2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+
+    resolveFetch2({
+      ok: true,
+      status: 200,
+      json: async () => ({ entitlement: inviteEntitlement }),
+    });
+    await fetch2;
+    expect(store.isFetching).toBe(false);
+  });
+
+  it("does not clear a newer pending invite code stored in sessionStorage while an older redemption is in-flight", async () => {
+    sessionStorage.setItem("gainz-pending-invite-code", "CODE_A");
+    let resolveRedeemA!: (val: unknown) => void;
+    fetchMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRedeemA = resolve;
+        }),
+    );
+
+    const store = useBillingStore();
+    const pendingPromise = store.redeemPendingInviteIfPresent();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    sessionStorage.setItem("gainz-pending-invite-code", "CODE_B");
+    resolveRedeemA({
+      ok: false,
+      status: 410,
+      json: async () => ({ error: "invite-expired" }),
+    });
+
+    await pendingPromise;
+    expect(sessionStorage.getItem("gainz-pending-invite-code")).toBe("CODE_B");
   });
 });

@@ -79,7 +79,8 @@ returns table (
   free_coach_used integer,
   free_coach_limit integer,
   free_classify_used integer,
-  free_classify_limit integer
+  free_classify_limit integer,
+  invite_expires_at timestamptz
 )
 language plpgsql
 security invoker
@@ -93,6 +94,8 @@ declare
   v_classify_used integer := 0;
   v_prev_coach_used integer := 0;
   v_prev_classify_used integer := 0;
+  v_has_active_invite boolean := false;
+  v_invite_expires_at timestamptz;
   v_can_use_coach boolean;
   v_can_use_classify boolean;
   v_source text;
@@ -125,9 +128,27 @@ begin
     v_classify_used := greatest(v_classify_used, coalesce(v_prev_classify_used, 0));
   end if;
 
-  v_can_use_coach := v_coach_used < v_free_coach_limit;
-  v_can_use_classify := v_classify_used < v_free_classify_limit;
-  v_source := case when v_can_use_coach or v_can_use_classify then 'free_allowance' else 'none' end;
+  select true, g.expires_at
+  into v_has_active_invite, v_invite_expires_at
+  from public.invite_grants g
+  join public.invite_codes c on c.code = g.code
+  where g.user_id = p_user_id
+    and c.is_active = true
+    and g.revoked_at is null
+    and (g.expires_at is null or g.expires_at > v_now);
+
+  v_has_active_invite := coalesce(v_has_active_invite, false);
+
+  if v_has_active_invite then
+    v_source := 'invite_grant';
+    v_can_use_coach := true;
+    v_can_use_classify := true;
+  else
+    v_invite_expires_at := null;
+    v_can_use_coach := v_coach_used < v_free_coach_limit;
+    v_can_use_classify := v_classify_used < v_free_classify_limit;
+    v_source := case when v_can_use_coach or v_can_use_classify then 'free_allowance' else 'none' end;
+  end if;
 
   return query select
     v_source,
@@ -137,7 +158,8 @@ begin
     v_coach_used,
     v_free_coach_limit,
     v_classify_used,
-    v_free_classify_limit;
+    v_free_classify_limit,
+    v_invite_expires_at;
 end;
 $$;
 
@@ -169,7 +191,8 @@ returns table (
   free_coach_used integer,
   free_coach_limit integer,
   free_classify_used integer,
-  free_classify_limit integer
+  free_classify_limit integer,
+  invite_expires_at timestamptz
 )
 language plpgsql
 security invoker
@@ -192,6 +215,9 @@ declare
   v_free_classify_used integer := 0;
   v_prev_coach_used integer := 0;
   v_prev_classify_used integer := 0;
+  v_has_active_invite boolean := false;
+  v_invite_expires_at timestamptz;
+  v_effective_daily_limit integer;
   v_can_use_coach boolean;
   v_can_use_classify boolean;
   v_entitlement_source text;
@@ -208,9 +234,28 @@ begin
     raise exception 'Invalid quota kind: %', p_kind;
   end if;
 
+  if p_paid_daily_limit is null or p_paid_daily_limit <= 0 then
+    raise exception 'p_paid_daily_limit must be positive';
+  end if;
+
   if p_free_daily_limit is null or p_free_daily_limit <= 0 then
     raise exception 'p_free_daily_limit must be positive';
   end if;
+
+  select true, g.expires_at
+  into v_has_active_invite, v_invite_expires_at
+  from public.invite_grants g
+  join public.invite_codes c on c.code = g.code
+  where g.user_id = p_user_id
+    and c.is_active = true
+    and g.revoked_at is null
+    and (g.expires_at is null or g.expires_at > v_now);
+
+  v_has_active_invite := coalesce(v_has_active_invite, false);
+  if not v_has_active_invite then
+    v_invite_expires_at := null;
+  end if;
+  v_effective_daily_limit := case when v_has_active_invite then p_paid_daily_limit else p_free_daily_limit end;
 
   v_global_cap := coalesce(
     p_global_cap,
@@ -257,16 +302,22 @@ begin
       v_free_classify_used := greatest(v_free_classify_used, coalesce(v_prev_classify_used, 0));
     end if;
 
-    v_can_use_coach := v_free_coach_used < v_free_coach_limit;
-    v_can_use_classify := v_free_classify_used < v_free_classify_limit;
-    v_entitlement_source := case when v_can_use_coach or v_can_use_classify then 'free_allowance' else 'none' end;
+    if v_has_active_invite then
+      v_can_use_coach := true;
+      v_can_use_classify := true;
+      v_entitlement_source := 'invite_grant';
+    else
+      v_can_use_coach := v_free_coach_used < v_free_coach_limit;
+      v_can_use_classify := v_free_classify_used < v_free_classify_limit;
+      v_entitlement_source := case when v_can_use_coach or v_can_use_classify then 'free_allowance' else 'none' end;
+    end if;
 
     return query select
       false,
       'rate-limit-exceeded'::text,
       'none'::text,
-      p_free_daily_limit,
-      p_free_daily_limit,
+      v_effective_daily_limit,
+      v_effective_daily_limit,
       v_reset_at,
       true,
       v_entitlement_source,
@@ -276,7 +327,8 @@ begin
       v_free_coach_used,
       v_free_coach_limit,
       v_free_classify_used,
-      v_free_classify_limit;
+      v_free_classify_limit,
+      v_invite_expires_at;
     return;
   end if;
 
@@ -325,60 +377,74 @@ begin
     where f.subject_digest = p_previous_subject_digest;
   end if;
 
-  insert into public.free_allowance_usage (subject_digest, coach_used, classify_used, updated_at)
-  values (
-    p_subject_digest,
-    coalesce(v_prev_coach_used, 0),
-    coalesce(v_prev_classify_used, 0),
-    v_now
-  )
-  on conflict (subject_digest) do update
-  set coach_used = greatest(public.free_allowance_usage.coach_used, excluded.coach_used),
-      classify_used = greatest(public.free_allowance_usage.classify_used, excluded.classify_used),
-      updated_at = v_now
-  where public.free_allowance_usage.coach_used < excluded.coach_used
-     or public.free_allowance_usage.classify_used < excluded.classify_used;
+  if v_has_active_invite then
+    select f.coach_used, f.classify_used
+    into v_free_coach_used, v_free_classify_used
+    from public.free_allowance_usage f
+    where f.subject_digest = p_subject_digest;
 
-  select f.coach_used, f.classify_used
-  into v_free_coach_used, v_free_classify_used
-  from public.free_allowance_usage f
-  where f.subject_digest = p_subject_digest
-  for update;
+    v_free_coach_used := greatest(coalesce(v_free_coach_used, 0), coalesce(v_prev_coach_used, 0));
+    v_free_classify_used := greatest(coalesce(v_free_classify_used, 0), coalesce(v_prev_classify_used, 0));
+    v_can_use_coach := true;
+    v_can_use_classify := true;
+    v_entitlement_source := 'invite_grant';
+  else
+    insert into public.free_allowance_usage (subject_digest, coach_used, classify_used, updated_at)
+    values (
+      p_subject_digest,
+      coalesce(v_prev_coach_used, 0),
+      coalesce(v_prev_classify_used, 0),
+      v_now
+    )
+    on conflict (subject_digest) do update
+    set coach_used = greatest(public.free_allowance_usage.coach_used, excluded.coach_used),
+        classify_used = greatest(public.free_allowance_usage.classify_used, excluded.classify_used),
+        updated_at = v_now
+    where public.free_allowance_usage.coach_used < excluded.coach_used
+       or public.free_allowance_usage.classify_used < excluded.classify_used;
 
-  v_can_use_coach := v_free_coach_used < v_free_coach_limit;
-  v_can_use_classify := v_free_classify_used < v_free_classify_limit;
-  v_entitlement_source := case when v_can_use_coach or v_can_use_classify then 'free_allowance' else 'none' end;
+    select f.coach_used, f.classify_used
+    into v_free_coach_used, v_free_classify_used
+    from public.free_allowance_usage f
+    where f.subject_digest = p_subject_digest
+    for update;
 
-  -- Evaluate coach vs classify pools independently so exhausting 40 classify calls never blocks coach requests
-  if (p_kind = 'coach' and v_free_coach_used >= v_free_coach_limit)
-     or (p_kind = 'classify' and v_free_classify_used >= v_free_classify_limit) then
-    return query select
-      false,
-      'payment-required'::text,
-      'none'::text,
-      v_daily_count,
-      p_free_daily_limit,
-      v_reset_at,
-      false,
-      v_entitlement_source,
-      v_can_use_coach,
-      v_can_use_classify,
-      v_now,
-      v_free_coach_used,
-      v_free_coach_limit,
-      v_free_classify_used,
-      v_free_classify_limit;
-    return;
+    v_can_use_coach := v_free_coach_used < v_free_coach_limit;
+    v_can_use_classify := v_free_classify_used < v_free_classify_limit;
+    v_entitlement_source := case when v_can_use_coach or v_can_use_classify then 'free_allowance' else 'none' end;
+
+    -- Evaluate coach vs classify pools independently so exhausting 40 classify calls never blocks coach requests
+    if (p_kind = 'coach' and v_free_coach_used >= v_free_coach_limit)
+       or (p_kind = 'classify' and v_free_classify_used >= v_free_classify_limit) then
+      return query select
+        false,
+        'payment-required'::text,
+        'none'::text,
+        v_daily_count,
+        v_effective_daily_limit,
+        v_reset_at,
+        false,
+        v_entitlement_source,
+        v_can_use_coach,
+        v_can_use_classify,
+        v_now,
+        v_free_coach_used,
+        v_free_coach_limit,
+        v_free_classify_used,
+        v_free_classify_limit,
+        null::timestamptz;
+      return;
+    end if;
   end if;
 
-  -- Enforce free-phase daily limit before locking or modifying the global counter
-  if v_daily_count >= p_free_daily_limit then
+  -- Enforce per-user daily limit before locking or modifying the global counter
+  if v_daily_count >= v_effective_daily_limit then
     return query select
       false,
       'rate-limit-exceeded'::text,
       'none'::text,
       v_daily_count,
-      p_free_daily_limit,
+      v_effective_daily_limit,
       v_reset_at,
       false,
       v_entitlement_source,
@@ -388,7 +454,8 @@ begin
       v_free_coach_used,
       v_free_coach_limit,
       v_free_classify_used,
-      v_free_classify_limit;
+      v_free_classify_limit,
+      v_invite_expires_at;
     return;
   end if;
 
@@ -416,8 +483,8 @@ begin
       false,
       'rate-limit-exceeded'::text,
       'none'::text,
-      p_free_daily_limit,
-      p_free_daily_limit,
+      v_effective_daily_limit,
+      v_effective_daily_limit,
       v_reset_at,
       true,
       v_entitlement_source,
@@ -427,7 +494,8 @@ begin
       v_free_coach_used,
       v_free_coach_limit,
       v_free_classify_used,
-      v_free_classify_limit;
+      v_free_classify_limit,
+      v_invite_expires_at;
     return;
   end if;
 
@@ -439,11 +507,13 @@ begin
       and public.ai_daily_usage.usage_date = v_today
     returning public.ai_daily_usage.coaching_count into v_daily_count;
 
-    update public.free_allowance_usage
-    set coach_used = public.free_allowance_usage.coach_used + 1,
-        updated_at = v_now
-    where public.free_allowance_usage.subject_digest = p_subject_digest
-    returning public.free_allowance_usage.coach_used into v_free_coach_used;
+    if not v_has_active_invite then
+      update public.free_allowance_usage
+      set coach_used = public.free_allowance_usage.coach_used + 1,
+          updated_at = v_now
+      where public.free_allowance_usage.subject_digest = p_subject_digest
+      returning public.free_allowance_usage.coach_used into v_free_coach_used;
+    end if;
   else
     update public.ai_daily_usage
     set classify_count = public.ai_daily_usage.classify_count + 1,
@@ -452,23 +522,27 @@ begin
       and public.ai_daily_usage.usage_date = v_today
     returning public.ai_daily_usage.classify_count into v_daily_count;
 
-    update public.free_allowance_usage
-    set classify_used = public.free_allowance_usage.classify_used + 1,
-        updated_at = v_now
-    where public.free_allowance_usage.subject_digest = p_subject_digest
-    returning public.free_allowance_usage.classify_used into v_free_classify_used;
+    if not v_has_active_invite then
+      update public.free_allowance_usage
+      set classify_used = public.free_allowance_usage.classify_used + 1,
+          updated_at = v_now
+      where public.free_allowance_usage.subject_digest = p_subject_digest
+      returning public.free_allowance_usage.classify_used into v_free_classify_used;
+    end if;
   end if;
 
-  v_can_use_coach := v_free_coach_used < v_free_coach_limit;
-  v_can_use_classify := v_free_classify_used < v_free_classify_limit;
-  v_entitlement_source := case when v_can_use_coach or v_can_use_classify then 'free_allowance' else 'none' end;
+  if not v_has_active_invite then
+    v_can_use_coach := v_free_coach_used < v_free_coach_limit;
+    v_can_use_classify := v_free_classify_used < v_free_classify_limit;
+    v_entitlement_source := case when v_can_use_coach or v_can_use_classify then 'free_allowance' else 'none' end;
+  end if;
 
   return query select
     true,
     null::text,
-    'free_allowance'::text,
+    case when v_has_active_invite then 'invite_grant'::text else 'free_allowance'::text end,
     v_daily_count,
-    p_free_daily_limit,
+    v_effective_daily_limit,
     v_reset_at,
     false,
     v_entitlement_source,
@@ -478,7 +552,8 @@ begin
     v_free_coach_used,
     v_free_coach_limit,
     v_free_classify_used,
-    v_free_classify_limit;
+    v_free_classify_limit,
+    v_invite_expires_at;
 end;
 $$;
 

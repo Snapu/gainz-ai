@@ -5,6 +5,7 @@ import { DEFAULT_DAILY_COST_CAP_USD_MICROS } from "./tokenCost";
 
 const SCHEMA_PATH = resolve(process.cwd(), "supabase/schemas/01_ai_daily_usage.sql");
 const TOKEN_SCHEMA_PATH = resolve(process.cwd(), "supabase/schemas/03_ai_token_usage.sql");
+const INVITE_SCHEMA_PATH = resolve(process.cwd(), "supabase/schemas/04_invite_grants.sql");
 const MIGRATIONS_DIR = resolve(process.cwd(), "supabase/migrations");
 
 const GLOBAL_TABLE_START = "create table if not exists public.ai_daily_global_usage";
@@ -42,6 +43,27 @@ const UNIT_ECONOMICS_VIEW_START = "create or replace view public.v_ai_unit_econo
 const UNIT_ECONOMICS_VIEW_END =
   "grant select on public.v_ai_unit_economics_monthly to service_role;";
 
+const INVITE_CODES_TABLE_START = "create table if not exists public.invite_codes";
+const INVITE_CODES_TABLE_END =
+  "grant select, insert, update, delete on table public.invite_codes to service_role;";
+
+const INVITE_GRANTS_TABLE_START = "create table if not exists public.invite_grants";
+const INVITE_GRANTS_TABLE_END =
+  "grant select, insert, update, delete on table public.invite_grants to service_role;";
+
+const INVITE_ATTEMPTS_TABLE_START = "create table if not exists public.invite_redeem_attempts";
+const INVITE_ATTEMPTS_TABLE_END =
+  "grant select, insert, update, delete on table public.invite_redeem_attempts to service_role;";
+
+const CHECK_INVITE_RATE_LIMIT_START =
+  "create or replace function public.check_invite_redeem_rate_limit(";
+const CHECK_INVITE_RATE_LIMIT_END =
+  "grant execute on function public.check_invite_redeem_rate_limit(text, text, integer, integer, integer) to service_role;";
+
+const REDEEM_INVITE_CODE_START = "create or replace function public.redeem_invite_code(";
+const REDEEM_INVITE_CODE_END =
+  "grant execute on function public.redeem_invite_code(text, text) to service_role;";
+
 function extractSection(sql: string, startMarker: string, endMarker: string): string {
   const start = sql.indexOf(startMarker);
   if (start === -1) {
@@ -69,6 +91,7 @@ function loadLatestMigrationSection(
 describe("ai_daily_global_usage schema and migration contract", () => {
   const schemaSql = readFileSync(SCHEMA_PATH, "utf8");
   const tokenSchemaSql = readFileSync(TOKEN_SCHEMA_PATH, "utf8");
+  const inviteSchemaSql = readFileSync(INVITE_SCHEMA_PATH, "utf8");
   const migrations = readdirSync(MIGRATIONS_DIR)
     .filter((file) => file.endsWith(".sql"))
     .sort()
@@ -107,8 +130,33 @@ describe("ai_daily_global_usage schema and migration contract", () => {
     UNIT_ECONOMICS_VIEW_START,
     UNIT_ECONOMICS_VIEW_END,
   );
+  const inviteCodesBlock = extractSection(
+    inviteSchemaSql,
+    INVITE_CODES_TABLE_START,
+    INVITE_CODES_TABLE_END,
+  );
+  const inviteGrantsBlock = extractSection(
+    inviteSchemaSql,
+    INVITE_GRANTS_TABLE_START,
+    INVITE_GRANTS_TABLE_END,
+  );
+  const inviteAttemptsBlock = extractSection(
+    inviteSchemaSql,
+    INVITE_ATTEMPTS_TABLE_START,
+    INVITE_ATTEMPTS_TABLE_END,
+  );
+  const checkInviteRateLimitBlock = extractSection(
+    inviteSchemaSql,
+    CHECK_INVITE_RATE_LIMIT_START,
+    CHECK_INVITE_RATE_LIMIT_END,
+  );
+  const redeemInviteCodeBlock = extractSection(
+    inviteSchemaSql,
+    REDEEM_INVITE_CODE_START,
+    REDEEM_INVITE_CODE_END,
+  );
 
-  it("keeps ai_daily_global_usage, free_allowance_usage, token usage, views, and RPCs in zero-drift sync with latest migrations", () => {
+  it("keeps ai_daily_global_usage, free_allowance_usage, token usage, invite tables, views, and RPCs in zero-drift sync with latest migrations", () => {
     expect(loadLatestMigrationSection(migrations, GLOBAL_TABLE_START, GLOBAL_TABLE_END)).toBe(
       globalBlock,
     );
@@ -134,6 +182,29 @@ describe("ai_daily_global_usage schema and migration contract", () => {
     expect(
       loadLatestMigrationSection(migrations, UNIT_ECONOMICS_VIEW_START, UNIT_ECONOMICS_VIEW_END),
     ).toBe(unitEconomicsViewBlock);
+    expect(
+      loadLatestMigrationSection(migrations, INVITE_CODES_TABLE_START, INVITE_CODES_TABLE_END),
+    ).toBe(inviteCodesBlock);
+    expect(
+      loadLatestMigrationSection(migrations, INVITE_GRANTS_TABLE_START, INVITE_GRANTS_TABLE_END),
+    ).toBe(inviteGrantsBlock);
+    expect(
+      loadLatestMigrationSection(
+        migrations,
+        INVITE_ATTEMPTS_TABLE_START,
+        INVITE_ATTEMPTS_TABLE_END,
+      ),
+    ).toBe(inviteAttemptsBlock);
+    expect(
+      loadLatestMigrationSection(
+        migrations,
+        CHECK_INVITE_RATE_LIMIT_START,
+        CHECK_INVITE_RATE_LIMIT_END,
+      ),
+    ).toBe(checkInviteRateLimitBlock);
+    expect(
+      loadLatestMigrationSection(migrations, REDEEM_INVITE_CODE_START, REDEEM_INVITE_CODE_END),
+    ).toBe(redeemInviteCodeBlock);
   });
 
   it("wraps LOCK TABLE migrations in an explicit transaction (the Supabase CLI adds none)", () => {
@@ -246,6 +317,9 @@ describe("ai_daily_global_usage schema and migration contract", () => {
       ["ai_daily_global_usage", globalBlock],
       ["free_allowance_usage", freeAllowanceBlock],
       ["ai_monthly_token_usage", tokenUsageBlock],
+      ["invite_codes", inviteCodesBlock],
+      ["invite_grants", inviteGrantsBlock],
+      ["invite_redeem_attempts", inviteAttemptsBlock],
     ] as const) {
       expect(block).toContain(`alter table public.${tableName} enable row level security;`);
       expect(block).toContain('create policy "service_role_full_access"');
@@ -273,6 +347,12 @@ describe("ai_daily_global_usage schema and migration contract", () => {
         "text, date, text, text, text, boolean, bigint, bigint, bigint, bigint, bigint",
         recordTokenUsageBlock,
       ],
+      [
+        "check_invite_redeem_rate_limit",
+        "text, text, integer, integer, integer",
+        checkInviteRateLimitBlock,
+      ],
+      ["redeem_invite_code", "text, text", redeemInviteCodeBlock],
     ] as const) {
       expect(block).toMatch(/security invoker/i);
       expect(block).toContain("set search_path = ''");
@@ -297,5 +377,23 @@ describe("ai_daily_global_usage schema and migration contract", () => {
       "if p_kind is null or p_kind not in ('coach', 'classify') then",
     );
     expect(refundBlock).toContain("if p_kind is null or p_kind not in ('coach', 'classify') then");
+
+    // Active InviteGrant precedence & immediate revocation checks in both SQL RPCs
+    for (const block of [entitlementStatusBlock, authorizeBlock]) {
+      expect(block).toContain("and c.is_active = true");
+      expect(block).toContain("and g.revoked_at is null");
+      expect(block).toContain("and (g.expires_at is null or g.expires_at > v_now)");
+    }
+    expect(authorizeBlock).toContain("'invite_grant'::text");
+    expect(inviteGrantsBlock).toContain("idx_invite_grants_code");
+    expect(redeemInviteCodeBlock).toContain("pg_advisory_xact_lock");
+    expect(checkInviteRateLimitBlock).toContain("p_user_max_attempts");
+    expect(checkInviteRateLimitBlock).toContain("p_ip_max_attempts");
+    expect(allMigrationsSql).toContain(
+      "drop function if exists public.get_entitlement_status(text, text, text);",
+    );
+    expect(allMigrationsSql).toContain(
+      "drop function if exists public.authorize_ai_request(text, text, text, text, integer, integer, integer, bigint);",
+    );
   });
 });

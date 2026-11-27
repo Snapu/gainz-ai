@@ -45,6 +45,7 @@ export const de: MessageSchema = {
     data: "Daten",
     legal: "Rechtliches",
     language: "Sprache",
+    membership: "Mitgliedschaft",
     openSpreadsheet: "Tabelle öffnen",
     switchSpreadsheet: "Tabelle wechseln",
     privacyPolicy: "Datenschutz",
@@ -633,5 +634,35 @@ export const de: MessageSchema = {
     freeFeatureInsights: "Trainingswissenschaftliche Insights (ACWR, e1RM, Volumen-Landmarks)",
     billingNotice:
       "Abrechnung, Rechnungen und Kündigung laufen sicher über Stripe / Link (erscheint als LINK.COM* auf dem Kontoauszug).",
+    membershipTitle: "Mitgliedschaft",
+    membershipSubtitle: "Aktueller Zugangsstatus und Einlösung von Einladungscodes.",
+    statusPro: "GainzAI Pro",
+    statusTester: "Tester-Zugang",
+    statusStarter: "Starter-Kontingent",
+    statusStarterDetail: "{remaining} / {limit} KI-Coaching-Briefings verbleibend",
+    statusFree: "Kostenlose Basisfunktionen",
+    statusLoading: "Mitgliedschaftsstatus wird geladen...",
+    statusUnavailableTitle: "Status nicht verfügbar",
+    statusUnavailableDetail:
+      "Der aktuelle Mitgliedschaftsstatus konnte gerade nicht geladen werden.",
+    inviteExpiresOn: "Gültig bis {date}",
+    inviteUnlimited: "Unbefristeter Tester-Zugang",
+    inviteToggleLabel: "Einladungscode vorhanden?",
+    invitePlaceholder: "Einladungscode eingeben",
+    inviteRedeemButton: "Einlösen",
+    inviteRedeemingButton: "Wird eingelöst...",
+    inviteRedeemSuccessTitle: "Tester-Zugang aktiviert",
+    inviteRedeemSuccessDesc:
+      "Alle KI-Coaching- und Trainingsplan-Limits sind jetzt freigeschaltet.",
+    inviteRedeemErrorTitle: "Einlösung fehlgeschlagen",
+    inviteErrors: {
+      invalid: "Dieser Einladungscode ist ungültig.",
+      exhausted: "Dieser Einladungscode wurde bereits maximal oft eingelöst.",
+      expired: "Dieser Einladungscode ist abgelaufen.",
+      alreadyRedeemed:
+        "Für dein Konto ist bereits ein aktiver Zugang hinterlegt oder dieser Code wurde bereits eingelöst.",
+      rateLimited: "Zu viele Versuche. Bitte versuche es in einigen Minuten erneut.",
+      unavailable: "Der Mitgliedschafts-Dienst ist vorübergehend nicht erreichbar.",
+    },
   },
 };

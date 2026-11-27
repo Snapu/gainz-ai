@@ -1,7 +1,8 @@
-const SENSITIVE_QUERY_PARAM = /([?&#](?:access_token|id_token|refresh_token|code|token)=)[^&#]*/gi;
+const SENSITIVE_QUERY_PARAM =
+  /([?&#](?:access_token|id_token|refresh_token|code|token|invite)=)[^&#]*/gi;
 const SENSITIVE_HEADER_KEY = /^(?:authorization|cookie|x-api-key|apikey)$/i;
 const SENSITIVE_EXTRA_KEY =
-  /^(?:access_token|id_token|refresh_token|authorization|cookie|x-api-key|apikey|token|code|coachingAdviceText|rawJson)$/i;
+  /^(?:access_token|id_token|refresh_token|authorization|cookie|x-api-key|apikey|token|code|invite|inviteCode|invite_code|coachingAdviceText|rawJson)$/i;
 
 interface ScrubbableEvent {
   user?: unknown;
@@ -11,7 +12,7 @@ interface ScrubbableEvent {
     query_string?: unknown;
   };
   extra?: Record<string, unknown>;
-  breadcrumbs?: Array<{ data?: Record<string, unknown> }>;
+  breadcrumbs?: Array<{ message?: unknown; data?: Record<string, unknown> }>;
 }
 
 function scrubSensitiveUrl(rawUrl: string): string {
@@ -69,6 +70,13 @@ function scrubRequest(request: NonNullable<ScrubbableEvent["request"]>): void {
   }
   if (typeof request.query_string === "string") {
     request.query_string = scrubSensitiveUrl(`?${request.query_string}`).slice(1);
+  } else if (Array.isArray(request.query_string)) {
+    request.query_string = request.query_string.map((entry) => {
+      if (Array.isArray(entry) && entry.length >= 2 && typeof entry[0] === "string") {
+        return SENSITIVE_EXTRA_KEY.test(entry[0]) ? [entry[0], "[REDACTED]"] : entry;
+      }
+      return entry;
+    });
   } else if (isRecord(request.query_string)) {
     scrubRecordValues(request.query_string, SENSITIVE_EXTRA_KEY);
   }
@@ -84,6 +92,9 @@ export function scrubSentryEvent<T extends ScrubbableEvent>(event: T): T {
     scrubRecordValues(event.extra);
   }
   for (const breadcrumb of event.breadcrumbs ?? []) {
+    if (typeof breadcrumb.message === "string") {
+      breadcrumb.message = scrubSensitiveUrl(breadcrumb.message);
+    }
     if (breadcrumb.data) {
       scrubRecordValues(breadcrumb.data);
     }

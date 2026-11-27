@@ -6,7 +6,11 @@ import { type EffectScope, effectScope, onMounted, onScopeDispose, onUnmounted, 
 import { useRouter } from "vue-router";
 import { useAiOrchestratorStore } from "@/modules/aiCoach/presentation";
 import { useAuthErrorHandler, useAuthStore } from "@/modules/auth/presentation";
-import { useBillingStore } from "@/modules/billing/presentation";
+import {
+  capturePendingInviteFromUrl,
+  resolveInviteErrorMessage,
+  useBillingStore,
+} from "@/modules/billing/presentation";
 import { useExerciseLogsStore } from "@/modules/trainingLogs/presentation";
 import { isPublicRoute } from "@/router/routePolicy";
 import UiToaster from "@/shared/presentation/components/ui/UiToaster.vue";
@@ -23,8 +27,10 @@ const router = useRouter();
 const authStore = useAuthStore();
 const { handleAuthError } = useAuthErrorHandler();
 const { hasLegalConsent } = useLegalConsent();
+const { toast } = useToast();
 
 let consentedServicesScope: EffectScope | null = null;
+let triggerConsentedBillingSync: (() => void) | null = null;
 
 function startConsentedServices(): void {
   if (consentedServicesScope) return;
@@ -32,19 +38,80 @@ function startConsentedServices(): void {
   consentedServicesScope.run(() => {
     useAuthExpirationWatcher();
     useSheetCacheSync();
-    const refreshBillingIfOnline = () => {
-      if (typeof navigator === "undefined" || navigator.onLine !== false) {
-        void useBillingStore().fetchEntitlement();
+    let disposed = false;
+    let isSyncing = false;
+    let pendingResync = false;
+    const billingStore = useBillingStore();
+    const showPendingInviteToast = (
+      result: Awaited<ReturnType<typeof billingStore.redeemPendingInviteIfPresent>>,
+    ) => {
+      if (!result) return;
+      if (result.isOk()) {
+        toast({
+          variant: "default",
+          title: t("billing.inviteRedeemSuccessTitle"),
+          description: t("billing.inviteRedeemSuccessDesc"),
+        });
+        return;
+      }
+      toast({
+        variant: "destructive",
+        title: t("billing.inviteRedeemErrorTitle"),
+        description: resolveInviteErrorMessage(result.error),
+      });
+    };
+    const runSingleBillingSync = async () => {
+      const result = await billingStore.redeemPendingInviteIfPresent();
+      if (disposed || !authStore.isLoggedIn) return;
+      if (result) {
+        showPendingInviteToast(result);
+        if (result.isOk()) return;
+      }
+      if (!disposed && authStore.isLoggedIn) {
+        await billingStore.fetchEntitlement();
       }
     };
-    refreshBillingIfOnline();
+    const syncBillingOnConnect = async () => {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+      if (isSyncing) {
+        pendingResync = true;
+        return;
+      }
+      isSyncing = true;
+      try {
+        do {
+          pendingResync = false;
+          await runSingleBillingSync();
+        } while (pendingResync && !disposed && authStore.isLoggedIn);
+      } finally {
+        isSyncing = false;
+      }
+    };
+    const triggerSync = () => {
+      void syncBillingOnConnect();
+    };
+    triggerConsentedBillingSync = triggerSync;
+    triggerSync();
     if (typeof window !== "undefined") {
-      window.addEventListener("online", refreshBillingIfOnline);
-      onScopeDispose(() => {
-        window.removeEventListener("online", refreshBillingIfOnline);
-      });
+      window.addEventListener("online", triggerSync);
     }
+    onScopeDispose(() => {
+      disposed = true;
+      if (triggerConsentedBillingSync === triggerSync) {
+        triggerConsentedBillingSync = null;
+      }
+      if (typeof window !== "undefined") {
+        window.removeEventListener("online", triggerSync);
+      }
+    });
   });
+}
+
+function handleHashChange(): void {
+  const captured = capturePendingInviteFromUrl();
+  if (captured && authStore.isLoggedIn && hasLegalConsent.value) {
+    triggerConsentedBillingSync?.();
+  }
 }
 
 function stopConsentedServices(): void {
@@ -124,12 +191,13 @@ function handleServiceWorkerMessage(event: MessageEvent) {
 onUnmounted(() => {
   stopConsentedServices();
   clearInterval(swUpdateInterval);
+  if (typeof window !== "undefined") {
+    window.removeEventListener("hashchange", handleHashChange);
+  }
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.removeEventListener("message", handleServiceWorkerMessage);
   }
 });
-
-const { toast } = useToast();
 
 watch(
   needRefresh,
@@ -153,6 +221,9 @@ watch(
 onMounted(() => {
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.addEventListener("message", handleServiceWorkerMessage);
+  }
+  if (typeof window !== "undefined") {
+    window.addEventListener("hashchange", handleHashChange);
   }
 });
 

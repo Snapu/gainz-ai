@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { Check, Lock, Sparkles } from "@lucide/vue";
+import { Check, ChevronDown, Lock, Sparkles } from "@lucide/vue";
+import { ref } from "vue";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiCard from "@/shared/presentation/components/ui/UiCard.vue";
 import { t } from "@/shared/presentation/i18n";
+import InviteCodeForm from "./InviteCodeForm.vue";
+
+const showInviteForm = ref(false);
 </script>
 
 <template>
@@ -81,6 +85,25 @@ import { t } from "@/shared/presentation/i18n";
     </div>
 
     <slot name="actions" />
+
+    <div class="border-t border-white/5 pt-3 flex flex-col gap-3">
+      <button
+        type="button"
+        :aria-expanded="showInviteForm"
+        aria-controls="upgrade-invite-form"
+        class="flex items-center justify-between w-full rounded-xl px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-white/5 active:scale-95 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background cursor-pointer"
+        @click="showInviteForm = !showInviteForm"
+      >
+        <span>{{ t("billing.inviteToggleLabel") }}</span>
+        <ChevronDown
+          :class="['w-4 h-4 transition-transform duration-200', showInviteForm && 'rotate-180']"
+          aria-hidden="true"
+        />
+      </button>
+      <div v-if="showInviteForm" id="upgrade-invite-form">
+        <InviteCodeForm />
+      </div>
+    </div>
 
     <p class="flex items-start gap-2 text-xs font-medium text-muted-foreground/80 leading-relaxed">
       <Lock class="w-3.5 h-3.5 shrink-0 mt-0.5 text-muted-foreground/70" aria-hidden="true" />
