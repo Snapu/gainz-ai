@@ -491,6 +491,7 @@ describe("ai_daily_global_usage schema and migration contract", () => {
     // Subscription precedence (active/trialing/3-day past_due grace) & monotonic webhook sync
     for (const block of [entitlementStatusBlock, authorizeBlock]) {
       expect(block).toContain("from public.user_subscriptions");
+      expect(block).toContain("v_has_active_subscription := coalesce(");
       expect(block).toContain("v_sub_status in ('active', 'trialing')");
       expect(block).toContain("v_sub_status = 'past_due'");
       expect(block).toContain("v_sub_grace_ends_at > v_now");

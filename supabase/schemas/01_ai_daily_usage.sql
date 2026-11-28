@@ -158,7 +158,7 @@ begin
   v_has_customer_portal :=
     v_provider_customer_id is not null and length(trim(v_provider_customer_id)) > 0;
 
-  v_has_active_subscription :=
+  v_has_active_subscription := coalesce(
     (
       v_sub_status in ('active', 'trialing')
       and (
@@ -171,7 +171,9 @@ begin
       v_sub_status = 'past_due'
       and v_sub_grace_ends_at is not null
       and v_sub_grace_ends_at > v_now
-    );
+    ),
+    false
+  );
 
   if v_has_active_subscription then
     v_source := 'subscription';
@@ -329,7 +331,7 @@ begin
   v_has_customer_portal :=
     v_provider_customer_id is not null and length(trim(v_provider_customer_id)) > 0;
 
-  v_has_active_subscription :=
+  v_has_active_subscription := coalesce(
     (
       v_sub_status in ('active', 'trialing')
       and (
@@ -342,7 +344,9 @@ begin
       v_sub_status = 'past_due'
       and v_sub_grace_ends_at is not null
       and v_sub_grace_ends_at > v_now
-    );
+    ),
+    false
+  );
 
   if not v_has_active_subscription then
     select true, g.expires_at
