@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Sparkles } from "@lucide/vue";
 import { computed, watch } from "vue";
 import UiBadge from "@/shared/presentation/components/ui/UiBadge.vue";
 import UiBottomSheet from "@/shared/presentation/components/ui/UiBottomSheet.vue";
@@ -95,12 +96,29 @@ const statusInfo = computed(() => {
 
 const canRedeemInvite = computed(() => !billingStore.isInviteGrant && !billingStore.isSubscription);
 
+const canUpgradeToPro = computed(
+  () =>
+    billingStore.entitlement !== null &&
+    !billingStore.isInviteGrant &&
+    !billingStore.hasNonTerminatedSubscription,
+);
+
 const portalButtonLabel = computed(() => {
   if (billingStore.isOpeningPortal) return t("billing.openingPortal");
   return billingStore.isSubscription
     ? t("billing.manageSubscription")
     : t("billing.viewBillingHistory");
 });
+
+function handleSubscribe(): void {
+  void billingStore.startCheckout().orTee(() => {
+    toast({
+      variant: "destructive",
+      title: t("billing.checkoutErrorTitle"),
+      description: t("billing.checkoutErrorDesc"),
+    });
+  });
+}
 
 function handleOpenPortal(): void {
   void billingStore.openPortal().orTee(() => {
@@ -146,6 +164,42 @@ function handleOpenPortal(): void {
               {{ portalButtonLabel }}
             </UiButton>
           </template>
+        </div>
+
+        <div
+          v-if="billingStore.isPollingCheckout"
+          data-testid="membership-checkout-syncing"
+          class="rounded-xl bg-white/5 border border-white/5 p-4"
+        >
+          <UiTelemetryLoader :text="t('billing.checkoutSyncing')" />
+        </div>
+
+        <div
+          v-else-if="canUpgradeToPro"
+          data-testid="membership-upgrade-section"
+          class="rounded-xl bg-white/5 border border-white/5 p-4 flex flex-col gap-3"
+        >
+          <div class="flex items-center gap-2">
+            <Sparkles class="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
+            <span class="text-sm font-bold text-foreground">{{ t("billing.upgradeTitle") }}</span>
+          </div>
+          <p class="text-xs font-semibold text-primary">{{ t("billing.priceLabel") }}</p>
+          <UiButton
+            type="button"
+            variant="default"
+            class="w-full"
+            :disabled="billingStore.isRedirectingToCheckout"
+            @click="handleSubscribe"
+          >
+            {{
+              billingStore.isRedirectingToCheckout
+                ? t("billing.subscribingCta")
+                : t("billing.subscribeCta")
+            }}
+          </UiButton>
+          <p class="text-xs font-medium text-muted-foreground/80 leading-relaxed">
+            {{ t("billing.billingNotice") }}
+          </p>
         </div>
 
         <div

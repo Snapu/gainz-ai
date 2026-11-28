@@ -404,4 +404,147 @@ describe("InviteCodeForm, UpgradeCard, and MembershipSheet flows", () => {
       sheetMounted.unmount();
     }
   });
+
+  it("allows upgrading to Pro directly from MembershipSheet during free allowance or after cancellation while hiding upgrade for testers, non-terminated subscriptions, cold cache, and checkout polling", async () => {
+    const store = useBillingStore();
+    vi.spyOn(store, "fetchEntitlement").mockReturnValue(errAsync("billing-unavailable"));
+    const startCheckoutSpy = vi
+      .spyOn(store, "startCheckout")
+      .mockReturnValueOnce(okAsync(undefined))
+      .mockReturnValueOnce(errAsync("billing-unavailable"));
+
+    const sheetMounted = mountWithPinia(MembershipSheet, { open: true });
+    try {
+      // 1. Cold cache (entitlement === null): upgrade section hidden
+      await nextTick();
+      expect(
+        sheetMounted.host.querySelector('[data-testid="membership-upgrade-section"]'),
+      ).toBeNull();
+
+      // 2. Active free_allowance with remaining starter calls: upgrade section shown & triggers checkout
+      store.applyEntitlement(
+        makeEntitlement({
+          source: "free_allowance",
+          evaluatedAt: "2026-11-27T12:00:00.000Z",
+          freeAllowance: { coachUsed: 5, coachLimit: 30, classifyUsed: 0, classifyLimit: 40 },
+        }),
+      );
+      await nextTick();
+
+      const upgradeSection = sheetMounted.host.querySelector(
+        '[data-testid="membership-upgrade-section"]',
+      );
+      expect(upgradeSection).not.toBeNull();
+      expect(upgradeSection?.textContent).toContain("€7.99 / month incl. VAT, cancel monthly");
+
+      const upgradeBtn = Array.from(upgradeSection?.querySelectorAll("button") ?? []).find((btn) =>
+        btn.textContent?.includes("Subscribe to GainzAI Pro"),
+      );
+      expect(upgradeBtn).toBeDefined();
+      upgradeBtn?.click();
+      await vi.waitFor(() => {
+        expect(startCheckoutSpy).toHaveBeenCalledTimes(1);
+      });
+
+      upgradeBtn?.click();
+      await vi.waitFor(() => {
+        expect(startCheckoutSpy).toHaveBeenCalledTimes(2);
+        expect(toastMock).toHaveBeenCalledWith(
+          expect.objectContaining({
+            variant: "destructive",
+            title: "Checkout Unavailable",
+          }),
+        );
+      });
+
+      // 3. While polling checkout return: upgrade section replaced with syncing loader
+      store.isPollingCheckout = true;
+      await nextTick();
+      expect(
+        sheetMounted.host.querySelector('[data-testid="membership-upgrade-section"]'),
+      ).toBeNull();
+      expect(
+        sheetMounted.host.querySelector('[data-testid="membership-checkout-syncing"]')?.textContent,
+      ).toContain("Confirming subscription status...");
+      store.isPollingCheckout = false;
+      await nextTick();
+
+      // 4. Invite grant & non-terminated subscriptions (active, expired past_due grace, unpaid): hidden
+      for (const entitlementOverride of [
+        {
+          source: "invite_grant" as const,
+          evaluatedAt: "2026-11-27T12:01:00.000Z",
+          inviteGrant: { expiresAt: null },
+        },
+        {
+          source: "subscription" as const,
+          evaluatedAt: "2026-11-27T12:02:00.000Z",
+          inviteGrant: null,
+          subscription: {
+            status: "active" as const,
+            cancelAtPeriodEnd: false,
+            currentPeriodEnd: "2026-12-27T00:00:00.000Z",
+            graceEndsAt: null,
+          },
+          hasCustomerPortal: true,
+        },
+        {
+          source: "none" as const,
+          canUseCoach: false,
+          canUseClassify: false,
+          evaluatedAt: "2026-11-27T12:03:00.000Z",
+          subscription: {
+            status: "past_due" as const,
+            cancelAtPeriodEnd: false,
+            currentPeriodEnd: "2026-12-01T00:00:00.000Z",
+            graceEndsAt: "2026-11-20T00:00:00.000Z",
+          },
+          hasCustomerPortal: true,
+        },
+        {
+          source: "none" as const,
+          canUseCoach: false,
+          canUseClassify: false,
+          evaluatedAt: "2026-11-27T12:04:00.000Z",
+          subscription: {
+            status: "unpaid" as const,
+            cancelAtPeriodEnd: false,
+            currentPeriodEnd: "2026-12-01T00:00:00.000Z",
+            graceEndsAt: null,
+          },
+          hasCustomerPortal: true,
+        },
+      ]) {
+        store.applyEntitlement(makeEntitlement(entitlementOverride));
+        await nextTick();
+        expect(
+          sheetMounted.host.querySelector('[data-testid="membership-upgrade-section"]'),
+        ).toBeNull();
+      }
+
+      // 5. Canceled subscription with portal receipts: both upgrade CTA and portal receipts button shown
+      store.applyEntitlement(
+        makeEntitlement({
+          source: "none",
+          canUseCoach: false,
+          canUseClassify: false,
+          evaluatedAt: "2026-11-27T12:05:00.000Z",
+          subscription: {
+            status: "canceled",
+            cancelAtPeriodEnd: false,
+            currentPeriodEnd: "2026-10-27T00:00:00.000Z",
+            graceEndsAt: null,
+          },
+          hasCustomerPortal: true,
+        }),
+      );
+      await nextTick();
+      expect(
+        sheetMounted.host.querySelector('[data-testid="membership-upgrade-section"]'),
+      ).not.toBeNull();
+      expect(sheetMounted.host.textContent).toContain("Download Receipts / Invoices");
+    } finally {
+      sheetMounted.unmount();
+    }
+  });
 });
