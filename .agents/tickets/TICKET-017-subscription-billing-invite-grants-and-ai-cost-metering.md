@@ -1,7 +1,7 @@
 # 17: Subscription Billing, Starter Free Allowance, Invite Grants & AI Cost Metering
 
-**Status:** ready-for-agent  
-**Labels:** `ready-for-agent`, `domain`, `application`, `infrastructure`, `presentation`
+**Status:** done  
+**Labels:** `domain`, `application`, `infrastructure`, `presentation`
 
 ---
 
@@ -157,7 +157,7 @@ Introduce a unified, provider-decoupled **`billing` Bounded Context** and server
   3. Verify an end-to-end test subscription across Hosted Checkout (no custom domain), Stripe Billing Customer Portal, and Link/Onelink guest order management (disclosed on the Upgrade Card).
 - **Founder Pre-Launch Operational Notes (Germany, Non-Architectural):**
   - `InviteGrant` testing, `FreeAllowance` metering, and Stripe Sandbox / Test Mode work immediately prior to formal business registration.
-  - While Stripe Managed Payments acts as Merchant of Record for consumer sales (handling end-customer VAT/receipts in supported jurisdictions), it does not replace your own German business & tax registration: before enabling live payouts, complete sole-proprietorship trade registration (*Gewerbeanmeldung*, KVR München), submit the ELSTER tax registration questionnaire (noting Germany's updated *Kleinunternehmerregelung § 19 UStG* thresholds of 25,000 EUR prior-year / 100,000 EUR current-year turnover and confirming VAT-ID / B2B payout reporting treatment for MoR disbursements with a tax advisor if needed), restrict selling countries in Stripe Managed Payments settings to MoR tax-covered jurisdictions, and set Stripe Payout Schedule to **Monthly** to keep annual EÜR bookkeeping minimal.
+  - While Stripe Managed Payments acts as Merchant of Record for consumer sales (handling end-customer VAT/receipts in supported jurisdictions), it does not replace your own German business & tax registration: before enabling live payouts, complete sole-proprietorship trade registration (_Gewerbeanmeldung_, KVR München), submit the ELSTER tax registration questionnaire (noting Germany's updated _Kleinunternehmerregelung § 19 UStG_ thresholds of 25,000 EUR prior-year / 100,000 EUR current-year turnover and confirming VAT-ID / B2B payout reporting treatment for MoR disbursements with a tax advisor if needed), restrict selling countries in Stripe Managed Payments settings to MoR tax-covered jurisdictions, and set Stripe Payout Schedule to **Monthly** to keep annual EÜR bookkeeping minimal.
 - **Environment Secrets Required on Supabase Edge Functions:**
   - `ABUSE_PREVENTION_PEPPER` (random 32+ byte hex secret for pseudonymous `HMAC-SHA256` subject digests)
   - `STRIPE_SECRET_KEY`
