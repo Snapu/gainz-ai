@@ -147,6 +147,36 @@ Deno.test("extractSubscriptionIdFromStripeEvent handles post-2025 Basil+ invoice
 
   assert.equal(
     extractSubscriptionIdFromStripeEvent({
+      id: "evt_4b",
+      type: "checkout.session.async_payment_succeeded",
+      created: 100,
+      data: { object: { mode: "subscription", subscription: "sub_async_ok" } },
+    }),
+    "sub_async_ok",
+  );
+
+  assert.equal(
+    extractSubscriptionIdFromStripeEvent({
+      id: "evt_4c",
+      type: "checkout.session.async_payment_failed",
+      created: 100,
+      data: { object: { mode: "subscription", subscription: "sub_async_fail" } },
+    }),
+    "sub_async_fail",
+  );
+
+  assert.equal(
+    extractSubscriptionIdFromStripeEvent({
+      id: "evt_4d",
+      type: "checkout.session.async_payment_succeeded",
+      created: 100,
+      data: { object: { mode: "payment", subscription: null } },
+    }),
+    null,
+  );
+
+  assert.equal(
+    extractSubscriptionIdFromStripeEvent({
       id: "evt_5",
       type: "customer.subscription.deleted",
       created: 100,

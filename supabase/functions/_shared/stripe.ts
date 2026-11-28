@@ -188,7 +188,11 @@ export function extractSubscriptionIdFromStripeEvent(event: StripeWebhookEventLi
     return id?.startsWith("sub_") ? id : null;
   }
 
-  if (event.type === "checkout.session.completed") {
+  if (
+    event.type === "checkout.session.completed" ||
+    event.type === "checkout.session.async_payment_succeeded" ||
+    event.type === "checkout.session.async_payment_failed"
+  ) {
     if (obj.mode !== "subscription") return null;
     return readExpandableId(obj.subscription);
   }
